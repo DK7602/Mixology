@@ -57,7 +57,8 @@ public:
         setDb, minusInf, nudge, fader, faderEnd, pan, mute, solo, protect, restore, trim.
         Global ones: restoreAll, forget, bank(action), refresh, reconnect, copyLog.
         Analyze Mix: analyze, analyzeFinish, analyzeCancel, setRole, setExcluded, setReference.
-        Milestone 4: plan(tool) -> { plan }, planApply { id, picked, allowBig }, planUndo, refListen ("ref" / "mix").
+        Milestone 4: plan(tool) -> { plan }, planApply { id, picked, allowBig, headroom }, planUndo -> { bridge },
+        refListen ("ref" / "mix"), vocalTaste ("right" / "quieter" / "louder" / "style").
         Returns { ok, message, warning, info }. */
     juce::var command (const juce::String& name, const juce::var& arg);
 
@@ -68,6 +69,9 @@ public:
     /** Your track roles and "leave out of Analyze Mix" choices, saved with the project the same way. */
     juce::String trackSettingsState() const;
     void setTrackSettingsState (const juce::String&);
+    /** How you like your vocal ("Sounds right / too loud / too quiet"), saved with the project the same way. */
+    juce::String mixPrefsState() const;
+    void setMixPrefsState (const juce::String&);
 
     juce::String logText() const;
 
@@ -91,7 +95,7 @@ private:
     std::vector<mixology::mix::ChannelNow> channelsNow() const;
     juce::var planToVar (const mixology::mix::Plan&) const;
     juce::var applyState() const;
-    mixology::BridgeSession::Result applyCurrentPlan (const juce::var& picked, bool allowBig, std::string& info);
+    mixology::BridgeSession::Result applyCurrentPlan (const juce::var& picked, bool allowBig, bool headroom, std::string& info);
     mixology::BridgeSession::Result undoLastApply (std::string& info);
     mixology::BridgeSession::Result listenToReference (bool reference, std::string& info);
     const mixology::link::LinkInfo* uniqueLink (const std::vector<mixology::link::LinkInfo>&, std::uint32_t hash) const;
@@ -116,6 +120,13 @@ private:
     LastApply lastApply;
     std::uint64_t applyVersion = 0, seenPlanSerial = 0;
     bool hearingReference = false;
+
+    double vocalOffset = 0.0;          // your vocal setting (dB on top of the style's target)
+    bool vocalFromYou = false;
+    juce::String prefsCache, prefsPending;
+    bool hasPendingPrefs = false;
+    void cachePrefs();
+    bool audibleNow (std::uint32_t hash) const;   // muted or soloed-out channels: their Link still hears them
     std::optional<mixology::mix::Role> roleFor (std::uint32_t hash, const std::string& name) const;
 
     enum class Analyze { idle, reading, listening, done };

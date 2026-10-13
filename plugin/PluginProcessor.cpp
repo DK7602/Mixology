@@ -90,6 +90,7 @@ void MixologyAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     xml.setAttribute ("ui", getUiState());
     xml.setAttribute ("protected", bridgeHub->protectedState());   // the padlocks on the Tracks page
     xml.setAttribute ("tracks", bridgeHub->trackSettingsState());  // your track roles, tracks left out of Analyze Mix
+    xml.setAttribute ("prefs", bridgeHub->mixPrefsState());         // how you like your vocal
     copyXmlToBinary (xml, destData);
 }
 
@@ -101,6 +102,7 @@ void MixologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
             setUiState (xml->getStringAttribute ("ui"));
             bridgeHub->setProtectedState (xml->getStringAttribute ("protected"));
             bridgeHub->setTrackSettingsState (xml->getStringAttribute ("tracks"));
+            bridgeHub->setMixPrefsState (xml->getStringAttribute ("prefs"));
         }
 }
 

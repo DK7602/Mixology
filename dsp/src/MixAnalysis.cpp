@@ -484,28 +484,31 @@ namespace mixology::mix
             {
                 std::nth_element (ratios.begin(), ratios.begin() + static_cast<long> (ratios.size() / 2), ratios.end());
                 const double ratio = ratios[ratios.size() / 2];
-                const double target = vocalTarget (style.key);
+                const double styleTarget = vocalTarget (style.key);
+                const double target = styleTarget + style.vocalOffset;
                 r.hasVocalRatio = true;
                 r.vocalRatio = ratio;
                 r.vocalTarget = target;
+                r.styleVocalTarget = styleTarget;
                 std::vector<std::string> names;
                 for (auto k : vocals) names.push_back (trackOf (k).name);
+                const std::string where = target >= 0 ? fmt0 (target) + " dB above" : fmt0 (-target) + " dB under";
+                const std::string aim = style.vocalFromYou ? "You like it about " + where + " it (your setting)."
+                                                           : "For " + style.name + " it usually sits about " + where + " it.";
+                const std::string yourEars = "If it already sounds right to you, press 'Sounds right' below: Mixology remembers how you like your vocal.";
                 if (ratio < target - kVocalTolerance)
-                    out.push_back ({ "vocal-low", "warn", "vox", "The vocal is buried",
-                                     "While it sings, the vocal sits " + fmt1 (-ratio) + " dB under the rest of the mix. For " + style.name
-                                         + " it usually sits about " + (target >= 0 ? fmt0 (target) + " dB above" : fmt0 (-target) + " dB under") + " it.",
-                                     "Yes, if the words are hard to follow. That is the first thing listeners notice.",
-                                     { "Raise " + joinNames (names) + " about " + fmt0 (target - ratio) + " dB (or lower the beat as much)"
-                                           + (target - ratio > 6.0 ? ": start with 6 dB and listen." : "."),
-                                       "Then check the vocal masking point below: clearing room for the vocal often beats turning it up." }, names });
+                    out.push_back ({ "vocal-low", style.vocalFromYou ? "warn" : "info", "vox", "The vocal may be buried",
+                                     "While it sings, the vocal sits " + fmt1 (-ratio) + " dB under the rest of the mix. " + aim,
+                                     "Only if the words are hard to follow. Your ears decide: some songs want the vocal inside the band.",
+                                     { "Raise " + joinNames (names) + " 2 - 3 dB (or lower the band as much), then listen.", yourEars }, names });
                 else if (ratio > target + kVocalTolerance + 1.0)
                     out.push_back ({ "vocal-high", "info", "vox", "The vocal sits far on top",
-                                     "While it sings, the vocal is " + fmt1 (ratio) + " dB louder than the rest of the mix: the beat may feel small behind it.",
-                                     "Only if the beat sounds weak. Some songs want the vocal right in your face.",
-                                     { "Try " + joinNames (names) + " 2 - 3 dB lower and listen to the hook again." }, names });
+                                     "While it sings, the vocal is " + fmt1 (ratio) + " dB louder than the rest of the mix. " + aim,
+                                     "Only if the band sounds weak behind it. Your ears decide.",
+                                     { "Try " + joinNames (names) + " 2 - 3 dB lower and listen to the hook again.", yourEars }, names });
                 else
-                    out.push_back ({ "vocal-ok", "calm", "vox", "Vocal level fits " + style.name,
-                                     "While it sings, the vocal sits " + signedDb (ratio) + " against the rest of the mix.", "No.", {}, names });
+                    out.push_back ({ "vocal-ok", "calm", "vox", "Vocal level fits " + (style.vocalFromYou ? std::string ("your setting") : style.name),
+                                     "While it sings, the vocal sits " + signedDb (ratio) + " against the rest of the mix. " + aim, "No.", {}, names });
             }
         }
 

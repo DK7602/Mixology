@@ -174,13 +174,24 @@ namespace mixology::mix
             auto isInstrument = [&] (const Group& g) { return ! g.unheard && w.instruments.count (g.role) != 0; };
             auto isRest = [&] (const Group& g) { return g.unheard || (g.role != Role::vox && g.role != Role::adlibs); };
 
+            // A full drum kit on one track (no separate kick, snare or hats) is the drums: it weighs like a kick.
+            auto weightOf = [&] (Role role) {
+                if (role == Role::perc && ! groups.count (static_cast<int> (Role::kick)) && ! groups.count (static_cast<int> (Role::snare))
+                    && ! groups.count (static_cast<int> (Role::hats)))
+                    return 0.0;
+                return w.instruments.at (role);
+            };
+            auto kindWords = [] (const Group& g) {
+                return g.unheard ? std::string ("the channels without a Link") : std::string (roleWords (g.role));
+            };
+
             // 1. Instruments against each other: only kinds clearly off the style's balance move (to within 1 dB).
             {
                 std::vector<double> offsets, locked;
                 for (auto& [k, g] : groups)
                     if (isInstrument (g))
                     {
-                        offsets.push_back (g.level() - w.instruments.at (g.role));
+                        offsets.push_back (g.level() - weightOf (g.role));
                         if (! g.anyMovable()) locked.push_back (offsets.back());
                     }
                 if (offsets.size() >= 2)
@@ -191,16 +202,17 @@ namespace mixology::mix
                     for (auto& [k, g] : groups)
                     {
                         if (! isInstrument (g)) continue;
-                        const double dev = g.level() - w.instruments.at (g.role) - c;
+                        const double dev = g.level() - weightOf (g.role) - c;
                         if (std::abs (dev) <= 2.5) continue;
                         g.move -= dev - std::copysign (1.0, dev);
-                        g.why.push_back (std::string (roleWords (g.role)) + (dev > 0.0 ? " sit " + fmt1 (dev) + " dB louder" : " sit " + fmt1 (-dev) + " dB quieter")
-                                         + " against the rest of the beat than " + r.style.name + " usually has");
+                        g.why.push_back (kindWords (g) + (dev > 0.0 ? " sit " + fmt1 (dev) + " dB louder" : " sit " + fmt1 (-dev) + " dB quieter")
+                                         + " against the rest of the band than " + r.style.name + " usually has");
                     }
                 }
             }
 
-            // 2. The lead vocal against the rest of the mix (as measured while it sings).
+            // 2. The lead vocal against the rest of the mix (as measured while it sings), towards the style's level or
+            //    the one you set. At most 4 dB per Apply: listen, analyze again, repeat if you like where it goes.
             Group* vocal = groups.count (static_cast<int> (Role::vox)) ? &groups[static_cast<int> (Role::vox)] : nullptr;
             Group* adlibs = groups.count (static_cast<int> (Role::adlibs)) ? &groups[static_cast<int> (Role::adlibs)] : nullptr;
             if (vocal != nullptr && r.hasVocalRatio)
@@ -215,15 +227,18 @@ namespace mixology::mix
                         restMovable = restMovable || g.anyMovable();
                     }
                 const double ratio = r.vocalRatio - (toDb (restNew) - toDb (restOld));
-                const double err = r.vocalTarget - ratio;
-                if (std::abs (err) > 1.5)
+                const double fullErr = r.vocalTarget - ratio;
+                const double err = std::clamp (fullErr, -4.0, 4.0);
+                if (std::abs (fullErr) > 1.5)
                 {
                     const bool vocalMovable = vocal->anyMovable();
                     double vm = 0.0, rm = 0.0;
                     if (vocalMovable && restMovable) { vm = err / 2.0; rm = -err / 2.0; }
                     else if (vocalMovable) vm = err;
                     else if (restMovable) rm = -err;
-                    // A vocal fader can't go past the top (+6 dB): the beat takes what is left.
+                    else plan.notes.push_back ("The vocal sits " + signedDb (ratio) + " against the rest (the aim is " + signedDb (r.vocalTarget)
+                                               + "), but the channels that would move are protected or weren't read.");
+                    // A vocal fader can't go past the top (+6 dB): the band takes what is left.
                     if (vm > 0.0)
                     {
                         double room = 1.0e9;
@@ -235,10 +250,12 @@ namespace mixology::mix
                             vm = std::max (0.0, room);
                         }
                     }
-                    else plan.notes.push_back ("The vocal sits " + signedDb (ratio) + " against the rest (the style wants " + signedDb (r.vocalTarget)
-                                               + "), but the channels that would move are protected or weren't read.");
-                    const std::string where = (ratio < r.vocalTarget ? "is buried: " : "sits far on top: ") + signedDb (ratio)
-                                              + " against the rest while it sings, " + r.style.name + " wants about " + signedDb (r.vocalTarget);
+                    const std::string aim = r.style.vocalFromYou ? "you set about " + signedDb (r.vocalTarget)
+                                                                 : r.style.name + " usually has about " + signedDb (r.vocalTarget);
+                    const std::string where = (ratio < r.vocalTarget ? "sits low: " : "sits high: ") + signedDb (ratio)
+                                              + " against the rest while it sings, " + aim;
+                    if (std::abs (fullErr) > 4.05)
+                        plan.notes.push_back ("The vocal is " + fmt1 (std::abs (fullErr)) + " dB from the aim: Mixology moves it 4 dB at a time. Listen, then Analyze Mix and apply again if you like where it goes.");
                     if (vm != 0.0)
                     {
                         vocal->move += vm;
@@ -264,24 +281,47 @@ namespace mixology::mix
                 }
             }
 
-            // 3. Room for Masterology: the mix peaks around -6 dBTP (never pushed up: loudness is Masterology's job).
+            // 3. The same overall loudness as before (louder always sounds "better", so a fair before / after needs this).
+            //    Only when the difference would be heard (1 dB or more), and not around protected channels (moving
+            //    everything else back would undo what was asked of them).
+            {
+                double total = 0.0, after = 0.0;
+                bool anyLocked = false;
+                for (auto& [k, g] : groups)
+                {
+                    total += g.e;
+                    after += g.e * toE (g.move);
+                    anyLocked = anyLocked || ! g.anyMovable();
+                }
+                double c = std::clamp (toDb (total) - toDb (after), -6.0, 6.0);
+                if (c > 0.0)   // never past the top of a fader (that would undo the balance)
+                    for (auto& [k, g] : groups)
+                        for (const auto& m : g.members)
+                            if (movable (m.ch)) c = std::min (c, std::max (0.0, kMaxFaderDb - m.ch->faderDb - g.move));
+                if (! anyLocked && std::abs (c) >= 1.0)
+                    for (auto& [k, g] : groups) g.move += c;
+            }
+
+            // 4. Room for Masterology: offered separately (you tick it). Every fader that plays goes down together, so the
+            //    balance stays; the mix gets quieter and Masterology brings the level back at the end.
             {
                 double before = 0.0, after = 0.0;
                 for (auto& [k, g] : groups) { before += g.e; after += g.e * toE (g.move); }
                 const double peak = r.mixPeak + (toDb (after) - toDb (before));
-                if (r.mixPeak > -100.0 && peak > -5.5)
+                if (r.mixPeak > -100.0 && peak > -5.0)
                 {
-                    const double shift = -(peak + 6.0);
+                    plan.headroomDb = std::round (-(peak + 6.0) * 10.0) / 10.0;
+                    plan.headroomWhy = "Your mix peaks at " + signedDb (peak) + "TP. Masterology works best with peaks around -6: every fader goes down "
+                                       + fmt1 (-plan.headroomDb) + " dB together. The balance stays the same, the mix just gets quieter (Masterology brings the level back).";
                     std::vector<std::string> stuck;
                     for (auto& [k, g] : groups)
-                    {
-                        if (! g.anyMovable()) { for (auto& m : g.members) stuck.push_back (m.name); continue; }
-                        g.move += shift;
-                        g.why.push_back ("room for Masterology (the mix would peak at " + signedDb (peak) + "TP, -6 is the aim)");
-                    }
+                        for (const auto& m : g.members)
+                        {
+                            if (! movable (m.ch)) { stuck.push_back (m.name); continue; }
+                            plan.headroom.push_back ({ m.ch->hash, m.name, m.ch->faderDb, std::min (m.ch->faderDb + g.move, kMaxFaderDb) });
+                        }
                     if (! stuck.empty())
-                        plan.notes.push_back (joinNames (stuck) + " can't move (protected or not read): everything else goes down "
-                                              + fmt1 (-shift) + " dB around it, so it gets that much louder against the rest.");
+                        plan.headroomWhy += " " + joinNames (stuck) + " can't move (protected or not read): it would get louder against the rest.";
                 }
             }
 
@@ -290,7 +330,7 @@ namespace mixology::mix
             for (auto& [k, g] : groups)
             {
                 if (std::abs (g.move) < 0.5) continue;
-                moved.push_back ({ g.move, g.unheard ? std::string ("the channels without a Link") : std::string (roleWords (g.role)) });
+                moved.push_back ({ g.move, kindWords (g) });
                 for (const auto& m : g.members)
                 {
                     if (! movable (m.ch))
@@ -310,6 +350,7 @@ namespace mixology::mix
                     c.to = std::min (c.from + std::clamp (g.move, -kMaxMoveDb, kMaxMoveDb), kMaxFaderDb);
                     c.big = std::abs (g.move) > kMaxMoveDb + 0.05;
                     c.why = joinWords (g.why);
+                    if (c.why.empty()) c.why = "keeps the mix as loud as before";
                     if (std::abs (c.to - c.from) < 0.05)
                     {
                         plan.notes.push_back (quoted (m.name) + " is already at the top of its fader (+6 dB): raise it with Mixology Link's Trim instead.");
@@ -318,11 +359,11 @@ namespace mixology::mix
                     plan.changes.push_back (c);
                 }
             }
-            if (moved.empty()) return "levels already fit " + r.style.name;
+            if (moved.empty()) return "levels already fit " + (r.style.vocalFromYou ? std::string ("your setting") : r.style.name);
             std::sort (moved.begin(), moved.end(), [] (auto& a, auto& b) { return std::abs (a.first) > std::abs (b.first); });
             std::vector<std::string> parts;
             for (std::size_t i = 0; i < moved.size() && i < 4; ++i) parts.push_back (moved[i].second + " " + signedDb (moved[i].first));
-            return "levels: " + joinWords (parts, ", ");
+            return "levels: " + joinWords (parts, ", ") + " (same overall loudness)";
         }
 
         // ---------------------------------------------------------------------------------------------
@@ -370,6 +411,31 @@ namespace mixology::mix
                 ts.push_back ({ &t, ch, ch->pan, ch->pan, false, {} });
             }
             if (ts.empty()) return {};
+
+            // The pans Cubase reports must agree with what the Stereo Out hears. A stereo track with Cubase's Combined
+            // Panner reports one side of it (e.g. "L100" for a full-width track): then the numbers can't be trusted.
+            {
+                double l = 0.0, rgt = 0.0;
+                for (const auto& x : ts)
+                {
+                    const double e = toE (x.t->loudness) * std::max (0.05, x.t->activity);
+                    const double q = toE (std::clamp (x.t->balance + panBalanceDb (x.pan), -40.0, 40.0));
+                    l += 2.0 * e * q / (1.0 + q);
+                    rgt += 2.0 * e / (1.0 + q);
+                }
+                if (r.unheardLoudness > -100.0) { l += toE (r.unheardLoudness); rgt += toE (r.unheardLoudness); }
+                const double expected = toDb (l) - toDb (rgt);
+                if (std::abs (expected - r.mixBalance) > 6.0)
+                {
+                    std::vector<std::string> hard;
+                    for (const auto& x : ts) if (std::abs (x.pan) >= 60.0) hard.push_back (x.t->name);
+                    plan.notes.push_back ("Cubase shows " + (hard.empty() ? std::string ("some tracks") : joinNames (hard)) + " panned well off-centre, but your mix "
+                                          + (std::abs (r.mixBalance) < 1.5 ? std::string ("doesn't lean") : "leans " + fmt1 (std::abs (r.mixBalance)) + " dB")
+                                          + ": they're probably stereo tracks with Cubase's Combined Panner, where Mixology only sees one side. "
+                                            "Stereo Architect leaves the pans alone: check those panners in Cubase.");
+                    return "pans left alone";
+                }
+            }
 
             // 1. Low end and the lead vocal in the middle.
             for (auto& x : ts)

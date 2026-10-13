@@ -1,5 +1,25 @@
 # Milestone 4 test: Auto Mix and the smart tools
 
+## Round 2 (after your first test): what changed, what to try
+
+Your first test found: Balance raised the vocal you already find too loud (Mixology aimed for Rock's usual
+level), moves were cut at 6 dB so the balance came out wrong, Auto Mix made everything quieter, Undo needed the
+tool to be reopened, and muted tracks still showed. Now:
+
+- R1. Analyze Mix (same song, same part). Open **BALANCE**. At the top: "Your vocal right now sounds:" press
+  **Too loud**. The list comes back: the vocal goes down about 2.5 dB against the band. Apply and listen.
+  **Report**: better? Then try **Right** (nothing should move for the vocal).
+- R2. The bottom line **Also make room for Masterology** is unticked. Leave it unticked while you balance.
+  Tick it once to see it, Apply, listen (quieter, same balance), then Undo.
+- R3. After **Undo**, the list comes back by itself, ready to Apply again (no closing and reopening).
+- R4. Mute a track and press play: its colour leaves the analyzer. Analyze Mix leaves it out.
+- R5. **STEREO ARCHITECT** on that song: if Cubase shows your Electric tracks at L100 but you hear them in both
+  ears, it now says so and leaves the pans alone. **Report**: do you hear those guitars only on the left, or on
+  both sides?
+- R6. AUTO MIX: same as before, with your vocal setting. **Report**: better, worse, or different?
+
+The original steps follow.
+
 Goal: each tool on the Overview (Auto Mix, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match)
 shows sensible changes, applies them to the real Cubase faders, pans and Mixology Links, and Undo puts
 everything back. About 30 minutes. **Use a copy of a project** (File > Save As... first).

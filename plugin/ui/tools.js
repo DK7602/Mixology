@@ -39,7 +39,8 @@ export async function openToolSheet(app, tool) {
   $("sheet-title").textContent = plan.title.toUpperCase();
 
   const picked = new Set(plan.changes.map((_, i) => i));
-  let allowBig = false, lastSerial = null, waiting = false;
+  let allowBig = false, lastSerial = null, waiting = false, headroomOn = false, reopenAfter = null;
+  const reopen = () => { openTool = null; openToolSheet(app, tool); };
 
   // ---- head: what this tool does, and what it found
   const head = el("div", "", body, { display: "flex", gap: "16px", alignItems: "flex-start", marginBottom: "12px", flex: "none" });
@@ -54,6 +55,26 @@ export async function openToolSheet(app, tool) {
     go.textContent = "Close, then press Analyze Mix";
     go.addEventListener("click", () => $("overlay").classList.remove("shown"));
     return;
+  }
+
+  // ---- your ears: how the vocal sounds right now (Balance and Auto Mix aim for it; saved with the project)
+  const report = app.bridge && app.bridge.analysis && app.bridge.analysis.report;
+  if ((tool === "balance" || tool === "auto") && report && report.hasVocal) {
+    const taste = el("div", "", body, { display: "flex", alignItems: "center", gap: "10px", margin: "0 0 10px", flex: "none", fontSize: "18px", flexWrap: "wrap" });
+    el("span", "", taste, { color: "var(--gold)" }).textContent = "Your vocal right now sounds:";
+    for (const [value, label] of [["louder", "Too quiet"], ["right", "Right"], ["quieter", "Too loud"]]) {
+      const b = el("button", "small-btn", taste);
+      b.textContent = label;
+      b.addEventListener("click", async () => { const res = await app.command("vocalTaste", { value }); if (res && res.ok) setTimeout(reopen, 150); });
+    }
+    const st = el("span", "", taste, { color: "var(--text-dim)", fontSize: "16px" });
+    st.textContent = report.vocalFromYou ? `Aiming for your setting (${fmt.db(report.vocalTarget)} against the band).`
+      : `Aiming for ${report.style}'s usual level (${fmt.db(report.vocalTarget)}). Your ears decide: tell Mixology.`;
+    if (report.vocalFromYou) {
+      const back = el("button", "small-btn", taste, { fontSize: "15px", height: "34px" });
+      back.textContent = "Use the style's level";
+      back.addEventListener("click", async () => { const res = await app.command("vocalTaste", { value: "style" }); if (res && res.ok) setTimeout(reopen, 150); });
+    }
   }
 
   // ---- toolbar
@@ -93,6 +114,17 @@ export async function openToolSheet(app, tool) {
   }
   if (!plan.changes.length) el("div", "", list, { fontSize: "20px", marginTop: "14px", color: "var(--green)" }).textContent = "Nothing to change: this part of your mix already fits.";
 
+  // ---- room for Masterology: on its own, unticked (the mix gets quieter, and quieter always sounds worse at first)
+  let headBox = null;
+  if (plan.headroomDb < 0) {
+    const hr = el("div", "", list, { display: "grid", gridTemplateColumns: "34px 1fr", gap: "6px 12px", alignItems: "start", marginTop: "18px", padding: "12px 14px", borderRadius: "10px", border: "1.5px solid var(--panel-edge)" });
+    headBox = el("button", "", hr, { width: "30px", height: "30px", borderRadius: "7px", border: "1.5px solid var(--btn-edge)", background: "var(--btn)", color: "var(--green)", cursor: "pointer", padding: "4px", display: "grid", placeItems: "center" });
+    headBox.addEventListener("click", () => { headroomOn = !headroomOn; refresh(); });
+    const ht2 = el("div", "", hr);
+    el("div", "", ht2, { fontSize: "19px", fontWeight: "600" }).textContent = `Also make room for Masterology: every fader ${fmt.db(plan.headroomDb)} (${plan.headroomCount} channels)`;
+    el("div", "", ht2, { fontSize: "15.5px", lineHeight: "1.35", color: "var(--text-dim)", marginTop: "3px" }).textContent = plan.headroomWhy + " Best done last, when the balance is right.";
+  }
+
   // ---- what it left alone
   if (plan.notes.length) {
     const nb = el("div", "", list, { marginTop: "18px", fontSize: "16px", color: "var(--text-dim)", lineHeight: "1.4" });
@@ -114,7 +146,7 @@ export async function openToolSheet(app, tool) {
   applyBtn.addEventListener("click", async () => {
     waiting = true;
     refresh();
-    const res = await app.command("planApply", { id: plan.id, picked: [...picked], allowBig });
+    const res = await app.command("planApply", { id: plan.id, picked: [...picked], allowBig, headroom: headroomOn });
     waiting = false;
     if (res && res.ok) {
       const a = app.bridge && app.bridge.apply;
@@ -123,7 +155,15 @@ export async function openToolSheet(app, tool) {
     }
     refresh();
   });
-  undoBtn.addEventListener("click", async () => { await app.command("planUndo"); refresh(); });
+  // Undo, then the same tool again with a fresh plan (once Cubase has the faders back).
+  undoBtn.addEventListener("click", async () => {
+    const before = (app.bridge && app.bridge.apply && app.bridge.apply.serial) ?? null;
+    const res = await app.command("planUndo");
+    if (!res || !res.ok) return;
+    if (res.undo && res.undo.bridge) reopenAfter = before;
+    else setTimeout(reopen, 600);
+    refresh();
+  });
 
   function refresh() {
     if (!document.body.contains(body) || $("sheet-title").textContent !== plan.title.toUpperCase()) { openTool = null; return; }
@@ -141,18 +181,22 @@ export async function openToolSheet(app, tool) {
       bigBtn.style.color = allowBig ? "var(--amber)" : "";
     }
     count.textContent = `${picked.size} of ${plan.changes.length} ticked`;
+    if (headBox) headBox.innerHTML = headroomOn ? icon("check", 'stroke-width="3"') : "";
 
     const a = (app.bridge && app.bridge.apply) || {};
+    if (reopenAfter !== null && !a.active && a.serial !== reopenAfter) { reopenAfter = null; setTimeout(reopen, 300); }
+    const n = picked.size + (headroomOn ? 1 : 0);
     const done = applyBtn.dataset.done === "1";
     if (a.active) status.innerHTML = `<span style="color:var(--cyan)">${a.what}: ${a.done} of ${a.total} channels…</span> Mixology steps through Cubase's channels and comes back.`;
     else if (done && lastSerial !== null && a.serial !== lastSerial && a.message) {
       status.innerHTML = `<span style="color:var(--green)">${a.message}</span>` + (a.notes && a.notes.length ? `<br>${a.notes.slice(0, 3).join("<br>")}` : "");
     } else if (done) status.innerHTML = `<span style="color:var(--green)">Applied.</span> Listen, then keep it or press Undo.`;
-    else status.textContent = plan.changes.length ? "Nothing changes until you press Apply. Protected channels are never touched." : "";
-    undoBtn.style.display = a.canUndo ? "" : "none";
+    else status.textContent = plan.changes.length || plan.headroomDb < 0 ? "Nothing changes until you press Apply. Protected channels are never touched." : "";
+    if (reopenAfter !== null) status.innerHTML = `<span style="color:var(--cyan)">Undoing…</span> the list comes back fresh when Cubase has the faders back.`;
+    undoBtn.style.display = a.canUndo && reopenAfter === null ? "" : "none";
     undoBtn.textContent = "Undo " + (a.undoWhat || "");
-    applyBtn.disabled = waiting || a.active || !picked.size || done;
-    applyBtn.textContent = done ? "Applied" : `Apply ${picked.size} change${picked.size === 1 ? "" : "s"}`;
+    applyBtn.disabled = waiting || a.active || !n || done || reopenAfter !== null;
+    applyBtn.textContent = done ? "Applied" : `Apply ${n} change${n === 1 ? "" : "s"}`;
   }
   openTool = refresh;
   refresh();

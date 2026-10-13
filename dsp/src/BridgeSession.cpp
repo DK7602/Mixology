@@ -238,11 +238,23 @@ namespace mixology
             }
 
             case Cmd::slotMute:
-                if (slotOk) { slotRef (m.slot).mute = m.flag != 0; changed(); }
+                if (slotOk)
+                {
+                    auto& s = slotRef (m.slot);
+                    s.mute = m.flag != 0;
+                    if (s.present) if (auto it = faders.find (s.hash); it != faders.end()) it->second.mute = s.mute;
+                    changed();
+                }
                 return;
 
             case Cmd::slotSolo:
-                if (slotOk) { slotRef (m.slot).solo = m.flag != 0; changed(); }
+                if (slotOk)
+                {
+                    auto& s = slotRef (m.slot);
+                    s.solo = m.flag != 0;
+                    if (s.present) if (auto it = faders.find (s.hash); it != faders.end()) it->second.solo = s.solo;
+                    changed();
+                }
                 return;
 
             case Cmd::slotColour:
@@ -367,6 +379,8 @@ namespace mixology
             f.hasPan = s.hasPan;
             f.pan = s.pan;
             f.panText = s.panText;
+            f.mute = s.mute;
+            f.solo = s.solo;
         }
         changed();
 
@@ -845,6 +859,15 @@ namespace mixology
         addLog (now, sum.message);
         changed();
         return sum;
+    }
+
+    bool BridgeSession::isAudible (std::uint32_t hash) const
+    {
+        const auto it = faders.find (hash);
+        if (it == faders.end()) return true;   // never seen: assume it plays
+        if (it->second.mute) return false;
+        const bool anySolo = std::any_of (faders.begin(), faders.end(), [] (const auto& f) { return f.second.solo; });
+        return ! anySolo || it->second.solo;
     }
 
     void BridgeSession::forgetRestorePoints (double now)

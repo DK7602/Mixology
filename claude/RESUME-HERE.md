@@ -80,6 +80,24 @@ User asked (2026-10-13): "Once fixed move forward with M4?" after the M3 test vi
 - Open: does a muted track's insert still get audio in Cubase (reference via its Link)? Ducking (sidechain) waits
   for M5. Calibrate genre weights / thresholds from the user's results.
 
+### M4 user test 1 (2026-10-13, Rock - Punk / Pop Punk song, video + MP3 of the raw mix) and the fixes
+- User: Balance raised the vocal ("vocals way louder than music"), Auto Mix "lowered everything but the vocals,
+  sounded worse", Clean Up / Pocket "nothing to change but my vocals are too loud", Undo needed close/reopen,
+  steps 7, 8, 10 worked, muted tracks still show in the analyzer (Links hear muted tracks: confirmed).
+- MP3 analysis (demucs htdemucs in a scratch venv): vocal vs rest median -6.4 LU (Mixology said -8.2), vocal vs mix
+  -9.1 LU, mix -7.5 LUFS, +6.4 dBTP. So the measurement was right; the user's taste differs from the genre
+  target (Gerdes & Siedenburg 2023: commercial rock ~0 dB, pop/country/rap positive). The export is exactly dual
+  mono (L == R) although Cubase reported the four Electric tracks at L100, and Mixology saw no lean: likely
+  stereo tracks with the Combined Panner (bridge pan = one side) or a mono export. Asked the user.
+- Fixes: vocal taste ("Too quiet / Right / Too loud", hub vocalTaste -> Style.vocalOffset + vocalFromYou via
+  Analysis::setVocalOffset, saved in the processor state "prefs"); vocal-low is "info" unless the user set a
+  taste; Balance: vocal step max 4 dB, loudness-neutral top-up (>= 1 dB, not past fader tops, not around locked
+  groups), headroom separate (Plan.headroomDb / headroom list, UI tick, hub adds it to every playing fader);
+  one-track drum kit (perc without kick/snare/hats) weighs like the kick; Stereo Architect refuses when the pans'
+  expected lean differs > 6 dB from the measured mix balance (Combined Panner note); BridgeSession tracks mute /
+  solo per channel (isAudible); hub skips muted / soloed-out Links in analysisTick and roleCurves (reference
+  kept); Undo re-plans the sheet when done; the wrong "protected" note when the vocal goes down is gone.
+
 ## Milestone 3 status (v0.3.0): BUILT, tested by the user (video): worked; follow-ups done in M4
 - dsp: Fft (radix-2), TrackAnalyzer (4096-pt, mid/side in one complex FFT, 31 ISO 1/3-oct bands re full-scale
   sine, sideShare, K-weighted loudness, rms, peak, corr, width), AudioRing, MixAnalysis (Moment = mix frame +

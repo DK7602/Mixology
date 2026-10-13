@@ -58,6 +58,8 @@ namespace mixology::mix
         std::string key = "hiphop.modern";   // "genre.style"
         std::string name = "Hip Hop - Modern Clean";
         double bass = 4.0, scoop = 1.5, air = 2.0;   // tonal target (dB), same as the Tone page
+        double vocalOffset = 0.0;    // your ears: added to the style's vocal level target (dB)
+        bool vocalFromYou = false;   // ... and you set it ("sounds right / too loud / too quiet")
     };
 
     struct TrackSettings
@@ -137,8 +139,9 @@ namespace mixology::mix
         double mixLoudness = -120.0, mixPeak = -120.0, mixCorrelation = 1.0, mixBalance = 0.0;
         std::vector<std::string> unheard; // channels in Cubase without a Link (not part of this analysis)
         bool hasVocalRatio = false;       // the lead vocal against the rest of the mix while it sings (dB),
-        double vocalRatio = 0.0;          // and where the style wants it
+        double vocalRatio = 0.0;          // and where it should sit: the style's target plus your offset
         double vocalTarget = 0.0;
+        double styleVocalTarget = 0.0;    // the style's own target (without your offset)
         double unheardLoudness = -120.0;  // the channels without a Link together (the mix minus the Links), LUFS-like
         double mixWidth = 0.0;
         ReferenceReport reference;
@@ -157,6 +160,8 @@ namespace mixology::mix
         static constexpr double kEnoughSeconds = 20.0;
 
         void begin (const Style&);
+        /** How you like your vocal (kept with the project): evaluate() aims for the style's target plus this. */
+        void setVocalOffset (double offsetDb, bool fromYou) { style.vocalOffset = offsetDb; style.vocalFromYou = fromYou; }
         void clear();
         void add (Moment);
         double secondsHeard() const { return static_cast<double> (moments.size()) * kMomentSeconds; }

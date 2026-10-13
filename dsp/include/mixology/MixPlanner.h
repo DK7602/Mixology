@@ -11,9 +11,10 @@
 /** Milestone 4: turns Analyze Mix's report into concrete moves that you look over before anything changes.
 
     - Balance: fader levels. Instruments against each other (role targets per genre; only clear outliers
-      move), the lead vocal against the rest of the mix (the style's target), ad-libs under the vocal, and
-      room for Masterology (mix peaks around -6 dBTP). Tracks of one kind move together, so their balance
-      among themselves stays yours.
+      move), the lead vocal against the rest of the mix (the style's target, or the level you set: at most
+      4 dB per Apply), ad-libs under the vocal, all at the same overall loudness. Tracks of one kind move
+      together, so their balance among themselves stays yours. Room for Masterology (mix peaks around
+      -6 dBTP) is offered separately: every fader down together.
     - Stereo Architect: pans. Low end and the lead vocal in the middle, doubles and pairs spread left / right,
       a lopsided mix evened out.
     - Clean Up: Assist EQ low cuts on tracks with rumble (and on vocals), mud dips where the mix is muddy.
@@ -64,6 +65,19 @@ namespace mixology::mix
         std::string summary;
         std::vector<Change> changes;
         std::vector<std::string> notes;   // what it left alone, and why
+
+        /** Room for Masterology, offered on its own (you tick it): every fader that plays moves headroomDb
+            (< 0) together, on top of the level changes. 0 = not needed. */
+        struct HeadroomMove
+        {
+            std::uint32_t hash = 0;
+            std::string name;
+            double from = 0.0;        // the fader now
+            double afterLevels = 0.0; // after this plan's level change (if any), before the headroom move
+        };
+        double headroomDb = 0.0;
+        std::string headroomWhy;
+        std::vector<HeadroomMove> headroom;
     };
 
     constexpr double kMaxMoveDb = 6.0;

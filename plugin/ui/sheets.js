@@ -265,6 +265,16 @@ export function openSuggestion(app, sg) {
     const ol = el("ol", "", body, { fontSize: "20px", lineHeight: "1.5", margin: "0 0 16px", paddingLeft: "28px" });
     for (const st of sg.steps) el("li", "", ol, { marginBottom: "6px" }).textContent = st;
   }
+  if (sg.id && sg.id.startsWith("vocal-") && sg.id !== "vocal-pocket") {
+    const taste = el("div", "", body, { display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center", margin: "0 0 16px" });
+    el("span", "", taste, { fontSize: "19px", color: "var(--gold)" }).textContent = "To your ears, the vocal sounds:";
+    for (const [value, label] of [["louder", "Too quiet"], ["right", "Sounds right"], ["quieter", "Too loud"]]) {
+      const b = el("button", "small-btn", taste, { height: "44px", fontSize: "19px" });
+      b.textContent = label;
+      b.addEventListener("click", async () => { const r = await app.command("vocalTaste", { value }); if (r && r.ok) $("overlay").classList.remove("shown"); });
+    }
+    el("div", "", taste, { width: "100%", fontSize: "16px", color: "var(--text-dim)" }).textContent = "Mixology remembers it for this song: the advice, Balance and Auto Mix follow your ears.";
+  }
   if (sg.tracks && sg.tracks.length) {
     const row = el("div", "", body, { display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" });
     el("span", "", row, { fontSize: "18px", color: "var(--text-dim)", marginRight: "4px" }).textContent = "Tracks:";

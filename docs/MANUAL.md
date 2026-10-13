@@ -163,14 +163,23 @@ list: every change it wants to make, **now → new**, and why, in plain words. U
 **Nothing changes until you press Apply.** Afterwards **Undo** puts back exactly what that tool changed.
 
 - **Balance**: fader levels. Each kind of instrument against the others (kick, 808 / bass, snare, hats, keys,
-  synths, guitars) using your genre's usual balance; only clear outliers move. Then the lead vocal against the
-  rest of the mix (your style's target), ad-libs under the vocal, and room for Masterology: if the mix peaks
-  above about -6 dBTP, everything comes down together. Tracks of one kind move together, so their balance among
-  themselves stays yours. Channels without a Link (e.g. a printed beat) move with the rest of the beat.
+  synths, guitars; one "Drum Machine" track counts as the whole kit) using your genre's usual balance; only clear
+  outliers move. Then the lead vocal against the rest of the mix, at most 4 dB per Apply, and ad-libs under the
+  vocal. The overall loudness stays the same, so you can judge before / after fairly (louder always sounds
+  "better" at first). Tracks of one kind move together, so their balance among themselves stays yours. Channels
+  without a Link (e.g. a printed beat) move with the rest of the band.
+  **Your vocal, your ears.** At the top: "Your vocal right now sounds: Too quiet / Right / Too loud". Mixology
+  measures where your vocal sits; your answer sets where it should sit, saved with the song. The advice, Balance
+  and Auto Mix follow it from then on ("Use the style's level" goes back to the genre's usual level). The same
+  buttons are on the Mix Assistant's vocal points.
+  **Room for Masterology** is a separate line at the bottom, unticked: every fader that plays goes down together
+  (e.g. -12.8 dB when the mix peaks at +6.8 dBTP). The balance stays the same, the mix gets quieter, Masterology
+  brings the level back. Tick it last, once the balance sounds right.
 - **Stereo Architect**: pans. Kick, bass, snare and the lead vocal in the middle. Pairs and doubles
   ("Gtr L" / "Gtr R", "Electric Rhythm" / "Electric Rhythm (D)", "Keys 1" / "Keys 2") spread left and right:
   if one is already out on a side, it stays and its partner mirrors it. A mix that leans to one side is evened
-  out with the tracks pulling it there.
+  out with the tracks pulling it there. If Cubase reports pans your mix doesn't match (stereo tracks with Cubase's
+  Combined Panner show one side only, e.g. "L100" on a full-width track), it leaves the pans alone and says so.
 - **Clean Up**: Assist EQ. Low cuts on tracks with rumble they don't need (and on vocals: about 90 Hz), and mud
   dips (200 - 500 Hz) on the tracks carrying it when the mix is muddier than your style.
 - **Vocal Pocket**: Assist EQ. Gentle dips (2 - 4 dB) at 1.6 - 4 kHz in the instruments that cover the vocal's
@@ -182,6 +191,10 @@ list: every change it wants to make, **now → new**, and why, in plain words. U
   plays it alone, its Trim matched to your mix's loudness, so you compare sound, not volume; **Back to your mix**
   mutes it again. The reference is always left out of the mix advice. Loudness differences are Masterology's
   job: don't push your mix up to match a mastered song.
+
+**Muted tracks.** A Mixology Link still hears its track when the track is muted (that's how Reference Match hears
+your muted reference song). Analyze Mix and the analyzer's colours leave muted channels out, and channels that
+aren't soloed while something else is.
 
 **Safety.** Protected channels (padlock) are never touched (faders, pans or EQ). Channels writing automation (W)
 are skipped. A fader moves at most 6 dB per Apply unless you press **Allow moves over 6 dB**. If you moved a fader

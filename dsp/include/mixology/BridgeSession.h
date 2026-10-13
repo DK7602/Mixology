@@ -168,7 +168,11 @@ namespace mixology
             bool hasPan = false;
             double pan = 0.5;
             std::string panText;
+            bool mute = false, solo = false;
         };
+        /** Is the channel heard on the Stereo Out? Not when it is muted, or when another channel is soloed
+            and this one isn't (as far as Mixology has seen them). Its Mixology Link still hears it either way. */
+        bool isAudible (std::uint32_t hash) const;
         /** Fader levels of every channel seen so far (in the bank, or during a scan). */
         const std::map<std::uint32_t, KnownFader>& knownFaders() const { return faders; }
         /** Steps the bank through all channels to read their faders, then puts it back where it was.

@@ -337,12 +337,26 @@ TEST_CASE ("Analyze Mix: vocal level against the beat", "[analysis]")
     };
     SECTION ("buried")
     {
-        auto r = listen (beat (-28.0)).evaluate ({});
+        auto a = listen (beat (-28.0));
+        auto r = a.evaluate ({});
         const auto* s = find (r, "vocal-low");
         REQUIRE (s != nullptr);
-        CHECK (s->kind == "warn");
+        CHECK (s->kind == "info");          // the style's opinion: your ears decide
         CHECK (mentions (s, "Lead Vox"));
         CHECK (s->steps.front().find ("Raise 'Lead Vox'") != std::string::npos);
+        CHECK (s->steps.back().find ("Sounds right") != std::string::npos);
+
+        // You said how you like it: the advice follows your setting.
+        a.setVocalOffset (5.0, true);
+        r = a.evaluate ({});
+        REQUIRE (find (r, "vocal-low") != nullptr);
+        CHECK (find (r, "vocal-low")->kind == "warn");
+        CHECK (find (r, "vocal-low")->text.find ("your setting") != std::string::npos);
+        CHECK (r.vocalTarget == Catch::Approx (r.styleVocalTarget + 5.0));
+        a.setVocalOffset (r.vocalRatio - r.styleVocalTarget, true);   // "sounds right"
+        r = a.evaluate ({});
+        CHECK (find (r, "vocal-ok") != nullptr);
+        CHECK (find (r, "vocal-ok")->title.find ("your setting") != std::string::npos);
     }
     SECTION ("sits right")
     {
@@ -377,7 +391,6 @@ TEST_CASE ("Analyze Mix: vocal level against a beat that has no Link", "[analysi
     };
     const auto buried = run (-30.0);
     REQUIRE (find (buried, "vocal-low") != nullptr);
-    CHECK (find (buried, "vocal-low")->kind == "warn");
     CHECK (find (run (-6.0), "vocal-low") == nullptr);
 }
 
@@ -586,36 +599,30 @@ TEST_CASE ("Plans: Balance lifts a buried vocal and makes room for it", "[plan]"
         sample ("Kick", kickFrame()), sample ("808", bassFrame()), sample ("Hats", hatsFrame()), sample ("Lead Vox", vocalFrame (-22.0), -6.0) }; };
     const auto r = listen (tracks).evaluate ({});
     REQUIRE (r.hasVocalRatio);
-    const double err = r.vocalTarget - r.vocalRatio;
-    REQUIRE (err > 6.0);
+    REQUIRE (r.vocalTarget - r.vocalRatio > 6.0);
+    auto move = [] (const mixology::mix::Change* c) { return c == nullptr ? 0.0 : c->wanted - c->from; };
 
-    SECTION ("split between the vocal and the beat")
+    SECTION ("4 dB at a time, split between the vocal and the beat, same overall loudness")
     {
         const auto p = makePlan (Tool::balance, r, channelsOf (tracks (0)));
         REQUIRE (p.valid);
         const auto* v = change (p, "Lead Vox", "level");
-        const auto* k = change (p, "Kick", "level");
         REQUIRE (v != nullptr);
-        REQUIRE (k != nullptr);
-        CHECK (v->wanted - v->from == Catch::Approx (err / 2.0).margin (0.6));
-        CHECK (k->wanted - k->from == Catch::Approx (-err / 2.0).margin (0.6));
-        CHECK (v->why.find ("buried") != std::string::npos);
-        CHECK (std::abs (v->to - v->from) <= 6.0 + 1e-9);   // the 6 dB limit
-        CHECK (v->big == (std::abs (v->wanted - v->from) > 6.05));
-        CHECK (change (p, "808", "level") != nullptr);   // the whole beat goes down together
-        CHECK (change (p, "Hats", "level") != nullptr);
+        CHECK (move (v) - move (change (p, "Kick", "level")) == Catch::Approx (4.0).margin (0.3));
+        CHECK (move (change (p, "Kick", "level")) == Catch::Approx (move (change (p, "808", "level"))).margin (0.01));   // the beat moves together
+        CHECK (v->why.find ("sits low") != std::string::npos);
+        CHECK (noted (p, "4 dB at a time"));
+        // Same loudness: the beat (most of the energy) barely moves, the vocal goes up.
+        CHECK (std::abs (move (change (p, "Kick", "level"))) < 1.0);
+        CHECK (p.headroomDb == 0.0);   // peaks at -6: no room needed
     }
     SECTION ("a vocal fader near the top: the beat makes the rest of the room")
     {
         auto chans = channelsOf (tracks (0));
-        for (auto& c : chans) if (c.name == "Lead Vox") c.faderDb = 4.0;
+        for (auto& c : chans) if (c.name == "Lead Vox") c.faderDb = 5.0;
         const auto p = makePlan (Tool::balance, r, chans);
-        const auto* v = change (p, "Lead Vox", "level");
-        const auto* k = change (p, "Kick", "level");
-        REQUIRE (v != nullptr);
-        REQUIRE (k != nullptr);
-        CHECK (v->wanted == Catch::Approx (6.0));
-        CHECK (k->wanted - k->from == Catch::Approx (-(err - 2.0)).margin (0.6));
+        CHECK ((change (p, "Lead Vox", "level") == nullptr || change (p, "Lead Vox", "level")->wanted <= 6.0));
+        CHECK (move (change (p, "Kick", "level")) < -2.5);
     }
     SECTION ("a protected vocal: the beat makes all the room")
     {
@@ -623,9 +630,24 @@ TEST_CASE ("Plans: Balance lifts a buried vocal and makes room for it", "[plan]"
         for (auto& c : chans) if (c.name == "Lead Vox") c.locked = true;
         const auto p = makePlan (Tool::balance, r, chans);
         CHECK (change (p, "Lead Vox", "level") == nullptr);
-        const auto* k = change (p, "Kick", "level");
-        REQUIRE (k != nullptr);
-        CHECK (k->wanted - k->from == Catch::Approx (-err).margin (0.6));
+        CHECK (move (change (p, "Kick", "level")) == Catch::Approx (-4.0).margin (0.3));
+    }
+    SECTION ("you like it where it is: nothing moves")
+    {
+        Analysis a = listen (tracks);
+        a.setVocalOffset (r.vocalRatio - r.styleVocalTarget, true);
+        const auto p = makePlan (Tool::balance, a.evaluate ({}), channelsOf (tracks (0)));
+        CHECK (change (p, "Lead Vox", "level") == nullptr);
+        CHECK (change (p, "Kick", "level") == nullptr);
+    }
+    SECTION ("you find it too loud: it goes down")
+    {
+        Analysis a = listen (tracks);
+        a.setVocalOffset (r.vocalRatio - 2.5 - r.styleVocalTarget, true);
+        const auto p = makePlan (Tool::balance, a.evaluate ({}), channelsOf (tracks (0)));
+        REQUIRE (change (p, "Lead Vox", "level") != nullptr);
+        CHECK (move (change (p, "Lead Vox", "level")) - move (change (p, "Kick", "level")) == Catch::Approx (-2.5).margin (0.3));
+        CHECK_FALSE (noted (p, "protected"));
     }
 }
 
@@ -637,22 +659,28 @@ TEST_CASE ("Plans: Balance brings an outlier back, leaves a fitting beat alone",
     const auto p = makePlan (Tool::balance, loud, channelsOf (tracks (12.0) (0)));
     const auto* h = change (p, "Hats", "level");
     REQUIRE (h != nullptr);
-    CHECK (h->to < h->from - 2.0);
+    const auto* k = change (p, "Kick", "level");
+    const double kickMove = k != nullptr ? k->wanted - k->from : 0.0;
+    CHECK (h->wanted - h->from < kickMove - 2.0);
     CHECK (h->why.find ("louder") != std::string::npos);
-    CHECK (change (p, "Kick", "level") == nullptr);
+    if (k != nullptr) CHECK (k->why.find ("as loud as before") != std::string::npos);   // only the loudness top-up
+
+    const auto fits = listen (tracks (0.0)).evaluate ({});
+    CHECK (makePlan (Tool::balance, fits, channelsOf (tracks (0.0) (0))).changes.empty());
 }
 
-TEST_CASE ("Plans: Balance leaves room for Masterology in a hot mix", "[plan]")
+TEST_CASE ("Plans: room for Masterology is offered separately", "[plan]")
 {
     auto tracks = [] (int) { return std::vector<TrackSample> { sample ("Kick", kickFrame()), sample ("808", bassFrame()), sample ("Lead Vox", vocalFrame (-12.0)) }; };
     const auto r = listen (tracks, 150, 7.6).evaluate ({});   // peaks at +7.6 dBTP like the first test session
-    const auto p = makePlan (Tool::balance, r, channelsOf (tracks (0)));
-    const auto* k = change (p, "Kick", "level");
-    REQUIRE (k != nullptr);
-    CHECK (k->wanted - k->from < -12.0);
-    CHECK (k->big);
-    CHECK (k->to - k->from == Catch::Approx (-6.0));
-    CHECK (k->why.find ("Masterology") != std::string::npos);
+    auto chans = channelsOf (tracks (0));
+    chans[1].locked = true;
+    const auto p = makePlan (Tool::balance, r, chans);
+    CHECK (p.headroomDb < -12.0);
+    CHECK (p.headroomWhy.find ("Masterology") != std::string::npos);
+    CHECK (p.headroomWhy.find ("'808' can't move") != std::string::npos);
+    REQUIRE (p.headroom.size() == 2);   // Kick and Lead Vox; the protected 808 stays
+    for (const auto& c : p.changes) CHECK (std::abs (c.wanted - c.from) < 6.0);   // the level changes stay small
 }
 
 TEST_CASE ("Plans: Balance moves channels without a Link with the rest of the beat", "[plan]")
@@ -671,15 +699,50 @@ TEST_CASE ("Plans: Balance moves channels without a Link with the rest of the be
     }
     const auto r = a.evaluate ({}, { "Beat", "Beat 808" });
     CHECK (r.unheardLoudness > -20.0);
-    const auto p = makePlan (Tool::balance, r, { channel ("Lead Vox"), channel ("Beat", 0.0, 0.0, false), channel ("Beat 808", -2.0, 0.0, false) });
+    std::vector<ChannelNow> chans { channel ("Lead Vox"), channel ("Beat", 0.0, 0.0, false), channel ("Beat 808", -2.0, 0.0, false) };
+    chans[0].locked = true;   // the vocal stays: the beat channels (no Link) make the room
+    const auto p = makePlan (Tool::balance, r, chans);
     const auto* beat = change (p, "Beat", "level");
     const auto* bass = change (p, "Beat 808", "level");
     REQUIRE (beat != nullptr);
     REQUIRE (bass != nullptr);
     CHECK (beat->to < beat->from);
     CHECK (beat->wanted - beat->from == Catch::Approx (bass->wanted - bass->from));   // they keep their balance
-    REQUIRE (change (p, "Lead Vox", "level") != nullptr);
-    CHECK (change (p, "Lead Vox", "level")->to > 0.0);
+}
+
+TEST_CASE ("Plans: a full drum kit on one track weighs like the drums", "[plan]")
+{
+    // Rock: guitars and one "Drum Machine" track (perc): no kick / snare / hats tracks.
+    auto tracks = [] (int) { return std::vector<TrackSample> {
+        sample ("Drum Machine 01", shaped ([] (int b) { return std::max (bump (b, 5, 2.0, -10.0), bump (b, 24, 3.0, -18.0)); }, 14.0)),
+        sample ("Electric Rhythm", padFrame (-12.0)), sample ("Electric Rhythm (D)", padFrame (-12.0)) }; };
+    Analysis a;
+    Style rock;
+    rock.key = "rock.punk";
+    rock.name = "Rock - Punk / Pop Punk";
+    a.begin (rock);
+    for (int i = 0; i < 150; ++i) { Moment m; m.tracks = tracks (i); m.mix = mixOf (m.tracks); a.add (m); }
+    const auto r = a.evaluate ({});
+    REQUIRE (track (r, "Drum Machine 01")->role == Role::perc);
+    const auto p = makePlan (Tool::balance, r, channelsOf (tracks (0)));
+    const auto* d = change (p, "Drum Machine 01", "level");
+    CHECK ((d == nullptr || std::abs (d->wanted - d->from) < 4.0));   // not pushed down like a shaker
+}
+
+TEST_CASE ("Plans: Stereo Architect doesn't trust pans the mix contradicts", "[plan]")
+{
+    // Cubase says L100 for four guitars, but the Stereo Out is centred (stereo tracks, Combined Panner).
+    auto tracks = [] (int) { return std::vector<TrackSample> {
+        sample ("Kick", kickFrame()), sample ("Vocals", vocalFrame (-12.0)),
+        sample ("Electric Rhythm", padFrame (-14.0)), sample ("Electric Rhythm (D)", padFrame (-14.0)),
+        sample ("Electric Lead", padFrame (-15.0)), sample ("Electric Lead (D)", padFrame (-15.0)) }; };
+    const auto r = listen (tracks).evaluate ({});
+    REQUIRE (std::abs (r.mixBalance) < 1.0);
+    std::vector<ChannelNow> chans;
+    for (const auto& t : tracks (0)) chans.push_back (channel (t.name, 0.0, t.name.rfind ("Electric", 0) == 0 ? -100.0 : 0.0));
+    const auto p = makePlan (Tool::stereo, r, chans);
+    CHECK (p.changes.empty());
+    CHECK (noted (p, "Combined Panner"));
 }
 
 TEST_CASE ("Plans: Stereo Architect spreads four guitars panned hard left", "[plan]")

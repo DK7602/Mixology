@@ -719,3 +719,23 @@ TEST_CASE ("Bridge: reading every channel's fader, then back to the same bank", 
     CHECK (r.session.setVolumeDb (r.session.refOf (0), -6.0, r.now).ok);
 }
 
+
+TEST_CASE ("Bridge: muted and soloed-out channels aren't in the mix", "[bridge]")
+{
+    Rig r;
+    r.run (0.2);
+    CHECK (r.session.isAudible (nameHash ("Kick")));
+    REQUIRE (r.session.setMute (r.ref ("Kick"), true, r.now).ok);
+    r.run (0.2);
+    CHECK_FALSE (r.session.isAudible (nameHash ("Kick")));
+    CHECK (r.session.isAudible (nameHash ("Snare")));
+    REQUIRE (r.session.setSolo (r.ref ("Snare"), true, r.now).ok);
+    r.run (0.2);
+    CHECK (r.session.isAudible (nameHash ("Snare")));
+    CHECK_FALSE (r.session.isAudible (nameHash ("Hats")));    // another channel is soloed
+    CHECK (r.session.isAudible (nameHash ("Never Seen")));    // unknown: assumed to play
+    r.cubase.channels[1].solo = false;                        // unsoloed in Cubase
+    r.session.requestDump (r.now);
+    r.run (0.2);
+    CHECK (r.session.isAudible (nameHash ("Hats")));
+}

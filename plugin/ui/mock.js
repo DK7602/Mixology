@@ -44,7 +44,7 @@
         { name: "Air (8 - 16 kHz)", diff: -3.1, text: `Your mix has 3.1 dB less air than '${refTrack.name}'.` },
       ] };
     return {
-      reference, mixWidth: 0.28,
+      reference, mixWidth: 0.28, hasVocal: true, vocalRatio: -8.2, vocalFromYou: B.vocal != null, vocalTarget: B.vocal != null ? -8.2 + B.vocal : -1,
       seconds: B.an.seconds, style: (window.__mixStyle || "Hip Hop - Modern Clean"), mixLoudness: -12.8, mixPeak: -4.1, mixCorrelation: 0.62,
       unheard: chans.filter((c) => !c.link).map((c) => c.name).slice(0, 4), mixBands, targetBands: [], tracks,
       suggestions: [
@@ -128,13 +128,21 @@
       const changes = value === "auto" ? [...parts.balance, ...parts.stereo, ...parts.clean, ...parts.pocket] : parts[value] || [];
       const notes = ["'Lead Vox': protected (padlock), so it stays where it is (it would have moved +1.5 dB)."];
       if (value === "auto" || value === "clean" || value === "pocket") notes.push("'Synth' has no Mixology Link Mixology can reach: vocal pocket skipped.");
-      B.plan = { id: B.planId, tool: value, title, valid: true, summary: `${changes.length} changes for ${window.__mixStyle || "Hip Hop - Modern Clean"}: levels: the hats -3.4 dB, the kick -1.5 dB; pans: 2 tracks; 1 low cut, 1 mud dip; 2 pocket dips.`, notes, changes };
+      const hd = value === "auto" || value === "balance" ? { headroomDb: -12.8, headroomCount: 8, headroomWhy: "Your mix peaks at +6.8 dBTP. Masterology works best with peaks around -6: every fader goes down 12.8 dB together. The balance stays the same, the mix just gets quieter (Masterology brings the level back)." } : { headroomDb: 0, headroomCount: 0, headroomWhy: "" };
+      B.plan = { ...hd, id: B.planId, tool: value, title, valid: true, summary: `${changes.length} changes for ${window.__mixStyle || "Hip Hop - Modern Clean"}: levels: the hats -3.4 dB, the kick -1.5 dB; pans: 2 tracks; 1 low cut, 1 mud dip; 2 pocket dips.`, notes, changes };
       return { ok: true, plan: B.plan };
+    }
+    if (name === "vocalTaste") {
+      if (!B.an.report) return fail("Analyze Mix first (with the vocal singing): then Mixology knows where your vocal sits now.");
+      B.vocal = value === "style" ? null : { right: 0, louder: 2.5, quieter: -2.5 }[value];
+      B.an.report = fakeReport();
+      B.version++;
+      return { ok: true, info: value === "style" ? "Mixology aims for the style's usual vocal level again." : value === "right" ? "Got it: Mixology keeps your vocal where it is (saved with the project)." : `Got it: Balance and Auto Mix now aim for the vocal 2.5 dB ${value === "louder" ? "higher" : "lower"} than now (saved with the project).` };
     }
     if (name === "planApply") {
       if (!B.plan || arg.id !== B.plan.id) return fail("That plan is out of date: open it again.");
       const picked = (arg.picked || []).map((i) => B.plan.changes[i]).filter(Boolean);
-      if (!picked.length) return fail("Tick at least one change.");
+      if (!picked.length && !arg.headroom) return fail("Tick at least one change.");
       const before = chans.map((c) => ({ c, v: c.volume, p: c.pan }));
       Object.assign(B.apply, { active: true, what: B.plan.title, done: 0, total: new Set(picked.filter((c) => c.kind === "level" || c.kind === "pan").map((c) => c.name)).size, skipped: 0, notes: [], canUndo: false, undoWhat: B.plan.title });
       B.version++;
@@ -162,7 +170,7 @@
       B.undo = null;
       Object.assign(B.apply, { canUndo: false, message: "Undo done.", serial: B.apply.serial + 1 });
       B.version++;
-      return { ok: true, info: "Undoing: everything it changed goes back." };
+      return { ok: true, info: "Undoing: everything it changed goes back.", undo: { bridge: false } };
     }
     if (name === "setReference") {
       for (const h of Object.keys(B.settings)) if (B.settings[h]) B.settings[h].reference = false;
