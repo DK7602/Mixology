@@ -173,7 +173,10 @@ button { font-family: inherit; }
 #preset button { border: 0; background: transparent; color: var(--text); cursor: pointer; display: grid; place-items: center; }
 #preset button:hover { background: rgba(255,255,255,0.06); }
 #preset button svg { width: 26px; height: 26px; }
-#preset .name { display: grid; place-items: center; font-size: 22px; font-weight: 500; border-left: 1.5px solid var(--panel-edge); border-right: 1.5px solid var(--panel-edge); cursor: pointer; }
+#preset .name {
+  display: block; min-width: 0; padding: 0 8px; line-height: 62px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 22px; font-weight: 500; border-left: 1.5px solid var(--panel-edge); border-right: 1.5px solid var(--panel-edge); cursor: pointer;
+}
 
 #tabs {
   position: absolute; left: 342px; top: 146px; width: 1076px; height: 60px;
@@ -318,6 +321,23 @@ code { font-family: inherit; font-weight: 600; color: var(--cyan); }
 #sheet .close { position: absolute; right: 18px; top: 16px; width: 48px; height: 48px; border-radius: 50%; border: 1.5px solid var(--btn-edge); background: var(--btn); color: var(--text); cursor: pointer; display: grid; place-items: center; }
 #sheet .close svg { width: 22px; height: 22px; }
 #sheet-body { position: absolute; inset: 80px 28px 24px 28px; overflow: auto; }
+
+/* Mix styles: the genre grid, and the pop-up with that genre's styles */
+.genre-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.genre-grid .btn { position: relative; height: 112px; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: 0 18px 0 86px; }
+.genre-grid .btn svg { position: absolute; left: 20px; top: 32px; width: 48px; height: 48px; }
+.genre-grid .btn .g-name { font-size: 24px; font-weight: 600; }
+.genre-grid .btn .g-sub { font-size: 15px; opacity: 0.85; }
+#style-pop { position: absolute; inset: 0; z-index: 5; border-radius: inherit; background: rgba(0, 0, 0, 0.5); display: grid; place-items: center; }
+:root[data-theme="light"] #style-pop { background: rgba(60, 70, 90, 0.3); }
+#style-pop .pop { position: relative; width: 1000px; max-height: 760px; padding: 24px 28px 28px; border-radius: 16px; border: 2px solid var(--btn-edge);
+  background: var(--panel); box-shadow: 0 16px 44px rgba(0, 0, 0, 0.6), inset 0 1px 0 var(--panel-hi); display: flex; flex-direction: column; }
+#style-pop .pop-head { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; font-size: 30px; font-weight: 600; }
+#style-pop .pop-head svg { width: 40px; height: 40px; }
+#style-pop .styles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; overflow: auto; }
+#style-pop .styles .btn { position: relative; height: 96px; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; }
+#style-pop .styles .btn .s-name { font-size: 24px; font-weight: 600; }
+#style-pop .styles .btn .s-about { font-size: 16px; opacity: 0.85; }
 #sheet-title { position: absolute; left: 30px; top: 20px; font-size: 32px; font-weight: 600; color: var(--gold); }
 :root[data-theme="light"] #sheet-title { color: #a86d16; }
 

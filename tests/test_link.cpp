@@ -260,7 +260,7 @@ TEST_CASE ("TrackMeter: peaks per 50 ms window and BS.1770 loudness", "[link]")
     std::vector<float> l (4800 * 40), r (l.size());
     for (std::size_t i = 0; i < l.size(); ++i)
     {
-        l[i] = static_cast<float> (0.5 * std::sin (2.0 * M_PI * 997.0 * static_cast<double> (i) / sr));   // -6 dBFS
+        l[i] = static_cast<float> (0.5 * std::sin (2.0 * 3.14159265358979323846 * 997.0 * static_cast<double> (i) / sr));   // -6 dBFS
         r[i] = 0.5f * l[i];                                                                                // -12 dBFS
     }
     const float* ch[] = { l.data(), r.data() };

@@ -111,8 +111,29 @@ Milestone 3 teaches the Links to listen properly (spectrum, roles, masking) for 
 
 ## Mix styles
 
-The style in the header (for example "Hip Hop - Modern Clean") is what Mixology aims for. Today it sets
-the Tone page's target curve. Later it steers Auto Mix and the Mix Assistant.
+The style in the header (for example "Hip Hop - Modern Clean") is what Mixology aims for. Click it (or
+**PRESETS**) to choose: first the **genre**, then its **style** in the pop-up. The arrows next to the name step
+through the styles of the genre you're in.
+
+| Genre | Styles |
+| --- | --- |
+| Hip Hop | Modern Clean, Boom Bap, West Coast, G-Funk, Old School, Lo-Fi, Pop Rap |
+| Trap & Drill | Hard 808, Melodic, Drill, Rage, Plugg |
+| R&B & Soul | Smooth R&B, 90s R&B, Alternative R&B, Neo-Soul, Classic Soul, Funk |
+| Pop | Modern, Dance, Synth / 80s, Indie, Acoustic, Ballad, K-Pop, Hyperpop |
+| Rock | Classic, Hard, Alternative, Indie, Punk / Pop Punk, Grunge, Metal, Modern Metal, Soft / Light, Blues Rock |
+| Country | Modern, Country Pop, Classic, Outlaw / Southern, Bluegrass, Americana |
+| Gospel | Contemporary, Traditional, Mass Choir, Urban Gospel |
+| Worship | Modern, Live / Big Room, Acoustic, Hymns |
+| Electronic | House, EDM / Big Room, Techno, Drum & Bass, Dubstep, Future Bass, Ambient |
+| Latin | Reggaeton, Latin Pop, Salsa / Tropical, Bachata, Regional Mexican |
+| Afro & Caribbean | Afrobeats, Amapiano, Reggae, Dancehall |
+| Jazz & Blues | Jazz, Smooth Jazz, Blues |
+| Folk & Acoustic | Singer-Songwriter, Folk, Indie Folk |
+| Cinematic | Epic Trailer, Orchestral, Soft Score |
+
+Today the style sets the Tone page's target curve. Later it steers Auto Mix (levels, panning, width) and the
+Mix Assistant. The style is saved with the project.
 
 ## How it works with Voxology and Masterology
 

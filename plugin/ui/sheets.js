@@ -1,21 +1,11 @@
 // Overlays: Settings (Cubase Bridge, Mixology Link, display), the built-in manual, and mix styles.
 
 import { $, el, icon, fmt } from "./ui.js";
-
-// Mix styles: names + the tonal target the Tone page shows (bass weight, low-mid scoop, top sheen in dB).
-// Milestone 4 adds level / pan / width targets for Auto Mix per style.
-export const PRESETS = [
-  { name: "Hip Hop - Modern Clean", bass: 4, scoop: 1.5, air: 2, about: "Full low end, clean mids, crisp top. Vocal on top of the beat." },
-  { name: "Trap - Hard 808", bass: 6, scoop: 2, air: 2.5, about: "Big 808, scooped low mids, bright hats." },
-  { name: "G-Funk - Laid Back", bass: 4.5, scoop: 0.5, air: 1, about: "Warm, round bass and synth leads, softer top." },
-  { name: "Boom Bap - Dusty", bass: 3, scoop: 0, air: -1, about: "Punchy drums, warm mids, rolled-off top like vinyl." },
-  { name: "Drill - Dark", bass: 5.5, scoop: 2.5, air: 0.5, about: "Sliding 808s, dark keys, tight hats." },
-  { name: "R&B - Smooth", bass: 3.5, scoop: 1, air: 1.5, about: "Silky vocals, soft low end, lush space." },
-  { name: "Pop Rap - Bright", bass: 3, scoop: 1.5, air: 3, about: "Forward vocal, bright and radio-ready balance." },
-  { name: "West Coast - Bounce", bass: 4.5, scoop: 1, air: 1.5, about: "Bouncy kick and bass, clear claps, smooth top." },
-];
+import { GENRES } from "./mixstyles.js";
 
 function sheet(title) {
+  const pop = $("style-pop");
+  if (pop) pop.remove();
   $("sheet-title").textContent = title;
   const body = $("sheet-body");
   body.innerHTML = "";
@@ -202,18 +192,51 @@ export async function openHelp(app) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Mix styles
+// Mix styles: pick a genre, then its style in a pop-up (so the list never gets cluttered).
 
 export function openPresets(app) {
   const body = sheet("MIX STYLES");
   body.className = "scroll";
-  const note = el("p", "", body, { fontSize: "18px", color: "var(--text-dim)", marginTop: "0" });
-  note.textContent = "The style tells Mixology what you're going for. Today it sets the Tone page's target curve; from Milestone 4 it also steers Auto Mix and the Mix Assistant.";
-  const grid = el("div", "", body, { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "14px" });
-  PRESETS.forEach((p, i) => {
-    const c = el("button", "btn", grid, { position: "relative", height: "104px", flexDirection: "column", alignItems: "flex-start", justifyContent: "center", gap: "4px" });
-    c.innerHTML = `<span style="font-size:24px;font-weight:600">${p.name}</span><span style="font-size:17px;opacity:0.85">${p.about}</span>`;
-    c.classList.toggle("active", i === app.preset);
-    c.addEventListener("click", () => { app.setPreset(i); $("overlay").classList.remove("shown"); });
-  });
+  const note = el("p", "", body, { fontSize: "18px", color: "var(--text-dim)", margin: "0 0 6px 0", lineHeight: "1.4" });
+  note.textContent = "Pick your genre, then the style. It tells Mixology what you're going for: today it sets the Tone page's target; from Milestone 4 it also steers Auto Mix and the Mix Assistant.";
+  const now = el("p", "", body, { fontSize: "19px", margin: "0 0 16px 0" });
+  now.innerHTML = `Now: <b style="color:var(--gold)">${app.style.fullName}</b>`;
+
+  const grid = el("div", "genre-grid", body);
+  for (const genre of GENRES) {
+    const colour = genreColour(genre);
+    const b = el("button", "btn", grid);
+    b.innerHTML = `${icon(genre.icon)}<span class="g-name">${genre.name}</span><span class="g-sub">${genre.styles.length} styles</span>`;
+    b.querySelector("svg").style.color = colour;
+    b.classList.toggle("active", genre === app.style.genre);
+    if (genre === app.style.genre) b.querySelector("svg").style.color = "#fff";
+    b.addEventListener("click", () => openGenre(app, genre));
+  }
+}
+
+// Pale genre colours (Worship, Cinematic...) get darker on the light look so they still read on white.
+function genreColour(genre) {
+  return document.documentElement.dataset.theme === "light" ? `color-mix(in srgb, ${genre.colour} 72%, #000)` : genre.colour;
+}
+
+function openGenre(app, genre) {
+  const old = $("style-pop");
+  if (old) old.remove();
+  const cover = el("div", "", $("sheet"));
+  cover.id = "style-pop";
+  cover.addEventListener("pointerdown", (e) => { if (e.target === cover) cover.remove(); });
+  const pop = el("div", "pop", cover);
+  const head = el("div", "pop-head", pop);
+  head.innerHTML = `<span style="color:${genreColour(genre)};display:grid">${icon(genre.icon)}</span><span>${genre.name}</span>`;
+  const back = el("button", "small-btn", head, { marginLeft: "auto" });
+  back.textContent = "‹ All genres";
+  back.addEventListener("click", () => cover.remove());
+  const list = el("div", "styles scroll", pop);
+  for (const style of genre.styles) {
+    const key = `${genre.id}.${style.id}`;
+    const b = el("button", "btn", list);
+    b.innerHTML = `<span class="s-name">${style.name}</span><span class="s-about">${style.about}</span>`;
+    b.classList.toggle("active", key === app.style.key);
+    b.addEventListener("click", () => { app.setStyle(key); cover.remove(); $("overlay").classList.remove("shown"); });
+  }
 }

@@ -2,7 +2,6 @@
 // the processing controls are previews until Milestone 5.
 
 import { el, box, icon, fmt, clamp, Knob, Meter, select, graph, freqToX, moduleList, previewTag, store, cssVar } from "./ui.js";
-import { PRESETS } from "./sheets.js";
 
 function knobRow(host, defs, prefix, onChange) {
   host.innerHTML = "";
@@ -50,7 +49,7 @@ export function buildTone(root, app) {
 
   // Genre target curves (dB vs a flat, tilted reference): bass weight, low-mid scoop, top sheen.
   function target(f) {
-    const p = PRESETS[app.preset] || PRESETS[0];
+    const p = app.style;
     const lf = Math.log2(f / 1000);
     const bass = p.bass * Math.exp(-Math.pow(Math.log2(f / 55), 2) / 2.2);
     const scoop = -p.scoop * Math.exp(-Math.pow(Math.log2(f / 350), 2) / 1.2);
@@ -92,7 +91,7 @@ export function buildTone(root, app) {
     ctx.stroke(); ctx.restore();
   };
   function renderLegend() {
-    legend.innerHTML = `<span><span style="display:inline-block;width:22px;height:3px;background:#ff2a2a;vertical-align:5px;margin-right:8px;box-shadow:0 0 6px #ff2a2a"></span>Target: ${(PRESETS[app.preset] || PRESETS[0]).name}</span>
+    legend.innerHTML = `<span><span style="display:inline-block;width:22px;height:3px;background:#ff2a2a;vertical-align:5px;margin-right:8px;box-shadow:0 0 6px #ff2a2a"></span>Target: ${app.style.fullName}</span>
       <span><span style="display:inline-block;width:22px;height:3px;background:var(--text);vertical-align:5px;margin-right:8px"></span>Your mix</span>`;
   }
   app.on("preset", () => { renderLegend(); g.redraw(); });

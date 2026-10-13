@@ -6,7 +6,8 @@ import { $, el, icon, store, setRenderScale } from "./ui.js";
 import { buildOverview, buildTracks } from "./pages_main.js";
 import { buildEq, buildDynamics, buildSpace } from "./pages_process.js";
 import { buildTone, buildStereo, buildMaster } from "./pages_output.js";
-import { openSettings, openHelp, openPresets, hookBridge, PRESETS } from "./sheets.js";
+import { openSettings, openHelp, openPresets, hookBridge } from "./sheets.js";
+import { styleByKey } from "./mixstyles.js";
 
 // ---------------------------------------------------------------------------------------------
 // Fit the 1440 x 1080 design to the window.
@@ -46,7 +47,7 @@ export const app = {
   native,
   bridge: null,       // latest bridge state (see BridgeHub::getState)
   frame: null,        // latest meter frame
-  preset: 0,
+  style: styleByKey(0),   // the mix style (see mixstyles.js)
   on(kind, f) { listeners[kind].push(f); },
   emit(kind, data) { for (const f of listeners[kind]) f(data); },
   showPage,
@@ -114,18 +115,28 @@ $("sheet-close").addEventListener("click", () => $("overlay").classList.remove("
 $("overlay").addEventListener("pointerdown", (e) => { if (e.target.id === "overlay") $("overlay").classList.remove("shown"); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("overlay").classList.remove("shown"); });
 
-// Mix style picker in the header
+// Mix style picker in the header: the arrows step through the styles of the current genre;
+// clicking the name opens the genre / style picker.
 $("preset-prev").innerHTML = icon("chevL", 'stroke-width="2.6"');
 $("preset-next").innerHTML = icon("chevR", 'stroke-width="2.6"');
-function setPreset(i) {
-  app.preset = (i + PRESETS.length) % PRESETS.length;
-  $("preset-name").textContent = PRESETS[app.preset].name;
-  store.set("preset", app.preset);
-  app.emit("preset", app.preset);
+function setStyle(key) {
+  app.style = styleByKey(key);
+  const name = $("preset-name");
+  name.textContent = app.style.fullName;
+  name.title = app.style.about;
+  name.style.fontSize = "";
+  for (const size of [20, 18, 16]) if (name.scrollWidth > name.clientWidth) name.style.fontSize = size + "px";
+  store.set("preset", app.style.key);
+  app.emit("preset", app.style);
 }
-app.setPreset = setPreset;
-$("preset-prev").addEventListener("click", () => setPreset(app.preset - 1));
-$("preset-next").addEventListener("click", () => setPreset(app.preset + 1));
+function stepStyle(delta) {
+  const list = app.style.genre.styles;
+  const i = list.findIndex((s) => s.id === app.style.id);
+  setStyle(`${app.style.genre.id}.${list[(i + delta + list.length) % list.length].id}`);
+}
+app.setStyle = setStyle;
+$("preset-prev").addEventListener("click", () => stepStyle(-1));
+$("preset-next").addEventListener("click", () => stepStyle(1));
 $("preset-name").addEventListener("click", () => openPresets(app));
 
 // ---------------------------------------------------------------------------------------------
@@ -149,7 +160,7 @@ async function start() {
     pages[id] = Object.assign({ root }, b(root, app) || {});
   }
   fit();
-  setPreset(store.get("preset", 0));
+  setStyle(store.get("preset", 0));
   showPage(store.get("page", "overview"));
 
   const bridge = await native.getBridgeState();
