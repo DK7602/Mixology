@@ -215,6 +215,18 @@ void MixWebEditor::timerCallback()
     if (currentPage == "tracks")
         frame->setProperty ("trackMeters", hub.trackMeters());   // from each track's Mixology Link
 
+    // Analyze Mix and the analyzer's track colours: five times a second.
+    if (++frameCount % 6 == 0)
+    {
+        mixL.resize (static_cast<std::size_t> (mixology::TrackAnalyzer::kSize));
+        mixR.resize (mixL.size());
+        processor.analysisRing.copyLatest (mixL.data(), mixR.data(), mixology::TrackAnalyzer::kSize);
+        const auto mixFrame = mixAnalyzer.analyse (mixL.data(), mixR.data(), juce::jmax (8000.0, processor.getSampleRate()));
+        hub.analysisTick (mixFrame, processor.transportPlaying.load());
+        if (currentPage == "overview")
+            frame->setProperty ("roleCurves", hub.roleCurves (processor.getSampleRate()));
+    }
+
     if (hub.stateVersion() != sentBridgeVersion)
     {
         sentBridgeVersion = hub.stateVersion();

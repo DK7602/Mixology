@@ -2,6 +2,8 @@
 
 #include "PluginProcessor.h"
 
+#include "mixology/TrackAnalyzer.h"
+
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_dsp/juce_dsp.h>
 
@@ -54,6 +56,10 @@ private:
     std::array<float, 2048> stereoL {}, stereoR {};
     float correlationSmoothed = 0.0f;
     juce::String currentPage { "overview" };
+
+    mixology::TrackAnalyzer mixAnalyzer;
+    std::vector<float> mixL, mixR;
+    int frameCount = 0;
 
     std::uint64_t sentBridgeVersion = ~0ull;
     juce::int64 sentLogVersion = -1;

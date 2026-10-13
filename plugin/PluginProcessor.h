@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "mixology/AudioRing.h"
 #include "mixology/LoudnessMeter.h"
 #include "BridgeHub.h"
 #include "SpectrumTap.h"
@@ -57,6 +58,8 @@ public:
     Meters meters;
     SpectrumTap spectrumTap;
     StereoTap stereoTap;
+    mixology::AudioRing analysisRing;              // for Analyze Mix (the editor analyses it 5 times a second)
+    std::atomic<bool> transportPlaying { false };
 
     /** UI state saved with the project (last page, etc.). */
     juce::String getUiState() const { const juce::ScopedLock sl (stateLock); return uiState; }

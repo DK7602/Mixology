@@ -1,49 +1,14 @@
 // Overview and Tracks pages.
 
-import { el, box, icon, fmt, clamp, Knob, Meter, select, graph, freqToX, previewTag, store } from "./ui.js";
+import { el, box, icon, fmt, clamp, Knob, Meter, select, graph, freqToX, previewTag, store, popupMenu } from "./ui.js";
+import { ROLES, ROLE_ORDER, GROUPS, guessRole } from "./roles.js";
+import { openSuggestion, openTracksSheet } from "./sheets.js";
 
-// Track roles: icon + colour (the mockup's palette). Guessed from the channel name; Milestone 3 adds
-// guessing from the sound and lets you correct it.
-export const ROLES = {
-  kick:   { icon: "kick",   colour: "#ff2b2b", label: "Kick" },
-  snare:  { icon: "snare",  colour: "#3dff8a", label: "Snare" },
-  hats:   { icon: "hats",   colour: "#ff3fa4", label: "Hats" },
-  perc:   { icon: "perc",   colour: "#26d4ff", label: "Perc" },
-  bass:   { icon: "bass",   colour: "#ffd21f", label: "Bass" },
-  keys:   { icon: "keys",   colour: "#28c8ff", label: "Keys" },
-  synth:  { icon: "synth",  colour: "#2fb6ff", label: "Synth" },
-  guitar: { icon: "guitar", colour: "#b04dff", label: "Guitar" },
-  vox:    { icon: "vox",    colour: "#3dff6e", label: "Vocals" },
-  fx:     { icon: "fx",     colour: "#ffe23a", label: "FX" },
-  adlibs: { icon: "adlibs", colour: "#ff9a1f", label: "Ad-libs" },
-  other:  { icon: "other",  colour: "#c0c8d6", label: "Other" },
-};
-
-export function guessRole(name) {
-  const n = (name || "").toLowerCase();
-  const rules = [
-    ["adlibs", /ad.?lib|adlib|hype|dub vox|backing|bgv|double/],
-    ["vox", /vox|vocal|voc\b|lead v|verse|hook|rap|sing|acap/],
-    ["kick", /kick|kik|\bbd\b|bassdrum/],
-    ["snare", /snare|snr|clap|\bsd\b|rim/],
-    ["hats", /hat|\bhh\b|cymbal|ride|crash|open h/],
-    ["perc", /perc|shaker|tamb|conga|bongo|tom|cowbell|drum/],
-    ["bass", /808|bass|sub\b|subs/],
-    ["keys", /key|piano|rhodes|organ|\bep\b|wurl/],
-    ["guitar", /guitar|gtr|acoustic|strat/],
-    ["synth", /synth|pad|lead|pluck|arp|string|brass|bell|choir|sample|melod|loop/],
-    ["fx", /\bfx\b|riser|sweep|impact|reverse|noise|verb|delay|transition/],
-  ];
-  for (const [role, re] of rules) if (re.test(n)) return role;
-  return "other";
-}
+export { ROLES, guessRole };
 
 // =============================================================================================
 // OVERVIEW
 
-const SOURCES = [
-  ["Kick", "#ff2424"], ["Bass", "#ff7a12"], ["Drums", "#ffe11f"], ["Vocals", "#3dff5a"], ["Instruments", "#1f6bff"], ["Other", "#e62bff"],
-];
 
 export function buildOverview(root, app) {
   // ---- left: operations
@@ -57,8 +22,12 @@ export function buildOverview(root, app) {
   ];
   const analyze = el("button", "btn big active", root, box(0, 0, 252, 112));
   analyze.innerHTML = `ANALYZE MIX<span class="sub">Scan tracks and build a mix</span>`;
-  analyze.addEventListener("click", () =>
-    app.toast("Analyze Mix arrives in Milestone 3: it listens through Mixology Link on each track. Right now Mixology hears your full mix, shows each track's level through Mixology Link, and can move every Cubase fader in view (Tracks page)."));
+  const busy = () => { const a = app.bridge && app.bridge.analysis; return a && (a.state === "reading" || a.state === "listening"); };
+  analyze.addEventListener("click", () => {
+    if (busy()) return;
+    const st = app.style;
+    app.command("analyze", { value: { key: st.key, name: st.fullName, bass: st.bass, scoop: st.scoop, air: st.air } });
+  });
   ops.forEach((o, i) => {
     const b = el("button", "btn", root, box(0, 130 + i * 120, 252, 104));
     b.innerHTML = icon(o.icon) + `<span>${o.label}</span>`;
@@ -70,12 +39,13 @@ export function buildOverview(root, app) {
   const t = el("div", "panel-title", an);
   t.textContent = "MIX ANALYZER";
   const legend = el("div", "", an, { position: "absolute", left: "218px", top: "27px", display: "flex", gap: "11px", fontSize: "15px" });
-  legend.title = "Per-track colours arrive with Mixology Link (Milestone 3). Today the analyzer shows your whole mix, coloured by frequency.";
-  for (const [name, c] of SOURCES) {
+  legend.title = "The coloured lines: each kind of track, heard through its Mixology Link (after its fader). The rainbow: your whole mix.";
+  const legendItems = GROUPS.map((gr) => {
     const item = el("span", "", legend, { display: "flex", alignItems: "center", gap: "7px", opacity: "0.9" });
-    el("span", "", item, { width: "14px", height: "14px", background: c, boxShadow: `0 0 6px ${c}` });
-    item.appendChild(document.createTextNode(name));
-  }
+    el("span", "", item, { width: "14px", height: "14px", background: gr.colour, boxShadow: `0 0 6px ${gr.colour}` });
+    item.appendChild(document.createTextNode(gr.label));
+    return item;
+  });
   const viewSel = select(an, 690, 16, 126, ["Live Mix", "Slow", "Peak Hold"], store.get("anView", "Live Mix"), (v) => { store.set("anView", v); hold = null; });
 
   const g = graph(an, 18, 72, 680, 466);
@@ -88,7 +58,7 @@ export function buildOverview(root, app) {
   const ml = el("div", "", an, { position: "absolute", left: "736px", top: "502px", width: "90px", display: "flex", gap: "8px", fontSize: "16px", color: "var(--text-dim)" });
   ml.innerHTML = "<span style='width:14px;text-align:center'>L</span><span style='width:14px;text-align:center'>R</span><span>LUFS</span>";
 
-  let spectrum = null, hold = null, smooth = null;
+  let spectrum = null, hold = null, smooth = null, curves = null;
   const DB_MIN = -48, DB_MAX = 12, OFFSET = 40;   // tilted spectrum reads about -40 for a balanced mix: centre it on 0
   const yOf = (db, h) => 12 + (1 - (db - DB_MIN) / (DB_MAX - DB_MIN)) * (h - 12);
   g.draw = (ctx, w, h) => {
@@ -158,6 +128,29 @@ export function buildOverview(root, app) {
       });
       ctx.stroke();
     }
+    // Each kind of track (Mixology Link), in its colour, through the 1/3-octave band centres.
+    if (curves) {
+      ctx.save();
+      ctx.lineWidth = 2.4;
+      curves.forEach((c, gi) => {
+        if (!c) return;
+        const colour = GROUPS[gi].colour;
+        ctx.strokeStyle = colour;
+        ctx.shadowColor = colour;
+        ctx.shadowBlur = dark ? 8 : 2;
+        ctx.beginPath();
+        let started = false;
+        c.forEach((v, b) => {
+          const hz = 1000 * Math.pow(2, (b - 17) / 3);
+          if (hz < 20 || hz > 20000) return;
+          const x = 34 + freqToX(hz, W), y = yOf(clamp(v + OFFSET, DB_MIN - 6, DB_MAX), plotH);
+          started ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+          started = true;
+        });
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
     if (hold) {
       ctx.setLineDash([4, 4]);
       ctx.lineWidth = 1.2;
@@ -171,6 +164,43 @@ export function buildOverview(root, app) {
       ctx.setLineDash([]);
     }
   };
+
+  // ---- Analyze Mix: the listening panel (over the analyzer while it listens)
+  const lp = el("div", "card", an, { position: "absolute", left: "120px", top: "120px", width: "560px", padding: "22px 26px 20px", display: "none", zIndex: "4", boxShadow: "0 14px 44px rgba(0,0,0,0.55)", border: "2px solid var(--btn-edge)" });
+  const lpTitle = el("div", "panel-title gold", lp, { position: "relative", left: "0", top: "0", fontSize: "26px", marginBottom: "8px" });
+  lpTitle.textContent = "ANALYZE MIX";
+  const lpText = el("div", "", lp, { fontSize: "19px", lineHeight: "1.4", minHeight: "54px" });
+  const bar = el("div", "", lp, { position: "relative", height: "16px", borderRadius: "8px", background: "var(--well)", boxShadow: "inset 0 0 0 1px var(--panel-edge)", margin: "14px 0 6px" });
+  const barFill = el("div", "", bar, { position: "absolute", left: "0", top: "0", bottom: "0", width: "0%", borderRadius: "8px", background: "linear-gradient(90deg,#1f6bff,#1fd1ff,#3dff5a)", boxShadow: "0 0 10px rgba(31,209,255,0.6)" });
+  el("div", "", bar, { position: "absolute", left: "33.3%", top: "-4px", bottom: "-4px", width: "2px", background: "var(--gold)" });
+  const barLabels = el("div", "", lp, { position: "relative", height: "20px", fontSize: "14px", color: "var(--text-dim)" });
+  barLabels.innerHTML = `<span style="position:absolute;left:0">0 s</span><span style="position:absolute;left:33.3%;transform:translateX(-50%);color:var(--gold)">20 s: enough</span><span style="position:absolute;right:0">60 s</span>`;
+  const lpButtons = el("div", "", lp, { display: "flex", gap: "10px", marginTop: "14px" });
+  const finishBtn = el("button", "small-btn", lpButtons);
+  finishBtn.textContent = "Finish now";
+  finishBtn.addEventListener("click", () => app.command("analyzeFinish"));
+  const cancelBtn = el("button", "small-btn", lpButtons);
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.addEventListener("click", () => app.command("analyzeCancel"));
+
+  function renderListening(b) {
+    const a = b && b.analysis;
+    const on = a && (a.state === "reading" || a.state === "listening");
+    lp.style.display = on ? "block" : "none";
+    analyze.innerHTML = !a || !on ? `ANALYZE MIX<span class="sub">Scan tracks and build a mix</span>`
+      : a.state === "reading" ? `READING FADERS<span class="sub">One moment...</span>`
+      : `LISTENING ${Math.floor(a.seconds)} s<span class="sub">${a.playing ? "Keep playing" : "Press play in Cubase"}</span>`;
+    if (!on) return;
+    const s = a.seconds || 0;
+    barFill.style.width = Math.min(100, (s / (a.max || 60)) * 100) + "%";
+    finishBtn.disabled = s < 10;
+    lpText.innerHTML = a.state === "reading"
+      ? "Reading every channel's fader in Cubase (a second or two). Nothing moves."
+      : !a.playing
+        ? `<b>Press play in Cubase.</b> Play the busiest part of the song (the hook or the drop), 30 to 60 seconds. Mixology listens to ${a.heard} track${a.heard === 1 ? "" : "s"} through Mixology Link and to the whole mix.`
+        : `<b>Listening: ${Math.floor(s)} s</b> to ${a.heard} track${a.heard === 1 ? "" : "s"} and the whole mix. ${s < (a.enough || 20) ? "Keep playing..." : "That's enough to go on: press Finish now, or let it run to 60 s."}`;
+  }
+  app.on("bridge", renderListening);
 
   // ---- centre bottom: quick tone knobs (preview)
   const qt = el("div", "", root, box(266, 570, 830, 272));
@@ -189,13 +219,21 @@ export function buildOverview(root, app) {
   mt.textContent = "MIX ASSISTANT";
   const sub = el("div", "", ma, { position: "absolute", left: "72px", top: "54px", right: "14px", fontSize: "17px", color: "var(--text)" });
   sub.textContent = "What Mixology hears right now:";
-  const list = el("div", "", ma, { position: "absolute", left: "12px", top: "92px", right: "12px", bottom: "12px", display: "flex", flexDirection: "column", gap: "10px" });
+  const list = el("div", "scroll", ma, { position: "absolute", left: "12px", top: "92px", right: "12px", bottom: "12px", display: "flex", flexDirection: "column", gap: "10px", overflowY: "auto", overflowX: "hidden" });
+  const maFoot = el("div", "", ma, { position: "absolute", left: "12px", right: "12px", bottom: "12px", height: "48px", display: "none", gap: "8px" });
+  const tracksBtn = el("button", "small-btn", maFoot, { flex: "1" });
+  tracksBtn.addEventListener("click", () => openTracksSheet(app));
+  const liveBtn = el("button", "small-btn", maFoot, { flex: "1" });
+  liveBtn.textContent = "Live view";
+  let showLive = false;
+  liveBtn.addEventListener("click", () => { showLive = !showLive; lastKey = ""; renderAssistant(); });
+  const KIND = { warn: "#ff5a3c", info: "#19d3ff", calm: "#39e26b" };
 
   function card(iconName, colour, title, hint, onClick) {
-    const c = el("div", "card", list, { position: "relative", minHeight: "104px", padding: "14px 34px 12px 70px", cursor: onClick ? "pointer" : "default" });
+    const c = el("div", "card", list, { position: "relative", flex: "none", minHeight: "104px", padding: "14px 34px 12px 70px", cursor: onClick ? "pointer" : "default" });
     c.innerHTML = `<div style="position:absolute;left:12px;top:22px;width:46px;height:46px;color:${colour};filter:drop-shadow(0 0 6px ${colour})">${icon(iconName)}</div>
       <div style="font-size:19px;font-weight:500;line-height:1.2">${title}</div>
-      <div style="font-size:16px;margin-top:5px;line-height:1.25;color:var(--cyan)">${hint}</div>
+      <div style="font-size:16px;margin-top:5px;line-height:1.25;color:var(--info)">${hint}</div>
       ${onClick ? `<div style="position:absolute;right:8px;top:36px;width:24px;height:24px;color:var(--text)">${icon("chevR", 'stroke-width="2.4"')}</div>` : ""}`;
     if (onClick) c.addEventListener("click", onClick);
     return c;
@@ -206,10 +244,24 @@ export function buildOverview(root, app) {
     const f = app.frame || {};
     const b = app.bridge || {};
     const st = f.shortTerm ?? -100, tp = f.truePeak ?? -100;
-    const key = [b.link, (b.slots || []).filter((s) => s.present).length, b.linksPaired, b.linksSeen, Math.round(st), Math.round(tp)].join("|");
+    const report = b.analysis && b.analysis.report;
+    const useReport = report && !showLive;
+    const key = useReport ? "r|" + JSON.stringify(report.suggestions.map((x) => x.id + x.kind + x.title)) + report.seconds + report.style
+      : [b.link, (b.slots || []).filter((s) => s.present).length, b.linksPaired, b.linksSeen, Math.round(st), Math.round(tp), !!report].join("|");
     if (key === lastKey) return;
     lastKey = key;
     list.innerHTML = "";
+    maFoot.style.display = report ? "flex" : "none";
+    list.style.bottom = report ? "70px" : "12px";
+    liveBtn.textContent = showLive ? "Analysis" : "Live view";
+    if (report) tracksBtn.textContent = `Your tracks (${report.tracks.length})`;
+    if (useReport) {
+      sub.textContent = `From Analyze Mix (${Math.round(report.seconds)} s heard):`;
+      for (const sg of report.suggestions)
+        card(sg.icon, KIND[sg.kind] || KIND.info, sg.title, sg.need, () => openSuggestion(app, sg));
+      return;
+    }
+    sub.textContent = "What Mixology hears right now:";
     const n = (b.slots || []).filter((s) => s.present).length;
     if (b.link === "connected")
       card("check", "#39e26b", `Cubase connected: ${n} channel${n === 1 ? "" : "s"} in view`, b.linksPaired
@@ -226,7 +278,8 @@ export function buildOverview(root, app) {
       else if (tp > -3) card("headroom", "#ffc04a", `Peaks reach ${fmt.num(tp, 1)} dBTP`, "A bit hot for mastering: aim for peaks around -6 to -3");
       else card("check", "#39e26b", `Headroom is good (peaks ${fmt.num(tp, 1)} dBTP)`, "Plenty of room for Masterology");
     }
-    card("bulb", "#ff36e1", "Mix suggestions arrive in Milestone 3", "Kick / bass clashes, harsh hats, vocal pocket... need Mixology Link on each track");
+    if (!report)
+      card("bulb", "#ff36e1", "Press Analyze Mix for real advice", b.linksSeen ? `Play the busiest part of the song: Mixology listens to your ${b.linksSeen} track${b.linksSeen === 1 ? "" : "s"} with Mixology Link` : "First insert Mixology Link on your tracks (after their other plug-ins)");
   }
 
   return {
@@ -235,6 +288,10 @@ export function buildOverview(root, app) {
       meters.l.set(f.peakL ?? -100);
       meters.r.set(f.peakR ?? -100);
       meters.lufs.set((f.momentary ?? -100) + 0);
+      if (f.roleCurves) {
+        curves = f.roleCurves;
+        legendItems.forEach((it, i) => { it.style.opacity = curves[i] ? "1" : "0.4"; });
+      }
       if (f.spectrum) {
         const s = f.spectrum;
         const mode = viewSel.value;
@@ -332,6 +389,22 @@ export function buildTracks(root, app) {
     };
 
     lock.addEventListener("click", () => { if (live()) send("protect", !strip.data.protected); });
+
+    // The role icon: click to set what this track is (or leave it out of Analyze Mix).
+    ic.style.cursor = "pointer";
+    ic.addEventListener("click", () => {
+      if (!strip.data || !strip.data.present) return;
+      const d = strip.data, current = d.role || guessRole(d.title);
+      const items = ROLE_ORDER.map((k) => ({ label: ROLES[k].label, value: k, icon: ROLES[k].icon, colour: ROLES[k].colour, sel: d.roleSet && k === current }));
+      items.push({ divider: true });
+      items.push({ label: d.roleSet ? "Automatic (from name and sound)" : "Automatic (now: " + ROLES[current].label + ")", value: "auto", icon: "wand", sel: !d.roleSet });
+      items.push({ divider: true });
+      items.push({ label: d.excluded ? "Include in Analyze Mix" : "Leave out of Analyze Mix", value: "exclude", icon: d.excluded ? "check" : "close" });
+      popupMenu(ic, items, (v) => {
+        if (v === "exclude") app.command("setExcluded", { hash: d.hash, value: !d.excluded });
+        else app.command("setRole", { hash: d.hash, value: v === "auto" ? "" : v });
+      }, 300);
+    });
     undo.addEventListener("click", () => send("restore"));
     sBtn.addEventListener("click", () => { if (guarded()) send("solo", !strip.data.solo); });
     mBtn.addEventListener("click", () => { if (guarded()) send("mute", !strip.data.mute); });
@@ -465,7 +538,7 @@ export function buildTracks(root, app) {
       st.data = d;
       const present = connected && d && d.present;
       st.s.style.opacity = present ? "1" : "0.35";
-      const role = present ? guessRole(d.title) : "other";
+      const role = present ? (d.role || guessRole(d.title)) : "other";
       const R = ROLES[role];
       st.name.textContent = present ? d.title : "—";
       st.name.title = present ? d.title + (d.duplicate ? "\nAnother channel in view has the same name." : "") : "";
@@ -473,7 +546,9 @@ export function buildTracks(root, app) {
       st.colourBar.style.background = present && d.colour ? d.colour : "transparent";
       if (st.role !== role) { st.ic.innerHTML = icon(R.icon); st.role = role; }
       st.ic.style.color = R.colour;
-      st.ic.style.filter = `drop-shadow(0 0 6px ${R.colour})`;
+      st.ic.style.filter = present && d.excluded ? "grayscale(1)" : `drop-shadow(0 0 6px ${R.colour})`;
+      st.ic.style.opacity = present && d.excluded ? "0.4" : "1";
+      st.ic.title = present ? `${R.label}${d.roleSet ? " (set by you)" : ""}${d.excluded ? ". Left out of Analyze Mix" : ""}. Click to change` : "";
 
       // Padlock: closed = protected (Mixology never moves it).
       const prot = present && d.protected;

@@ -51,6 +51,10 @@ void MixologyAudioProcessor::process (juce::AudioBuffer<Sample>& buffer)
     loudness.process (data, channels, n);
     spectrumTap.push (data, channels, n);
     stereoTap.push (data, channels, n);
+    analysisRing.push (data, channels, n);
+    if (auto* ph = getPlayHead())
+        if (auto pos = ph->getPosition())
+            transportPlaying.store (pos->getIsPlaying(), std::memory_order_relaxed);
 
     for (int c = 0; c < juce::jmin (2, channels); ++c)
     {
@@ -85,6 +89,7 @@ void MixologyAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     xml.setAttribute ("version", JucePlugin_VersionString);
     xml.setAttribute ("ui", getUiState());
     xml.setAttribute ("protected", bridgeHub->protectedState());   // the padlocks on the Tracks page
+    xml.setAttribute ("tracks", bridgeHub->trackSettingsState());  // your track roles, tracks left out of Analyze Mix
     copyXmlToBinary (xml, destData);
 }
 
@@ -95,6 +100,7 @@ void MixologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
         {
             setUiState (xml->getStringAttribute ("ui"));
             bridgeHub->setProtectedState (xml->getStringAttribute ("protected"));
+            bridgeHub->setTrackSettingsState (xml->getStringAttribute ("tracks"));
         }
 }
 

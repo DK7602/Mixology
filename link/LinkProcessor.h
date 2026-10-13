@@ -1,23 +1,28 @@
 #pragma once
 
+#include "mixology/AudioRing.h"
 #include "mixology/LinkRegistry.h"
+#include "mixology/TrackAnalyzer.h"
 #include "mixology/TrackMeter.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include <atomic>
 
-/** Mixology Link: one on each track. v1 (Milestone 2): a Trim, meters, and the track's identity.
+/** Mixology Link: one on each track. A Trim, meters, the track's identity, and (Milestone 3) analysis.
 
     - Measures its track (peaks per 50 ms, momentary and short-term loudness) and publishes it to the
       process-wide Link registry, where Mixology on the Stereo Out reads it.
     - Learns the track's name and colour from the host (VST3 channel context) and publishes those too, so
       Mixology can pair it with the matching MixConsole channel it sees through the Cubase bridge.
+    - About five times a second a background thread (one per library, shared by every Link) analyses the
+      latest audio (TrackAnalyzer: 1/3-octave bands, loudness, width) for Analyze Mix.
     - Trim: a clean gain (-24..+24 dB). Mixology may ask for a new Trim; the request is applied on the
       message thread like a user move, so the host sees it (automation, undo) and the project saves it.
     Audio is otherwise untouched (no latency). */
 class MixologyLinkProcessor final : public juce::AudioProcessor,
-                                    private juce::Timer
+                                    private juce::Timer,
+                                    private juce::TimeSliceClient
 {
 public:
     MixologyLinkProcessor();
@@ -76,7 +81,22 @@ private:
     template <typename Sample>
     void process (juce::AudioBuffer<Sample>&);
     void timerCallback() override;
+    int useTimeSlice() override;   // analysis thread
     void publishIdentity();
+
+    struct AnalysisThread : juce::TimeSliceThread
+    {
+        AnalysisThread() : juce::TimeSliceThread ("Mixology Link analysis") { startThread (juce::Thread::Priority::low); }
+        ~AnalysisThread() override { stopThread (2000); }
+    };
+    juce::SharedResourcePointer<AnalysisThread> analysisThread;
+    mixology::AudioRing ring;
+    mixology::TrackAnalyzer analyzer;                 // analysis thread only
+    std::vector<float> snapL, snapR;                  // analysis thread only
+    std::atomic<double> currentRate { 48000.0 };
+    std::atomic<bool> transportPlaying { false };
+    std::atomic<std::int64_t> songPosition { 0 };
+    std::atomic<std::uint64_t> lastAudioMs { 0 };
 
     std::atomic<float>* trimParam = nullptr;
     juce::SmoothedValue<double, juce::ValueSmoothingTypes::Multiplicative> trimGain;

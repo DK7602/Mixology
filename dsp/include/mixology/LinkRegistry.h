@@ -1,5 +1,7 @@
 #pragma once
 
+#include "mixology/TrackAnalyzer.h"
+
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -15,12 +17,13 @@
 
     Threads:
     - Each Link owns one slot. Its audio thread writes the meters (atomics, never blocks); its message
-      thread writes the identity (name / colour, guarded by a sequence counter) and a heartbeat.
+      thread writes the identity (name / colour, guarded by a sequence counter) and a heartbeat; its analysis
+      thread writes an AnalysisFrame about five times a second (guarded by its own sequence counter).
     - Mixology (main) reads everything from its message thread and can ask a Link to change its Trim; the
       Link's message thread picks the request up and applies it like a user move (host sees it, undo works). */
 namespace mixology::link
 {
-    constexpr std::uint32_t kLayoutVersion = 1;
+    constexpr std::uint32_t kLayoutVersion = 2;   // 2: analysis frames (Milestone 3)
     constexpr int kMaxLinks = 256;
     constexpr std::size_t kNameBytes = 128;
     constexpr std::uint64_t kAliveMs = 2000;   // a Link without a heartbeat for this long is gone
@@ -54,6 +57,15 @@ namespace mixology::link
 
         std::atomic<std::uint32_t> mainMatch;      // Mixology -> Link: MatchStatus with the channel in view
         std::atomic<std::uint64_t> mainMatchMs;    // when Mixology last said so
+
+        // Analysis (Link's analysis thread): the latest AnalysisFrame, odd analysisSeq while it is written.
+        std::atomic<std::uint32_t> analysisSeq;
+        std::atomic<std::uint64_t> analysisMs;     // when it was measured (0 = never)
+        std::atomic<std::uint32_t> analysisFlags;  // bit 0 silent, bit 1 transport playing
+        std::atomic<std::int64_t> songSample;      // song position (samples) at that moment
+        std::array<std::atomic<float>, kBands> bandDb;
+        std::array<std::atomic<float>, kBands> sideShare;
+        std::atomic<float> aLoudness, aRms, aPeak, aCorrelation, aWidth;
     };
 
     struct alignas (64) Header
@@ -71,6 +83,7 @@ namespace mixology::link
     static_assert (std::atomic<std::uint64_t>::is_always_lock_free);
     static_assert (std::atomic<float>::is_always_lock_free);
     static_assert (std::atomic<char>::is_always_lock_free);
+    static_assert (std::atomic<std::int64_t>::is_always_lock_free);
 
     enum class MatchStatus : std::uint32_t { none = 0, matched = 1, ambiguous = 2 };
 
@@ -93,6 +106,12 @@ namespace mixology::link
         float peakL = kSilentDb, peakR = kSilentDb, momentary = kSilentDb, shortTerm = kSilentDb, trimDb = 0.0f;
         int channels = 0;
         bool audio = false;   // processed audio in the last second
+
+        bool hasAnalysis = false;   // a frame measured within the last second
+        AnalysisFrame analysis;
+        bool playing = false;       // the host's transport was running at that moment
+        std::int64_t songSample = 0;
+        std::uint64_t analysisMs = 0;
     };
 
     class Registry
@@ -115,6 +134,8 @@ namespace mixology::link
         bool takeTrimRequest (int slot, std::uint32_t& lastSeq, float& db) const;
         /** How Mixology paired this Link lately (none when Mixology hasn't said anything for kAliveMs). */
         MatchStatus matchSeen (int slot, std::uint64_t nowMs) const;
+        /** Analysis thread: one writer per slot. */
+        void publishAnalysis (int slot, const AnalysisFrame&, bool playing, std::int64_t songSample, std::uint64_t nowMs);
 
         // ---- Mixology side ---------------------------------------------------------------------
         void mainHeartbeat (std::uint64_t nowMs);
@@ -126,6 +147,8 @@ namespace mixology::link
         void reportMatch (int slot, std::uint32_t generation, MatchStatus, std::uint64_t nowMs);
 
         Identity readIdentity (int slot) const;
+        /** The latest frame; false if there is none or a writer kept getting in the way. */
+        bool readAnalysis (int slot, AnalysisFrame&, bool& playing, std::int64_t& songSample, std::uint64_t& whenMs) const;
 
     private:
         Block& block;

@@ -107,6 +107,8 @@ namespace mixology
             }
         }
 
+        if (scan.active && now >= scan.nextAt) scanStep (now);
+
         for (int i = 0; i < static_cast<int> (meta.size()); ++i)
         {
             auto& mt = meta[static_cast<std::size_t> (i)];
@@ -344,6 +346,7 @@ namespace mixology
         {
             s.volumeDb = law.toDb (m.value);
         }
+        if (s.present) faders[s.hash] = { s.title, s.volumeDb, now };
         changed();
 
         if (first)
@@ -428,6 +431,7 @@ namespace mixology
 
     void BridgeSession::cancelMoves (const std::string& why, double now)
     {
+        scan.active = false;
         bool any = false;
         for (auto& mt : meta)
         {
@@ -440,6 +444,7 @@ namespace mixology
     BridgeSession::Result BridgeSession::checkWritable (ChannelRef ref, Field field) const
     {
         if (linkState != Link::connected) return { false, "Not connected to Cubase." };
+        if (scan.active) return { false, "Mixology is reading your faders for Analyze Mix (a second or two)." };
         if (ref.slot < 0 || ref.slot >= slotCount()) return { false, "No such channel." };
         const auto& s = slots[static_cast<std::size_t> (ref.slot)];
         if (! s.present) return { false, "That strip is empty." };
@@ -776,6 +781,82 @@ namespace mixology
     }
 
     // ---------------------------------------------------------------------------------------------
+
+    // ---------------------------------------------------------------------------------------------
+    // Reading every channel's fader: reset the bank, then page through it, then go back.
+
+    void BridgeSession::sendBank (BankAction action)
+    {
+        Message m;
+        m.cmd = Cmd::bank;
+        m.flag = static_cast<int> (action);
+        send (m);
+    }
+
+    BridgeSession::Result BridgeSession::scanAllChannels (double now)
+    {
+        if (linkState != Link::connected) return { false, "Not connected to Cubase." };
+        if (scan.active) return { true, {} };
+        cancelMoves ({}, now);
+        scan = {};
+        scan.active = true;
+        scan.originalFirst = slotCount() > 0 && slot (0).present ? slot (0).hash : 0;
+        scan.nextAt = now + kScanPageSeconds;
+        sendBank (BankAction::reset);
+        changed();
+        return { true, {} };
+    }
+
+    void BridgeSession::scanStep (double now)
+    {
+        if (scan.restoring)
+        {
+            if (! scan.pending.empty())
+            {
+                sendBank (scan.pending.front());
+                scan.pending.pop_front();
+                scan.nextAt = now + kScanStepSeconds;
+                return;
+            }
+            scan.active = false;
+            addLog (now, "Read " + std::to_string (faders.size()) + " channel fader" + (faders.size() == 1 ? "" : "s") + " for Analyze Mix.");
+            changed();
+            return;
+        }
+
+        // The page in view now: remember where the channel that was first in view sits.
+        int present = 0;
+        for (int i = 0; i < slotCount(); ++i)
+        {
+            if (! slot (i).present) continue;
+            ++present;
+            if (scan.foundPage < 0 && scan.originalFirst != 0 && slot (i).hash == scan.originalFirst)
+            {
+                scan.foundPage = scan.page;
+                scan.foundSlot = i;
+            }
+        }
+        const std::uint32_t first = slotCount() > 0 && slot (0).present ? slot (0).hash : 0;
+        const bool last = first == 0 || present < slotCount() || (scan.page > 0 && first == scan.lastFirst) || scan.page >= 40;
+        if (! last)
+        {
+            scan.lastFirst = first;
+            ++scan.page;
+            scan.nextAt = now + kScanPageSeconds;
+            sendBank (BankAction::next);
+            return;
+        }
+
+        // Back to where the bank was: reset, whole pages, then single steps (spaced out, one per step).
+        scan.restoring = true;
+        scan.pending.push_back (BankAction::reset);
+        if (scan.foundPage >= 0)
+        {
+            for (int p = 0; p < scan.foundPage; ++p) scan.pending.push_back (BankAction::next);
+            for (int k = 0; k < scan.foundSlot; ++k) scan.pending.push_back (BankAction::shiftRight);
+        }
+        scan.nextAt = now;   // the next tick starts sending
+    }
 
     BridgeSession::Result BridgeSession::bank (BankAction action, double now)
     {

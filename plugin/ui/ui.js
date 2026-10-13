@@ -400,6 +400,32 @@ export function select(parent, x, y, w, options, value, onChange, opts = {}) {
   return api;
 }
 
+/** A menu that pops up under `anchor`. items: { label, value, icon?, colour?, sel?, divider? }. */
+export function popupMenu(anchor, items, onPick, width = 240) {
+  if (openMenu) { openMenu.remove(); openMenu = null; }
+  const stage = document.getElementById("stage");
+  const r = anchor.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+  const k = sr.width / 1440;
+  let left = (r.left - sr.left) / k, top = (r.bottom - sr.top) / k + 4;
+  const m = el("div", "menu", stage, { left: left + "px", top: top + "px", minWidth: width + "px", maxHeight: "620px", overflowY: "auto" });
+  for (const it of items) {
+    if (it.divider) { el("div", "", m, { height: "1px", margin: "6px 4px", padding: "0", background: "var(--panel-edge)", pointerEvents: "none" }); continue; }
+    const item = el("div", it.sel ? "sel" : "", m, { display: "flex", alignItems: "center", gap: "10px" });
+    if (it.icon) {
+      const ic = el("span", "", item, { width: "24px", height: "24px", flex: "none", color: it.colour || "var(--text)" });
+      ic.innerHTML = icon(it.icon);
+    }
+    el("span", "", item).textContent = it.label;
+    item.addEventListener("click", () => { m.remove(); openMenu = null; onPick(it.value); });
+  }
+  // keep it on the stage
+  const mr = m.getBoundingClientRect();
+  if (mr.bottom > sr.bottom) m.style.top = Math.max(8, top - (mr.bottom - sr.bottom) / k - 8) + "px";
+  if (mr.right > sr.right) m.style.left = Math.max(8, left - (mr.right - sr.right) / k - 8) + "px";
+  setTimeout(() => { openMenu = m; }, 0);   // the click that opened it must not close it
+  return m;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Left-column module list (one active, red)
 

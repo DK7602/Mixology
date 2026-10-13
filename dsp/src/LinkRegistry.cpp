@@ -51,6 +51,7 @@ namespace mixology::link
             s.trimDb.store (0.0f, kRelaxed);
             s.audioMs.store (0, kRelaxed);
             s.mainMatchMs.store (0, kRelaxed);
+            s.analysisMs.store (0, kRelaxed);
             s.heartbeatMs.store (nowMs, kRelaxed);
             s.generation.fetch_add (1, kRelease);
             return i;
@@ -167,6 +168,64 @@ namespace mixology::link
         return static_cast<MatchStatus> (s->mainMatch.load (kRelaxed));
     }
 
+    void Registry::publishAnalysis (int slot, const AnalysisFrame& f, bool playing, std::int64_t songSample, std::uint64_t nowMs)
+    {
+        auto* s = slotPtr (slot);
+        if (s == nullptr) return;
+        const auto seq = s->analysisSeq.load (kRelaxed);
+        s->analysisSeq.store (seq + 1, kRelaxed);
+        std::atomic_thread_fence (kRelease);
+        for (std::size_t b = 0; b < static_cast<std::size_t> (kBands); ++b)
+        {
+            s->bandDb[b].store (f.bandDb[b], kRelaxed);
+            s->sideShare[b].store (f.sideShare[b], kRelaxed);
+        }
+        s->aLoudness.store (f.loudness, kRelaxed);
+        s->aRms.store (f.rmsDb, kRelaxed);
+        s->aPeak.store (f.peakDb, kRelaxed);
+        s->aCorrelation.store (f.correlation, kRelaxed);
+        s->aWidth.store (f.width, kRelaxed);
+        s->analysisFlags.store ((f.silent ? 1u : 0u) | (playing ? 2u : 0u), kRelaxed);
+        s->songSample.store (songSample, kRelaxed);
+        s->analysisMs.store (nowMs, kRelaxed);
+        s->analysisSeq.store (seq + 2, kRelease);
+    }
+
+    bool Registry::readAnalysis (int slot, AnalysisFrame& f, bool& playing, std::int64_t& songSample, std::uint64_t& whenMs) const
+    {
+        auto* s = slotPtr (slot);
+        if (s == nullptr) return false;
+        for (int attempt = 0; attempt < 64; ++attempt)
+        {
+            const auto before = s->analysisSeq.load (kAcquire);
+            if (before & 1u) continue;
+            AnalysisFrame out;
+            for (std::size_t b = 0; b < static_cast<std::size_t> (kBands); ++b)
+            {
+                out.bandDb[b] = s->bandDb[b].load (kRelaxed);
+                out.sideShare[b] = s->sideShare[b].load (kRelaxed);
+            }
+            out.loudness = s->aLoudness.load (kRelaxed);
+            out.rmsDb = s->aRms.load (kRelaxed);
+            out.peakDb = s->aPeak.load (kRelaxed);
+            out.correlation = s->aCorrelation.load (kRelaxed);
+            out.width = s->aWidth.load (kRelaxed);
+            const auto flags = s->analysisFlags.load (kRelaxed);
+            const auto pos = s->songSample.load (kRelaxed);
+            const auto when = s->analysisMs.load (kRelaxed);
+            std::atomic_thread_fence (kAcquire);
+            if (s->analysisSeq.load (kRelaxed) != before) continue;
+            if (when == 0) return false;
+            out.silent = (flags & 1u) != 0;
+            f = out;
+            playing = (flags & 2u) != 0;
+            songSample = pos;
+            whenMs = when;
+            return true;
+        }
+        return false;
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Mixology side
 
@@ -202,6 +261,12 @@ namespace mixology::link
             info.shortTerm = info.audio ? s.shortTerm.load (kRelaxed) : kSilentDb;
             info.channels = static_cast<int> (s.channels.load (kRelaxed));
             info.trimDb = s.trimDb.load (kRelaxed);
+            std::uint64_t when = 0;
+            if (readAnalysis (i, info.analysis, info.playing, info.songSample, when))
+            {
+                info.analysisMs = when;
+                info.hasAnalysis = nowMs - std::min (nowMs, when) <= kAudioMs;
+            }
             out.push_back (std::move (info));
         }
         return out;

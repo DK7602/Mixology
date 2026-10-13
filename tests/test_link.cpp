@@ -1,5 +1,6 @@
 #include "mixology/BridgeProtocol.h"
 #include "mixology/LinkRegistry.h"
+#include "mixology/TrackAnalyzer.h"
 #include "mixology/SharedBlock.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -102,7 +103,7 @@ TEST_CASE ("Registry: silent and vanished Links", "[link]")
     auto l = r.links (1000 + kAudioMs + 10);   // no audio for a while (stopped, bypassed)
     REQUIRE (l.size() == 1);
     CHECK_FALSE (l[0].audio);
-    CHECK (l[0].peakL == kSilentDb);
+    CHECK (l[0].peakL == link::kSilentDb);
 
     CHECK (r.links (1000 + kAliveMs + 10).empty());   // no heartbeat: gone
     r.heartbeat (s, 5000);
@@ -140,6 +141,31 @@ TEST_CASE ("Registry: Mixology tells each Link whether it is paired", "[link]")
     CHECK (r.matchSeen (s, 100 + kAliveMs + 1) == MatchStatus::none);   // Mixology went quiet
     r.reportMatch (s, gen + 1, MatchStatus::ambiguous, 300);             // stale generation: ignored
     CHECK (r.matchSeen (s, 300) == MatchStatus::matched);
+}
+
+TEST_CASE ("Registry: analysis frames travel whole, with the transport state", "[link]")
+{
+    SharedBlock linkLib (testName ("analysis"), Registry::bytes()), mainLib (testName ("analysis"), Registry::bytes());
+    Registry linkSide (linkLib.data()), mainSide (mainLib.data());
+    const int s = linkSide.claim (3, 1000);
+    CHECK_FALSE (mainSide.links (1000)[0].hasAnalysis);
+
+    AnalysisFrame f;
+    f.silent = false;
+    for (int b = 0; b < kBands; ++b) { f.bandDb[static_cast<std::size_t> (b)] = -20.0f - b; f.sideShare[static_cast<std::size_t> (b)] = b / 100.0f; }
+    f.loudness = -14.5f; f.rmsDb = -17.0f; f.peakDb = -3.0f; f.correlation = 0.8f; f.width = 0.2f;
+    linkSide.publishAnalysis (s, f, true, 123456, 1100);
+
+    auto l = mainSide.links (1200);
+    REQUIRE (l.size() == 1);
+    CHECK (l[0].hasAnalysis);
+    CHECK (l[0].playing);
+    CHECK (l[0].songSample == 123456);
+    CHECK (l[0].analysis.bandDb[30] == -50.0f);
+    CHECK (l[0].analysis.sideShare[10] == 0.1f);
+    CHECK (l[0].analysis.loudness == -14.5f);
+    CHECK_FALSE (l[0].analysis.silent);
+    CHECK_FALSE (mainSide.links (1100 + kAudioMs + 1)[0].hasAnalysis);   // stale: not used
 }
 
 TEST_CASE ("Registry: Mixology's heartbeat", "[link]")

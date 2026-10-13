@@ -1,5 +1,7 @@
 #include "BridgeHub.h"
 
+#include <set>
+
 namespace
 {
     constexpr double kReopenInterval = 3.0;   // seconds between attempts to find the ports
@@ -136,6 +138,30 @@ void BridgeHub::timerCallback()
 {
     const double t = now();
     applyPendingProtected();   // a project loaded its padlocks off the message thread
+    {
+        juce::String pending;
+        bool has = false;
+        {
+            const juce::ScopedLock sl (protectedLock);
+            if (hasPendingTrackSettings) { pending = trackSettingsPending; has = true; hasPendingTrackSettings = false; }
+        }
+        if (has)
+        {
+            trackSettings.clear();
+            for (const auto& line : juce::StringArray::fromLines (pending))
+            {
+                juce::StringArray f;
+                f.addTokens (line, "\t", "");
+                const auto hash = static_cast<std::uint32_t> (f[0].getLargeIntValue());
+                if (hash == 0) continue;
+                auto& ts = trackSettings[hash];
+                ts.role = mixology::mix::roleFromKey (f[1].toStdString());
+                ts.excluded = f[2] == "1";
+            }
+            cacheTrackSettings();
+            ++analysisVersion;
+        }
+    }
 
     if (toCubase == nullptr && t - lastOpenAttempt > kReopenInterval)
         openPorts();
@@ -299,6 +325,203 @@ void BridgeHub::cacheProtected()
     protectedCache = lines.joinIntoString ("\n");
 }
 
+juce::String BridgeHub::trackSettingsState() const
+{
+    const juce::ScopedLock sl (protectedLock);
+    return hasPendingTrackSettings ? trackSettingsPending : trackSettingsCache;
+}
+
+void BridgeHub::setTrackSettingsState (const juce::String& text)
+{
+    const juce::ScopedLock sl (protectedLock);
+    trackSettingsPending = text;
+    hasPendingTrackSettings = true;   // applied on the message thread (next timer tick)
+}
+
+void BridgeHub::cacheTrackSettings()
+{
+    juce::StringArray lines;
+    for (const auto& [hash, ts] : trackSettings)
+        if (ts.role || ts.excluded)
+            lines.add (juce::String (static_cast<juce::int64> (hash)) + "\t" + (ts.role ? mixology::mix::roleKey (*ts.role) : "") + "\t" + (ts.excluded ? "1" : "0"));
+    const juce::ScopedLock sl (protectedLock);
+    trackSettingsCache = lines.joinIntoString ("\n");
+}
+
+// ---------------------------------------------------------------------------------------------
+// Analyze Mix
+
+std::optional<mixology::mix::Role> BridgeHub::roleFor (std::uint32_t hash, const std::string& name) const
+{
+    if (auto it = trackSettings.find (hash); it != trackSettings.end() && it->second.role) return it->second.role;
+    for (const auto& t : report.tracks)
+        if (t.hash == hash) return t.role;
+    return mixology::mix::roleFromName (name);
+}
+
+void BridgeHub::analysisTick (const mixology::AnalysisFrame& mixFrame, bool playing)
+{
+    using namespace mixology;
+    if (playing != transportPlaying) { transportPlaying = playing; ++analysisVersion; }
+    if (analyzeState == Analyze::reading && ! bridge.scanning()) { analyzeState = Analyze::listening; ++analysisVersion; }
+
+    const auto ms = link::nowMs();
+    std::vector<mix::TrackSample> tracks;
+    for (const auto& l : link::processRegistry().links (ms))
+    {
+        if (! l.hasAnalysis || ms - std::min (ms, l.analysisMs) > 500) continue;
+        mix::TrackSample t;
+        t.hash = l.identity.hasName ? l.nameHash : 0u;
+        t.name = l.identity.hasName ? l.identity.name : "Unnamed track " + std::to_string (l.slot + 1);
+        if (t.hash != 0)
+            if (auto it = bridge.knownFaders().find (t.hash); it != bridge.knownFaders().end())
+            {
+                t.faderDb = std::max (it->second.db, -200.0);
+                t.faderKnown = true;
+            }
+        t.frame = l.analysis;
+        tracks.push_back (std::move (t));
+    }
+    if (static_cast<int> (tracks.size()) != tracksHeard) { tracksHeard = static_cast<int> (tracks.size()); ++analysisVersion; }
+
+    if (analyzeState != Analyze::listening || ! playing) return;
+    mix::Moment m;
+    m.mix = mixFrame;
+    m.tracks = std::move (tracks);
+    analysis.add (std::move (m));
+    ++analysisVersion;
+    if (analysis.secondsHeard() >= 60.0 || analysis.full()) finishAnalysis();
+}
+
+void BridgeHub::finishAnalysis()
+{
+    // Channels Cubase showed that no Link reported: listed, so the advice is honest about what it heard.
+    std::vector<std::string> unheard;
+    std::set<std::uint32_t> heard;
+    for (const auto& l : mixology::link::processRegistry().links (mixology::link::nowMs()))
+        if (l.identity.hasName) heard.insert (l.nameHash);
+    for (const auto& [hash, f] : bridge.knownFaders())
+    {
+        const auto ts = trackSettings.find (hash);
+        if (heard.count (hash) == 0 && f.db > mixology::FaderLaw::kMinusInf + 1.0 && (ts == trackSettings.end() || ! ts->second.excluded))
+            unheard.push_back (f.title);
+    }
+
+    report = analysis.evaluate (trackSettings, unheard);
+    analyzeState = Analyze::done;
+    ++analysisVersion;
+}
+
+juce::var BridgeHub::analysisState() const
+{
+    static const char* names[] = { "idle", "reading", "listening", "done" };
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("state", names[static_cast<int> (analyzeState)]);
+    o->setProperty ("seconds", analysis.secondsHeard());
+    o->setProperty ("enough", mixology::mix::Analysis::kEnoughSeconds);
+    o->setProperty ("max", 60.0);
+    o->setProperty ("playing", transportPlaying);
+    o->setProperty ("heard", tracksHeard);
+
+    if (report.valid)
+    {
+        auto* r = new juce::DynamicObject();
+        r->setProperty ("seconds", report.secondsHeard);
+        r->setProperty ("style", juce::String::fromUTF8 (report.style.name.c_str()));
+        r->setProperty ("mixLoudness", report.mixLoudness);
+        r->setProperty ("mixPeak", report.mixPeak);
+        r->setProperty ("mixCorrelation", report.mixCorrelation);
+        auto list = [] (const std::vector<std::string>& v) {
+            juce::Array<juce::var> a;
+            for (const auto& x : v) a.add (juce::String::fromUTF8 (x.c_str()));
+            return a;
+        };
+        auto numbers = [] (const std::vector<double>& v) {
+            juce::Array<juce::var> a;
+            for (double x : v) a.add (std::round (x * 10.0) / 10.0);
+            return a;
+        };
+        r->setProperty ("unheard", list (report.unheard));
+        r->setProperty ("mixBands", numbers (report.mixBands));
+        r->setProperty ("targetBands", numbers (report.targetBands));
+
+        juce::Array<juce::var> tracks;
+        for (const auto& t : report.tracks)
+        {
+            auto* to = new juce::DynamicObject();
+            to->setProperty ("hash", static_cast<juce::int64> (t.hash));
+            to->setProperty ("name", juce::String::fromUTF8 (t.name.c_str()));
+            to->setProperty ("role", mixology::mix::roleKey (t.role));
+            to->setProperty ("roleFrom", juce::String (t.roleFrom));
+            to->setProperty ("excluded", t.excluded);
+            to->setProperty ("faderKnown", t.faderKnown);
+            to->setProperty ("activity", std::round (t.activity * 100.0) / 100.0);
+            to->setProperty ("loudness", std::round (t.loudness * 10.0) / 10.0);
+            to->setProperty ("peak", std::round (t.peakBeforeFader * 10.0) / 10.0);
+            to->setProperty ("width", std::round (t.width * 100.0) / 100.0);
+            tracks.add (juce::var (to));
+        }
+        r->setProperty ("tracks", tracks);
+
+        juce::Array<juce::var> sugs;
+        for (const auto& sg : report.suggestions)
+        {
+            auto* so = new juce::DynamicObject();
+            so->setProperty ("id", juce::String (sg.id));
+            so->setProperty ("kind", juce::String (sg.kind));
+            so->setProperty ("icon", juce::String (sg.icon));
+            so->setProperty ("title", juce::String::fromUTF8 (sg.title.c_str()));
+            so->setProperty ("text", juce::String::fromUTF8 (sg.text.c_str()));
+            so->setProperty ("need", juce::String::fromUTF8 (sg.need.c_str()));
+            so->setProperty ("steps", list (sg.steps));
+            so->setProperty ("tracks", list (sg.tracks));
+            sugs.add (juce::var (so));
+        }
+        r->setProperty ("suggestions", sugs);
+        o->setProperty ("report", juce::var (r));
+    }
+    return juce::var (o);
+}
+
+juce::var BridgeHub::roleCurves (double sampleRate) const
+{
+    using namespace mixology;
+    std::array<std::array<double, kBands>, mix::kGroupCount> energy {};
+    std::array<bool, mix::kGroupCount> any {};
+    const auto ms = link::nowMs();
+    for (const auto& l : link::processRegistry().links (ms))
+    {
+        if (! l.hasAnalysis || l.analysis.silent || ms - std::min (ms, l.analysisMs) > 500) continue;
+        const auto hash = l.identity.hasName ? l.nameHash : 0u;
+        if (auto it = trackSettings.find (hash); it != trackSettings.end() && it->second.excluded) continue;
+        const auto role = roleFor (hash, l.identity.name).value_or (mix::Role::other);
+        const auto g = static_cast<std::size_t> (mix::groupOf (role));
+        double fader = 0.0;
+        if (auto it = bridge.knownFaders().find (hash); hash != 0 && it != bridge.knownFaders().end()) fader = std::max (it->second.db, -200.0);
+        any[g] = true;
+        for (int b = 0; b < kBands; ++b)
+            energy[g][static_cast<std::size_t> (b)] += std::pow (10.0, (l.analysis.bandDb[static_cast<std::size_t> (b)] + fader) / 10.0);
+    }
+
+    // Same units as the mix spectrum (per FFT bin of the 8192-point display, tilted 4.5 dB per octave).
+    juce::Array<juce::var> out;
+    const double binHz = std::max (8000.0, sampleRate) / 8192.0;
+    for (int g = 0; g < mix::kGroupCount; ++g)
+    {
+        if (! any[static_cast<std::size_t> (g)]) { out.add (juce::var()); continue; }
+        juce::Array<juce::var> curve;
+        for (int b = 0; b < kBands; ++b)
+        {
+            const double hz = bandHz (b);
+            const double e = energy[static_cast<std::size_t> (g)][static_cast<std::size_t> (b)];
+            const double db = e > 1.0e-14 ? 10.0 * std::log10 (e) - 10.0 * std::log10 (std::max (1.0, 0.2316 * hz / binHz)) + 4.5 * std::log2 (hz / 1000.0) : -120.0;
+            curve.add (std::round (db * 10.0) / 10.0);
+        }
+        out.add (curve);
+    }
+    return out;
+}
+
 juce::var BridgeHub::getState (bool includeLog)
 {
     using mixology::link::MatchStatus;
@@ -344,6 +567,13 @@ juce::var BridgeHub::getState (bool includeLog)
                 changed = bridge.isChanged (it->second, &at) && at == i;
             }
         so->setProperty ("changed", changed);
+        if (s.present)
+        {
+            if (auto role = roleFor (s.hash, s.title)) so->setProperty ("role", mixology::mix::roleKey (*role));
+            const auto ts = trackSettings.find (s.hash);
+            so->setProperty ("roleSet", ts != trackSettings.end() && ts->second.role.has_value());
+            so->setProperty ("excluded", ts != trackSettings.end() && ts->second.excluded);
+        }
 
         const auto sl = i < static_cast<int> (stripLinks.size()) ? stripLinks[static_cast<std::size_t> (i)] : StripLink {};
         so->setProperty ("linkStatus", sl.status == MatchStatus::matched ? "matched" : sl.status == MatchStatus::ambiguous ? "ambiguous" : "none");
@@ -362,6 +592,8 @@ juce::var BridgeHub::getState (bool includeLog)
     o->setProperty ("linksPaired", paired);
     o->setProperty ("linksShared", mixology::link::processRegistryShared());
     o->setProperty ("lastMove", juce::String::fromUTF8 (bridge.lastMoveResult().c_str()));
+    o->setProperty ("scanning", bridge.scanning());
+    o->setProperty ("analysis", analysisState());
     o->setProperty ("lawPoints", static_cast<int> (bridge.faderLaw().size()));
 
     // Where the fader scale marks sit on Cubase's fader (learned curve; a rough guess until learned).
@@ -420,6 +652,51 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
         info = bridge.restoreAll (t).message;
     }
     else if (name == "forget")    bridge.forgetRestorePoints (t);
+    else if (name == "analyze")
+    {
+        const auto& st = value;
+        mixology::mix::Style style;
+        style.key = st.getProperty ("key", "hiphop.modern").toString().toStdString();
+        style.name = st.getProperty ("name", "Hip Hop - Modern Clean").toString().toStdString();
+        style.bass = st.getProperty ("bass", 4.0);
+        style.scoop = st.getProperty ("scoop", 1.5);
+        style.air = st.getProperty ("air", 2.0);
+        if (mixology::link::processRegistry().links (mixology::link::nowMs()).empty())
+            r = { false, "No Mixology Link found. Insert Mixology Link on your tracks (after their other plug-ins), then press Analyze Mix." };
+        else
+        {
+            analysis.begin (style);
+            if (bridge.link() == mixology::BridgeSession::Link::connected && bridge.scanAllChannels (t).ok)
+                analyzeState = Analyze::reading;   // first every channel's fader, then listen
+            else
+                analyzeState = Analyze::listening;
+            ++analysisVersion;
+        }
+    }
+    else if (name == "analyzeFinish")
+    {
+        if (! analysis.hasMoments()) r = { false, "Nothing heard yet: press play in Cubase." };
+        else finishAnalysis();
+    }
+    else if (name == "analyzeCancel")
+    {
+        analyzeState = report.valid ? Analyze::done : Analyze::idle;
+        ++analysisVersion;
+    }
+    else if (name == "setRole" || name == "setExcluded")
+    {
+        const auto hash = static_cast<std::uint32_t> (static_cast<juce::int64> (arg.getProperty ("hash", 0)));
+        if (hash == 0) r = { false, "That track has no name Mixology can keep track of." };
+        else
+        {
+            auto& ts = trackSettings[hash];
+            if (name == "setRole") ts.role = mixology::mix::roleFromKey (value.toString().toStdString());
+            else ts.excluded = static_cast<bool> (value);
+            cacheTrackSettings();
+            if (report.valid && analysis.hasMoments()) report = analysis.evaluate (trackSettings, report.unheard);
+            ++analysisVersion;
+        }
+    }
     else if (name == "trim")
     {
         const bool valid = ref.slot >= 0 && ref.slot < bridge.slotCount() && ref.slot < static_cast<int> (stripLinks.size())

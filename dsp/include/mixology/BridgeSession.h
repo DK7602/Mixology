@@ -157,6 +157,20 @@ namespace mixology
         RestoreSummary restoreAll (double now);
         void forgetRestorePoints (double now);
 
+        // ---- every channel's fader (Analyze Mix needs them, not just the 12 in view) -------------
+        struct KnownFader
+        {
+            std::string title;
+            double db = FaderLaw::kMinusInf;
+            double seenAt = 0.0;
+        };
+        /** Fader levels of every channel seen so far (in the bank, or during a scan). */
+        const std::map<std::uint32_t, KnownFader>& knownFaders() const { return faders; }
+        /** Steps the bank through all channels to read their faders, then puts it back where it was.
+            Takes about half a second per 12 channels; nothing can be moved meanwhile. */
+        Result scanAllChannels (double now);
+        bool scanning() const { return scan.active; }
+
         // ---- commands --------------------------------------------------------------------------
         Result setVolumeDb (ChannelRef, double db, double now);
         Result nudgeDb (ChannelRef, double deltaDb, double now);
@@ -206,6 +220,21 @@ namespace mixology
 
         enum class Field { volume, pan, mute, solo };
 
+        struct Scan
+        {
+            bool active = false;
+            double nextAt = 0.0;
+            int page = 0;
+            std::uint32_t originalFirst = 0, lastFirst = 0;
+            int foundPage = -1, foundSlot = -1;
+            bool restoring = false;
+            std::deque<bridge::BankAction> pending;   // the way back, one step at a time
+        };
+        void scanStep (double now);
+        void sendBank (bridge::BankAction);
+        static constexpr double kScanPageSeconds = 0.5;
+        static constexpr double kScanStepSeconds = 0.08;   // between bank steps on the way back
+
         void send (const bridge::Message&);
         void handle (const bridge::Message&, double now);
         void onTitle (const bridge::Message&, double now);
@@ -237,6 +266,8 @@ namespace mixology
         std::map<std::uint32_t, std::string> protectedChannels;   // hash -> title
         std::map<std::uint32_t, RestorePoint> restore;            // hash -> how it was
         std::map<std::uint32_t, bool> readWarned;                 // hash -> warned about R this session
+        std::map<std::uint32_t, KnownFader> faders;               // hash -> last fader level seen
+        Scan scan;
         std::string moveResult;
 
         std::deque<LogLine> logBuffer;

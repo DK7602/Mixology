@@ -68,7 +68,7 @@ Goal: prove that Mixology can move ONE real MixConsole fader safely, and see you
   0.1 dB; moving the Cubase fader shows in Mixology within 0.1 s; renaming / reordering / banking never moves another
   channel; no automation gets written; playback never stutters; Restore puts the fader back.
 
-### M2 - Tracks page goes live (built: you test it, docs/M2_TEST.md)
+### M2 - Tracks page goes live: PASSED (2026-10-13, Cubase Artist 14)
 - Bank of channels with real names, colours, fader, pan, mute, solo, both directions, no feedback loops. Every write
   names the channel the strip showed (slot + name hash) and is refused if that changed. Type a dB value, wheel nudges,
   per-channel and "Restore all" restore points.
@@ -80,7 +80,13 @@ Goal: prove that Mixology can move ONE real MixConsole fader safely, and see you
   first does something.
 - Test whether moves land in Cubase's MixConsole History (undo); our own Restore works either way.
 
-### M3 - Listening (analysis)
+### M3 - Listening (analysis) (built: you test it, docs/M3_TEST.md)
+Built: each Link analyses its track on a background thread 5 x a second (31 one-third-octave bands with stereo share,
+K-weighted loudness, RMS / peak, correlation, width; TrackAnalyzer, 0.1 ms per frame) into the registry (layout v2).
+Analyze Mix: reads every channel's fader first (bank scan, then back), listens while the transport runs (20 - 60 s),
+then MixAnalysis gives roles (yours > name > sound), per-track stats and plain-language suggestions with
+"Do I need to fix it?". Overview analyzer draws the six role groups; strips take the roles; role / leave-out saved
+with the project. Song-position tagging was not needed: moments are taken together 5 x a second.
 - Every Link publishes loudness (momentary / short-term), true peak, crest factor, a 1/3-octave spectrum, stereo width
   and correlation into the shared registry (M2 already carries peaks, loudness and Trim), tagged with song position
   (the same proven method as Voxology's Unmask link).

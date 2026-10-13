@@ -2,9 +2,12 @@ add_library(mixology_dsp STATIC
     src/BridgeProtocol.cpp
     src/BridgeSession.cpp
     src/FaderLaw.cpp
+    src/Fft.cpp
     src/LinkRegistry.cpp
+    src/MixAnalysis.cpp
     src/SharedBlock.cpp
     src/TrackMeter.cpp
+    src/TrackAnalyzer.cpp
     src/KWeighting.cpp
     src/TruePeakDetector.cpp
     src/LoudnessMeter.cpp)

@@ -15,6 +15,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
@@ -126,8 +127,8 @@ int main (int argc, char** argv)
     check (processRegistryShared(), "shared memory available");
     auto links = registry.links (nowMs());
     check (links.size() == 2, "both Links visible from another library (" + juce::String (static_cast<int> (links.size())) + ")");
-    const auto* k = byName (links, "Kick");
-    const auto* b = byName (links, "808 Bass");
+    const LinkInfo* k = byName (links, "Kick");
+    const LinkInfo* b = byName (links, "808 Bass");
     check (k != nullptr && b != nullptr, "names arrived through the VST3 channel context");
     if (k == nullptr || b == nullptr) return 1;
 
@@ -138,6 +139,41 @@ int main (int argc, char** argv)
     check (std::abs (b->peakR + 6.02f) < 0.3f, "808 level -6 dBFS: " + juce::String (b->peakR, 2));
     check (b->momentary < -5.0f && b->momentary > -9.0f, "808 loudness about -6 LUFS: " + juce::String (b->momentary, 2));
     check (std::abs (k->trimDb + 6.0f) < 0.05f, "Kick reports its Trim: " + juce::String (k->trimDb, 2));
+
+    // Milestone 3: each Link analyses its track on a background thread while audio flows (about 5 x a second).
+    {
+        juce::AudioBuffer<float> buffer (2, block);
+        juce::MidiBuffer midi;
+        bool analysed = false;
+        for (int blk = 0; blk < 200 && ! analysed; ++blk)   // up to ~2 s of "real time"
+        {
+            for (auto* p : { kick.get(), bass.get() })
+            {
+                for (int i = 0; i < block; ++i)
+                {
+                    const auto x = 0.5f * static_cast<float> (std::sin (2.0 * juce::MathConstants<double>::pi * 997.0 * (blk * block + i) / sr));
+                    buffer.setSample (0, i, x);
+                    buffer.setSample (1, i, x);
+                }
+                p->processBlock (buffer, midi);
+            }
+            juce::Thread::sleep (10);
+            if (blk > 40)
+            {
+                const auto now = registry.links (nowMs());
+                analysed = ! now.empty() && std::all_of (now.begin(), now.end(), [] (const LinkInfo& l) { return l.hasAnalysis; });
+            }
+        }
+        check (analysed, "analysis frames arrive from both Links");
+        links = registry.links (nowMs());
+        k = byName (links, "Kick");
+        b = byName (links, "808 Bass");
+        if (k == nullptr || b == nullptr) return 1;
+        check (std::abs (k->analysis.bandDb[17] + 12.0f) < 0.8f, "Kick's 1 kHz band reads its level after the Trim: " + juce::String (k->analysis.bandDb[17], 2) + " dB");
+        check (k->analysis.bandDb[10] < -40.0f, "nothing in the 200 Hz band: " + juce::String (k->analysis.bandDb[10], 1));
+        check (k->analysis.correlation > 0.99f && k->analysis.width < 0.01f, "a centred sound reads mono");
+        check (std::abs (b->analysis.loudness + 6.0f) < 1.0f, "808 loudness about -6: " + juce::String (b->analysis.loudness, 2));
+    }
 
     std::vector<ChannelKey> bank { { true, mixology::bridge::nameHash ("808 Bass"), true, 0xd6b23au },
                                    { true, mixology::bridge::nameHash ("Snare"), false, 0 },

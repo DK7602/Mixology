@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-13, v0.2.0)
+# Mixology: resume here (updated 2026-10-13, v0.3.0)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -35,7 +35,32 @@ sends higher-resolution art, re-run it.
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
 
-## Milestone 2 status (v0.2.0): BUILT, WAITING FOR THE USER'S CUBASE TEST (docs/M2_TEST.md)
+## Milestone 3 status (v0.3.0): BUILT, WAITING FOR THE USER'S CUBASE TEST (docs/M3_TEST.md)
+- dsp: Fft (radix-2), TrackAnalyzer (4096-pt, mid/side in one complex FFT, 31 ISO 1/3-oct bands re full-scale
+  sine, sideShare, K-weighted loudness, rms, peak, corr, width), AudioRing, MixAnalysis (Moment = mix frame +
+  TrackSamples {hash, name, faderDb, frame}; evaluate(settings, unheard) -> Report: roles you > name (same regexes
+  as JS guessRole) > sound, stats, suggestions: short, unheard, vocal-low/high/ok (family targets: urban/pop +1,
+  band/acoustic -1, tol 3), kick-bass (shared 40-160 Hz > 50 %), kick-quiet, mud / harsh / bass-light|heavy /
+  dull|bright vs style target (mix bands tilted +1.5 dB/oct, normalised), vocal-pocket (1.6-4 kHz within 6 dB of
+  the vocal), highpass (>20 % below 100 Hz), low-wide, phase, quiet, hot, headroom, fine).
+- Registry layout v2 (name MixologyLink.v2.<pid>): per-slot analysis frame under its own seqlock + playing flag +
+  song sample. Link: AudioRing after Trim, juce::TimeSliceThread per library (SharedResourcePointer), 200 ms.
+- BridgeSession: knownFaders (hash -> title, dB) from every report; scanAllChannels(): reset, page with next
+  every 0.5 s until a short/empty/repeated page, then back (reset, next x page, shiftRight x slot, 80 ms apart);
+  writes refused while scanning. Simulated with the real script (30 channels).
+- Hub: commands analyze {value: style}, analyzeFinish, analyzeCancel, setRole {hash, value: key|""},
+  setExcluded; analysisTick(mixFrame, playing) from the editor every 6th frame (5 Hz); auto-finish at 60 s;
+  state.analysis {state idle|reading|listening|done, seconds, enough, max, playing, heard, report}; slots get
+  role / roleSet / excluded; roleCurves() for the Overview (6 groups x 31 bands, analyzer units). Track settings
+  saved in the processor state ("tracks": hash<TAB>role<TAB>excluded).
+- UI: roles.js (ROLES, ROLE_ORDER, GROUPS, guessRole), popupMenu() in ui.js, listening panel over the analyzer,
+  Mix Assistant report cards (+ Your tracks / Live view), openSuggestion + openTracksSheet in sheets.js, strip icon
+  role menu. mock.js simulates the whole flow.
+- Tests: 56 Catch2 cases (analysis: bands, sums, LF spread, width, silence, rates; roles, clash / no clash,
+  vocal level, masking, rumble + wide lows, mud / harsh, headroom / short / unheard / excluded, calm), bridge-sim
+  18 scenarios / 169 checks, linkcheck + analysis checks.
+
+## Milestone 2 status (v0.2.0): PASSED in Cubase Artist 14 (user, 2026-10-13)
 - Tracks page: all 12 strips write. Every command carries ChannelRef {slot, name hash} = what the strip showed;
   BridgeSession refuses if the slot now holds another channel, the script re-checks slot + hash on arrival.
   No lock / pause any more. Per-slot closed-loop dB moves (latest wins), wheel nudges add up (nudge from the active
@@ -151,7 +176,8 @@ Download: Actions -> latest green run -> artifact "Mixology-Windows" (VST3, Stan
 MANUAL.md, M1_TEST.md, INSTALL.txt).
 
 ## Next
-1. User runs docs/M2_TEST.md (copy both VST3s; script unchanged) and sends results + log. Fix what fails.
-2. M3: Links listen (1/3-octave spectrum, crest, width, song-position tags), roles, Analyze Mix, Mix Assistant,
-   exclude-from-analysis. Maybe: bank follows Cubase's selected track (mTrackSelection), restore points saved
-   with the project.
+1. User runs docs/M3_TEST.md (copy BOTH VST3s: registry v2) and sends results, screenshots, log. Tune thresholds
+   and texts from what they hear (calibration of tonal targets and vocal targets is a first guess).
+2. M4: Auto Mix (levels / pans from style targets, preview, apply via bridge, Restore), Low End tool (kick / 808),
+   Vocal Pocket (dips via Link: needs Link EQ), Stereo Architect, Clean Up, Reference Match. Style level / pan /
+   width targets per style (mixstyles.js). Maybe: restore points saved with the project.

@@ -571,3 +571,32 @@ TEST_CASE ("Bridge: a fast Cubase-side drag with lagging text doesn't bend the f
     }
 }
 
+TEST_CASE ("Bridge: reading every channel's fader, then back to the same bank", "[bridge]")
+{
+    Rig r;
+    for (int i = 0; i < 11; ++i) r.cubase.channels[static_cast<std::size_t> (i)].volume = 0.3 + 0.05 * i;
+    r.run (0.2);
+    r.session.bank (BankAction::shiftRight, r.now);
+    r.session.bank (BankAction::shiftRight, r.now);   // the user looks at channels 3 - 10
+    r.run (0.3);
+    REQUIRE (r.session.slot (0).title == "Hats");
+    CHECK (r.session.knownFaders().size() == 10);      // only what has been in view so far
+
+    REQUIRE (r.session.scanAllChannels (r.now).ok);
+    CHECK (r.session.scanning());
+    CHECK_FALSE (r.session.setVolumeDb (r.session.refOf (0), -6.0, r.now).ok);   // nothing moves meanwhile
+    r.run (3.0);
+    CHECK_FALSE (r.session.scanning());
+    CHECK (r.session.knownFaders().size() == 11);
+    for (const auto& c : r.cubase.channels)
+    {
+        const auto it = r.session.knownFaders().find (nameHash (c.name));
+        REQUIRE (it != r.session.knownFaders().end());
+        CHECK (it->second.db == Catch::Approx (FakeCubase::lawDb (c.volume)).margin (0.006));
+    }
+    CHECK (r.cubase.bankOffset == 2);                   // back where the user was
+    CHECK (r.session.slot (0).title == "Hats");
+    CHECK (r.cubase.setVolumeCount == 0);
+    CHECK (r.session.setVolumeDb (r.session.refOf (0), -6.0, r.now).ok);
+}
+

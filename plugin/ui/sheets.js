@@ -1,7 +1,8 @@
 // Overlays: Settings (Cubase Bridge, Mixology Link, display), the built-in manual, and mix styles.
 
-import { $, el, icon, fmt } from "./ui.js";
+import { $, el, icon, fmt, popupMenu } from "./ui.js";
 import { GENRES } from "./mixstyles.js";
+import { ROLES, ROLE_ORDER } from "./roles.js";
 
 function sheet(title) {
   const pop = $("style-pop");
@@ -56,7 +57,7 @@ function displayPanel(app, root) {
 function aboutPanel(app, root) {
   const p = el("div", "", root, { fontSize: "19px", lineHeight: "1.6" });
   p.innerHTML = `<b>Mixology</b>: intelligent mixing engineer. Part of the suite: Voxology (vocals), Mixology (the mix), Masterology (mastering).<br>
-    This build: the full interface, live mix meters, loudness, vectorscope, the Cubase bridge (every fader in view), and Mixology Link on each track (Milestone 2).<br>
+    This build: the full interface, live mix meters, loudness, vectorscope, the Cubase bridge (every fader in view), Mixology Link on each track, and Analyze Mix with the Mix Assistant (Milestone 3).<br>
     <span class="dim">Fonts: Barlow Semi Condensed (SIL Open Font License).</span>`;
 }
 
@@ -240,3 +241,77 @@ function openGenre(app, genre) {
     b.addEventListener("click", () => { app.setStyle(key); cover.remove(); $("overlay").classList.remove("shown"); });
   }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Mix Assistant: one suggestion in full, and the list of tracks Analyze Mix heard.
+
+const KIND = { warn: ["#ff5a3c", "Worth fixing"], info: ["#19d3ff", "Have a look"], calm: ["#39e26b", "Fine"] };
+
+export function openSuggestion(app, sg) {
+  const body = sheet("MIX ASSISTANT");
+  body.className = "scroll";
+  const [colour, kindLabel] = KIND[sg.kind] || KIND.info;
+  const head = el("div", "", body, { display: "flex", alignItems: "center", gap: "16px", marginBottom: "12px" });
+  head.innerHTML = `<span style="width:54px;height:54px;flex:none;color:${colour};filter:drop-shadow(0 0 6px ${colour})">${icon(sg.icon)}</span>
+    <span><span style="display:block;font-size:30px;font-weight:600">${sg.title}</span>
+    <span style="font-size:16px;letter-spacing:0.12em;text-transform:uppercase;color:${colour}">${kindLabel}</span></span>`;
+  el("p", "", body, { fontSize: "21px", lineHeight: "1.5", margin: "0 0 16px" }).textContent = sg.text;
+  const need = el("div", "card", body, { position: "relative", padding: "14px 18px", marginBottom: "16px", fontSize: "20px", lineHeight: "1.45", borderColor: colour });
+  need.innerHTML = `<b style="color:var(--gold)">Do I need to fix it?</b> ${sg.need}`;
+  if (sg.steps && sg.steps.length) {
+    el("div", "", body, { fontSize: "18px", fontWeight: "600", color: "var(--gold)", margin: "4px 0 6px", letterSpacing: "0.06em" }).textContent = "HOW";
+    const ol = el("ol", "", body, { fontSize: "20px", lineHeight: "1.5", margin: "0 0 16px", paddingLeft: "28px" });
+    for (const st of sg.steps) el("li", "", ol, { marginBottom: "6px" }).textContent = st;
+  }
+  if (sg.tracks && sg.tracks.length) {
+    const row = el("div", "", body, { display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" });
+    el("span", "", row, { fontSize: "18px", color: "var(--text-dim)", marginRight: "4px" }).textContent = "Tracks:";
+    for (const t of sg.tracks) el("span", "chip", row).textContent = t;
+    const go = el("button", "small-btn", row, { marginLeft: "auto" });
+    go.textContent = "Show the Tracks page";
+    go.addEventListener("click", () => { $("overlay").classList.remove("shown"); app.showPage("tracks"); });
+  }
+}
+
+export function openTracksSheet(app) {
+  const body = sheet("YOUR TRACKS");
+  body.className = "scroll";
+  const render = () => {
+    body.innerHTML = "";
+    const report = app.bridge && app.bridge.analysis && app.bridge.analysis.report;
+    if (!report) { el("p", "", body, { fontSize: "20px" }).textContent = "Press Analyze Mix first: this list shows what it heard."; return; }
+    const note = el("p", "", body, { fontSize: "18px", color: "var(--text-dim)", margin: "0 0 14px", lineHeight: "1.4" });
+    note.textContent = `What Analyze Mix heard (${Math.round(report.seconds)} s). Correct a track's role if Mixology guessed wrong, or leave a track out (a reference song, a printed stem): the advice updates right away.`;
+    const table = el("div", "", body, { display: "grid", gridTemplateColumns: "44px 1.6fr 1.2fr 0.8fr 0.8fr 0.7fr 0.9fr", gap: "8px 12px", alignItems: "center", fontSize: "18px" });
+    for (const h of ["", "Track", "Role", "Level", "Peak", "Width", ""]) el("div", "", table, { color: "var(--gold)", fontSize: "15px", letterSpacing: "0.08em", textTransform: "uppercase" }).textContent = h;
+    for (const t of report.tracks) {
+      const R = ROLES[t.role] || ROLES.other;
+      const ic = el("div", "", table, { width: "34px", height: "34px", color: R.colour, filter: t.excluded ? "grayscale(1)" : `drop-shadow(0 0 5px ${R.colour})`, opacity: t.excluded ? "0.4" : "1" });
+      ic.innerHTML = icon(R.icon);
+      const name = el("div", "", table, { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", opacity: t.excluded ? "0.5" : "1" });
+      name.textContent = t.name;
+      name.title = t.name + (t.faderKnown ? "" : " (its fader wasn't read: counted at 0 dB)");
+      const roleBtn = el("button", "small-btn", table, { textAlign: "left", padding: "0 12px" });
+      roleBtn.textContent = R.label + (t.roleFrom === "you" ? "" : t.roleFrom === "name" ? "  (name)" : "  (sound)");
+      roleBtn.addEventListener("click", () => {
+        const items = ROLE_ORDER.map((k) => ({ label: ROLES[k].label, value: k, icon: ROLES[k].icon, colour: ROLES[k].colour, sel: k === t.role }));
+        items.push({ divider: true }, { label: "Automatic", value: "", icon: "wand" });
+        popupMenu(roleBtn, items, async (v) => { await app.command("setRole", { hash: t.hash, value: v }); setTimeout(render, 250); }, 260);
+      });
+      el("div", "", table).textContent = t.loudness > -99 ? fmt.num(t.loudness, 1) + " LUFS" : "—";
+      const pk = el("div", "", table, { color: t.peak > 0 ? "var(--red)" : "" });
+      pk.textContent = t.peak > -99 ? fmt.signed(t.peak, 1) : "—";
+      el("div", "", table).textContent = Math.round(t.width * 100) + " %";
+      const inc = el("button", "small-btn", table);
+      inc.textContent = t.excluded ? "Left out" : "Included";
+      inc.style.color = t.excluded ? "var(--text-dim)" : "var(--green)";
+      inc.addEventListener("click", async () => { await app.command("setExcluded", { hash: t.hash, value: !t.excluded }); setTimeout(render, 250); });
+    }
+    if (report.unheard && report.unheard.length) {
+      const u = el("p", "", body, { fontSize: "17px", color: "var(--text-dim)", marginTop: "18px" });
+      u.textContent = "Without Mixology Link (not heard one by one): " + report.unheard.join(", ") + ".";
+    }
+  };
+  render();
+}
+

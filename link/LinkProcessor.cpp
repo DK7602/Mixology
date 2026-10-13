@@ -34,13 +34,31 @@ MixologyLinkProcessor::MixologyLinkProcessor()
     instanceId = (static_cast<std::uint64_t> (static_cast<std::uint32_t> (juce::Random::getSystemRandom().nextInt())) << 32)
                  ^ static_cast<std::uint32_t> (juce::Random::getSystemRandom().nextInt()) ^ static_cast<std::uint64_t> (juce::Time::getHighResolutionTicks());
     slot = registry.claim (instanceId, mixology::link::nowMs());
+    snapL.resize (static_cast<std::size_t> (mixology::TrackAnalyzer::kSize));
+    snapR.resize (static_cast<std::size_t> (mixology::TrackAnalyzer::kSize));
     startTimerHz (10);
+    analysisThread->addTimeSliceClient (this);
 }
 
 MixologyLinkProcessor::~MixologyLinkProcessor()
 {
+    analysisThread->removeTimeSliceClient (this);   // waits if it is analysing this Link right now
     stopTimer();
     registry.release (slot, instanceId);
+}
+
+// Analysis thread: about five times a second, while audio is flowing.
+int MixologyLinkProcessor::useTimeSlice()
+{
+    constexpr int kIntervalMs = 200;
+    const auto now = mixology::link::nowMs();
+    const auto last = lastAudioMs.load (std::memory_order_relaxed);
+    if (last == 0 || now - std::min (now, last) > 300) return kIntervalMs;   // stopped or bypassed: nothing new
+
+    ring.copyLatest (snapL.data(), snapR.data(), mixology::TrackAnalyzer::kSize);
+    const auto frame = analyzer.analyse (snapL.data(), snapR.data(), currentRate.load());
+    registry.publishAnalysis (slot, frame, transportPlaying.load(), songPosition.load(), now);
+    return kIntervalMs;
 }
 
 bool MixologyLinkProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -54,6 +72,7 @@ bool MixologyLinkProcessor::isBusesLayoutSupported (const BusesLayout& layouts) 
 void MixologyLinkProcessor::prepareToPlay (double sampleRate, int)
 {
     meter.prepare (sampleRate, juce::jmax (1, getTotalNumOutputChannels()));
+    currentRate = sampleRate;
     publishedWindows = meter.windowCount();
     trimGain.reset (sampleRate, 0.02);
     trimGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (static_cast<double> (trimParam->load())));
@@ -84,6 +103,13 @@ void MixologyLinkProcessor::process (juce::AudioBuffer<Sample>& buffer)
 
     // Measured after the Trim: what this track sends on to the fader.
     meter.process (buffer.getArrayOfReadPointers(), channels, n);
+    ring.push (buffer.getArrayOfReadPointers(), channels, n);
+    if (auto* ph = getPlayHead())
+        if (auto pos = ph->getPosition())
+        {
+            transportPlaying.store (pos->getIsPlaying(), std::memory_order_relaxed);
+            if (auto t = pos->getTimeInSamples()) songPosition.store (*t, std::memory_order_relaxed);
+        }
     if (meter.windowCount() != publishedWindows)
     {
         publishedWindows = meter.windowCount();
@@ -92,7 +118,9 @@ void MixologyLinkProcessor::process (juce::AudioBuffer<Sample>& buffer)
         storeMax (editorPeak[1], r);
         momentary.store (meter.momentaryLufs(), std::memory_order_relaxed);
         shortTerm.store (meter.shortTermLufs(), std::memory_order_relaxed);
-        registry.publishMeters (slot, l, r, meter.momentaryLufs(), meter.shortTermLufs(), meter.channels(), mixology::link::nowMs());
+        const auto now = mixology::link::nowMs();
+        registry.publishMeters (slot, l, r, meter.momentaryLufs(), meter.shortTermLufs(), meter.channels(), now);
+        lastAudioMs.store (now, std::memory_order_relaxed);
     }
 }
 

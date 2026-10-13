@@ -5,18 +5,19 @@ Intelligent multitrack mixing engineer for Cubase (VST3), the missing link betwe
 HTML / CSS / JS interface in the platform web view, GitHub Actions builds on every push.
 
 The plan and milestones: [docs/PLAN.md](docs/PLAN.md). User manual (also built into the plug-in): [docs/MANUAL.md](docs/MANUAL.md).
-Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md) (passed), [docs/M2_TEST.md](docs/M2_TEST.md) (current).
+Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_TEST.md) (passed), [docs/M3_TEST.md](docs/M3_TEST.md) (current).
 
-## Status: v0.2.0
+## Status: v0.3.0
 
 | Piece | State |
 | --- | --- |
 | Interface: 8 pages, dark / light (click the logo), resizable 4:3 | Done |
 | Live: analyzer, peaks, LUFS (Masterology's R128 meter), vectorscope, correlation, loudness history | Done |
 | Cubase bridge (M1): MIDI Remote script + SysEx protocol, one channel | Passed in Cubase Artist 14.0.41 |
-| Tracks page live (M2): every channel in view, protect, Restore, automation guard | Built + simulator-tested, waiting for the Cubase test |
-| Mixology Link v1 (M2): per-track meters, Trim, name / colour pairing | Built + cross-library check, waiting for the Cubase test |
-| Analysis through the Links, Analyze Mix, Auto Mix | Planned (M3-M4) |
+| Tracks page live (M2): every channel in view, protect, Restore, automation guard | Passed in Cubase |
+| Mixology Link v1 (M2): per-track meters, Trim, name / colour pairing | Passed in Cubase |
+| Analyze Mix (M3): Link analysis, fader read, roles, Mix Assistant advice, analyzer role colours | Built + tested, waiting for the Cubase test |
+| Auto Mix and the smart tools | Planned (M4) |
 | EQ / Dynamics / Space / Tone / Stereo processing | Preview UI; DSP in M5 |
 
 ## Layout
@@ -27,7 +28,9 @@ dsp/        Framework-free engine (no JUCE): unit-testable
     BridgeProtocol.h   SysEx message format shared with the Cubase script
     BridgeSession.h    Plug-in side of the bridge: per-write channel identity, closed-loop dB moves, protect, restore
     FaderLaw.h         Cubase fader position <-> dB, learned from Cubase's own display text
-    LinkRegistry.h     Mixology Link <-> Mixology: shared-memory registry (meters, identity, Trim) + pairing
+    LinkRegistry.h     Mixology Link <-> Mixology: shared-memory registry (meters, identity, Trim, analysis) + pairing
+    TrackAnalyzer.h    One analysis frame: 31 one-third-octave bands, loudness, width (own small FFT: Fft.h)
+    MixAnalysis.h      Analyze Mix: moments -> track roles, stats and the Mix Assistant's suggestions
     SharedBlock.h      Named shared memory, so two plug-in libraries in one host see each other
     TrackMeter.h       The Link's light per-track meter (peaks, momentary / short-term loudness)
     LoudnessMeter.h    EBU R128 meter (from Masterology, repo DK7602/polisher)

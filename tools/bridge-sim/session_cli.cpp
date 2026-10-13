@@ -51,6 +51,8 @@ namespace
         std::ostringstream j;
         j << "{\"link\":" << esc (toString (s.link()))
           << ",\"changed\":" << s.changedCount()
+          << ",\"scanning\":" << (s.scanning() ? "true" : "false")
+          << ",\"knownFaders\":" << s.knownFaders().size()
           << ",\"moving\":" << (s.moveInProgress() ? "true" : "false")
           << ",\"lastMove\":" << esc (s.lastMoveResult())
           << ",\"slots\":[";
@@ -129,6 +131,7 @@ int main()
             else if (name == "bank") r = session.bank (static_cast<bridge::BankAction> (static_cast<int> (arg)), now);
             else if (name == "refresh") session.requestDump (now);
             else if (name == "forget") session.forgetRestorePoints (now);
+            else if (name == "scan") r = session.scanAllChannels (now);
             else r = { false, "unknown command" };
             std::cout << "result " << (r.ok ? "ok " : "fail ") << r.message << (r.warning.empty() ? "" : " WARNING " + r.warning) << "\n";
             flush (session);

@@ -484,6 +484,25 @@ const scenarios = {
     check(near(r.cubase.db(r.cubase.channels[3]), 2, 0.006), 'moves land');
   },
 
+  async 'reading every fader pages through the bank and comes back'(r) {
+    for (let i = 0; i < 18; i++)   // 30 channels: three pages of 12
+      r.cubase.channels.push({ name: 'Extra ' + (i + 1), volume: 0.3 + i * 0.02, pan: 0.5, mute: 0, solo: 0, read: 0, write: 0, visible: true, uid: 'x' + i, rgb: [0.5, 0.5, 0.5] });
+    await r.run(0.3);
+    await r.global('bank', 4);
+    await r.global('bank', 4);
+    await r.global('bank', 4);   // the user looks at channels 4 - 15
+    await r.run(0.3);
+    check(r.state.slots[0].title === 'Perc', 'starts at Perc, got ' + r.state.slots[0].title);
+    check((await r.global('scan')).ok, 'scan starts');
+    check(!(await r.cmd('setDb', 0, -6)).ok, 'no moves while reading');
+    await r.run(3.0);
+    check(!r.state.scanning, 'scan finished');
+    check(r.state.knownFaders === 30, 'all 30 faders read, got ' + r.state.knownFaders);
+    check(r.state.slots[0].title === 'Perc', 'back at Perc, got ' + r.state.slots[0].title);
+    check(r.cubase.setCalls === 0, 'nothing was moved');
+    check(r.state.log.some((l) => l.includes('Read 30 channel faders')), 'logged');
+  },
+
   async 'script restart mid-session: writing works right after'(r) {
     await r.run(0.3);
     r.cubase.activate();   // e.g. "Reload Scripts" in Cubase

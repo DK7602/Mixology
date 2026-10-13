@@ -1,6 +1,6 @@
 # Mixology manual
 
-Manual for version 0.2.0 (the interface, live meters, every Cubase fader in view, and Mixology Link).
+Manual for version 0.3.0 (the interface, live meters, every Cubase fader in view, Mixology Link, and Analyze Mix).
 
 **Voxology** makes each vocal sound great. **Mixology** makes all your tracks work together.
 **Masterology** turns the finished mix into the master.
@@ -14,9 +14,10 @@ Manual for version 0.2.0 (the interface, live meters, every Cubase fader in view
 | Stereo page: vectorscope and correlation | Live |
 | Master page: loudness history, hand-off check for Masterology | Live |
 | Tracks page: your real Cubase channels (names, faders, pan, mute, solo), 12 at a time | Live, both ways, through the Cubase bridge |
-| Mixology Link on a track: its level on the Tracks page, a Trim | Live: this is what we're testing now |
+| Mixology Link on a track: its level on the Tracks page, a Trim | Live |
+| Analyze Mix and the Mix Assistant's advice; track roles; the analyzer's track colours | Live: this is what we're testing now |
 | EQ, Dynamics, Space, Tone controls | Preview: they move but don't process audio yet |
-| Analyze Mix, Auto Mix, Vocal Pocket, Mix Assistant suggestions | Coming (Milestones 3 and 4) |
+| Auto Mix, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match | Coming (Milestone 4) |
 
 Mixology passes your audio through untouched in this build.
 
@@ -35,8 +36,9 @@ Mixology remembers your choice.
 
 ## Pages
 
-- **Overview**: the mix analyzer (your whole mix, coloured by frequency), L / R peak meters and
-  loudness, quick tone knobs, and the Mix Assistant (what Mixology hears right now).
+- **Overview**: the mix analyzer (your whole mix as a rainbow, and each kind of track as a coloured line:
+  Kick, Bass, Drums, Vocals, Instruments, Other), L / R peak meters and loudness, quick tone knobs, **Analyze
+  Mix**, and the Mix Assistant.
 - **Tracks**: the MixConsole as Mixology sees it, 12 channels at a time. Arrows move the bank.
   The colour bar on top of each strip is the Cubase track colour. Every strip moves its real Cubase channel
   (see "Moving faders" below). Meters show on strips whose track has Mixology Link.
@@ -107,7 +109,42 @@ Mixology Link is a small plug-in for each track. Version 1:
   same too, the chain turns amber and nothing is paired until you rename one.
 - **Trim**: a clean volume change before the fader (-24 to +24 dB). Later, Auto Mix uses it for gain staging.
 
-Milestone 3 teaches the Links to listen properly (spectrum, roles, masking) for Analyze Mix and the Mix Assistant.
+From Milestone 3 each Link also listens to its track about five times a second (tone in 31 bands, loudness,
+punch, stereo width) for Analyze Mix and the analyzer's track colours. It runs on a background thread and
+costs very little.
+
+## Analyze Mix and the Mix Assistant
+
+Analyze Mix listens to every track that has Mixology Link, and to the whole mix, while the song plays. Then the
+Mix Assistant tells you, in plain words, what stands out, with **Do I need to fix it?** and how.
+
+1. Insert Mixology Link on your tracks (after their other plug-ins). Pick your mix style in the header.
+2. Press **ANALYZE MIX**. Mixology first reads every channel's fader in Cubase (a second or two; the Tracks
+   page flickers while it pages through).
+3. Press play in Cubase. Play the busiest part (the hook or the drop): **20 seconds is enough**, up to 60.
+   Press **Finish now**, or it finishes by itself at 60 seconds.
+4. The Mix Assistant lists what it found, the things worth fixing first. Click a point to read it in full.
+
+What it looks at:
+
+- **Vocal level**: how loud the lead vocal sits against the rest of the mix while it sings, compared with your
+  style.
+- **Kick and 808 / bass**: whether they fight over the same low frequencies when they hit together.
+- **Words covered**: instruments as loud as the vocal at 1.6 - 4 kHz (where words are understood).
+- **Tone against your style**: muddy low mids, harsh upper mids, too much or too little low end, dull or very
+  bright top.
+- **Low rumble** in tracks that don't need low end (vocals, keys...): a low cut makes room.
+- **Stereo**: low end that isn't centred; tracks or a mix that could fall apart in mono.
+- **Tracks you can hardly hear**, tracks running very hot, and headroom for Masterology.
+- **Channels without Mixology Link**: listed, so you know what the advice leaves out.
+
+**Your tracks** (button under the Mix Assistant) shows what Analyze Mix heard for each track: its role, level
+after the fader, peak and width. **Live view** switches the Mix Assistant back to the live readings.
+
+**Track roles.** Mixology guesses each track's role from its name ("808", "Lead Vox", "Hi Hat"...), and from its
+sound when the name doesn't say. Click a strip's icon on the Tracks page (or the role in Your tracks) to set it
+yourself, or to **leave a track out of Analyze Mix** (a reference song, a printed stem). Your choices are saved
+with the project and the advice updates straight away, without listening again.
 
 ## Mix styles
 
@@ -132,8 +169,9 @@ through the styles of the genre you're in.
 | Folk & Acoustic | Singer-Songwriter, Folk, Indie Folk |
 | Cinematic | Epic Trailer, Orchestral, Soft Score |
 
-Today the style sets the Tone page's target curve. Later it steers Auto Mix (levels, panning, width) and the
-Mix Assistant. The style is saved with the project.
+The style sets the Tone page's target curve and what Analyze Mix compares your mix with (tone, how loud the
+vocal sits). In Milestone 4 it also steers Auto Mix (levels, panning, width). The style is saved with the
+project.
 
 ## How it works with Voxology and Masterology
 
@@ -160,5 +198,8 @@ Mixology never limits the mix bus; that's Masterology's job.
 - **A strip has no meter**: insert Mixology Link on that track. If the Link is there but the chain icon is amber,
   another track has the same name: rename one.
 - **The Link window says "Track name not reported"**: tell us (Cubase normally passes the name on).
+- **Analyze Mix says "No Mixology Link found"**: insert Mixology Link on your tracks first. Both plug-ins must be
+  from the same download (an older Link can't talk to a newer Mixology).
+- **Analyze Mix waits at "Press play in Cubase"**: it only listens while the song plays.
 - **Strange notes on an instrument track**: untick "In 'All MIDI Inputs'" for both Mixology ports (setup step 3).
 - **Send us the log**: Settings > Cubase Bridge > **Copy log**, then paste it into the chat.

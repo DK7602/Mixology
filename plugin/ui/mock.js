@@ -18,7 +18,31 @@
     ["Lead Vox", -2, 0.5, "#4fd66b", 1], ["FX", -14, 0.7, "#d6d23a", 0], ["Adlibs", -7.5, 0.6, "#d68a3a", 1], ["Vox Double", -13, 0.3, "#6bd64f", 0],
     ["Pad", -16, 0.5, "#5a7bd6", 0], ["Riser", -18, 0.5, "#c7c7c7", 0],
   ].map(([name, db, pan, colour, link]) => ({ name, hash: hashOf(name), volume: toNorm(db), pan, mute: false, solo: false, read: name === "FX", write: false, colour, link: !!link, trim: 0, protected: name === "Lead Vox" }));
-  const B = { offset: 0, lastMove: "", log: [], version: 1, restore: {} };
+  const B = { offset: 0, lastMove: "", log: [], version: 1, restore: {}, an: { state: "idle", seconds: 0, playing: true, report: null }, settings: {} };
+  const ROLE_OF = { Kick: "kick", Snare: "snare", Hats: "hats", Perc: "perc", "808": "bass", Keys: "keys", Synth: "synth", Guitar: "guitar", "Lead Vox": "vox", FX: "fx", Adlibs: "adlibs", "Vox Double": "adlibs", Pad: "synth", Riser: "fx" };
+  const roleOf = (c) => (B.settings[c.hash] && B.settings[c.hash].role) || ROLE_OF[c.name] || "other";
+  function fakeReport() {
+    const linked = chans.filter((c) => c.link);
+    const tracks = linked.map((c, i) => ({ hash: c.hash, name: c.name, role: roleOf(c), roleFrom: B.settings[c.hash] && B.settings[c.hash].role ? "you" : i % 4 === 3 ? "sound" : "name",
+      excluded: !!(B.settings[c.hash] && B.settings[c.hash].excluded), faderKnown: true, activity: 0.8, loudness: +(lawDb(c.volume) - 12 + (i % 3)).toFixed(1), peak: +(lawDb(c.volume) - 3 + (i === 0 ? 4 : 0)).toFixed(1), width: c.name === "Keys" ? 0.31 : 0.04 }));
+    const sg = (id, kind, icon, title, text, need, steps, tracks) => ({ id, kind, icon, title, text, need, steps, tracks });
+    return {
+      seconds: B.an.seconds, style: (window.__mixStyle || "Hip Hop - Modern Clean"), mixLoudness: -12.8, mixPeak: -4.1, mixCorrelation: 0.62,
+      unheard: chans.filter((c) => !c.link).map((c) => c.name).slice(0, 4), mixBands: [], targetBands: [], tracks,
+      suggestions: [
+        sg("kick-bass", "warn", "kick", "Kick and bass fight for the low end", "When they hit together, 72 % of their low end (40 - 160 Hz) sits in the same place. That makes the bottom muddy and the kick lose its punch.",
+          "Yes, for most Hip Hop mixes: a clean low end is what makes it hit on big speakers and in the car.",
+          ["Let each own a spot: the kick's punch around 60 - 100 Hz, the 808 / bass below 60 Hz (a small EQ dip in each where the other lives).", "Or duck the 808 for a moment each time the kick hits (sidechain compression). Mixology's Low End tool will do this for you (Milestone 4)."], ["Kick", "808"]),
+        sg("vocal-pocket", "warn", "mic", "Instruments cover the vocal's words", "'Keys' and 'Snare' are nearly as loud as the vocal at 1.6 - 4 kHz while it sings: the range where words are understood.",
+          "Yes, if lyrics get lost in busy parts.", ["Dip 'Keys' and 'Snare' 2 - 3 dB around 2 - 3 kHz (a medium EQ bell), or pan them a little off-centre.", "Vocal Pocket (Milestone 4) will make these dips for you, only while the vocal sings."], ["Keys", "Snare"]),
+        sg("highpass", "info", "lowcut", "Low rumble in tracks that don't need it", "'Adlibs' has a lot of energy below 100 Hz. It adds mud and fights the kick and bass without being heard as part of the sound.",
+          "Usually yes: it's free headroom and a cleaner low end.", ["Put a low cut (high-pass) on it: about 80 - 100 Hz for vocals, 60 - 80 Hz for keys, guitars and synths."], ["Adlibs"]),
+        sg("unheard", "info", "link", "5 channels without Mixology Link", "'Perc', 'Synth', 'Guitar' and 'FX' and 1 more play in your mix, but Mixology can't hear them one by one, so the advice below leaves them out.",
+          "Only if those tracks matter for the balance (they usually do).", ["Insert Mixology Link on each of them, after their other plug-ins, then Analyze Mix again."], ["Perc", "Synth", "Guitar", "FX"]),
+        sg("vocal-ok", "calm", "vox", "Vocal level fits Hip Hop - Modern Clean", "While it sings, the vocal sits +1.4 dB against the rest of the mix.", "No.", [], ["Lead Vox"]),
+      ],
+    };
+  }
   const t0 = performance.now();
   const stamp = () => { const ms = Math.round(performance.now() - t0); const s = Math.floor(ms / 1000); return `${String(Math.floor(s / 60) % 60).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}.${String(ms % 1000).padStart(3, "0")}`; };
   const log = (t) => { B.log.push(stamp() + "  " + t); if (B.log.length > 200) B.log.shift(); B.version++; };
@@ -30,13 +54,15 @@
     const slots = Array.from({ length: 12 }, (_, i) => {
       const c = inSlot(i);
       if (!c) return { present: false, title: "", hash: 0 };
-      return { present: true, title: c.name, hash: c.hash, hasVolume: true, volume: c.volume, volumeText: text(c.volume), volumeDb: lawDb(c.volume), hasPan: true, pan: c.pan, panText: panText(c.pan),
+      const set = B.settings[c.hash] || {};
+      return { role: roleOf(c), roleSet: !!set.role, excluded: !!set.excluded, present: true, title: c.name, hash: c.hash, hasVolume: true, volume: c.volume, volumeText: text(c.volume), volumeDb: lawDb(c.volume), hasPan: true, pan: c.pan, panText: panText(c.pan),
         mute: c.mute, solo: c.solo, read: c.read, write: c.write, colour: c.colour, protected: c.protected, duplicate: false, changed: isChanged(c),
         linkStatus: c.link ? "matched" : "none", trim: c.trim, linkAudio: true };
     });
     return {
       enabled: true, link: "connected", portProblem: "", script: 3, toCubase: "Mixology to Cubase", fromCubase: "Cubase to Mixology", slots,
-      changedCount: chans.filter(isChanged).length, restorePoints: Object.keys(B.restore).length,
+      changedCount: chans.filter(isChanged).length, restorePoints: Object.keys(B.restore).length, scanning: B.an.state === "reading",
+      analysis: { state: B.an.state, seconds: B.an.seconds, enough: 20, max: 60, playing: B.an.playing, heard: chans.filter((c) => c.link).length, report: B.an.report },
       linksSeen: chans.filter((c) => c.link).length, linksPaired: slots.filter((s) => s.linkStatus === "matched").length, linksShared: true,
       lastMove: B.lastMove, lawPoints: 37, marks: [6, 0, -6, -12, -24, -36, -48].map((db) => ({ db, pos: toNorm(db) })),
       logVersion: B.log.length, log: withLog ? B.log.slice() : undefined,
@@ -53,6 +79,21 @@
     }
     if (name === "refresh" || name === "reconnect") { B.version++; return { ok: true }; }
     if (name === "copyLog") { try { navigator.clipboard.writeText(B.log.join("\n")); } catch (e) { /* preview */ } return { ok: true }; }
+    if (name === "analyze") {
+      window.__mixStyle = value && value.name;
+      B.an.state = "reading"; B.an.seconds = 0; B.version++;
+      setTimeout(() => { B.an.state = "listening"; B.version++; }, 1200);
+      return { ok: true };
+    }
+    if (name === "analyzeFinish") { if (B.an.seconds < 1) return fail("Nothing heard yet: press play in Cubase."); B.an.state = "done"; B.an.report = fakeReport(); B.version++; return { ok: true }; }
+    if (name === "analyzeCancel") { B.an.state = B.an.report ? "done" : "idle"; B.version++; return { ok: true }; }
+    if (name === "setRole" || name === "setExcluded") {
+      const set = (B.settings[arg.hash] = B.settings[arg.hash] || {});
+      if (name === "setRole") set.role = value || undefined; else set.excluded = !!value;
+      if (B.an.report) B.an.report = fakeReport();
+      B.version++;
+      return { ok: true };
+    }
     if (name === "forget") { B.restore = {}; log("Restore points cleared: the mix as it is now is the new starting point."); return { ok: true }; }
     if (name === "restoreAll") {
       let n = 0;
@@ -99,7 +140,7 @@
       else if (payload.name === "getBridgeState") result = state(true);
       else if (payload.name === "getSettings") {
         let ui = null; try { ui = localStorage.getItem("mixology-ui"); } catch (e) { /* none */ }
-        result = { theme: null, ui: ui || JSON.stringify(demoUi), version: "0.2.0 (preview)" };
+        result = { theme: null, ui: ui || JSON.stringify(demoUi), version: "0.3.0 (preview)" };
       }
       else if (payload.name === "setUiState") { try { localStorage.setItem("mixology-ui", a); } catch (e) { /* none */ } }
       else if (payload.name === "setPage") page = a;
@@ -144,6 +185,24 @@
       }
       frame.scope = dots;
       frame.corr = +(0.62 + 0.15 * Math.sin(t / 3)).toFixed(2);
+    }
+    if (B.an.state === "listening" && B.an.playing) {
+      B.an.seconds += 1 / 30;
+      if (Math.floor(B.an.seconds * 5) !== Math.floor((B.an.seconds - 1 / 30) * 5)) B.version++;
+      if (B.an.seconds >= 60) { B.an.state = "done"; B.an.report = fakeReport(); B.version++; }
+    }
+    if (page === "overview" && Math.round(t * 30) % 6 === 0) {
+      const groups = { kick: 0, bass: 1, snare: 2, hats: 2, perc: 2, vox: 3, adlibs: 3, keys: 4, synth: 4, guitar: 4, fx: 5, other: 5 };
+      const centres = [5, 3.5, 22, 18, 19, 16];
+      const curves = [null, null, null, null, null, null];
+      chans.filter((c) => c.link && !(B.settings[c.hash] && B.settings[c.hash].excluded)).forEach((c, i) => {
+        const gi = groups[roleOf(c)];
+        const centre = gi === 2 && c.name === "Hats" ? 27 : centres[gi];
+        const level = lawDb(c.volume) - 34 + (gi < 2 ? 6 * beat : 0) + (Math.random() - 0.5);
+        const curve = Array.from({ length: 31 }, (_, b) => level - 2.2 * Math.pow((b - centre) / 3.2, 2) + 4.5 * Math.log2(Math.pow(2, (b - 17) / 3)) - 6);
+        curves[gi] = curves[gi] ? curves[gi].map((v, b) => 10 * Math.log10(Math.pow(10, v / 10) + Math.pow(10, curve[b] / 10))) : curve;
+      });
+      frame.roleCurves = curves.map((c) => c && c.map((v) => +v.toFixed(1)));
     }
     if (B.version !== sentVersion) {
       sentVersion = B.version;

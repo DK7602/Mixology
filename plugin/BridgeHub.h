@@ -2,12 +2,15 @@
 
 #include "mixology/BridgeSession.h"
 #include "mixology/LinkRegistry.h"
+#include "mixology/MixAnalysis.h"
 
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_events/juce_events.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
 /** Process-wide owner of the Cubase bridge: the two virtual MIDI ports and the BridgeSession.
@@ -37,10 +40,17 @@ public:
 
     /** Everything the Tracks page and Settings > Cubase Bridge show. */
     juce::var getState (bool includeLog);
-    std::uint64_t stateVersion() const { return bridge.stateVersion() + linkVersion; }
+    std::uint64_t stateVersion() const { return bridge.stateVersion() + linkVersion + analysisVersion; }
 
     /** Per strip: [peak L, peak R] dBFS from its paired Mixology Link, or null. */
     juce::var trackMeters() const;
+
+    /** Analyze Mix, five times a second from the editor: the mix as Mixology hears it, and whether the
+        host's transport is running. Adds a moment while listening. */
+    void analysisTick (const mixology::AnalysisFrame& mix, bool playing);
+    /** The Overview analyzer's six colours (kick, bass, drums, vocals, instruments, other): each a list of
+        31 band levels in the analyzer's units, or null when nothing of that kind plays. */
+    juce::var roleCurves (double sampleRate) const;
 
     /** UI commands. Strip commands take { slot, hash, value } (the strip as the UI showed it):
         setDb, minusInf, nudge, fader, faderEnd, pan, mute, solo, protect, restore, trim.
@@ -52,6 +62,9 @@ public:
         may save or load state off the message thread, so both go through a small locked copy. */
     juce::String protectedState() const;
     void setProtectedState (const juce::String&);
+    /** Your track roles and "leave out of Analyze Mix" choices, saved with the project the same way. */
+    juce::String trackSettingsState() const;
+    void setTrackSettingsState (const juce::String&);
 
     juce::String logText() const;
 
@@ -67,6 +80,21 @@ private:
     void updateLinks();
     void applyPendingProtected();
     void cacheProtected();
+    void cacheTrackSettings();
+    void finishAnalysis();
+    juce::var analysisState() const;
+    std::optional<mixology::mix::Role> roleFor (std::uint32_t hash, const std::string& name) const;
+
+    enum class Analyze { idle, reading, listening, done };
+    Analyze analyzeState = Analyze::idle;
+    mixology::mix::Analysis analysis;
+    mixology::mix::Report report;
+    std::map<std::uint32_t, mixology::mix::TrackSettings> trackSettings;
+    std::uint64_t analysisVersion = 0;
+    bool transportPlaying = false;
+    int tracksHeard = 0;
+    juce::String trackSettingsCache, trackSettingsPending;
+    bool hasPendingTrackSettings = false;
     static double now();
 
     juce::CriticalSection protectedLock;
