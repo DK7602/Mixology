@@ -8,11 +8,39 @@ namespace
     juce::AudioProcessorValueTreeState::ParameterLayout makeLayout()
     {
         juce::AudioProcessorValueTreeState::ParameterLayout layout;
+        auto dbText = [] (float v, int) { return (v > 0.04f ? "+" : "") + juce::String (v, 1) + " dB"; };
+        auto hzText = [] (float v, int) { return v >= 1000.0f ? juce::String (v / 1000.0f, 2) + " kHz" : juce::String (juce::roundToInt (v)) + " Hz"; };
         layout.add (std::make_unique<juce::AudioParameterFloat> (
             juce::ParameterID { "trim", 1 }, "Trim",
             juce::NormalisableRange<float> (-kTrimRange, kTrimRange, 0.1f), 0.0f,
-            juce::AudioParameterFloatAttributes().withLabel ("dB")
-                .withStringFromValueFunction ([] (float v, int) { return (v > 0.04f ? "+" : "") + juce::String (v, 1) + " dB"; })));
+            juce::AudioParameterFloatAttributes().withLabel ("dB").withStringFromValueFunction (dbText)));
+
+        // Assist EQ (Milestone 4): Mixology's Clean Up and Vocal Pocket set these.
+        auto hzRange = [] (float lo, float hi) {
+            juce::NormalisableRange<float> r (lo, hi, 1.0f);
+            r.setSkewForCentre (std::sqrt (lo * hi));
+            return r;
+        };
+        juce::NormalisableRange<float> lowCutRange (0.0f, 500.0f, 1.0f);
+        lowCutRange.setSkewForCentre (100.0f);
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { "lowcut", 2 }, "Low Cut", lowCutRange, 0.0f,
+            juce::AudioParameterFloatAttributes().withLabel ("Hz").withStringFromValueFunction (
+                [hzText] (float v, int n) { return v < mixology::AssistSettings::kLowCutOff ? juce::String ("Off") : hzText (v, n); })));
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { "mudfreq", 2 }, "Mud Frequency", hzRange (120.0f, 800.0f), 300.0f,
+            juce::AudioParameterFloatAttributes().withLabel ("Hz").withStringFromValueFunction (hzText)));
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { "mudgain", 2 }, "Mud Dip",
+            juce::NormalisableRange<float> (-12.0f, 0.0f, 0.1f), 0.0f,
+            juce::AudioParameterFloatAttributes().withLabel ("dB").withStringFromValueFunction (dbText)));
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { "pocketfreq", 2 }, "Pocket Frequency", hzRange (800.0f, 8000.0f), 2500.0f,
+            juce::AudioParameterFloatAttributes().withLabel ("Hz").withStringFromValueFunction (hzText)));
+        layout.add (std::make_unique<juce::AudioParameterFloat> (
+            juce::ParameterID { "pocketgain", 2 }, "Pocket Dip",
+            juce::NormalisableRange<float> (-12.0f, 0.0f, 0.1f), 0.0f,
+            juce::AudioParameterFloatAttributes().withLabel ("dB").withStringFromValueFunction (dbText)));
         return layout;
     }
 
@@ -31,6 +59,11 @@ MixologyLinkProcessor::MixologyLinkProcessor()
       registry (mixology::link::processRegistry())
 {
     trimParam = parameters.getRawParameterValue ("trim");
+    lowCutParam = parameters.getRawParameterValue ("lowcut");
+    mudHzParam = parameters.getRawParameterValue ("mudfreq");
+    mudDbParam = parameters.getRawParameterValue ("mudgain");
+    pocketHzParam = parameters.getRawParameterValue ("pocketfreq");
+    pocketDbParam = parameters.getRawParameterValue ("pocketgain");
     instanceId = (static_cast<std::uint64_t> (static_cast<std::uint32_t> (juce::Random::getSystemRandom().nextInt())) << 32)
                  ^ static_cast<std::uint32_t> (juce::Random::getSystemRandom().nextInt()) ^ static_cast<std::uint64_t> (juce::Time::getHighResolutionTicks());
     slot = registry.claim (instanceId, mixology::link::nowMs());
@@ -76,6 +109,34 @@ void MixologyLinkProcessor::prepareToPlay (double sampleRate, int)
     publishedWindows = meter.windowCount();
     trimGain.reset (sampleRate, 0.02);
     trimGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (static_cast<double> (trimParam->load())));
+    assist.setTarget (assistSettings());
+    assist.prepare (sampleRate, juce::jmax (1, getTotalNumOutputChannels()));
+}
+
+mixology::AssistSettings MixologyLinkProcessor::assistSettings() const
+{
+    mixology::AssistSettings a;
+    a.lowCutHz = lowCutParam->load (std::memory_order_relaxed);
+    if (! a.lowCutOn()) a.lowCutHz = 0.0f;
+    a.mudHz = mudHzParam->load (std::memory_order_relaxed);
+    a.mudDb = mudDbParam->load (std::memory_order_relaxed);
+    a.pocketHz = pocketHzParam->load (std::memory_order_relaxed);
+    a.pocketDb = pocketDbParam->load (std::memory_order_relaxed);
+    return a;
+}
+
+void MixologyLinkProcessor::setAssist (const mixology::AssistSettings& a)
+{
+    for (auto [id, v] : { std::pair { "lowcut", a.lowCutOn() ? a.lowCutHz : 0.0f }, std::pair { "mudfreq", a.mudHz },
+                          std::pair { "mudgain", a.mudDb }, std::pair { "pocketfreq", a.pocketHz }, std::pair { "pocketgain", a.pocketDb } })
+        if (auto* p = parameters.getParameter (id))
+        {
+            const auto n = p->convertTo0to1 (v);
+            if (std::abs (n - p->getValue()) < 1.0e-6f) continue;
+            p->beginChangeGesture();
+            p->setValueNotifyingHost (n);
+            p->endChangeGesture();
+        }
 }
 
 template <typename Sample>
@@ -101,7 +162,10 @@ void MixologyLinkProcessor::process (juce::AudioBuffer<Sample>& buffer)
         buffer.applyGain (static_cast<Sample> (trimGain.getTargetValue()));
     }
 
-    // Measured after the Trim: what this track sends on to the fader.
+    assist.setTarget (assistSettings());
+    assist.process (buffer.getArrayOfWritePointers(), channels, n);
+
+    // Measured after the Trim and the Assist EQ: what this track sends on to the fader.
     meter.process (buffer.getArrayOfReadPointers(), channels, n);
     ring.push (buffer.getArrayOfReadPointers(), channels, n);
     if (auto* ph = getPlayHead())
@@ -177,6 +241,14 @@ void MixologyLinkProcessor::timerCallback()
             p->endChangeGesture();
         }
         trimNote = "Mixology set the Trim to " + juce::String (requested, 1) + " dB";
+    }
+
+    registry.publishAssist (slot, assistSettings());
+    mixology::AssistSettings wanted;
+    if (registry.takeAssistRequest (slot, assistRequestSeen, wanted))
+    {
+        setAssist (wanted);
+        trimNote = wanted.neutral() ? "Mixology cleared the Assist EQ" : "Mixology set the Assist EQ";
     }
 }
 

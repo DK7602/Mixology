@@ -192,6 +192,35 @@ int main (int argc, char** argv)
     if (const auto* b2 = byName (links, "808 Bass"))
         check (std::abs (b2->trimDb - 3.0f) < 0.06f, "and reported back: " + juce::String (b2->trimDb, 2));
 
+    // Milestone 4: Mixology sets the Kick Link's Assist EQ (a pocket dip right on the test tone), then clears it.
+    {
+        check (findParameter (*kick, "Low Cut") != nullptr && findParameter (*kick, "Pocket Dip") != nullptr, "Assist EQ parameters exposed to the host");
+        links = registry.links (nowMs());
+        const auto* kl = byName (links, "Kick");
+        check (kl != nullptr, "Kick Link listed");
+        if (kl == nullptr) return 1;
+        const int kSlot = kl->slot;
+        const auto kGen = kl->generation;
+        const float before = play (*kick, sr, block, 0.5, 0.5f);
+        mixology::AssistSettings a;
+        a.pocketHz = 997.0f;
+        a.pocketDb = -6.0f;
+        a.lowCutHz = 60.0f;
+        registry.requestAssist (kSlot, kGen, a);
+        pump (400);
+        const float dipped = play (*kick, sr, block, 0.5, 0.5f);
+        const float change = juce::Decibels::gainToDecibels (dipped / before);
+        check (std::abs (change + 6.0f) < 0.4f, "Assist EQ request applied: the 997 Hz tone is " + juce::String (change, 2) + " dB");
+        links = registry.links (nowMs());
+        if (const auto* k2 = byName (links, "Kick"))
+            check (std::abs (k2->assist.pocketDb + 6.0f) < 0.06f && std::abs (k2->assist.lowCutHz - 60.0f) < 1.0f, "and reported back");
+        registry.requestAssist (kSlot, kGen, mixology::AssistSettings {});
+        pump (400);
+        play (*kick, sr, block, 0.2, 0.5f);   // glides out
+        const float cleared = play (*kick, sr, block, 0.5, 0.5f);
+        check (std::abs (cleared - before) < 1.0e-6f, "cleared: audio untouched again");
+    }
+
     // A renamed track is seen under its new name.
     bp.name = juce::String ("808 Sub");
     bass->updateTrackProperties (bp);

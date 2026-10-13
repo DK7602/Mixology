@@ -64,6 +64,7 @@ namespace mixology::mix
     {
         std::optional<Role> role;  // your correction
         bool excluded = false;     // left out of Analyze Mix (reference tracks, printed stems...)
+        bool reference = false;    // your reference song (Reference Match); always left out of the mix advice
     };
 
     // ---------------------------------------------------------------------------------------------
@@ -85,6 +86,31 @@ namespace mixology::mix
         double crest = 0.0;        // peak minus RMS (dB): punchy / transient sounds score high
         double balance = 0.0;      // left minus right (dB) after the fader: + leans left
         std::vector<double> bands; // average spectrum after the fader (dB per 1/3 octave)
+        double maskDb = -120.0;    // its 1.6 - 4 kHz level against the lead vocal's while it sings (> -6: covers it)
+        bool rumble = false;       // a lot of energy below 100 Hz it doesn't need
+        bool reference = false;    // your reference song
+    };
+
+    /** Your mix against your reference song (Reference Match). */
+    struct ReferenceReport
+    {
+        bool chosen = false;       // a track is marked as the reference
+        bool heard = false;        // ... and it played while Mixology listened
+        std::uint32_t hash = 0;
+        std::string name;
+        double loudness = -120.0;  // as it reached the fader (LUFS-like, while playing)
+        double width = 0.0;
+        std::vector<double> bands; // tilted and lined up like Report::mixBands
+        double loudnessDiff = 0.0; // reference minus your mix (LU): Masterology closes this, not the mix
+        double widthDiff = 0.0;    // your mix minus the reference (0..1 scale)
+
+        struct Region
+        {
+            std::string name;      // "Low end (40 - 125 Hz)"
+            double diff = 0.0;     // your mix minus the reference (dB)
+            std::string text;
+        };
+        std::vector<Region> regions;
     };
 
     struct Suggestion
@@ -110,7 +136,16 @@ namespace mixology::mix
         std::vector<double> targetBands;  // normalised to the same overall level
         double mixLoudness = -120.0, mixPeak = -120.0, mixCorrelation = 1.0, mixBalance = 0.0;
         std::vector<std::string> unheard; // channels in Cubase without a Link (not part of this analysis)
+        bool hasVocalRatio = false;       // the lead vocal against the rest of the mix while it sings (dB),
+        double vocalRatio = 0.0;          // and where the style wants it
+        double vocalTarget = 0.0;
+        double unheardLoudness = -120.0;  // the channels without a Link together (the mix minus the Links), LUFS-like
+        double mixWidth = 0.0;
+        ReferenceReport reference;
     };
+
+    /** Where the style wants the lead vocal against the rest of the mix (dB). */
+    double vocalTargetFor (const std::string& styleKey);
 
     // ---------------------------------------------------------------------------------------------
 

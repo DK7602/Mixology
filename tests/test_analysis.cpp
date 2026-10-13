@@ -508,3 +508,337 @@ TEST_CASE ("Analyze Mix: print a report (manual check)", "[analysis][.print]")
         for (const auto& st : s.steps) printf ("   - %s\n", st.c_str());
     }
 }
+
+// =============================================================================================
+// Milestone 4: the plans behind Auto Mix, Balance, Stereo Architect, Clean Up and Vocal Pocket
+
+#include "mixology/MixPlanner.h"
+
+namespace
+{
+    using mixology::mix::ChannelNow;
+    using mixology::mix::Plan;
+    using mixology::mix::Tool;
+    using mixology::mix::makePlan;
+
+    ChannelNow channel (const std::string& name, double fader = 0.0, double pan = 0.0, bool link = true, bool locked = false)
+    {
+        ChannelNow c;
+        c.hash = mixology::bridge::nameHash (name);
+        c.name = name;
+        c.faderKnown = true;
+        c.faderDb = fader;
+        c.hasPan = true;
+        c.pan = pan;
+        c.hasLink = link;
+        c.locked = locked;
+        return c;
+    }
+
+    std::vector<ChannelNow> channelsOf (const std::vector<TrackSample>& tracks)
+    {
+        std::vector<ChannelNow> out;
+        for (const auto& t : tracks) out.push_back (channel (t.name, t.faderDb));
+        return out;
+    }
+
+    const mixology::mix::Change* change (const Plan& p, const std::string& name, const std::string& kind)
+    {
+        for (const auto& c : p.changes)
+            if (c.name == name && c.kind == kind) return &c;
+        return nullptr;
+    }
+
+    bool noted (const Plan& p, const std::string& text)
+    {
+        return std::any_of (p.notes.begin(), p.notes.end(), [&] (const std::string& n) { return n.find (text) != std::string::npos; });
+    }
+}
+
+TEST_CASE ("Plans: pairs and doubles are found from the names", "[plan]")
+{
+    using mixology::mix::pairName;
+    CHECK (pairName ("Electric Rhythm (D)").base == "electric rhythm");
+    CHECK (pairName ("Electric Rhythm (D)").explicitPair);
+    CHECK (pairName ("Electric Rhythm").base == "electric rhythm");
+    CHECK_FALSE (pairName ("Electric Rhythm").explicitPair);
+    CHECK (pairName ("Gtr L").side == -1);
+    CHECK (pairName ("Gtr (R)").side == 1);
+    CHECK (pairName ("Gtr R").base == "gtr");
+    CHECK (pairName ("Keys 2").order == 1);
+    CHECK (pairName ("Keys 2").base == "keys");
+    CHECK (pairName ("Lead").base == "lead");          // not "Lea" + a double
+    CHECK (pairName ("Gtrl").base == "gtrl");
+    CHECK (pairName ("Bass 808").base == "bass 808");
+    CHECK (pairName ("Vox Dbl").explicitPair);
+}
+
+TEST_CASE ("Plans: nothing without Analyze Mix", "[plan]")
+{
+    const auto p = makePlan (Tool::autoMix, mixology::mix::Report {}, {});
+    CHECK_FALSE (p.valid);
+    CHECK (p.summary.find ("Analyze Mix") != std::string::npos);
+}
+
+TEST_CASE ("Plans: Balance lifts a buried vocal and makes room for it", "[plan]")
+{
+    auto tracks = [] (int) { return std::vector<TrackSample> {
+        sample ("Kick", kickFrame()), sample ("808", bassFrame()), sample ("Hats", hatsFrame()), sample ("Lead Vox", vocalFrame (-22.0), -6.0) }; };
+    const auto r = listen (tracks).evaluate ({});
+    REQUIRE (r.hasVocalRatio);
+    const double err = r.vocalTarget - r.vocalRatio;
+    REQUIRE (err > 6.0);
+
+    SECTION ("split between the vocal and the beat")
+    {
+        const auto p = makePlan (Tool::balance, r, channelsOf (tracks (0)));
+        REQUIRE (p.valid);
+        const auto* v = change (p, "Lead Vox", "level");
+        const auto* k = change (p, "Kick", "level");
+        REQUIRE (v != nullptr);
+        REQUIRE (k != nullptr);
+        CHECK (v->wanted - v->from == Catch::Approx (err / 2.0).margin (0.6));
+        CHECK (k->wanted - k->from == Catch::Approx (-err / 2.0).margin (0.6));
+        CHECK (v->why.find ("buried") != std::string::npos);
+        CHECK (std::abs (v->to - v->from) <= 6.0 + 1e-9);   // the 6 dB limit
+        CHECK (v->big == (std::abs (v->wanted - v->from) > 6.05));
+        CHECK (change (p, "808", "level") != nullptr);   // the whole beat goes down together
+        CHECK (change (p, "Hats", "level") != nullptr);
+    }
+    SECTION ("a vocal fader near the top: the beat makes the rest of the room")
+    {
+        auto chans = channelsOf (tracks (0));
+        for (auto& c : chans) if (c.name == "Lead Vox") c.faderDb = 4.0;
+        const auto p = makePlan (Tool::balance, r, chans);
+        const auto* v = change (p, "Lead Vox", "level");
+        const auto* k = change (p, "Kick", "level");
+        REQUIRE (v != nullptr);
+        REQUIRE (k != nullptr);
+        CHECK (v->wanted == Catch::Approx (6.0));
+        CHECK (k->wanted - k->from == Catch::Approx (-(err - 2.0)).margin (0.6));
+    }
+    SECTION ("a protected vocal: the beat makes all the room")
+    {
+        auto chans = channelsOf (tracks (0));
+        for (auto& c : chans) if (c.name == "Lead Vox") c.locked = true;
+        const auto p = makePlan (Tool::balance, r, chans);
+        CHECK (change (p, "Lead Vox", "level") == nullptr);
+        const auto* k = change (p, "Kick", "level");
+        REQUIRE (k != nullptr);
+        CHECK (k->wanted - k->from == Catch::Approx (-err).margin (0.6));
+    }
+}
+
+TEST_CASE ("Plans: Balance brings an outlier back, leaves a fitting beat alone", "[plan]")
+{
+    auto tracks = [] (double hats) { return [=] (int) { return std::vector<TrackSample> {
+        sample ("Kick", kickFrame()), sample ("808", bassFrame()), sample ("Snare", padFrame (-16.0)), sample ("Hats", hatsFrame(), hats) }; }; };
+    const auto loud = listen (tracks (12.0)).evaluate ({});
+    const auto p = makePlan (Tool::balance, loud, channelsOf (tracks (12.0) (0)));
+    const auto* h = change (p, "Hats", "level");
+    REQUIRE (h != nullptr);
+    CHECK (h->to < h->from - 2.0);
+    CHECK (h->why.find ("louder") != std::string::npos);
+    CHECK (change (p, "Kick", "level") == nullptr);
+}
+
+TEST_CASE ("Plans: Balance leaves room for Masterology in a hot mix", "[plan]")
+{
+    auto tracks = [] (int) { return std::vector<TrackSample> { sample ("Kick", kickFrame()), sample ("808", bassFrame()), sample ("Lead Vox", vocalFrame (-12.0)) }; };
+    const auto r = listen (tracks, 150, 7.6).evaluate ({});   // peaks at +7.6 dBTP like the first test session
+    const auto p = makePlan (Tool::balance, r, channelsOf (tracks (0)));
+    const auto* k = change (p, "Kick", "level");
+    REQUIRE (k != nullptr);
+    CHECK (k->wanted - k->from < -12.0);
+    CHECK (k->big);
+    CHECK (k->to - k->from == Catch::Approx (-6.0));
+    CHECK (k->why.find ("Masterology") != std::string::npos);
+}
+
+TEST_CASE ("Plans: Balance moves channels without a Link with the rest of the beat", "[plan]")
+{
+    Analysis a;
+    a.begin (Style {});
+    for (int i = 0; i < 150; ++i)
+    {
+        Moment m;
+        m.tracks = { sample ("Lead Vox", vocalFrame (-30.0)) };
+        auto all = m.tracks;
+        all.push_back (sample ("Beat", kickFrame()));
+        all.push_back (sample ("Beat 808", bassFrame()));
+        m.mix = mixOf (all);
+        a.add (m);
+    }
+    const auto r = a.evaluate ({}, { "Beat", "Beat 808" });
+    CHECK (r.unheardLoudness > -20.0);
+    const auto p = makePlan (Tool::balance, r, { channel ("Lead Vox"), channel ("Beat", 0.0, 0.0, false), channel ("Beat 808", -2.0, 0.0, false) });
+    const auto* beat = change (p, "Beat", "level");
+    const auto* bass = change (p, "Beat 808", "level");
+    REQUIRE (beat != nullptr);
+    REQUIRE (bass != nullptr);
+    CHECK (beat->to < beat->from);
+    CHECK (beat->wanted - beat->from == Catch::Approx (bass->wanted - bass->from));   // they keep their balance
+    REQUIRE (change (p, "Lead Vox", "level") != nullptr);
+    CHECK (change (p, "Lead Vox", "level")->to > 0.0);
+}
+
+TEST_CASE ("Plans: Stereo Architect spreads four guitars panned hard left", "[plan]")
+{
+    // The first test session: four "Electric" tracks all at L100, vocals and drums in the middle.
+    auto tracks = [] (int) { return std::vector<TrackSample> {
+        sample ("Kick", kickFrame()), sample ("Vocals", vocalFrame (-12.0)), sample ("Vocals (D)", vocalFrame (-18.0)),
+        sample ("Electric Rhythm", panned (padFrame (-16.0), 40.0)), sample ("Electric Rhythm (D)", panned (padFrame (-16.0), 40.0)),
+        sample ("Electric Lead", panned (padFrame (-17.0), 40.0)), sample ("Electric Lead (D)", panned (padFrame (-17.0), 40.0)) }; };
+    const auto r = listen (tracks).evaluate ({});
+    REQUIRE (r.mixBalance > 3.0);
+    std::vector<ChannelNow> chans;
+    for (const auto& t : tracks (0)) chans.push_back (channel (t.name, 0.0, t.name.rfind ("Electric", 0) == 0 ? -100.0 : 0.0));
+    chans[0].pan = 30.0;   // the kick off to the right
+    const auto p = makePlan (Tool::stereo, r, chans);
+
+    const auto* rh = change (p, "Electric Rhythm", "pan");
+    const auto* rhD = change (p, "Electric Rhythm (D)", "pan");
+    const auto* ld = change (p, "Electric Lead", "pan");
+    const auto* ldD = change (p, "Electric Lead (D)", "pan");
+    // Each pair: the original stays hard left, its double mirrors it hard right.
+    CHECK (rh == nullptr);
+    REQUIRE (rhD != nullptr);
+    CHECK (rhD->to == Catch::Approx (100.0));
+    CHECK (ld == nullptr);
+    REQUIRE (ldD != nullptr);
+    CHECK (ldD->to == Catch::Approx (100.0));
+    CHECK (rhD->why.find ("pairs with 'Electric Rhythm'") != std::string::npos);
+    REQUIRE (change (p, "Kick", "pan") != nullptr);
+    CHECK (change (p, "Kick", "pan")->to == Catch::Approx (0.0));
+    CHECK (change (p, "Vocals", "pan") == nullptr);        // already centred
+    CHECK (change (p, "Vocals (D)", "pan") == nullptr);    // a single double stays with the lead
+}
+
+TEST_CASE ("Plans: Stereo Architect evens out a lopsided mix", "[plan]")
+{
+    auto tracks = [] (int) { return std::vector<TrackSample> {
+        sample ("Kick", kickFrame()), sample ("Lead Vox", vocalFrame (-12.0)),
+        sample ("Piano", panned (padFrame (-14.0), 30.0)), sample ("Strings", panned (padFrame (-15.0), 25.0)) }; };
+    const auto r = listen (tracks).evaluate ({});
+    std::vector<ChannelNow> chans { channel ("Kick"), channel ("Lead Vox"), channel ("Piano", 0.0, -90.0), channel ("Strings", 0.0, -70.0) };
+    const auto p = makePlan (Tool::stereo, r, chans);
+    REQUIRE (p.changes.size() >= 1);
+    bool movedRight = false;
+    for (const auto& c : p.changes) movedRight = movedRight || (c.kind == "pan" && c.to > c.from + 20.0 && c.why.find ("leans left") != std::string::npos);
+    CHECK (movedRight);
+}
+
+TEST_CASE ("Plans: Clean Up cuts rumble and dips mud, never the kick", "[plan]")
+{
+    // A vocal with rumble, and a muddy pad.
+    auto rumbleVox = shaped ([] (int b) { return std::max (bump (b, 19, 4.0, -14.0), bump (b, 3, 2.0, -16.0)); }, 10.0, 0.02);
+    auto muddyPad = shaped ([] (int b) { return bump (b, 12, 2.5, -10.0); }, 5.0, 0.3);
+    auto tracks = [=] (int) { return std::vector<TrackSample> {
+        sample ("Kick", kickFrame()), sample ("808", bassFrame()), sample ("Lead Vox", rumbleVox), sample ("Pad", muddyPad) }; };
+    const auto r = listen (tracks).evaluate ({});
+    auto chans = channelsOf (tracks (0));
+    const auto p = makePlan (Tool::cleanUp, r, chans);
+    const auto* lc = change (p, "Lead Vox", "lowcut");
+    REQUIRE (lc != nullptr);
+    CHECK (lc->to == Catch::Approx (90.0));
+    CHECK (lc->from == 0.0);
+    const auto* mud = change (p, "Pad", "mud");
+    REQUIRE (mud != nullptr);
+    CHECK (mud->to <= -1.5);
+    CHECK (mud->hz >= 190.0);
+    CHECK (mud->hz <= 520.0);
+    CHECK (change (p, "Kick", "lowcut") == nullptr);
+    CHECK (change (p, "Kick", "mud") == nullptr);
+
+    // Already done: nothing proposed twice. Without a Link: a note instead.
+    for (auto& c : chans)
+    {
+        if (c.name == "Lead Vox") c.assist.lowCutHz = 100.0f;
+        if (c.name == "Pad") c.hasLink = false;
+    }
+    const auto p2 = makePlan (Tool::cleanUp, r, chans);
+    CHECK (change (p2, "Lead Vox", "lowcut") == nullptr);
+    CHECK (change (p2, "Pad", "mud") == nullptr);
+    CHECK (noted (p2, "'Pad' has no Mixology Link"));
+}
+
+TEST_CASE ("Plans: Vocal Pocket dips what covers the vocal's words", "[plan]")
+{
+    auto tracks = [] (int) { return std::vector<TrackSample> {
+        sample ("Kick", kickFrame()), sample ("Lead Vox", vocalFrame (-16.0)),
+        sample ("Synth Lead", shaped ([] (int b) { return bump (b, 21, 3.0, -15.0); }, 6.0, 0.2)), sample ("Hats", hatsFrame()) }; };
+    const auto r = listen (tracks).evaluate ({});
+    auto chans = channelsOf (tracks (0));
+    const auto p = makePlan (Tool::pocket, r, chans);
+    const auto* d = change (p, "Synth Lead", "pocket");
+    REQUIRE (d != nullptr);
+    CHECK (d->to <= -2.0);
+    CHECK (d->hz >= 1200.0);
+    CHECK (d->hz <= 5100.0);
+    CHECK (change (p, "Lead Vox", "pocket") == nullptr);
+    CHECK (change (p, "Kick", "pocket") == nullptr);
+
+    for (auto& c : chans) if (c.name == "Synth Lead") c.locked = true;
+    const auto p2 = makePlan (Tool::pocket, r, chans);
+    CHECK (change (p2, "Synth Lead", "pocket") == nullptr);
+    CHECK (noted (p2, "protected"));
+}
+
+TEST_CASE ("Plans: Auto Mix puts all four together", "[plan]")
+{
+    auto tracks = [] (int) { return std::vector<TrackSample> {
+        sample ("Kick", kickFrame()), sample ("808", bassFrame()),
+        sample ("Lead Vox", shaped ([] (int b) { return std::max (bump (b, 19, 4.0, -28.0), bump (b, 3, 2.0, -30.0)); }, 10.0, 0.02)),
+        sample ("Gtr L", panned (padFrame (-16.0), 40.0)), sample ("Gtr R", panned (padFrame (-16.0), 40.0)) }; };
+    const auto r = listen (tracks).evaluate ({});
+    std::vector<ChannelNow> chans;
+    for (const auto& t : tracks (0)) chans.push_back (channel (t.name, 0.0, t.name.rfind ("Gtr", 0) == 0 ? -100.0 : 0.0));
+    const auto p = makePlan (Tool::autoMix, r, chans);
+    CHECK (p.title == "Auto Mix");
+    CHECK (change (p, "Lead Vox", "level") != nullptr);
+    REQUIRE (change (p, "Gtr R", "pan") != nullptr);
+    CHECK (change (p, "Gtr R", "pan")->to == Catch::Approx (100.0));   // "Gtr L" stays hard left
+    CHECK (change (p, "Lead Vox", "lowcut") != nullptr);
+    CHECK (p.summary.find ("levels") != std::string::npos);
+}
+
+TEST_CASE ("Reference Match: your mix against your reference song", "[analysis]")
+{
+    // The reference plays under the song (muted in Cubase: only its Link hears it), with much more low end.
+    auto refFrame = shaped ([] (int b) { return std::max (bump (b, 4, 3.0, -6.0), bump (b, 18, 8.0, -14.0)); }, 8.0, 0.3);
+    Analysis a;
+    a.begin (Style {});
+    for (int i = 0; i < 150; ++i)
+    {
+        Moment m;
+        m.tracks = { sample ("Hats", hatsFrame()), sample ("Lead Vox", vocalFrame (-12.0)), sample ("Pad", padFrame (-16.0)), sample ("Ref Song", refFrame) };
+        m.mix = mixOf ({ m.tracks[0], m.tracks[1], m.tracks[2] });   // muted: not on the Stereo Out
+        a.add (m);
+    }
+    std::map<std::uint32_t, TrackSettings> settings;
+    settings[mixology::bridge::nameHash ("Ref Song")].reference = true;
+    const auto r = a.evaluate (settings);
+    REQUIRE (r.reference.chosen);
+    REQUIRE (r.reference.heard);
+    CHECK (r.reference.name == "Ref Song");
+    CHECK (track (r, "Ref Song")->excluded);                    // never part of the mix advice
+    for (const auto& s : r.suggestions) CHECK_FALSE (mentions (&s, "Ref Song"));
+    REQUIRE (r.reference.regions.size() == 5);
+    CHECK (r.reference.regions[0].diff < -3.0);                 // your mix has less low end
+    CHECK (r.reference.regions[0].text.find ("less low end") != std::string::npos);
+    CHECK (r.reference.loudnessDiff > 0.0);
+
+    // Not heard (placed elsewhere on the timeline): said so.
+    Analysis b;
+    b.begin (Style {});
+    for (int i = 0; i < 50; ++i)
+    {
+        Moment m;
+        m.tracks = { sample ("Kick", kickFrame()), sample ("Ref Song", silentFrame()) };
+        m.mix = mixOf ({ m.tracks[0] });
+        b.add (m);
+    }
+    const auto r2 = b.evaluate (settings);
+    CHECK (r2.reference.chosen);
+    CHECK_FALSE (r2.reference.heard);
+}

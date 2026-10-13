@@ -1,5 +1,6 @@
 #pragma once
 
+#include "mixology/AssistEq.h"
 #include "mixology/TrackAnalyzer.h"
 
 #include <array>
@@ -19,11 +20,13 @@
     - Each Link owns one slot. Its audio thread writes the meters (atomics, never blocks); its message
       thread writes the identity (name / colour, guarded by a sequence counter) and a heartbeat; its analysis
       thread writes an AnalysisFrame about five times a second (guarded by its own sequence counter).
-    - Mixology (main) reads everything from its message thread and can ask a Link to change its Trim; the
-      Link's message thread picks the request up and applies it like a user move (host sees it, undo works). */
+    - Mixology (main) reads everything from its message thread and can ask a Link to change its Trim or its
+      Assist EQ; the Link's message thread picks the request up and applies it like a user move (host sees
+      it, undo works). */
 namespace mixology::link
 {
-    constexpr std::uint32_t kLayoutVersion = 3;   // 2: analysis frames (Milestone 3), 3: + left / right balance
+    constexpr std::uint32_t kLayoutVersion = 4;   // 2: analysis frames (M3), 3: + left / right balance, 4: + Assist EQ (M4)
+    constexpr std::uint32_t kNoRequestSeen = 0xFFFFFFFFu;   // a Link's first look at a request counter: take none
     constexpr int kMaxLinks = 256;
     constexpr std::size_t kNameBytes = 128;
     constexpr std::uint64_t kAliveMs = 2000;   // a Link without a heartbeat for this long is gone
@@ -66,6 +69,12 @@ namespace mixology::link
         std::array<std::atomic<float>, kBands> bandDb;
         std::array<std::atomic<float>, kBands> sideShare;
         std::atomic<float> aLoudness, aRms, aPeak, aCorrelation, aWidth, aBalance;
+
+        // Assist EQ (low cut Hz, mud Hz, mud dB, pocket Hz, pocket dB): as it is now (Link), and requests
+        // (Mixology; odd assistRequestSeq while they are being written).
+        std::array<std::atomic<float>, 5> assistNow;
+        std::atomic<std::uint32_t> assistRequestSeq;
+        std::array<std::atomic<float>, 5> assistRequest;
     };
 
     struct alignas (64) Header
@@ -112,6 +121,8 @@ namespace mixology::link
         bool playing = false;       // the host's transport was running at that moment
         std::int64_t songSample = 0;
         std::uint64_t analysisMs = 0;
+
+        AssistSettings assist;      // the Link's Assist EQ as it is now
     };
 
     class Registry
@@ -130,8 +141,13 @@ namespace mixology::link
         /** Audio thread: lock-free, never blocks. */
         void publishMeters (int slot, float peakL, float peakR, float momentary, float shortTerm, int channels, std::uint64_t nowMs) noexcept;
         void publishTrim (int slot, float db) noexcept;
-        /** True (and the requested dB) when Mixology asked for a new Trim since `lastSeq`. */
+        /** True (and the requested dB) when Mixology asked for a new Trim since `lastSeq`. Start `lastSeq` at
+            kNoRequestSeen: the first call only learns the counter (a request meant for an earlier Link in
+            this slot is never applied). */
         bool takeTrimRequest (int slot, std::uint32_t& lastSeq, float& db) const;
+        void publishAssist (int slot, const AssistSettings&) noexcept;
+        /** Like takeTrimRequest, for the Assist EQ (all five values at once). */
+        bool takeAssistRequest (int slot, std::uint32_t& lastSeq, AssistSettings&) const;
         /** How Mixology paired this Link lately (none when Mixology hasn't said anything for kAliveMs). */
         MatchStatus matchSeen (int slot, std::uint64_t nowMs) const;
         /** Analysis thread: one writer per slot. */
@@ -143,6 +159,7 @@ namespace mixology::link
         /** Every live Link (heartbeat within kAliveMs). */
         std::vector<LinkInfo> links (std::uint64_t nowMs) const;
         void requestTrim (int slot, std::uint32_t generation, float db);
+        void requestAssist (int slot, std::uint32_t generation, const AssistSettings&);
         /** Tells a Link whether it is paired with a channel on the Tracks page (shown in its window). */
         void reportMatch (int slot, std::uint32_t generation, MatchStatus, std::uint64_t nowMs);
 

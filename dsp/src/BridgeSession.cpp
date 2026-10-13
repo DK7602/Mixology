@@ -220,12 +220,22 @@ namespace mixology
             case Cmd::slotVolume: if (slotOk) onVolume (m, now); return;
 
             case Cmd::slotPan:
+            {
                 if (! slotOk) return;
-                slotRef (m.slot).hasPan = true;
-                slotRef (m.slot).pan = m.value;
-                slotRef (m.slot).panText = m.text;
+                auto& s = slotRef (m.slot);
+                s.hasPan = true;
+                s.pan = m.value;
+                s.panText = m.text;
+                if (s.present)
+                    if (auto it = faders.find (s.hash); it != faders.end())
+                    {
+                        it->second.hasPan = true;
+                        it->second.pan = s.pan;
+                        it->second.panText = s.panText;
+                    }
                 changed();
                 return;
+            }
 
             case Cmd::slotMute:
                 if (slotOk) { slotRef (m.slot).mute = m.flag != 0; changed(); }
@@ -346,7 +356,18 @@ namespace mixology
         {
             s.volumeDb = law.toDb (m.value);
         }
-        if (s.present) faders[s.hash] = { s.title, s.volumeDb, now };
+        if (s.present)
+        {
+            auto& f = faders[s.hash];
+            f.title = s.title;
+            f.db = s.volumeDb;
+            f.seenAt = now;
+            f.volume = s.volume;
+            f.volumeText = s.volumeText;
+            f.hasPan = s.hasPan;
+            f.pan = s.pan;
+            f.panText = s.panText;
+        }
         changed();
 
         if (first)
@@ -431,6 +452,11 @@ namespace mixology
 
     void BridgeSession::cancelMoves (const std::string& why, double now)
     {
+        if (scan.active && scan.plan)
+        {
+            plan.notes.push_back ("Stopped: " + (why.empty() ? std::string ("contact with Cubase was lost") : why));
+            finishPlan (now);
+        }
         scan.active = false;
         bool any = false;
         for (auto& mt : meta)
@@ -444,6 +470,7 @@ namespace mixology
     BridgeSession::Result BridgeSession::checkWritable (ChannelRef ref, Field field) const
     {
         if (linkState != Link::connected) return { false, "Not connected to Cubase." };
+        if (scan.active && scan.plan) return { false, "Mixology is applying " + plan.what + " (a few seconds)." };
         if (scan.active) return { false, "Mixology is reading your faders for Analyze Mix (a second or two)." };
         if (ref.slot < 0 || ref.slot >= slotCount()) return { false, "No such channel." };
         const auto& s = slots[static_cast<std::size_t> (ref.slot)];
@@ -673,7 +700,17 @@ namespace mixology
         for (int i = 0; i < slotCount(); ++i)
             if (slot (i).present && slot (i).hash == p.hash) { found = i; ++count; }
         if (slotOut != nullptr) *slotOut = count == 1 ? found : -1;
-        if (count != 1) return true;   // not in view (or not unique): assume it still differs
+        if (count > 1) return true;   // not unique: assume it still differs
+        if (count == 0)
+        {
+            // Not in view: as it was when last seen (mute and solo aren't known there).
+            const auto it = faders.find (p.hash);
+            if (it == faders.end()) return true;
+            const auto& f = it->second;
+            const bool volumeDiffers = std::abs (f.volume - p.volume) > 1.0e-4 && f.volumeText != p.volumeText;
+            const bool panDiffers = p.hasPan && f.hasPan && std::abs (f.pan - p.pan) > 1.0e-4;
+            return volumeDiffers || panDiffers;
+        }
 
         const auto& s = slot (found);
         const bool volumeDiffers = std::abs (s.volume - p.volume) > 1.0e-4 && s.volumeText != p.volumeText;
@@ -740,6 +777,44 @@ namespace mixology
     {
         RestoreSummary sum;
         if (linkState != Link::connected) { sum.message = "Not connected to Cubase."; return sum; }
+        if (scan.active) { sum.message = "Mixology is busy (" + (scan.plan ? plan.what : std::string ("reading faders")) + "): try again in a second."; return sum; }
+
+        // Changed channels outside the bank: the whole restore goes through a plan (the bank pages through
+        // the project and comes back).
+        std::vector<PlanStep> steps;
+        int outside = 0;
+        for (const auto& [hash, p] : restore)
+        {
+            int at = -1;
+            if (! isChanged (p, &at)) continue;
+            bool inView = false;
+            for (int i = 0; i < slotCount(); ++i) inView = inView || (slot (i).present && slot (i).hash == hash);
+            if (! inView) ++outside;
+            if (p.ambiguous) continue;
+            PlanStep st;
+            st.hash = hash;
+            st.title = p.title;
+            st.setVolume = true;
+            st.exactVolume = true;
+            st.position = p.volume;
+            st.setPan = p.hasPan;
+            st.pan = p.pan;
+            st.setMute = true;
+            st.mute = p.mute;
+            st.setSolo = true;
+            st.solo = p.solo;
+            steps.push_back (st);
+        }
+        if (outside > 0)
+        {
+            sum.outsideBank = outside;
+            const auto n = steps.size();
+            const auto r = applyPlan ("Restore all", std::move (steps), now);
+            sum.message = r.ok ? "Restoring " + std::to_string (n) + " channel" + (n == 1 ? "" : "s")
+                                     + ": Mixology steps through the bank and comes back (a few seconds)."
+                               : r.message;
+            return sum;
+        }
 
         for (const auto& [hash, p] : restore)
         {
@@ -819,26 +894,68 @@ namespace mixology
                 return;
             }
             scan.active = false;
-            addLog (now, "Read " + std::to_string (faders.size()) + " channel fader" + (faders.size() == 1 ? "" : "s") + " for Analyze Mix.");
+            if (scan.plan) finishPlan (now);
+            else addLog (now, "Read " + std::to_string (faders.size()) + " channel fader" + (faders.size() == 1 ? "" : "s") + " for Analyze Mix.");
             changed();
             return;
         }
 
-        // The page in view now: remember where the channel that was first in view sits.
-        int present = 0;
-        for (int i = 0; i < slotCount(); ++i)
+        if (scan.waiting)
         {
-            if (! slot (i).present) continue;
-            ++present;
-            if (scan.foundPage < 0 && scan.originalFirst != 0 && slot (i).hash == scan.originalFirst)
+            // A plan's moves on this page land before the bank moves on (a bank change would cut them off).
+            if (moveInProgress (-1) && now < scan.waitUntil)
             {
-                scan.foundPage = scan.page;
-                scan.foundSlot = i;
+                scan.nextAt = now + kPlanPollSeconds;
+                return;
+            }
+            scan.waiting = false;
+        }
+        else
+        {
+            // A new page is in view: remember where the channel that was first in view sits.
+            if (! scan.inPlace)
+                for (int i = 0; i < slotCount() && scan.foundPage < 0; ++i)
+                    if (slot (i).present && scan.originalFirst != 0 && slot (i).hash == scan.originalFirst)
+                    {
+                        scan.foundPage = scan.page;
+                        scan.foundSlot = i;
+                    }
+            if (scan.plan && applyPlanHere (now))
+            {
+                scan.waiting = true;
+                scan.waitUntil = now + kPlanSettleSeconds;
+                scan.nextAt = now + kPlanPollSeconds;
+                return;
             }
         }
+        scanAdvance (now);
+    }
+
+    void BridgeSession::scanAdvance (double now)
+    {
+        if (scan.inPlace)
+        {
+            // A plan starts with the channels already in view; only what is left needs the bank to move.
+            scan.inPlace = false;
+            if (planPending.empty())
+            {
+                scan.active = false;
+                finishPlan (now);
+                return;
+            }
+            scan.page = 0;
+            scan.nextAt = now + kScanPageSeconds;
+            sendBank (BankAction::reset);
+            return;
+        }
+
+        int present = 0;
+        for (int i = 0; i < slotCount(); ++i)
+            if (slot (i).present) ++present;
         const std::uint32_t first = slotCount() > 0 && slot (0).present ? slot (0).hash : 0;
         const bool last = first == 0 || present < slotCount() || (scan.page > 0 && first == scan.lastFirst) || scan.page >= 40;
-        if (! last)
+        const bool planDone = scan.plan && planPending.empty() && (scan.foundPage >= 0 || scan.originalFirst == 0);
+        if (! last && ! planDone)
         {
             scan.lastFirst = first;
             ++scan.page;
@@ -856,6 +973,150 @@ namespace mixology
             for (int k = 0; k < scan.foundSlot; ++k) scan.pending.push_back (BankAction::shiftRight);
         }
         scan.nextAt = now;   // the next tick starts sending
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Plans
+
+    BridgeSession::Result BridgeSession::applyPlan (const std::string& what, std::vector<PlanStep> steps, double now)
+    {
+        if (linkState != Link::connected) return { false, "Not connected to Cubase." };
+        if (scan.active) return { false, scan.plan ? "Mixology is still applying " + plan.what + "." : "Mixology is reading your faders: try again in a second." };
+        planPending.clear();
+        for (auto& st : steps)
+            if (st.hash != 0) planPending[st.hash] = std::move (st);
+        if (planPending.empty()) return { false, "Nothing to change." };
+
+        cancelMoves ({}, now);
+        const auto serial = plan.serial;
+        plan = {};
+        plan.serial = serial;
+        plan.active = true;
+        plan.what = what;
+        plan.total = static_cast<int> (planPending.size());
+        addLog (now, what + ": changing " + std::to_string (plan.total) + " channel" + (plan.total == 1 ? "" : "s") + "...");
+
+        scan = {};
+        scan.active = true;
+        scan.plan = true;
+        scan.inPlace = true;
+        scan.originalFirst = slotCount() > 0 && slot (0).present ? slot (0).hash : 0;
+        scan.nextAt = now;
+        changed();
+        return { true, {} };
+    }
+
+    bool BridgeSession::applyPlanHere (double now)
+    {
+        bool sent = false;
+        for (int i = 0; i < slotCount(); ++i)
+        {
+            const auto& s = slot (i);
+            if (! s.present) continue;
+            const auto it = planPending.find (s.hash);
+            if (it == planPending.end()) continue;
+            const auto step = it->second;
+            planPending.erase (it);
+
+            auto skip = [&] (const std::string& why) {
+                ++plan.skipped;
+                plan.notes.push_back (quoted (s.title) + ": " + why);
+            };
+            if (nameIsDuplicated (i)) { skip ("two channels have this name (rename one)."); continue; }
+            if (isProtected (s.hash)) { skip ("protected (padlock)."); continue; }
+            if (s.automationWrite) { skip ("writing automation (W is on)."); continue; }
+            if (step.setVolume && ! s.hasVolume) { skip ("Cubase didn't report its fader."); continue; }
+            if (step.setVolume && step.checkFrom)
+            {
+                const bool bothInf = isMinusInf (s.volumeDb) && isMinusInf (step.fromDb);
+                if (! bothInf && ! (std::abs (s.volumeDb - step.fromDb) <= kPlanFromTolerance))
+                {
+                    skip ("its fader was moved since Analyze Mix (now " + formatDb (s.volumeDb) + "): left as it is. Analyze again for fresh advice.");
+                    continue;
+                }
+            }
+
+            // How it was just before (for this plan's undo).
+            PlanStep before;
+            before.hash = s.hash;
+            before.title = s.title;
+            before.setVolume = step.setVolume && s.hasVolume;
+            before.exactVolume = true;
+            before.position = s.volume;
+            before.setPan = step.setPan && s.hasPan;
+            before.pan = s.pan;
+            before.setMute = step.setMute;
+            before.mute = s.mute;
+            before.setSolo = step.setSolo;
+            before.solo = s.solo;
+            plan.undo.push_back (before);
+
+            takeRestorePointIfNeeded (i, now);
+            if (step.setVolume)
+            {
+                if (step.exactVolume)
+                {
+                    if (std::abs (s.volume - step.position) > 1.0e-7)
+                    {
+                        auto& mv = metaRef (i).move;
+                        mv = {};
+                        mv.kind = MoveKind::restore;
+                        mv.targetDb = law.toDb (step.position);
+                        sendVolume (i, step.position, now);
+                        sent = true;
+                    }
+                }
+                else
+                {
+                    double db = step.db;
+                    if (! std::isfinite (db) || db < -144.0) db = FaderLaw::kMinusInf;
+                    db = std::min (db, kMaxDb);
+                    const bool there = isMinusInf (db) ? isMinusInf (s.volumeDb) : std::abs (s.volumeDb - db) <= kDbExact;
+                    if (! there)
+                    {
+                        startMove (i, db, now);
+                        sent = true;
+                    }
+                }
+            }
+            if (step.setPan && s.hasPan && std::abs (s.pan - step.pan) > 1.0e-6)
+            {
+                auto m = writeMessage (Cmd::setPan, i);
+                m.value = std::clamp (step.pan, 0.0, 1.0);
+                send (m);
+            }
+            for (auto [want, cmd, on, have] : { std::tuple { step.setMute, Cmd::setMute, step.mute, s.mute },
+                                                std::tuple { step.setSolo, Cmd::setSolo, step.solo, s.solo } })
+            {
+                if (! want || on == have) continue;
+                auto m = writeMessage (cmd, i);
+                m.flag = on ? 1 : 0;
+                send (m);
+            }
+            ++plan.done;
+            changed();
+        }
+        return sent;
+    }
+
+    void BridgeSession::finishPlan (double now)
+    {
+        if (! plan.active) return;
+        plan.active = false;
+        for (const auto& [hash, st] : planPending)
+        {
+            ++plan.skipped;
+            plan.notes.push_back (quoted (st.title) + ": not found in Cubase (renamed or removed?).");
+        }
+        planPending.clear();
+
+        plan.message = plan.what + ": changed " + std::to_string (plan.done) + " channel" + (plan.done == 1 ? "" : "s") + ".";
+        if (plan.skipped > 0)
+            plan.message += " " + std::to_string (plan.skipped) + " skipped.";
+        addLog (now, plan.message);
+        for (const auto& n : plan.notes) addLog (now, "  " + n);
+        ++plan.serial;
+        changed();
     }
 
     BridgeSession::Result BridgeSession::bank (BankAction action, double now)

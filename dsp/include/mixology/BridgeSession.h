@@ -163,13 +163,54 @@ namespace mixology
             std::string title;
             double db = FaderLaw::kMinusInf;
             double seenAt = 0.0;
+            double volume = 0.0;      // exact fader position, as Cubase reported it
+            std::string volumeText;
+            bool hasPan = false;
+            double pan = 0.5;
+            std::string panText;
         };
         /** Fader levels of every channel seen so far (in the bank, or during a scan). */
         const std::map<std::uint32_t, KnownFader>& knownFaders() const { return faders; }
         /** Steps the bank through all channels to read their faders, then puts it back where it was.
             Takes about half a second per 12 channels; nothing can be moved meanwhile. */
         Result scanAllChannels (double now);
-        bool scanning() const { return scan.active; }
+        bool scanning() const { return scan.active && ! scan.plan; }
+
+        // ---- plans: many channels at once, wherever they are in the project ----------------------
+        /** One channel's part of a plan (Auto Mix, Balance, Stereo Architect, an undo). Found by name hash. */
+        struct PlanStep
+        {
+            std::uint32_t hash = 0;
+            std::string title;
+            bool setVolume = false;
+            double db = 0.0;               // closed-loop target
+            bool exactVolume = false;      // ... or an exact fader position (undo / restore)
+            double position = 0.0;
+            bool checkFrom = false;        // skip the channel if its fader isn't where the plan saw it
+            double fromDb = 0.0;
+            bool setPan = false;
+            double pan = 0.5;
+            bool setMute = false, mute = false, setSolo = false, solo = false;
+        };
+
+        struct PlanProgress
+        {
+            bool active = false;
+            std::string what;              // "Auto Mix", "Undo Balance"...
+            int total = 0, done = 0, skipped = 0;
+            std::vector<std::string> notes;   // why channels were skipped
+            std::string message;           // summary once finished
+            std::vector<PlanStep> undo;    // how the channels it changed were just before (exact positions)
+            std::uint64_t serial = 0;      // bumps when a plan finishes
+        };
+
+        /** Applies every step: first on the channels in view, then the bank pages through the project and
+            comes back to where it was (like the fader scan). Same safety as single moves (protected, W,
+            duplicated names skipped; restore points taken). Nothing else can be moved meanwhile. */
+        Result applyPlan (const std::string& what, std::vector<PlanStep> steps, double now);
+        bool applying() const { return scan.active && scan.plan; }
+        bool busy() const { return scan.active; }
+        const PlanProgress& planProgress() const { return plan; }
 
         // ---- commands --------------------------------------------------------------------------
         Result setVolumeDb (ChannelRef, double db, double now);
@@ -223,6 +264,10 @@ namespace mixology
         struct Scan
         {
             bool active = false;
+            bool plan = false;          // applying a plan (else: reading faders)
+            bool inPlace = false;       // a plan's first round: the channels already in view
+            bool waiting = false;       // a plan's moves on this page are still landing
+            double waitUntil = 0.0;
             double nextAt = 0.0;
             int page = 0;
             std::uint32_t originalFirst = 0, lastFirst = 0;
@@ -231,9 +276,15 @@ namespace mixology
             std::deque<bridge::BankAction> pending;   // the way back, one step at a time
         };
         void scanStep (double now);
+        void scanAdvance (double now);
+        bool applyPlanHere (double now);
+        void finishPlan (double now);
         void sendBank (bridge::BankAction);
         static constexpr double kScanPageSeconds = 0.5;
         static constexpr double kScanStepSeconds = 0.08;   // between bank steps on the way back
+        static constexpr double kPlanPollSeconds = 0.05;
+        static constexpr double kPlanSettleSeconds = 3.0;  // longest wait for a page's moves to land
+        static constexpr double kPlanFromTolerance = 0.3;  // dB a fader may differ from what the plan saw
 
         void send (const bridge::Message&);
         void handle (const bridge::Message&, double now);
@@ -268,6 +319,8 @@ namespace mixology
         std::map<std::uint32_t, bool> readWarned;                 // hash -> warned about R this session
         std::map<std::uint32_t, KnownFader> faders;               // hash -> last fader level seen
         Scan scan;
+        std::map<std::uint32_t, PlanStep> planPending;
+        PlanProgress plan;
         std::string moveResult;
 
         std::deque<LogLine> logBuffer;

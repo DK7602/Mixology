@@ -1,20 +1,20 @@
-// Mixology Link window: the track this Link sits on, its meters and Trim, and whether Mixology sees it.
+// Mixology Link window: the track this Link sits on, its meters, Trim and Assist EQ, and whether Mixology sees it.
 
 import * as Juce from "./juce/index.js";
 import { $, el, Knob, Meter, fmt, setRenderScale } from "./ui.js";
 
 const stage = $("lstage");
 function fit() {
-  const s = Math.min(window.innerWidth / 600, window.innerHeight / 400);
+  const s = Math.min(window.innerWidth / 600, window.innerHeight / 470);
   stage.style.transform = `scale(${s})`;
   stage.style.left = Math.max(0, (window.innerWidth - 600 * s) / 2) + "px";
-  stage.style.top = Math.max(0, (window.innerHeight - 400 * s) / 2) + "px";
+  stage.style.top = Math.max(0, (window.innerHeight - 470 * s) / 2) + "px";
   setRenderScale(s);
 }
 window.addEventListener("resize", fit);
 
 const fn = (name) => { const f = Juce.getNativeFunction(name); return (...a) => f(...a).catch(() => undefined); };
-const native = { getLinkInfo: fn("getLinkInfo"), setTrim: fn("setTrim"), trimGesture: fn("trimGesture") };
+const native = { getLinkInfo: fn("getLinkInfo"), setTrim: fn("setTrim"), trimGesture: fn("trimGesture"), clearAssist: fn("clearAssist") };
 
 // Light / dark: follows Mixology's saved choice; the logo switches this window.
 function applyTheme(theme) {
@@ -49,6 +49,58 @@ const trim = new Knob(trimCard, {
 const note = el("div", "lnote", trimCard);
 note.textContent = "Before the fader · double-click: 0 dB";
 
+// Assist EQ: what Mixology's Clean Up and Vocal Pocket set on this track.
+const assistCard = $("lassist");
+el("div", "ltitle", assistCard).textContent = "ASSIST EQ";
+const assistText = el("div", "ltext", assistCard);
+const assistCanvas = el("canvas", "", assistCard);
+assistCanvas.width = 280; assistCanvas.height = 88;
+const clearBtn = el("button", "small-btn", assistCard);
+clearBtn.textContent = "Clear";
+clearBtn.title = "Take the Assist EQ out (Low Cut off, no dips)";
+clearBtn.addEventListener("click", () => native.clearAssist());
+let assistKey = "";
+const hzText = (hz) => hz >= 1000 ? fmt.num(hz / 1000, hz >= 10000 ? 0 : 1) + " kHz" : Math.round(hz) + " Hz";
+
+function biquadDb(type, f0, db, q, f, sr = 48000) {
+  const w0 = 2 * Math.PI * f0 / sr, cw = Math.cos(w0), al = Math.sin(w0) / (2 * q), A = Math.pow(10, db / 40);
+  let b0, b1, b2, a0, a1, a2;
+  if (type === "hp") { b0 = (1 + cw) / 2; b1 = -(1 + cw); b2 = b0; a0 = 1 + al; a1 = -2 * cw; a2 = 1 - al; }
+  else { b0 = 1 + al * A; b1 = -2 * cw; b2 = 1 - al * A; a0 = 1 + al / A; a1 = -2 * cw; a2 = 1 - al / A; }
+  const w = 2 * Math.PI * f / sr, c1 = Math.cos(w), s1 = Math.sin(w), c2 = Math.cos(2 * w), s2 = Math.sin(2 * w);
+  const nr = b0 + b1 * c1 + b2 * c2, ni = -(b1 * s1 + b2 * s2), dr = a0 + a1 * c1 + a2 * c2, di = -(a1 * s1 + a2 * s2);
+  return 10 * Math.log10((nr * nr + ni * ni) / (dr * dr + di * di));
+}
+
+function drawAssist(a) {
+  const on = a.lowCut >= 20, mud = a.mudDb < -0.05, pocket = a.pocketDb < -0.05;
+  const parts = [];
+  if (on) parts.push("Low cut " + hzText(a.lowCut));
+  if (mud) parts.push(`Mud ${fmt.num(a.mudDb, 1)} dB at ${hzText(a.mudHz)}`);
+  if (pocket) parts.push(`Pocket ${fmt.num(a.pocketDb, 1)} dB at ${hzText(a.pocketHz)}`);
+  assistText.textContent = parts.length ? parts.join(" · ") : "Off. Mixology's Clean Up and Vocal Pocket set it.";
+  assistText.style.color = parts.length ? "var(--text)" : "var(--text-dim)";
+  clearBtn.disabled = !parts.length;
+  clearBtn.style.opacity = parts.length ? "1" : "0.4";
+
+  const ctx = assistCanvas.getContext("2d"), W = assistCanvas.width, H = assistCanvas.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.strokeStyle = "rgba(128,140,160,0.35)"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, H * 0.3); ctx.lineTo(W, H * 0.3); ctx.stroke();
+  ctx.strokeStyle = parts.length ? "#19d3ff" : "rgba(128,140,160,0.6)"; ctx.lineWidth = 3;
+  ctx.beginPath();
+  for (let i = 0; i <= 100; i++) {
+    const f = 20 * Math.pow(1000, i / 100);
+    let db = 0;
+    if (on) db += biquadDb("hp", a.lowCut, 0, 0.7071, f);
+    if (mud) db += biquadDb("pk", a.mudHz, a.mudDb, 1.0, f);
+    if (pocket) db += biquadDb("pk", a.pocketHz, a.pocketDb, 1.2, f);
+    const y = H * 0.3 - Math.max(-24, db) / 24 * (H * 0.66);
+    i ? ctx.lineTo(i / 100 * W, y) : ctx.moveTo(0, y);
+  }
+  ctx.stroke();
+}
+
 let peakHold = -100, peakTime = 0;
 function frame(f) {
   mL.set(f.peakL);
@@ -66,6 +118,11 @@ function frame(f) {
   $("lname").style.color = f.name ? "var(--text)" : "var(--text-dim)";
   $("lcolour").style.background = f.colour || "var(--text-faint)";
   $("lsub").textContent = f.note || (f.channels === 1 ? "Mono track" : "Stereo track") + " · put Mixology Link after your other plug-ins on this track";
+
+  if (f.assist) {
+    const key = JSON.stringify(f.assist);
+    if (key !== assistKey) { assistKey = key; drawAssist(f.assist); }
+  }
 
   const st = $("lstatus");
   const [colour, text] = !f.shared ? ["var(--red)", "Can't share data with Mixology on this computer"]

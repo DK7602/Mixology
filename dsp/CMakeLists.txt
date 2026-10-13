@@ -1,10 +1,12 @@
 add_library(mixology_dsp STATIC
+    src/AssistEq.cpp
     src/BridgeProtocol.cpp
     src/BridgeSession.cpp
     src/FaderLaw.cpp
     src/Fft.cpp
     src/LinkRegistry.cpp
     src/MixAnalysis.cpp
+    src/MixPlanner.cpp
     src/SharedBlock.cpp
     src/TrackMeter.cpp
     src/TrackAnalyzer.cpp

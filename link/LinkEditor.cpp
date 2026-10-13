@@ -80,6 +80,11 @@ juce::WebBrowserComponent::Options LinkEditor::makeEditorOptions()
                                  }
                                  complete (true);
                              })
+        .withNativeFunction ("clearAssist", [this] (const juce::Array<juce::var>&, auto complete)
+                             {
+                                 processor.setAssist (mixology::AssistSettings {});
+                                 complete (true);
+                             })
         .withResourceProvider ([] (const auto& url) { return getResource (url); });
 }
 
@@ -157,5 +162,13 @@ void LinkEditor::timerCallback()
     f->setProperty ("shared", processor.registryShared() && processor.registrySlot() >= 0);
     f->setProperty ("note", processor.lastTrimRequest());
     f->setProperty ("channels", processor.getTotalNumOutputChannels());
+    const auto a = processor.assistSettings();
+    auto* ao = new juce::DynamicObject();
+    ao->setProperty ("lowCut", roundTo (a.lowCutHz, 1.0f));
+    ao->setProperty ("mudHz", roundTo (a.mudHz, 1.0f));
+    ao->setProperty ("mudDb", roundTo (a.mudDb, 0.1f));
+    ao->setProperty ("pocketHz", roundTo (a.pocketHz, 1.0f));
+    ao->setProperty ("pocketDb", roundTo (a.pocketDb, 0.1f));
+    f->setProperty ("assist", juce::var (ao));
     webView.emitEventIfBrowserIsVisible ("linkFrame", juce::var (f));
 }

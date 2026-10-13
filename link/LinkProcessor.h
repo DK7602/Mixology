@@ -1,5 +1,6 @@
 #pragma once
 
+#include "mixology/AssistEq.h"
 #include "mixology/AudioRing.h"
 #include "mixology/LinkRegistry.h"
 #include "mixology/TrackAnalyzer.h"
@@ -19,7 +20,9 @@
       latest audio (TrackAnalyzer: 1/3-octave bands, loudness, width) for Analyze Mix.
     - Trim: a clean gain (-24..+24 dB). Mixology may ask for a new Trim; the request is applied on the
       message thread like a user move, so the host sees it (automation, undo) and the project saves it.
-    Audio is otherwise untouched (no latency). */
+    - Assist EQ (Milestone 4): low cut, mud dip and vocal-pocket dip, set by Mixology's Clean Up and Vocal
+      Pocket the same way. At its neutral settings audio passes through bit for bit.
+    No latency. */
 class MixologyLinkProcessor final : public juce::AudioProcessor,
                                     private juce::Timer,
                                     private juce::TimeSliceClient
@@ -76,6 +79,9 @@ public:
     float trimDb() const { return trimParam->load(); }
     void setTrimDb (float db);
     juce::String lastTrimRequest() const { return trimNote; }
+    mixology::AssistSettings assistSettings() const;
+    /** Sets all five Assist EQ parameters like a user move (one gesture each). */
+    void setAssist (const mixology::AssistSettings&);
 
 private:
     template <typename Sample>
@@ -99,6 +105,12 @@ private:
     std::atomic<std::uint64_t> lastAudioMs { 0 };
 
     std::atomic<float>* trimParam = nullptr;
+    std::atomic<float>* lowCutParam = nullptr;
+    std::atomic<float>* mudHzParam = nullptr;
+    std::atomic<float>* mudDbParam = nullptr;
+    std::atomic<float>* pocketHzParam = nullptr;
+    std::atomic<float>* pocketDbParam = nullptr;
+    mixology::AssistEq assist;
     juce::SmoothedValue<double, juce::ValueSmoothingTypes::Multiplicative> trimGain;
     mixology::TrackMeter meter;
     std::uint32_t publishedWindows = 0;
@@ -106,7 +118,8 @@ private:
     mixology::link::Registry& registry;
     std::uint64_t instanceId = 0;
     int slot = -1;
-    std::uint32_t trimRequestSeen = 0;
+    std::uint32_t trimRequestSeen = mixology::link::kNoRequestSeen;
+    std::uint32_t assistRequestSeen = mixology::link::kNoRequestSeen;
 
     Identity trackIdentity;
     juce::String trimNote;

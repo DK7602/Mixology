@@ -1,0 +1,781 @@
+#include "mixology/MixPlanner.h"
+
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <cstdio>
+#include <map>
+#include <regex>
+
+namespace mixology::mix
+{
+    namespace
+    {
+        double toE (double db) { return std::pow (10.0, db / 10.0); }
+        double toDb (double e) { return e > 1.0e-14 ? 10.0 * std::log10 (e) : -120.0; }
+
+        std::string fmt1 (double v)
+        {
+            char b[32];
+            std::snprintf (b, sizeof (b), "%.1f", std::abs (v) < 0.05 ? 0.0 : v);
+            return b;
+        }
+        std::string fmt0 (double v)
+        {
+            char b[32];
+            std::snprintf (b, sizeof (b), "%.0f", v);
+            return b;
+        }
+        std::string signedDb (double v) { return (v >= 0.05 ? "+" : "") + fmt1 (v) + " dB"; }
+        std::string quoted (const std::string& s) { return "'" + s + "'"; }
+        std::string panText (double p)
+        {
+            if (std::abs (p) < 0.5) return "C";
+            return (p < 0.0 ? "L" : "R") + fmt0 (std::abs (p));
+        }
+
+        std::string joinNames (const std::vector<std::string>& names, std::size_t max = 3)
+        {
+            std::string out;
+            for (std::size_t i = 0; i < names.size() && i < max; ++i)
+            {
+                if (i > 0) out += i + 1 == std::min (names.size(), max) ? " and " : ", ";
+                out += quoted (names[i]);
+            }
+            if (names.size() > max) out += " and " + std::to_string (names.size() - max) + " more";
+            return out;
+        }
+
+        std::string joinWords (const std::vector<std::string>& parts, const std::string& sep = "; ")
+        {
+            std::string out;
+            for (const auto& p : parts) out += (out.empty() ? "" : sep) + p;
+            return out;
+        }
+
+        double rangeE (const std::vector<double>& db, int from, int to)
+        {
+            double e = 0.0;
+            for (int b = from; b <= to && b < static_cast<int> (db.size()); ++b) e += toE (db[static_cast<std::size_t> (b)]);
+            return e;
+        }
+
+        const char* roleWords (Role r)
+        {
+            switch (r)
+            {
+                case Role::kick: return "the kick";
+                case Role::snare: return "the snare";
+                case Role::hats: return "the hats";
+                case Role::perc: return "the percussion";
+                case Role::bass: return "the bass / 808";
+                case Role::keys: return "the keys";
+                case Role::synth: return "the synths";
+                case Role::guitar: return "the guitars";
+                case Role::vox: return "the lead vocal";
+                case Role::adlibs: return "the ad-libs";
+                case Role::fx: return "the effects";
+                case Role::other: return "the other tracks";
+            }
+            return "the tracks";
+        }
+
+        // Loudness of each kind of instrument against the kick (dB, K-weighted, while it plays), per genre.
+        // Starting points from typical mixes of each style: only clear outliers get moved.
+        struct Weights
+        {
+            std::map<Role, double> instruments;
+            double adlibs = -8.0;   // ad-libs against the lead vocal
+        };
+
+        Weights weightsFor (const std::string& styleKey)
+        {
+            const auto genre = styleKey.substr (0, styleKey.find ('.'));
+            auto make = [] (double kick, double snare, double hats, double perc, double bass, double keys, double synth, double guitar, double adlibs) {
+                Weights w;
+                w.instruments = { { Role::kick, kick }, { Role::snare, snare }, { Role::hats, hats }, { Role::perc, perc }, { Role::bass, bass },
+                                  { Role::keys, keys }, { Role::synth, synth }, { Role::guitar, guitar } };
+                w.adlibs = adlibs;
+                return w;
+            };
+            if (genre == "hiphop" || genre == "trap" || genre == "rnb" || genre == "afro" || genre == "latin")
+                return make (0, -2, -9, -10, 1, -6, -5, -6, -7);
+            if (genre == "pop" || genre == "electronic") return make (0, -1, -9, -10, -1, -5, -4, -5, -8);
+            if (genre == "rock") return make (0, 1, -9, -9, -1, -5, -6, 1, -8);
+            return make (0, 0, -9, -8, 0, -2, -5, -1, -8);   // country, folk, gospel, worship, jazz, cinematic
+        }
+
+        bool counts (const TrackReport& t) { return ! t.excluded && t.activity >= 0.03 && t.loudness > -100.0; }
+
+        struct Lookup
+        {
+            std::map<std::uint32_t, const ChannelNow*> byHash;
+            std::map<std::string, const ChannelNow*> byName;
+
+            explicit Lookup (const std::vector<ChannelNow>& chans)
+            {
+                for (const auto& c : chans)
+                {
+                    if (c.hash != 0) byHash[c.hash] = &c;
+                    byName[c.name] = &c;
+                }
+            }
+            const ChannelNow* of (const TrackReport& t) const
+            {
+                if (auto it = byHash.find (t.hash); it != byHash.end()) return it->second;
+                if (auto it = byName.find (t.name); it != byName.end()) return it->second;
+                return nullptr;
+            }
+            const ChannelNow* named (const std::string& n) const
+            {
+                auto it = byName.find (n);
+                return it != byName.end() ? it->second : nullptr;
+            }
+        };
+
+        bool movable (const ChannelNow* c) { return c != nullptr && c->faderKnown && ! c->locked && c->faderDb > -100.0; }
+
+        // ---------------------------------------------------------------------------------------------
+        // Balance: fader levels
+
+        std::string planBalance (const Report& r, const Lookup& look, Plan& plan)
+        {
+            struct Member { std::string name; const ChannelNow* ch = nullptr; };
+            struct Group
+            {
+                Role role = Role::other;
+                bool unheard = false;
+                double e = 0.0;          // loudness energy of its tracks together
+                double move = 0.0;
+                std::vector<Member> members;
+                std::vector<std::string> why;
+                bool anyMovable() const { return std::any_of (members.begin(), members.end(), [] (const Member& m) { return movable (m.ch); }); }
+                double level() const { return toDb (e); }
+            };
+            std::map<int, Group> groups;   // by role; 100 = channels without a Link
+            for (const auto& t : r.tracks)
+            {
+                if (! counts (t)) continue;
+                auto& g = groups[static_cast<int> (t.role)];
+                g.role = t.role;
+                g.e += toE (t.loudness);
+                g.members.push_back ({ t.name, look.of (t) });
+            }
+            if (r.unheardLoudness > -100.0 && ! r.unheard.empty())
+            {
+                auto& g = groups[100];
+                g.unheard = true;
+                g.e = toE (r.unheardLoudness);
+                for (const auto& n : r.unheard) g.members.push_back ({ n, look.named (n) });
+            }
+            if (groups.empty()) return {};
+
+            const auto w = weightsFor (r.style.key);
+            auto isInstrument = [&] (const Group& g) { return ! g.unheard && w.instruments.count (g.role) != 0; };
+            auto isRest = [&] (const Group& g) { return g.unheard || (g.role != Role::vox && g.role != Role::adlibs); };
+
+            // 1. Instruments against each other: only kinds clearly off the style's balance move (to within 1 dB).
+            {
+                std::vector<double> offsets, locked;
+                for (auto& [k, g] : groups)
+                    if (isInstrument (g))
+                    {
+                        offsets.push_back (g.level() - w.instruments.at (g.role));
+                        if (! g.anyMovable()) locked.push_back (offsets.back());
+                    }
+                if (offsets.size() >= 2)
+                {
+                    auto& ref = locked.empty() ? offsets : locked;
+                    std::sort (ref.begin(), ref.end());
+                    const double c = ref.size() % 2 ? ref[ref.size() / 2] : 0.5 * (ref[ref.size() / 2 - 1] + ref[ref.size() / 2]);
+                    for (auto& [k, g] : groups)
+                    {
+                        if (! isInstrument (g)) continue;
+                        const double dev = g.level() - w.instruments.at (g.role) - c;
+                        if (std::abs (dev) <= 2.5) continue;
+                        g.move -= dev - std::copysign (1.0, dev);
+                        g.why.push_back (std::string (roleWords (g.role)) + (dev > 0.0 ? " sit " + fmt1 (dev) + " dB louder" : " sit " + fmt1 (-dev) + " dB quieter")
+                                         + " against the rest of the beat than " + r.style.name + " usually has");
+                    }
+                }
+            }
+
+            // 2. The lead vocal against the rest of the mix (as measured while it sings).
+            Group* vocal = groups.count (static_cast<int> (Role::vox)) ? &groups[static_cast<int> (Role::vox)] : nullptr;
+            Group* adlibs = groups.count (static_cast<int> (Role::adlibs)) ? &groups[static_cast<int> (Role::adlibs)] : nullptr;
+            if (vocal != nullptr && r.hasVocalRatio)
+            {
+                double restOld = 0.0, restNew = 0.0;
+                bool restMovable = false;
+                for (auto& [k, g] : groups)
+                    if (isRest (g))
+                    {
+                        restOld += g.e;
+                        restNew += g.e * toE (g.move);
+                        restMovable = restMovable || g.anyMovable();
+                    }
+                const double ratio = r.vocalRatio - (toDb (restNew) - toDb (restOld));
+                const double err = r.vocalTarget - ratio;
+                if (std::abs (err) > 1.5)
+                {
+                    const bool vocalMovable = vocal->anyMovable();
+                    double vm = 0.0, rm = 0.0;
+                    if (vocalMovable && restMovable) { vm = err / 2.0; rm = -err / 2.0; }
+                    else if (vocalMovable) vm = err;
+                    else if (restMovable) rm = -err;
+                    // A vocal fader can't go past the top (+6 dB): the beat takes what is left.
+                    if (vm > 0.0)
+                    {
+                        double room = 1.0e9;
+                        for (const auto& m : vocal->members)
+                            if (movable (m.ch)) room = std::min (room, kMaxFaderDb - m.ch->faderDb - vocal->move);
+                        if (vm > room)
+                        {
+                            if (restMovable) rm -= vm - std::max (0.0, room);
+                            vm = std::max (0.0, room);
+                        }
+                    }
+                    else plan.notes.push_back ("The vocal sits " + signedDb (ratio) + " against the rest (the style wants " + signedDb (r.vocalTarget)
+                                               + "), but the channels that would move are protected or weren't read.");
+                    const std::string where = (ratio < r.vocalTarget ? "is buried: " : "sits far on top: ") + signedDb (ratio)
+                                              + " against the rest while it sings, " + r.style.name + " wants about " + signedDb (r.vocalTarget);
+                    if (vm != 0.0)
+                    {
+                        vocal->move += vm;
+                        vocal->why.push_back ("the vocal " + where);
+                        if (adlibs != nullptr) { adlibs->move += vm; adlibs->why.push_back ("follows the lead vocal"); }
+                    }
+                    if (rm != 0.0)
+                        for (auto& [k, g] : groups)
+                            if (isRest (g))
+                            {
+                                g.move += rm;
+                                g.why.push_back (rm < 0.0 ? "makes room for the vocal" : "the vocal sits too far on top");
+                            }
+                }
+            }
+            if (vocal != nullptr && adlibs != nullptr)
+            {
+                const double dev = (adlibs->level() + adlibs->move) - (vocal->level() + vocal->move + w.adlibs);
+                if (std::abs (dev) > 3.0)
+                {
+                    adlibs->move -= dev - std::copysign (1.5, dev);
+                    adlibs->why.push_back (dev > 0.0 ? "ad-libs compete with the lead vocal" : "ad-libs are hard to hear under the lead vocal");
+                }
+            }
+
+            // 3. Room for Masterology: the mix peaks around -6 dBTP (never pushed up: loudness is Masterology's job).
+            {
+                double before = 0.0, after = 0.0;
+                for (auto& [k, g] : groups) { before += g.e; after += g.e * toE (g.move); }
+                const double peak = r.mixPeak + (toDb (after) - toDb (before));
+                if (r.mixPeak > -100.0 && peak > -5.5)
+                {
+                    const double shift = -(peak + 6.0);
+                    std::vector<std::string> stuck;
+                    for (auto& [k, g] : groups)
+                    {
+                        if (! g.anyMovable()) { for (auto& m : g.members) stuck.push_back (m.name); continue; }
+                        g.move += shift;
+                        g.why.push_back ("room for Masterology (the mix would peak at " + signedDb (peak) + "TP, -6 is the aim)");
+                    }
+                    if (! stuck.empty())
+                        plan.notes.push_back (joinNames (stuck) + " can't move (protected or not read): everything else goes down "
+                                              + fmt1 (-shift) + " dB around it, so it gets that much louder against the rest.");
+                }
+            }
+
+            // Changes, track by track (a kind's tracks all move the same).
+            std::vector<std::pair<double, std::string>> moved;
+            for (auto& [k, g] : groups)
+            {
+                if (std::abs (g.move) < 0.5) continue;
+                moved.push_back ({ g.move, g.unheard ? std::string ("the channels without a Link") : std::string (roleWords (g.role)) });
+                for (const auto& m : g.members)
+                {
+                    if (! movable (m.ch))
+                    {
+                        plan.notes.push_back (quoted (m.name) + (m.ch == nullptr ? ": Cubase hasn't shown its fader (press Analyze Mix again)"
+                                                                 : m.ch->locked ? ": protected (padlock)" : ": its fader wasn't read")
+                                              + ", so it stays where it is (it would have moved " + signedDb (g.move) + ").");
+                        continue;
+                    }
+                    Change c;
+                    c.hash = m.ch->hash;
+                    c.name = m.name;
+                    c.role = g.role;
+                    c.kind = "level";
+                    c.from = m.ch->faderDb;
+                    c.wanted = std::min (c.from + g.move, kMaxFaderDb);
+                    c.to = std::min (c.from + std::clamp (g.move, -kMaxMoveDb, kMaxMoveDb), kMaxFaderDb);
+                    c.big = std::abs (g.move) > kMaxMoveDb + 0.05;
+                    c.why = joinWords (g.why);
+                    if (std::abs (c.to - c.from) < 0.05)
+                    {
+                        plan.notes.push_back (quoted (m.name) + " is already at the top of its fader (+6 dB): raise it with Mixology Link's Trim instead.");
+                        continue;
+                    }
+                    plan.changes.push_back (c);
+                }
+            }
+            if (moved.empty()) return "levels already fit " + r.style.name;
+            std::sort (moved.begin(), moved.end(), [] (auto& a, auto& b) { return std::abs (a.first) > std::abs (b.first); });
+            std::vector<std::string> parts;
+            for (std::size_t i = 0; i < moved.size() && i < 4; ++i) parts.push_back (moved[i].second + " " + signedDb (moved[i].first));
+            return "levels: " + joinWords (parts, ", ");
+        }
+
+        // ---------------------------------------------------------------------------------------------
+        // Stereo Architect: pans
+
+        double panBalanceDb (double pan)   // left minus right of a mono source through an equal-power panner
+        {
+            const double th = (std::clamp (pan, -100.0, 100.0) + 100.0) / 200.0 * 1.5707963267948966;
+            const double l = std::cos (th), rr = std::sin (th);
+            if (rr < 1.0e-6) return 40.0;
+            if (l < 1.0e-6) return -40.0;
+            return std::clamp (20.0 * std::log10 (l / rr), -40.0, 40.0);
+        }
+
+        double spreadFor (Role r)
+        {
+            switch (r)
+            {
+                case Role::guitar: return 85.0;
+                case Role::synth: return 60.0;
+                case Role::adlibs: return 50.0;
+                case Role::keys: return 45.0;
+                case Role::perc: return 40.0;
+                case Role::vox: return 35.0;   // backing doubles of the lead
+                default: return 50.0;
+            }
+        }
+
+        std::string planStereo (const Report& r, const Lookup& look, Plan& plan)
+        {
+            struct T
+            {
+                const TrackReport* t = nullptr;
+                const ChannelNow* ch = nullptr;
+                double pan = 0.0, to = 0.0;
+                bool fixed = false;   // already decided by a rule
+                std::string why;
+            };
+            std::vector<T> ts;
+            for (const auto& t : r.tracks)
+            {
+                if (! counts (t)) continue;
+                const auto* ch = look.of (t);
+                if (ch == nullptr || ! ch->hasPan) continue;
+                ts.push_back ({ &t, ch, ch->pan, ch->pan, false, {} });
+            }
+            if (ts.empty()) return {};
+
+            // 1. Low end and the lead vocal in the middle.
+            for (auto& x : ts)
+            {
+                const auto role = x.t->role;
+                const auto pn = pairName (x.t->name);
+                const bool lead = role == Role::vox && ! pn.explicitPair && pn.order == 0;
+                const double limit = role == Role::kick || role == Role::bass ? 5.0 : role == Role::snare ? 25.0 : lead ? 15.0 : 1.0e9;
+                if (std::abs (x.pan) > limit)
+                {
+                    x.to = 0.0;
+                    x.why = role == Role::vox ? "the lead vocal is the centre of the song"
+                                              : std::string (roleWords (role)) + " belong" + (role == Role::snare ? "s" : "") + " in the middle: stronger on every speaker and in mono";
+                }
+                if (role == Role::kick || role == Role::bass || role == Role::snare || lead) x.fixed = true;
+            }
+
+            // 2. Pairs and doubles: spread left / right.
+            std::map<std::string, std::vector<T*>> pairs;
+            for (auto& x : ts)
+            {
+                if (x.fixed) continue;
+                const auto pn = pairName (x.t->name);
+                if (pn.base.empty()) continue;
+                const auto role = x.t->role;
+                if (role == Role::kick || role == Role::bass || role == Role::snare || role == Role::fx) continue;
+                pairs[pn.base + "|" + roleKey (role)].push_back (&x);
+            }
+            for (auto& [key, members] : pairs)
+            {
+                if (members.size() < 2) continue;
+                const auto role = members.front()->t->role;
+                bool anyExplicit = false;
+                for (auto* m : members) anyExplicit = anyExplicit || pairName (m->t->name).explicitPair;
+                if (role == Role::other && ! anyExplicit) continue;   // "Audio 01", "Audio 02": not a pair
+                std::vector<T*> spread = members;
+                if (role == Role::vox)
+                {
+                    // The original take is the lead (centre); spread its doubles only when there are two or more.
+                    spread.erase (std::remove_if (spread.begin(), spread.end(), [] (T* m) { const auto pn = pairName (m->t->name); return ! pn.explicitPair && pn.order == 0; }),
+                                  spread.end());
+                    if (spread.size() < 2) continue;
+                }
+                std::sort (spread.begin(), spread.end(), [] (T* a, T* b) {
+                    const auto pa = pairName (a->t->name), pb = pairName (b->t->name);
+                    return pa.side != pb.side ? pa.side < pb.side : pa.order < pb.order;
+                });
+                const double s = spreadFor (role);
+                const auto n = spread.size();
+                double lo = 1.0e9, hi = -1.0e9;
+                for (auto* m : spread) { lo = std::min (lo, m->pan); hi = std::max (hi, m->pan); }
+                const bool alreadySpread = n == 2 ? (lo <= -20.0 && hi >= 20.0) : (hi - lo >= s);
+                if (alreadySpread) continue;
+                // A pair with one side already well out (e.g. both hard left): that one stays, the other mirrors it.
+                T* anchor = nullptr;
+                if (n == 2)
+                {
+                    auto* a = std::abs (spread[0]->pan) >= std::abs (spread[1]->pan) ? spread[0] : spread[1];
+                    if (std::abs (a->pan) >= 0.6 * s) anchor = a;
+                }
+                for (std::size_t i = 0; i < n; ++i)
+                {
+                    auto* m = spread[i];
+                    if (anchor != nullptr) m->to = m == anchor ? m->pan : -anchor->pan;
+                    else m->to = -s + 2.0 * s * static_cast<double> (i) / static_cast<double> (n - 1);
+                    m->fixed = true;
+                    std::vector<std::string> names;
+                    for (auto* o : spread) if (o != m) names.push_back (o->t->name);
+                    m->why = "pairs with " + joinNames (names) + ": one left, one right sounds wide and keeps the middle free for the vocal";
+                }
+            }
+
+            // 3. A lopsided mix: even it out with the loudest tracks pulling it to one side.
+            auto predict = [&] () {
+                double l = 0.0, rgt = 0.0;
+                for (const auto& x : ts)
+                {
+                    const double e = toE (x.t->loudness) * std::max (0.05, x.t->activity);
+                    const double bal = std::clamp (x.t->balance + panBalanceDb (x.to) - panBalanceDb (x.pan), -40.0, 40.0);
+                    const double q = toE (bal);
+                    l += 2.0 * e * q / (1.0 + q);
+                    rgt += 2.0 * e / (1.0 + q);
+                }
+                if (r.unheardLoudness > -100.0) { l += toE (r.unheardLoudness); rgt += toE (r.unheardLoudness); }
+                return toDb (l) - toDb (rgt);
+            };
+            const double bias = r.mixBalance - predict();   // what the estimate misses (stereo stems, effects...)
+            for (int round = 0; round < 4; ++round)
+            {
+                const double lean = predict() + bias;
+                if (std::abs (lean) <= 1.5) break;
+                T* best = nullptr;
+                double bestLean = std::abs (lean), bestTo = 0.0;
+                for (auto& x : ts)
+                {
+                    if (x.fixed || (lean > 0.0 ? x.pan > -30.0 : x.pan < 30.0)) continue;
+                    for (double option : { -x.pan, x.pan * 0.5, 0.0 })
+                    {
+                        const double keep = x.to;
+                        x.to = option;
+                        const double l2 = std::abs (predict() + bias);
+                        x.to = keep;
+                        if (l2 < bestLean - 0.3) { best = &x; bestLean = l2; bestTo = option; }
+                    }
+                }
+                if (best == nullptr)
+                {
+                    plan.notes.push_back ("The mix leans " + std::string (lean > 0.0 ? "left" : "right") + " (" + fmt1 (std::abs (lean))
+                                          + " dB) from tracks Mixology can't pan (stereo stems or channels without a Link): check those in Cubase.");
+                    break;
+                }
+                best->to = bestTo;
+                best->fixed = true;
+                best->why = "the mix leans " + std::string (lean > 0.0 ? "left" : "right") + " by " + fmt1 (std::abs (lean)) + " dB: this evens it out";
+            }
+
+            int count = 0;
+            for (const auto& x : ts)
+            {
+                const double to = std::round (x.to);
+                if (std::abs (to - x.pan) < 3.0) continue;
+                if (x.ch->locked)
+                {
+                    plan.notes.push_back (quoted (x.t->name) + ": protected (padlock), so its pan stays " + panText (x.pan) + " (it would have gone " + panText (to) + ").");
+                    continue;
+                }
+                Change c;
+                c.hash = x.ch->hash;
+                c.name = x.t->name;
+                c.role = x.t->role;
+                c.kind = "pan";
+                c.from = x.pan;
+                c.to = c.wanted = to;
+                c.why = x.why;
+                plan.changes.push_back (c);
+                ++count;
+            }
+            if (count == 0) return "pans already work";
+            return "pans: " + std::to_string (count) + " track" + (count == 1 ? "" : "s");
+        }
+
+        // ---------------------------------------------------------------------------------------------
+        // Clean Up: low cuts and mud dips (Assist EQ)
+
+        double lowCutFor (Role r)
+        {
+            switch (r)
+            {
+                case Role::vox: return 90.0;
+                case Role::adlibs: return 100.0;
+                case Role::hats: return 250.0;
+                case Role::perc: return 120.0;
+                case Role::snare: return 70.0;
+                case Role::guitar: return 80.0;
+                case Role::keys: return 50.0;
+                case Role::synth: return 50.0;
+                default: return 60.0;
+            }
+        }
+
+        const ChannelNow* eqChannel (const TrackReport& t, const Lookup& look, Plan& plan, const char* what)
+        {
+            const auto* ch = look.of (t);
+            if (ch == nullptr || ! ch->hasLink)
+            {
+                plan.notes.push_back (quoted (t.name) + " has no Mixology Link Mixology can reach: " + what + " skipped.");
+                return nullptr;
+            }
+            if (ch->locked)
+            {
+                plan.notes.push_back (quoted (t.name) + " is protected (padlock): " + what + " skipped.");
+                return nullptr;
+            }
+            return ch;
+        }
+
+        std::string planCleanUp (const Report& r, const Lookup& look, Plan& plan)
+        {
+            int cuts = 0, dips = 0;
+            for (const auto& t : r.tracks)
+            {
+                if (! counts (t) || t.role == Role::kick || t.role == Role::bass || t.role == Role::fx) continue;
+                const double all = rangeE (t.bands, 0, kBands - 1);
+                if (all <= 0.0) continue;
+                const double share = rangeE (t.bands, 0, 7) / all;
+                const bool vocal = t.role == Role::vox || t.role == Role::adlibs;
+                if (! t.rumble && ! (vocal && share >= 0.03)) continue;
+                const double hz = lowCutFor (t.role);
+                const auto* ch = eqChannel (t, look, plan, "low cut");
+                if (ch == nullptr) continue;
+                const double now = ch->assist.lowCutOn() ? ch->assist.lowCutHz : 0.0;
+                if (now >= hz - 5.0) continue;
+                Change c;
+                c.hash = ch->hash;
+                c.name = t.name;
+                c.role = t.role;
+                c.kind = "lowcut";
+                c.from = now;
+                c.to = c.wanted = hz;
+                c.hz = hz;
+                c.why = t.rumble ? fmt0 (share * 100.0) + "% of its energy is below 100 Hz, where it only muddies the kick and bass"
+                                 : "vocals have nothing useful below " + fmt0 (hz) + " Hz: a low cut keeps rumble and pops out";
+                plan.changes.push_back (c);
+                ++cuts;
+            }
+
+            // Mud: where the mix has clearly more 200 - 500 Hz than the style.
+            if (r.mixBands.size() == kBands && r.targetBands.size() == kBands)
+            {
+                double dev = 0.0, worst = -1.0e9;
+                int worstBand = 12;
+                for (int b = 10; b <= 14; ++b)
+                {
+                    const double d = r.mixBands[static_cast<std::size_t> (b)] - r.targetBands[static_cast<std::size_t> (b)];
+                    dev += d / 5.0;
+                    if (d > worst) { worst = d; worstBand = b; }
+                }
+                if (dev > 2.5)
+                {
+                    const double hz = bandHz (worstBand);
+                    std::vector<std::pair<double, const TrackReport*>> v;
+                    for (const auto& t : r.tracks)
+                        if (counts (t) && t.role != Role::kick && t.role != Role::fx) v.push_back ({ rangeE (t.bands, 10, 14) * t.activity, &t });
+                    std::sort (v.begin(), v.end(), [] (auto& a, auto& b) { return a.first > b.first; });
+                    // Bass instruments only when nothing else carries the mud.
+                    const bool othersCarry = std::any_of (v.begin(), v.end(), [&] (auto& p) { return p.second->role != Role::bass && p.first > 0.25 * v.front().first; });
+                    const double depth = std::clamp (std::round (dev * 0.7 * 2.0) / 2.0, 1.5, 4.0);
+                    int taken = 0;
+                    for (const auto& [e, t] : v)
+                    {
+                        if (taken >= 3 || e < 0.1 * v.front().first) break;
+                        if (othersCarry && t->role == Role::bass) continue;
+                        const double d = std::max (1.0, std::round (depth * (taken == 0 ? 1.0 : taken == 1 ? 0.8 : 0.6) * 2.0) / 2.0);
+                        ++taken;
+                        const auto* ch = eqChannel (*t, look, plan, "mud dip");
+                        if (ch == nullptr) continue;
+                        if (ch->assist.mudDb <= -d + 0.25) continue;
+                        Change c;
+                        c.hash = ch->hash;
+                        c.name = t->name;
+                        c.role = t->role;
+                        c.kind = "mud";
+                        c.from = ch->assist.mudDb;
+                        c.to = c.wanted = -d;
+                        c.hz = hz;
+                        c.why = "the mix has " + fmt1 (dev) + " dB more 200 - 500 Hz than " + r.style.name + " usually does; this is one of the tracks carrying it";
+                        plan.changes.push_back (c);
+                        ++dips;
+                    }
+                }
+            }
+            if (cuts + dips == 0) return "nothing to clean up";
+            std::vector<std::string> parts;
+            if (cuts > 0) parts.push_back (std::to_string (cuts) + " low cut" + (cuts == 1 ? "" : "s"));
+            if (dips > 0) parts.push_back (std::to_string (dips) + " mud dip" + (dips == 1 ? "" : "s"));
+            return joinWords (parts, ", ");
+        }
+
+        // ---------------------------------------------------------------------------------------------
+        // Vocal Pocket: dips where instruments cover the vocal's words (Assist EQ)
+
+        std::string planPocket (const Report& r, const Lookup& look, Plan& plan)
+        {
+            std::vector<double> vocal (kBands, -120.0);
+            bool any = false;
+            for (const auto& t : r.tracks)
+                if (counts (t) && t.role == Role::vox && t.bands.size() == kBands)
+                {
+                    any = true;
+                    for (int b = 0; b < kBands; ++b)
+                        vocal[static_cast<std::size_t> (b)] = toDb (toE (vocal[static_cast<std::size_t> (b)]) + toE (t.bands[static_cast<std::size_t> (b)]));
+                }
+            if (! any)
+            {
+                plan.notes.push_back ("No lead vocal found: set your vocal's role to Lead Vox (Your tracks), then try again.");
+                return "no lead vocal";
+            }
+            int dips = 0;
+            for (const auto& t : r.tracks)
+            {
+                if (! counts (t) || t.role == Role::vox || t.role == Role::adlibs || t.maskDb <= -6.0 || t.bands.size() != kBands) continue;
+                const double d = t.maskDb >= 0.0 ? 4.0 : t.maskDb >= -3.0 ? 3.0 : 2.0;
+                // Where it covers the vocal most: the band (1.25 - 5 kHz) with the biggest overlap.
+                int best = 21;
+                double bestOverlap = -1.0e9;
+                for (int b = 18; b <= 24; ++b)
+                {
+                    const double o = std::min (vocal[static_cast<std::size_t> (b)], t.bands[static_cast<std::size_t> (b)]);
+                    if (o > bestOverlap) { bestOverlap = o; best = b; }
+                }
+                const auto* ch = eqChannel (t, look, plan, "vocal pocket");
+                if (ch == nullptr) continue;
+                if (ch->assist.pocketDb <= -d + 0.25) continue;
+                Change c;
+                c.hash = ch->hash;
+                c.name = t.name;
+                c.role = t.role;
+                c.kind = "pocket";
+                c.from = ch->assist.pocketDb;
+                c.to = c.wanted = -d;
+                c.hz = bandHz (best);
+                c.why = "at 1.6 - 4 kHz it is " + (t.maskDb >= 0.0 ? fmt1 (t.maskDb) + " dB louder than" : fmt1 (-t.maskDb) + " dB under")
+                        + " the vocal while it sings, covering its words";
+                plan.changes.push_back (c);
+                ++dips;
+            }
+            if (dips == 0) return "nothing covers the vocal";
+            return std::to_string (dips) + " pocket dip" + (dips == 1 ? "" : "s");
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+
+    const char* toolKey (Tool t)
+    {
+        switch (t)
+        {
+            case Tool::autoMix: return "auto";
+            case Tool::balance: return "balance";
+            case Tool::stereo: return "stereo";
+            case Tool::cleanUp: return "clean";
+            case Tool::pocket: return "pocket";
+        }
+        return "auto";
+    }
+
+    const char* toolName (Tool t)
+    {
+        switch (t)
+        {
+            case Tool::autoMix: return "Auto Mix";
+            case Tool::balance: return "Balance";
+            case Tool::stereo: return "Stereo Architect";
+            case Tool::cleanUp: return "Clean Up";
+            case Tool::pocket: return "Vocal Pocket";
+        }
+        return "Auto Mix";
+    }
+
+    std::optional<Tool> toolFromKey (const std::string& k)
+    {
+        for (auto t : { Tool::autoMix, Tool::balance, Tool::stereo, Tool::cleanUp, Tool::pocket })
+            if (k == toolKey (t)) return t;
+        return std::nullopt;
+    }
+
+    PairName pairName (const std::string& name)
+    {
+        PairName p;
+        std::string s;
+        for (char ch : name) s += static_cast<char> (std::tolower (static_cast<unsigned char> (ch)));
+        while (! s.empty() && std::isspace (static_cast<unsigned char> (s.back()))) s.pop_back();
+
+        static const std::regex suffix (R"(^(.*?)[\s_\-]*[\(\[]?\s*(l|r|left|right|lft|rt|d|dbl|double|dub|dup|\d{1,2})\s*[\)\]]?$)", std::regex::icase);
+        std::smatch m;
+        if (std::regex_match (s, m, suffix) && ! m[1].str().empty())
+        {
+            const auto tag = m[2].str();
+            const bool separated = m[1].str().size() + tag.size() < s.size();   // "Gtr L", "Gtr (L)", not "Gtrl" or "Lead"
+            if (separated)
+            {
+                p.base = m[1].str();
+                while (! p.base.empty() && (std::isspace (static_cast<unsigned char> (p.base.back())) || p.base.back() == '-' || p.base.back() == '_')) p.base.pop_back();
+                if (tag == "l" || tag == "left" || tag == "lft") { p.side = -1; p.explicitPair = true; }
+                else if (tag == "r" || tag == "right" || tag == "rt") { p.side = 1; p.explicitPair = true; }
+                else if (std::isdigit (static_cast<unsigned char> (tag[0]))) p.order = std::max (0, std::stoi (tag) - 1);
+                else { p.order = 1; p.explicitPair = true; }   // a double
+                return p;
+            }
+        }
+        p.base = s;
+        return p;
+    }
+
+    Plan makePlan (Tool tool, const Report& r, const std::vector<ChannelNow>& channels)
+    {
+        Plan plan;
+        plan.tool = tool;
+        plan.title = toolName (tool);
+        if (! r.valid)
+        {
+            plan.summary = "Press Analyze Mix first and play the song for 20 - 60 seconds: " + plan.title + " works from what it hears.";
+            return plan;
+        }
+        plan.valid = true;
+        const Lookup look (channels);
+        std::vector<std::string> parts;
+        auto add = [&] (const std::string& s) { if (! s.empty()) parts.push_back (s); };
+        if (tool == Tool::autoMix || tool == Tool::balance) add (planBalance (r, look, plan));
+        if (tool == Tool::autoMix || tool == Tool::stereo) add (planStereo (r, look, plan));
+        if (tool == Tool::autoMix || tool == Tool::cleanUp) add (planCleanUp (r, look, plan));
+        if (tool == Tool::autoMix || tool == Tool::pocket) add (planPocket (r, look, plan));
+
+        // Notes once each, in order.
+        std::vector<std::string> unique;
+        for (auto& n : plan.notes)
+            if (std::find (unique.begin(), unique.end(), n) == unique.end()) unique.push_back (n);
+        plan.notes = std::move (unique);
+
+        if (plan.changes.empty())
+            plan.summary = "Nothing to change for " + r.style.name + (parts.empty() ? std::string (".") : ": " + joinWords (parts, ", ") + ".");
+        else
+        {
+            plan.summary = std::to_string (plan.changes.size()) + " change" + (plan.changes.size() == 1 ? "" : "s") + " for " + r.style.name + ": "
+                           + joinWords (parts, "; ") + ".";
+        }
+        return plan;
+    }
+}

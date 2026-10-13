@@ -137,6 +137,8 @@ namespace mixology::mix
     // ---------------------------------------------------------------------------------------------
     // Roles
 
+    double vocalTargetFor (const std::string& styleKey) { return vocalTarget (styleKey); }
+
     const char* roleKey (Role r)
     {
         static const char* keys[] = { "kick", "snare", "hats", "perc", "bass", "keys", "synth", "guitar", "vox", "adlibs", "fx", "other" };
@@ -292,7 +294,8 @@ namespace mixology::mix
             }
 
             const auto it = settings.find (key);
-            t.excluded = it != settings.end() && it->second.excluded;
+            t.reference = it != settings.end() && it->second.reference;
+            t.excluded = (it != settings.end() && it->second.excluded) || t.reference;
             if (it != settings.end() && it->second.role) { t.role = *it->second.role; t.roleFrom = "you"; }
             else if (auto byName = roleFromName (t.name)) { t.role = *byName; t.roleFrom = "name"; }
             else { t.role = roleFromSound (t); t.roleFrom = "sound"; }
@@ -308,7 +311,7 @@ namespace mixology::mix
 
         // ---- the mix ---------------------------------------------------------------------------
         std::array<double, kBands> mixE {}, mixSide {};
-        double mixLoudE = 0.0, mixCorr = 0.0, mixLeft = 0.0, mixRight = 0.0;
+        double mixLoudE = 0.0, mixCorr = 0.0, mixLeft = 0.0, mixRight = 0.0, mixWidthSum = 0.0;
         int mixN = 0;
         for (const auto& m : moments)
         {
@@ -316,6 +319,7 @@ namespace mixology::mix
             ++mixN;
             mixLoudE += toE (m.mix.loudness);
             mixCorr += m.mix.correlation;
+            mixWidthSum += m.mix.width;
             const auto [ml, mr] = leftRight (m.mix);
             mixLeft += ml;
             mixRight += mr;
@@ -327,11 +331,34 @@ namespace mixology::mix
                 mixSide[i] += toE (m.mix.bandDb[i]) * m.mix.sideShare[i];
             }
         }
+        // The channels without a Link, together: what the Stereo Out hears beyond the Links (moments where
+        // that is clearly more than measuring error).
+        if (! unheard.empty())
+        {
+            double resE = 0.0;
+            int resN = 0;
+            for (const auto& m : moments)
+            {
+                if (m.mix.silent) continue;
+                double linked = 0.0;
+                for (const auto& t : m.tracks)
+                {
+                    const auto it = indexOf.find (keyOf (t));
+                    if (t.frame.silent || it == indexOf.end() || r.tracks[it->second].excluded) continue;
+                    linked += toE (t.frame.loudness + t.faderDb);
+                }
+                const double rest = toE (m.mix.loudness) - linked;
+                if (rest > 0.1 * toE (m.mix.loudness)) { resE += rest; ++resN; }
+            }
+            if (resN > 0) r.unheardLoudness = toDb (resE / resN);
+        }
+
         std::vector<double> mixDb (kBands, -120.0);
         if (mixN > 0)
         {
             r.mixLoudness = toDb (mixLoudE / mixN);
             r.mixCorrelation = mixCorr / mixN;
+            r.mixWidth = mixWidthSum / mixN;
             r.mixBalance = mixLeft > 0.0 && mixRight > 0.0 ? toDb (mixLeft) - toDb (mixRight) : 0.0;
             for (int b = 0; b < kBands; ++b) mixDb[static_cast<std::size_t> (b)] = toDb (mixE[static_cast<std::size_t> (b)] / mixN);
         }
@@ -355,6 +382,44 @@ namespace mixology::mix
             r.mixBands[static_cast<std::size_t> (b)] = mixN > 0 ? mixDb[static_cast<std::size_t> (b)] + 1.5 * std::log2 (hz / 1000.0) - mixMean : 0.0;
             r.targetBands[static_cast<std::size_t> (b)] = targetDb (style, hz) - targetMean;
         }
+        // Reference Match: the reference song's spectrum, tilted and lined up the same way as the mix's.
+        for (const auto& t : r.tracks)
+        {
+            if (! t.reference) continue;
+            auto& ref = r.reference;
+            ref.chosen = true;
+            ref.hash = t.hash;
+            ref.name = t.name;
+            ref.heard = t.activity > 0.0 && mixN > 0;
+            if (! ref.heard) break;
+            ref.loudness = t.loudness;
+            ref.width = t.width;
+            ref.loudnessDiff = t.loudness - r.mixLoudness;
+            ref.widthDiff = r.mixWidth - t.width;
+            double mean = 0.0;
+            for (int b = 3; b <= 29; ++b) mean += t.bands[static_cast<std::size_t> (b)] + 1.5 * std::log2 (bandHz (b) / 1000.0);
+            mean /= 27.0;
+            ref.bands.assign (kBands, 0.0);
+            for (int b = 0; b < kBands; ++b)
+                ref.bands[static_cast<std::size_t> (b)] = t.bands[static_cast<std::size_t> (b)] + 1.5 * std::log2 (bandHz (b) / 1000.0) - mean;
+            struct Span { const char* name; const char* what; int from, to; };
+            for (const auto& sp : { Span { "Low end (40 - 125 Hz)", "low end", 3, 8 }, Span { "Low mids (200 - 500 Hz)", "low mids", 10, 14 },
+                                    Span { "Mids (630 Hz - 2 kHz)", "mids", 15, 20 }, Span { "Presence (2.5 - 5 kHz)", "presence", 21, 24 },
+                                    Span { "Air (8 - 16 kHz)", "air", 26, 29 } })
+            {
+                double d = 0.0;
+                for (int b = sp.from; b <= sp.to; ++b) d += r.mixBands[static_cast<std::size_t> (b)] - ref.bands[static_cast<std::size_t> (b)];
+                d /= (sp.to - sp.from + 1);
+                ReferenceReport::Region rg;
+                rg.name = sp.name;
+                rg.diff = d;
+                rg.text = std::abs (d) < 1.5 ? std::string ("About the same as '") + t.name + "'."
+                                             : "Your mix has " + fmt1 (std::abs (d)) + " dB " + (d > 0.0 ? "more " : "less ") + sp.what + " than '" + t.name + "'.";
+                ref.regions.push_back (rg);
+            }
+            break;
+        }
+
         auto deviation = [&] (int from, int to) {
             double d = 0.0;
             for (int b = from; b <= to; ++b) d += r.mixBands[static_cast<std::size_t> (b)] - r.targetBands[static_cast<std::size_t> (b)];
@@ -420,6 +485,9 @@ namespace mixology::mix
                 std::nth_element (ratios.begin(), ratios.begin() + static_cast<long> (ratios.size() / 2), ratios.end());
                 const double ratio = ratios[ratios.size() / 2];
                 const double target = vocalTarget (style.key);
+                r.hasVocalRatio = true;
+                r.vocalRatio = ratio;
+                r.vocalTarget = target;
                 std::vector<std::string> names;
                 for (auto k : vocals) names.push_back (trackOf (k).name);
                 if (ratio < target - kVocalTolerance)
@@ -574,7 +642,10 @@ namespace mixology::mix
             }
             std::vector<std::pair<double, std::string>> maskers;
             for (const auto& [key, d] : diff)
+            {
+                if (d.second >= 5) r.tracks[indexOf.at (key)].maskDb = d.first / d.second;
                 if (d.second >= 5 && d.first / d.second > -6.0) maskers.push_back ({ d.first / d.second, trackOf (key).name });
+            }
             std::sort (maskers.begin(), maskers.end(), [] (auto& a, auto& b) { return a.first > b.first; });
             if (! maskers.empty())
             {
@@ -599,6 +670,7 @@ namespace mixology::mix
                 if (! counts (t) || t.role == Role::kick || t.role == Role::bass || t.role == Role::fx) continue;
                 const double low = rangeE (t.bands, 0, kHpTo), all = rangeE (t.bands, 0, kBands - 1);
                 if (all <= 0.0 || low / all < 0.2 || toDb (low) < toDb (mixSub) - 18.0) continue;
+                r.tracks[indexOf.at (t.hash)].rumble = true;
                 names.push_back (t.name);
                 vocalAmong = vocalAmong || t.role == Role::vox || t.role == Role::adlibs;
             }

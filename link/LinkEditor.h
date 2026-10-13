@@ -23,7 +23,7 @@ public:
     static bool isSupported();
 
     static constexpr int kDesignWidth = 600;
-    static constexpr int kDesignHeight = 400;
+    static constexpr int kDesignHeight = 470;
 
 private:
     void timerCallback() override;

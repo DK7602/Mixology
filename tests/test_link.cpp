@@ -3,6 +3,7 @@
 #include "mixology/TrackAnalyzer.h"
 #include "mixology/SharedBlock.h"
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <atomic>
@@ -117,7 +118,7 @@ TEST_CASE ("Registry: Trim requests reach the right Link once", "[link]")
     const int s = r.claim (9, 10);
     REQUIRE (r.links (10).size() == 1);
     const auto gen = r.links (10)[0].generation;
-    std::uint32_t seen = 0;
+    std::uint32_t seen = mixology::link::kNoRequestSeen;
     float db = 0.0f;
     CHECK_FALSE (r.takeTrimRequest (s, seen, db));
 
@@ -127,6 +128,39 @@ TEST_CASE ("Registry: Trim requests reach the right Link once", "[link]")
     CHECK (r.takeTrimRequest (s, seen, db));
     CHECK (db == -2.5f);
     CHECK_FALSE (r.takeTrimRequest (s, seen, db));
+
+    // A new Link in a reused slot never applies a request meant for the one before it.
+    r.release (s, 9);
+    const int s2 = r.claim (10, 20);
+    REQUIRE (s2 == s);
+    std::uint32_t seen2 = mixology::link::kNoRequestSeen;
+    CHECK_FALSE (r.takeTrimRequest (s2, seen2, db));
+}
+
+TEST_CASE ("Registry: Assist EQ requests and readback", "[link]")
+{
+    SharedBlock mem (testName ("assist"), Registry::bytes());
+    Registry r (mem.data());
+    const int s = r.claim (9, 10);
+    const auto gen = r.links (10)[0].generation;
+    CHECK (r.links (10)[0].assist.neutral());
+
+    std::uint32_t seen = mixology::link::kNoRequestSeen;
+    mixology::AssistSettings got;
+    CHECK_FALSE (r.takeAssistRequest (s, seen, got));
+    mixology::AssistSettings want;
+    want.lowCutHz = 90.0f;
+    want.pocketHz = 2200.0f;
+    want.pocketDb = -2.5f;
+    r.requestAssist (s, gen + 1, want);   // an older owner: ignored
+    CHECK_FALSE (r.takeAssistRequest (s, seen, got));
+    r.requestAssist (s, gen, want);
+    REQUIRE (r.takeAssistRequest (s, seen, got));
+    CHECK (got == want);
+    CHECK_FALSE (r.takeAssistRequest (s, seen, got));
+
+    r.publishAssist (s, want);
+    CHECK (r.links (20)[0].assist == want);
 }
 
 TEST_CASE ("Registry: Mixology tells each Link whether it is paired", "[link]")
@@ -318,4 +352,86 @@ TEST_CASE ("TrackMeter: mono tracks", "[link]")
     CHECK (m.channels() == 1);
     CHECK (m.peakDb (0) == Catch::Approx (-12.04).margin (0.05));
     CHECK (m.peakDb (1) == m.peakDb (0));   // a mono track shows the same level on both bars
+}
+
+// ---------------------------------------------------------------------------------------------
+// Assist EQ (Mixology Link's low cut, mud and pocket dips)
+
+#include "mixology/AssistEq.h"
+
+namespace
+{
+    // Gain (dB) of a steady sine through the EQ, measured after it settles.
+    double sineGainDb (mixology::AssistEq& eq, double hz, double rate = 48000.0)
+    {
+        const int n = static_cast<int> (rate);   // 1 s
+        std::vector<double> l (static_cast<std::size_t> (n)), r (static_cast<std::size_t> (n));
+        for (int i = 0; i < n; ++i)
+            l[static_cast<std::size_t> (i)] = r[static_cast<std::size_t> (i)] = 0.5 * std::sin (2.0 * 3.14159265358979 * hz * i / rate);
+        double* ch[] = { l.data(), r.data() };
+        eq.process (ch, 2, n);
+        double in = 0.0, out = 0.0;
+        for (int i = n / 2; i < n; ++i)
+        {
+            const double x = 0.5 * std::sin (2.0 * 3.14159265358979 * hz * i / rate);
+            in += x * x;
+            out += l[static_cast<std::size_t> (i)] * l[static_cast<std::size_t> (i)];
+        }
+        return 10.0 * std::log10 (out / in);
+    }
+}
+
+TEST_CASE ("Assist EQ: neutral is bit for bit, each move does what it says", "[link]")
+{
+    using mixology::AssistEq;
+    using mixology::AssistSettings;
+    AssistEq eq;
+    eq.prepare (48000.0, 2);
+    {
+        std::vector<float> l (512), r (512);
+        for (std::size_t i = 0; i < l.size(); ++i) { l[i] = static_cast<float> (std::sin (0.01 * i)); r[i] = -l[i] * 0.5f; }
+        const auto l0 = l, r0 = r;
+        float* ch[] = { l.data(), r.data() };
+        eq.process (ch, 2, 512);
+        CHECK (l == l0);
+        CHECK (r == r0);
+        CHECK_FALSE (eq.active());
+    }
+
+    AssistSettings s;
+    s.lowCutHz = 100.0f;
+    s.mudHz = 300.0f;
+    s.mudDb = -3.0f;
+    s.pocketHz = 2500.0f;
+    s.pocketDb = -4.0f;
+    eq.setTarget (s);
+    CHECK (sineGainDb (eq, 30.0) < -15.0);                                    // rumble gone
+    CHECK (sineGainDb (eq, 100.0) == Catch::Approx (-3.0 - 0.35).margin (0.5));   // -3 dB at the cut (+ a little mud dip)
+    CHECK (sineGainDb (eq, 300.0) == Catch::Approx (-3.0).margin (0.3));
+    CHECK (sineGainDb (eq, 2500.0) == Catch::Approx (-4.0).margin (0.3));
+    CHECK (sineGainDb (eq, 12000.0) == Catch::Approx (0.0).margin (0.4));
+    for (double hz : { 30.0, 100.0, 300.0, 1000.0, 2500.0, 8000.0 })
+        CHECK (AssistEq::responseDb (s, hz, 48000.0) == Catch::Approx (sineGainDb (eq, hz)).margin (0.3));
+
+    // Back to neutral: glides out, then passes audio through untouched again.
+    eq.setTarget (AssistSettings {});
+    CHECK (sineGainDb (eq, 2500.0) == Catch::Approx (0.0).margin (0.05));
+    CHECK_FALSE (eq.active());
+}
+
+TEST_CASE ("Assist EQ: changes glide (no jump in the output)", "[link]")
+{
+    mixology::AssistEq eq;
+    eq.prepare (48000.0, 1);
+    std::vector<double> x (4800);
+    for (std::size_t i = 0; i < x.size(); ++i) x[i] = 0.5 * std::sin (2.0 * 3.14159265358979 * 2500.0 * static_cast<double> (i) / 48000.0);
+    mixology::AssistSettings s;
+    s.pocketDb = -12.0f;
+    eq.setTarget (s);
+    double* ch[] = { x.data() };
+    eq.process (ch, 1, static_cast<int> (x.size()));
+    double biggestStep = 0.0;
+    for (std::size_t i = 1; i < 480; ++i)
+        biggestStep = std::max (biggestStep, std::abs (x[i] - x[i - 1]));
+    CHECK (biggestStep < 0.5 * 2.0 * 3.14159265358979 * 2500.0 / 48000.0 * 1.05);   // never steeper than the input sine
 }

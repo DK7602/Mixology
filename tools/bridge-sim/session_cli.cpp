@@ -53,6 +53,9 @@ namespace
           << ",\"changed\":" << s.changedCount()
           << ",\"scanning\":" << (s.scanning() ? "true" : "false")
           << ",\"knownFaders\":" << s.knownFaders().size()
+          << ",\"applying\":" << (s.applying() ? "true" : "false")
+          << ",\"plan\":{\"done\":" << s.planProgress().done << ",\"skipped\":" << s.planProgress().skipped
+          << ",\"serial\":" << s.planProgress().serial << ",\"undo\":" << s.planProgress().undo.size() << "}"
           << ",\"moving\":" << (s.moveInProgress() ? "true" : "false")
           << ",\"lastMove\":" << esc (s.lastMoveResult())
           << ",\"slots\":[";
@@ -134,6 +137,41 @@ int main()
             else if (name == "scan") r = session.scanAllChannels (now);
             else r = { false, "unknown command" };
             std::cout << "result " << (r.ok ? "ok " : "fail ") << r.message << (r.warning.empty() ? "" : " WARNING " + r.warning) << "\n";
+            flush (session);
+        }
+        else if (op == "plan" || op == "undo")
+        {
+            // plan <now> name|db|pan;name|db|pan...   (pan "-" = leave it). undo <now>: the last plan's undo.
+            double now = 0.0;
+            in >> now;
+            std::vector<BridgeSession::PlanStep> steps;
+            if (op == "undo")
+                steps = session.planProgress().undo;
+            else
+            {
+                std::string rest;
+                std::getline (in, rest);
+                std::istringstream list (rest.substr (rest.find_first_not_of (' ')));
+                std::string entry;
+                while (std::getline (list, entry, ';'))
+                {
+                    std::istringstream fields (entry);
+                    std::string name, db, pan;
+                    std::getline (fields, name, '|');
+                    std::getline (fields, db, '|');
+                    std::getline (fields, pan, '|');
+                    BridgeSession::PlanStep st;
+                    st.hash = bridge::nameHash (name);
+                    st.title = name;
+                    st.setVolume = db != "-";
+                    st.db = st.setVolume ? std::stod (db) : 0.0;
+                    st.setPan = pan != "-" && ! pan.empty();
+                    st.pan = st.setPan ? std::stod (pan) : 0.5;
+                    steps.push_back (st);
+                }
+            }
+            const auto r = session.applyPlan (op == "undo" ? "Undo" : "Plan", steps, now);
+            std::cout << "result " << (r.ok ? "ok " : "fail ") << r.message << "\n";
             flush (session);
         }
         else if (op == "quit")

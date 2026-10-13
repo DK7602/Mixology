@@ -503,6 +503,33 @@ const scenarios = {
     check(r.state.log.some((l) => l.includes('Read 30 channel faders')), 'logged');
   },
 
+  async 'a plan reaches channels on every page, comes back, and undoes'(r) {
+    for (let i = 0; i < 18; i++)   // 30 channels: three pages of 12
+      r.cubase.channels.push({ name: 'Extra ' + (i + 1), volume: 0.3 + i * 0.02, pan: 0.5, mute: 0, solo: 0, read: 0, write: 0, visible: true, uid: 'x' + i, rgb: [0.5, 0.5, 0.5] });
+    await r.run(0.3);
+    for (let i = 0; i < 3; i++) await r.global('bank', 4);   // the user looks at channels 4 - 15
+    await r.run(0.3);
+    const before = r.cubase.channels.map((c) => [c.volume, c.pan]);
+    const res = r.parse(await r.session.request(`plan ${r.now.toFixed(3)} Kick|-2|-;Extra 17|-4|0.25;Perc|-6.5|0.7`));
+    check(res.ok, 'plan starts');
+    check(r.state.applying, 'applying');
+    check(!(await r.cmd('setDb', 0, -6)).ok, 'no other moves meanwhile');
+    await r.run(6.0);
+    check(!r.state.applying, 'plan finished');
+    const byName = (n) => r.cubase.channels.find((c) => c.name === n);
+    check(near(r.cubase.db(byName('Kick')), -2, 0.006), 'Kick (page 1) at -2, got ' + r.cubase.db(byName('Kick')));
+    check(near(r.cubase.db(byName('Extra 17')), -4, 0.006), 'Extra 17 (page 3) at -4');
+    check(Math.abs(byName('Extra 17').pan - 0.25) < 0.002, 'Extra 17 panned');
+    check(near(r.cubase.db(byName('Perc')), -6.5, 0.006) && Math.abs(byName('Perc').pan - 0.7) < 0.002, 'Perc (in view) set');
+    check(r.state.plan.done === 3 && r.state.plan.skipped === 0, 'all three done');
+    check(r.state.slots[0].title === 'Perc', 'back at Perc, got ' + r.state.slots[0].title);
+    check(r.cubase.channels.every((c, i) => ['Kick', 'Extra 17', 'Perc'].includes(c.name) || (c.volume === before[i][0] && c.pan === before[i][1])), 'nothing else moved');
+    check(r.parse(await r.session.request(`undo ${r.now.toFixed(3)}`)).ok, 'undo starts');
+    await r.run(6.0);
+    check(r.cubase.channels.every((c, i) => Math.abs(c.volume - before[i][0]) < 1e-4 && Math.abs(c.pan - before[i][1]) < 1e-4), 'undo puts every fader and pan back');
+    check(r.state.slots[0].title === 'Perc', 'still at Perc');
+  },
+
   async 'script restart mid-session: writing works right after'(r) {
     await r.run(0.3);
     r.cubase.activate();   // e.g. "Reload Scripts" in Cubase

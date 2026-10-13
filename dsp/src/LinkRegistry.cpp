@@ -14,6 +14,27 @@ namespace mixology::link
         constexpr auto kRelaxed = std::memory_order_relaxed;
         constexpr auto kAcquire = std::memory_order_acquire;
         constexpr auto kRelease = std::memory_order_release;
+        constexpr auto kAcqRel = std::memory_order_acq_rel;
+
+        void storeAssist (std::array<std::atomic<float>, 5>& to, const AssistSettings& a) noexcept
+        {
+            to[0].store (a.lowCutHz, kRelaxed);
+            to[1].store (a.mudHz, kRelaxed);
+            to[2].store (a.mudDb, kRelaxed);
+            to[3].store (a.pocketHz, kRelaxed);
+            to[4].store (a.pocketDb, kRelaxed);
+        }
+
+        AssistSettings loadAssist (const std::array<std::atomic<float>, 5>& from) noexcept
+        {
+            AssistSettings a;
+            a.lowCutHz = from[0].load (kRelaxed);
+            a.mudHz = from[1].load (kRelaxed);
+            a.mudDb = from[2].load (kRelaxed);
+            a.pocketHz = from[3].load (kRelaxed);
+            a.pocketDb = from[4].load (kRelaxed);
+            return a;
+        }
     }
 
     std::string blockName() { return "MixologyLink.v" + std::to_string (kLayoutVersion); }
@@ -49,6 +70,7 @@ namespace mixology::link
             s.momentary.store (kSilentDb, kRelaxed);
             s.shortTerm.store (kSilentDb, kRelaxed);
             s.trimDb.store (0.0f, kRelaxed);
+            storeAssist (s.assistNow, AssistSettings {});
             s.audioMs.store (0, kRelaxed);
             s.mainMatchMs.store (0, kRelaxed);
             s.analysisMs.store (0, kRelaxed);
@@ -154,8 +176,31 @@ namespace mixology::link
         if (s == nullptr) return false;
         const auto seq = s->trimRequestSeq.load (kAcquire);
         if (seq == lastSeq) return false;
+        const bool first = lastSeq == kNoRequestSeen;
         lastSeq = seq;
+        if (first) return false;
         db = s->trimRequestDb.load (kRelaxed);
+        return true;
+    }
+
+    void Registry::publishAssist (int slot, const AssistSettings& a) noexcept
+    {
+        if (auto* s = slotPtr (slot)) storeAssist (s->assistNow, a);
+    }
+
+    bool Registry::takeAssistRequest (int slot, std::uint32_t& lastSeq, AssistSettings& a) const
+    {
+        auto* s = slotPtr (slot);
+        if (s == nullptr) return false;
+        const auto seq = s->assistRequestSeq.load (kAcquire);
+        if (seq == lastSeq || (seq & 1u) != 0) return false;   // nothing new, or being written right now
+        const auto values = loadAssist (s->assistRequest);
+        std::atomic_thread_fence (std::memory_order_acquire);
+        if (s->assistRequestSeq.load (kRelaxed) != seq) return false;   // changed while reading: next time
+        const bool first = lastSeq == kNoRequestSeen;
+        lastSeq = seq;
+        if (first) return false;
+        a = values;
         return true;
     }
 
@@ -263,6 +308,7 @@ namespace mixology::link
             info.shortTerm = info.audio ? s.shortTerm.load (kRelaxed) : kSilentDb;
             info.channels = static_cast<int> (s.channels.load (kRelaxed));
             info.trimDb = s.trimDb.load (kRelaxed);
+            info.assist = loadAssist (s.assistNow);
             std::uint64_t when = 0;
             if (readAnalysis (i, info.analysis, info.playing, info.songSample, when))
             {
@@ -280,6 +326,16 @@ namespace mixology::link
         if (s == nullptr || s->generation.load (kRelaxed) != generation) return;   // that Link is gone
         s->trimRequestDb.store (db, kRelaxed);
         s->trimRequestSeq.fetch_add (1, kRelease);
+    }
+
+    void Registry::requestAssist (int slot, std::uint32_t generation, const AssistSettings& a)
+    {
+        auto* s = slotPtr (slot);
+        if (s == nullptr || s->generation.load (kRelaxed) != generation) return;
+        s->assistRequestSeq.fetch_add (1, kAcqRel);   // odd: writing
+        std::atomic_thread_fence (std::memory_order_release);
+        storeAssist (s->assistRequest, a);
+        s->assistRequestSeq.fetch_add (1, kRelease);  // even: done
     }
 
     void Registry::reportMatch (int slot, std::uint32_t generation, MatchStatus status, std::uint64_t nowMs)

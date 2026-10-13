@@ -458,22 +458,139 @@ TEST_CASE ("Bridge: Restore all brings back every changed channel in view", "[br
     r.run (0.2);
     REQUIRE (r.session.setProtected (r.ref ("Hats"), true, r.now).ok);
 
+    // Hats unprotected again: everything in view comes back right away.
+    REQUIRE (r.session.setProtected (r.ref ("Hats"), false, r.now).ok);
+    r.session.bank (BankAction::reset, r.now);
+    r.run (0.2);
+    REQUIRE (r.session.setProtected (r.ref ("Hats"), true, r.now).ok);
     auto sum = r.session.restoreAll (r.now);
     r.run (0.5);
-    CHECK (sum.restored == 3);       // 808, Guitar, Keys
-    CHECK (sum.outsideBank == 1);    // Kick
+    CHECK (sum.restored == 4);       // Kick, 808, Guitar, Keys
+    CHECK (sum.outsideBank == 0);
     CHECK (sum.skipped == 1);        // Hats (protected)
+    CHECK (r.cubase.channels[0].volume == Catch::Approx (0.7766).margin (1.0 / 16384.0));
     CHECK (r.cubase.channels[4].volume == Catch::Approx (0.7766).margin (1.0 / 16384.0));
     CHECK (r.cubase.channels[7].volume == Catch::Approx (0.7766).margin (1.0 / 16384.0));
     CHECK_FALSE (r.cubase.channels[5].solo);
     CHECK (r.cubaseDb (2) == Catch::Approx (-15.0).margin (0.06));   // protected: left alone
+}
 
-    r.session.bank (BankAction::reset, r.now);
+TEST_CASE ("Bridge: Restore all reaches channels outside the bank, then the bank comes back", "[bridge]")
+{
+    Rig r;
     r.run (0.2);
-    sum = r.session.restoreAll (r.now);
-    r.run (0.5);
-    CHECK (sum.restored == 1);       // Kick, now in view
-    CHECK (r.cubase.channels[0].volume == Catch::Approx (0.7766).margin (1.0 / 16384.0));
+    for (const char* name : { "Kick", "Snare", "Guitar" })
+        REQUIRE (r.session.setVolumeDb (r.ref (name), -15.0, r.now).ok);
+    r.run (0.6);
+    r.session.bank (BankAction::next, r.now);           // the user looks at channels 8 - 10
+    r.run (0.3);
+    REQUIRE (r.session.slot (0).title == "Lead Vox");
+
+    const auto sum = r.session.restoreAll (r.now);
+    CHECK (sum.outsideBank == 3);                       // Kick, Snare, Guitar
+    CHECK (r.session.applying());
+    CHECK_FALSE (r.session.setVolumeDb (r.session.refOf (0), -6.0, r.now).ok);   // nothing else moves meanwhile
+    r.run (5.0);
+    CHECK_FALSE (r.session.applying());
+    for (int ch : { 0, 1, 7 })
+        CHECK (r.cubase.channels[static_cast<std::size_t> (ch)].volume == Catch::Approx (0.7766).margin (1.0 / 16384.0));
+    CHECK (r.cubase.bankOffset == 8);                   // back where the user was
+    CHECK (r.session.planProgress().done == 3);
+    CHECK (r.session.changedCount() == 0);
+}
+
+TEST_CASE ("Bridge: a plan sets levels and pans across the whole project, with its own undo", "[bridge]")
+{
+    Rig r;
+    for (int i = 0; i < 11; ++i) r.cubase.channels[static_cast<std::size_t> (i)].volume = 0.5 + 0.02 * i;
+    r.run (0.2);
+    r.session.bank (BankAction::shiftRight, r.now);     // the user looks at channels 1 - 8
+    r.run (0.3);
+    REQUIRE (r.session.slot (0).title == "Snare");
+    REQUIRE (r.session.scanAllChannels (r.now).ok);
+    r.run (3.0);
+    REQUIRE (r.session.knownFaders().size() == 11);
+    REQUIRE (r.session.setProtected (r.ref ("Keys"), true, r.now).ok);
+
+    auto from = [&] (const char* name) {
+        const auto it = r.session.knownFaders().find (nameHash (name));
+        return it != r.session.knownFaders().end() ? it->second.db : 0.0;
+    };
+    std::vector<BridgeSession::PlanStep> steps;
+    auto add = [&] (const char* name, double db, bool pan = false, double p = 0.5) {
+        BridgeSession::PlanStep st;
+        st.hash = nameHash (name);
+        st.title = name;
+        st.setVolume = true;
+        st.db = db;
+        st.checkFrom = true;
+        st.fromDb = from (name);
+        st.setPan = pan;
+        st.pan = p;
+        steps.push_back (st);
+    };
+    add ("Kick", -4.0);                 // outside the bank (left of it)
+    add ("Lead Vox", -2.5, true, 0.5);
+    add ("Adlibs", -9.0, true, 0.2);    // outside (right of it)
+    add ("Keys", -20.0);                // protected: skipped
+    add ("Gone", -3.0);                 // not in the project
+    r.cubase.userMovesFader (9, 0.3);   // FX: moved in Cubase since the plan was made
+    r.run (0.3);
+    add ("FX", -10.0);
+
+    REQUIRE (r.session.applyPlan ("Balance", steps, r.now).ok);
+    r.run (8.0);
+    REQUIRE_FALSE (r.session.applying());
+    CHECK (r.cubaseDb (0) == Catch::Approx (-4.0).margin (0.06));
+    CHECK (r.cubaseDb (8) == Catch::Approx (-2.5).margin (0.06));
+    CHECK (r.cubaseDb (10) == Catch::Approx (-9.0).margin (0.06));
+    CHECK (r.cubase.channels[10].pan == Catch::Approx (0.2).margin (1.0e-6));
+    CHECK (r.cubase.channels[9].volume == Catch::Approx (0.3).margin (1.0 / 16384.0));   // left as the user set it
+    CHECK (r.cubase.channels[5].volume == Catch::Approx (0.6).margin (1.0 / 16384.0));   // protected
+    const auto& pr = r.session.planProgress();
+    CHECK (pr.done == 3);
+    CHECK (pr.skipped == 3);
+    CHECK (pr.serial == 1);
+    CHECK (r.cubase.bankOffset == 1);                   // back where the user was
+    CHECK (r.session.slot (0).title == "Snare");
+    bool sawMoved = false, sawGone = false, sawProtected = false;
+    for (const auto& n : pr.notes)
+    {
+        sawMoved = sawMoved || (n.find ("'FX'") != std::string::npos && n.find ("moved since") != std::string::npos);
+        sawGone = sawGone || n.find ("'Gone'") != std::string::npos;
+        sawProtected = sawProtected || (n.find ("'Keys'") != std::string::npos && n.find ("protected") != std::string::npos);
+    }
+    CHECK (sawMoved);
+    CHECK (sawGone);
+    CHECK (sawProtected);
+
+    // Undo: exactly where the faders and pans were.
+    REQUIRE (pr.undo.size() == 3);
+    REQUIRE (r.session.applyPlan ("Undo Balance", pr.undo, r.now).ok);
+    r.run (8.0);
+    CHECK (r.cubase.channels[0].volume == Catch::Approx (0.5).margin (1.0 / 16384.0));
+    CHECK (r.cubase.channels[8].volume == Catch::Approx (0.66).margin (1.0 / 16384.0));
+    CHECK (r.cubase.channels[10].volume == Catch::Approx (0.7).margin (1.0 / 16384.0));
+    CHECK (r.cubase.channels[10].pan == Catch::Approx (0.5).margin (1.0e-6));
+    CHECK (r.cubase.bankOffset == 1);
+}
+
+TEST_CASE ("Bridge: a plan for channels in view doesn't move the bank", "[bridge]")
+{
+    Rig r;
+    r.run (0.2);
+    BridgeSession::PlanStep st;
+    st.hash = nameHash ("Snare");
+    st.title = "Snare";
+    st.setVolume = true;
+    st.db = -7.0;
+    REQUIRE (r.session.applyPlan ("Balance", { st }, r.now).ok);
+    const int bankMoves = r.cubase.bankOffset;
+    r.run (1.0);
+    CHECK_FALSE (r.session.applying());
+    CHECK (r.cubaseDb (1) == Catch::Approx (-7.0).margin (0.06));
+    CHECK (r.cubase.bankOffset == bankMoves);
+    CHECK (r.session.planProgress().done == 1);
 }
 
 TEST_CASE ("Bridge: losing Cubase stops moves; after reconnecting, writing works again", "[bridge]")
