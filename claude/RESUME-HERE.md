@@ -62,6 +62,13 @@ sends higher-resolution art, re-run it.
 - Browser preview: see README (mock.js simulates audio + a 14-channel Cubase project).
 - Screenshots: Playwright with /opt/pw-browsers/chromium_headless_shell-*/chrome-linux/headless_shell.
 
+## CI
+Every push: engine + bridge simulator under ASan/UBSan (Linux), Windows build + tests + package + pluginval 10 +
+Steinberg VST3 validator. First green run: 38407455828 (v0.1.0). Gotcha fixed there: getProgramName must not be
+empty (validator: "Program 000 has no name").
+Download: Actions -> latest green run -> artifact "Mixology-Windows" (VST3, Standalone, Cubase MIDI Remote/Mixology,
+MANUAL.md, M1_TEST.md, INSTALL.txt).
+
 ## Next
 1. User runs docs/M1_TEST.md in Cubase Artist 14 and sends results + log. Fix what fails.
 2. M2: Tracks page fully live (all 12 strips writable with per-channel lock / exclude), Mixology Link v1
