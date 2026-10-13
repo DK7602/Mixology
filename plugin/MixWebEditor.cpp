@@ -181,7 +181,7 @@ juce::var MixWebEditor::makeSpectrum()
             power += static_cast<double> (fftBuffer[static_cast<size_t> (b)]) * fftBuffer[static_cast<size_t> (b)];
         const double mag = std::sqrt (power / (hi - lo + 1)) / fullScale;
 
-        // 4.5 dB/octave tilt around 1 kHz so a balanced mix reads roughly flat (same as Polisher).
+        // 4.5 dB/octave tilt around 1 kHz so a balanced mix reads roughly flat (same as Masterology).
         float db = static_cast<float> (20.0 * std::log10 (mag + 1.0e-9) + 4.5 * std::log2 (f / 1000.0));
         db = juce::jlimit (-120.0f, 18.0f, db);
 

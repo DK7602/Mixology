@@ -216,13 +216,13 @@ export function buildOverview(root, app) {
     else
       card("link", "#ffc04a", "Not connected to Cubase", b.portProblem ? "Ports missing: open the setup steps" : "Open Settings > Cubase Bridge for the setup", () => app.openSettings("bridge"));
     if (st > -70)
-      card("speaker", "#19d3ff", `Mix loudness ${fmt.lufs(st)} LUFS (short-term)`, "Information only: Polisher sets the final loudness");
+      card("speaker", "#19d3ff", `Mix loudness ${fmt.lufs(st)} LUFS (short-term)`, "Information only: Masterology sets the final loudness");
     else
       card("speaker", "#19d3ff", "No audio yet", "Press play in Cubase to see the mix here");
     if (tp > -70) {
-      if (tp > -1) card("headroom", "#ff2b2b", `Peaks reach ${fmt.num(tp, 1)} dBTP`, "Pull the faders down a little: leave 3-6 dB for Polisher");
+      if (tp > -1) card("headroom", "#ff2b2b", `Peaks reach ${fmt.num(tp, 1)} dBTP`, "Pull the faders down a little: leave 3-6 dB for Masterology");
       else if (tp > -3) card("headroom", "#ffc04a", `Peaks reach ${fmt.num(tp, 1)} dBTP`, "A bit hot for mastering: aim for peaks around -6 to -3");
-      else card("check", "#39e26b", `Headroom is good (peaks ${fmt.num(tp, 1)} dBTP)`, "Plenty of room for Polisher");
+      else card("check", "#39e26b", `Headroom is good (peaks ${fmt.num(tp, 1)} dBTP)`, "Plenty of room for Masterology");
     }
     card("bulb", "#ff36e1", "Mix suggestions arrive in Milestone 3", "Kick / bass clashes, harsh hats, vocal pocket... need Mixology Link on each track");
   }

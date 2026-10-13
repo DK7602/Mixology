@@ -1,7 +1,7 @@
 # Mixology
 
 Intelligent multitrack mixing engineer for Cubase (VST3), the missing link between **Voxology** (vocals) and
-**Polisher** (mastering). Same template as both: JUCE 8, framework-free C++20 engine with Catch2 tests,
+**Masterology** (mastering). Same template as both: JUCE 8, framework-free C++20 engine with Catch2 tests,
 HTML / CSS / JS interface in the platform web view, GitHub Actions builds on every push.
 
 The plan and milestones: [docs/PLAN.md](docs/PLAN.md). User manual (also built into the plug-in): [docs/MANUAL.md](docs/MANUAL.md).
@@ -12,7 +12,7 @@ Cubase bridge test: [docs/M1_TEST.md](docs/M1_TEST.md).
 | Piece | State |
 | --- | --- |
 | Interface: 8 pages, dark / light (click the logo), resizable 4:3 | Done |
-| Live: analyzer, peaks, LUFS (Polisher's R128 meter), vectorscope, correlation, loudness history | Done |
+| Live: analyzer, peaks, LUFS (Masterology's R128 meter), vectorscope, correlation, loudness history | Done |
 | Cubase bridge (Milestone 1): MIDI Remote script + SysEx protocol + safe single-channel control | Built, simulator-tested, waiting for the Cubase test |
 | Mixology Link (per-track analysis + processing), Analyze Mix, Auto Mix | Planned (M2-M4) |
 | EQ / Dynamics / Space / Tone / Stereo processing | Preview UI; DSP in M5 |
@@ -25,7 +25,7 @@ dsp/        Framework-free engine (no JUCE): unit-testable
     BridgeProtocol.h   SysEx message format shared with the Cubase script
     BridgeSession.h    Plug-in side of the bridge: identity lock, safe writes, closed-loop dB moves, restore
     FaderLaw.h         Cubase fader position <-> dB, learned from Cubase's own display text
-    LoudnessMeter.h    EBU R128 meter (from Polisher)
+    LoudnessMeter.h    EBU R128 meter (from Masterology, repo DK7602/polisher)
 plugin/     JUCE processor (pass-through + meters), BridgeHub (MIDI ports), web editor
   ui/       The interface: index.html, styles.css, app.js, ui.js, pages_*.js, sheets.js, mock.js, assets, fonts (OFL)
 bridge/cubase/Mixology/Bridge/Mixology_Bridge.js   Cubase MIDI Remote script (ES5)

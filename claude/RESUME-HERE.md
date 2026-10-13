@@ -1,11 +1,16 @@
 # Mixology: resume here (updated 2026-10-13, v0.1.0)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
-Sister projects (same user, same template): Polisher (mastering), Voxology (vocals, + Honey Tune).
+Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
+NAMING: the mastering plug-in Polisher was renamed MASTEROLOGY (vendor "Masterology Audio", user 2026-10-13). Always call
+it Masterology in Mixology's text / UI / docs. Its repo is still github.com/DK7602/polisher and its internal code names
+still say "polisher". New logo (chrome crown over red/blue waveforms + MASTEROLOGY): plugin/ui/assets/logo.webp on
+branch claude/eloquent-einstein-sscadx of that repo. Mixology's LoudnessMeter / KWeighting / TruePeakDetector / Biquad
+are copied from it (namespace renamed to mixology).
 Plan: docs/PLAN.md (milestones M0-M6). Manual: docs/MANUAL.md (built into the plug-in, ? button).
 
 ## The user
-Same person as Voxology / Polisher: Cubase ARTIST 14 on Windows, makes hip-hop / trap / G-funk, mixing
+Same person as Voxology / Masterology: Cubase ARTIST 14 on Windows, makes hip-hop / trap / G-funk, mixing
 novice. Wants plain language, momentum ("you make the best choice"), honest status, short replies.
 Tests in Cubase and by screen recording. LOVES the approved mockup look: keep layout, colours, knobs, the
 beaker logo exactly; fix spelling / wrong labels / fake track names (user said so). Light mode = click the
@@ -53,7 +58,7 @@ sends higher-resolution art, re-run it.
   bipolar knobs light red below centre, orange above; blue = the rest of the travel.
 - Preview pages (EQ, Dynamics, Space, Tone controls, Stereo widths, Master knobs) show a "Preview" tag and
   start at the mockup's values. When their DSP lands (M5) they must start NEUTRAL (flat / off).
-- Analyzer spectrum: Polisher's 4.5 dB/oct tilt; a balanced mix reads about -40 -> displayed with +40 offset.
+- Analyzer spectrum: Masterology's 4.5 dB/oct tilt; a balanced mix reads about -40 -> displayed with +40 offset.
 - Browser preview: see README (mock.js simulates audio + a 14-channel Cubase project).
 - Screenshots: Playwright with /opt/pw-browsers/chromium_headless_shell-*/chrome-linux/headless_shell.
 

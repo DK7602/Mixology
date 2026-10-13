@@ -3,7 +3,7 @@
 Manual for version 0.1.0 (first build: the interface, live meters, and the Cubase bridge test).
 
 **Voxology** makes each vocal sound great. **Mixology** makes all your tracks work together.
-**Polisher** turns the finished mix into the master.
+**Masterology** turns the finished mix into the master.
 
 ## What works in this build
 
@@ -12,7 +12,7 @@ Manual for version 0.1.0 (first build: the interface, live meters, and the Cubas
 | Interface: all 8 pages, light / dark look | Ready |
 | Overview analyzer, loudness, peaks, headroom check | Live (what Mixology hears on its channel) |
 | Stereo page: vectorscope and correlation | Live |
-| Master page: loudness history, hand-off check for Polisher | Live |
+| Master page: loudness history, hand-off check for Masterology | Live |
 | Tracks page: your real Cubase channels (names, faders, pan, mute, solo) | Live, through the Cubase bridge |
 | Moving one Cubase fader from Mixology (test channel) | Live: this is what we're testing now |
 | EQ, Dynamics, Space, Tone controls | Preview: they move but don't process audio yet |
@@ -22,7 +22,7 @@ Mixology passes your audio through untouched in this build.
 
 ## Where to put it
 
-Insert **Mixology** on the **Stereo Out** (after your mix, before Polisher). It measures the whole mix
+Insert **Mixology** on the **Stereo Out** (after your mix, before Masterology). It measures the whole mix
 there. The Tracks page shows your channels through the Cubase bridge.
 
 ## Light or dark
@@ -42,7 +42,7 @@ Mixology remembers your choice.
   plus EQ and Ducking (the effect gets quieter while the vocal sings).
 - **Tone**: your mix's tonal balance against the style's target (red line), and loudness.
 - **Stereo**: how wide your mix is, and whether it holds up in mono.
-- **Master**: loudness over the last minute and a checklist for handing the mix to Polisher.
+- **Master**: loudness over the last minute and a checklist for handing the mix to Masterology.
 
 Knobs: drag up / down (hold Shift for fine steps), scroll, or use the arrow keys. Double-click resets.
 
@@ -85,14 +85,14 @@ Safety rules (always on):
 The style in the header (for example "Hip Hop - Modern Clean") is what Mixology aims for. Today it sets
 the Tone page's target curve. Later it steers Auto Mix and the Mix Assistant.
 
-## How it works with Voxology and Polisher
+## How it works with Voxology and Masterology
 
 1. Voxology on each vocal: tuning, cleanup, de-essing, compression, space.
 2. Mixology on the Stereo Out: balance all tracks against each other (levels first, then masking and width).
-3. Polisher after Mixology (or in a mastering project): final EQ, loudness and limiting.
+3. Masterology after Mixology (or in a mastering project): final EQ, loudness and limiting.
 
-Leave Polisher 3 to 6 dB of headroom: the Master page tells you when the mix peaks are in the right place.
-Mixology never limits the mix bus; that's Polisher's job.
+Leave Masterology 3 to 6 dB of headroom: the Master page tells you when the mix peaks are in the right place.
+Mixology never limits the mix bus; that's Masterology's job.
 
 ## Troubleshooting
 

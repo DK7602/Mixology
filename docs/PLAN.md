@@ -1,8 +1,8 @@
 # Mixology build plan
 
 Mixology is the intelligent multitrack mixing engineer for the suite:
-**Voxology** makes each vocal great, **Mixology** makes all the tracks work together, **Polisher** masters the result.
-Target host: Cubase Artist 14 on Windows (VST3). Same template as Polisher and Voxology: JUCE 8, framework-free C++20
+**Voxology** makes each vocal great, **Mixology** makes all the tracks work together, **Masterology** masters the result.
+Target host: Cubase Artist 14 on Windows (VST3). Same template as Masterology and Voxology: JUCE 8, framework-free C++20
 engine with Catch2 tests, HTML / CSS / JS interface in the platform web view, GitHub Actions builds Windows on every push.
 
 ## How the pieces fit
@@ -16,7 +16,7 @@ engine with Catch2 tests, HTML / CSS / JS interface in the platform web view, Gi
  │  FX:   Verb   [Mixology Link]──┤   lives in the same process and finds the others)        │
  │                                ▼                                                         │
  │  Stereo Out   [Mixology] ◄── main window: analysis, Mix Assistant, Auto Mix, all pages    │
- │               [Polisher]       │                                                         │
+ │               [Masterology]    │                                                         │
  │                                │ SysEx over two virtual MIDI ports                       │
  │  MIDI Remote script ◄──────────┘ ("Mixology Bridge", Steinberg's documented API)         │
  │        │                                                                                 │
@@ -41,7 +41,7 @@ The approved mockups are the reference for layout, colours, knobs and the beaker
 - Values that disagree with their knob position: every knob, meter and number is live and consistent.
 - Track names and icons come from your real Cubase session (never the example names in the art).
 - Wrong axes: the Dynamics transfer curve uses input dB vs output dB (the art shows a frequency axis).
-- The mix stage shows loudness for information only (no "-8 to -6 LUFS target"; loudness targets are Polisher's job).
+- The mix stage shows loudness for information only (no "-8 to -6 LUFS target"; loudness targets are Masterology's job).
 
 **Light mode:** click the beaker logo to switch. Same layout and accent colours (gold trim, red active tabs, red / orange /
 blue knob glows, rainbow meters); backgrounds and knob bodies turn white. The choice is remembered.
@@ -93,18 +93,18 @@ Goal: prove that Mixology can move ONE real MixConsole fader safely, and see you
 - Low End: kick vs 808 masking, sidechain-style ducking suggestions.
 - Stereo Architect, Clean Up (resonances / mud), Reference Match (loudness-matched comparison with a reference song).
 - Hard limits: never more than +/-6 dB per move without asking, never touch locked channels or the Stereo Out, never
-  aim the mix at a loudness target, keep 3-6 dB of headroom for Polisher.
+  aim the mix at a loudness target, keep 3-6 dB of headroom for Masterology.
 
 ### M5 - Processing pages
 - EQ, Dynamics (compressor, multiband, transient, gate / expand, limiter), Tone (warmth, presence, air, glue, punch),
   Stereo (width, low / high width, pan assist, mono check, correlation) running inside each track's Link.
 - Space: Reverb, Delay, Chorus, Phaser, Hall, Room, Special FX on an FX channel's Link, each with its own correct
   controls and scene picture, plus EQ and ducking.
-- Master page: monitoring and gentle finishing only (no limiter fight with Polisher).
+- Master page: monitoring and gentle finishing only (no limiter fight with Masterology).
 - Auto Mix may then also propose EQ / dynamics moves through the Links.
 
 ### M6 - Suite and polish
-- Recognise Voxology on a track (no double compression of vocals), hand-off notes for Polisher.
+- Recognise Voxology on a track (no double compression of vocals), hand-off notes for Masterology.
 - Built-in manual (docs/MANUAL.md shown by the ? button), presets, undo history, CPU checks with 40+ tracks.
 - Later: code signing, timeline clip-gain study (separate feasibility test).
 

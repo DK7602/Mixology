@@ -117,7 +117,7 @@ export function buildTone(root, app) {
   ml.innerHTML = "<span>L</span><span>S</span><span>R</span>";
   const stat = el("div", "", right, { position: "absolute", left: "22px", right: "22px", top: "712px", height: "66px", borderRadius: "12px", display: "grid", placeItems: "center", fontSize: "24px", fontWeight: "600", textAlign: "center", lineHeight: "1.1" });
   const statNote = el("div", "", right, { position: "absolute", left: "16px", right: "16px", top: "786px", textAlign: "center", fontSize: "15px", color: "var(--text-dim)" });
-  statNote.textContent = "Info only: Polisher sets the final loudness";
+  statNote.textContent = "Info only: Masterology sets the final loudness";
 
   return {
     onFrame(f) {
@@ -231,7 +231,7 @@ export function buildStereo(root, app) {
 }
 
 // =============================================================================================
-// MASTER: mix-bus monitoring and a hand-off check for Polisher (no limiting here).
+// MASTER: mix-bus monitoring and a hand-off check for Masterology (no limiting here).
 
 const MASTER_MODULES = [
   { id: "monitor", label: "MONITOR", icon: "monitor" },
@@ -287,7 +287,7 @@ export function buildMaster(root, app) {
   const rt = el("div", "panel-title gold", right);
   rt.textContent = "HAND-OFF";
   const rsub = el("div", "", right, { position: "absolute", left: "22px", right: "22px", top: "56px", fontSize: "17px", color: "var(--text-dim)" });
-  rsub.textContent = "Is the mix ready for Polisher?";
+  rsub.textContent = "Is the mix ready for Masterology?";
   const readouts = el("div", "", right, { position: "absolute", left: "22px", right: "22px", top: "96px", display: "grid", gridTemplateColumns: "1fr auto", rowGap: "10px", fontSize: "20px" });
   const rows = {};
   for (const [id, label] of [["st", "Short-term"], ["int", "Integrated"], ["tp", "True peak (max)"]]) {
@@ -315,8 +315,8 @@ export function buildMaster(root, app) {
       mL.set(f.peakL ?? -100); mR.set(f.peakR ?? -100);
       const tp = f.truePeak ?? -100, silent = (f.shortTerm ?? -100) <= -70;
       const items = [
-        [silent ? null : tp <= -3, tp <= -3 ? "Peaks leave 3 dB+ for Polisher" : "Peaks are above −3 dBTP: pull the mix down"],
-        [true, "No limiter on the mix bus (Polisher does that)"],
+        [silent ? null : tp <= -3, tp <= -3 ? "Peaks leave 3 dB+ for Masterology" : "Peaks are above −3 dBTP: pull the mix down"],
+        [true, "No limiter on the mix bus (Masterology does that)"],
         [silent ? null : (f.shortTerm ?? -100) < -8, (f.shortTerm ?? -100) < -8 ? "Mix isn't squashed (short-term under −8 LUFS)" : "Mix is already very loud: ease off bus processing"],
       ];
       checks.innerHTML = items.map(([ok, text]) => `<div style="display:flex;gap:10px;align-items:flex-start"><span style="width:22px;height:22px;flex:none;color:${ok === null ? "var(--text-faint)" : ok ? "var(--green)" : "var(--amber)"}">${icon(ok === false ? "headroom" : "check", 'stroke-width="2.4"')}</span><span>${text}</span></div>`).join("");

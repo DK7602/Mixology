@@ -65,7 +65,7 @@ function displayPanel(app, root) {
 
 function aboutPanel(app, root) {
   const p = el("div", "", root, { fontSize: "19px", lineHeight: "1.6" });
-  p.innerHTML = `<b>Mixology</b>: intelligent mixing engineer. Part of the suite: Voxology (vocals), Mixology (the mix), Polisher (mastering).<br>
+  p.innerHTML = `<b>Mixology</b>: intelligent mixing engineer. Part of the suite: Voxology (vocals), Mixology (the mix), Masterology (mastering).<br>
     This build: the full interface, live mix meters, loudness, vectorscope, and the Cubase bridge test (Milestone 1).<br>
     <span class="dim">Fonts: Barlow Semi Condensed (SIL Open Font License).</span>`;
 }
