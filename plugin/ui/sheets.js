@@ -1,4 +1,4 @@
-// Overlays: Settings (Cubase Bridge test panel, display), the built-in manual, and mix styles.
+// Overlays: Settings (Cubase Bridge, Mixology Link, display), the built-in manual, and mix styles.
 
 import { $, el, icon, fmt } from "./ui.js";
 
@@ -66,7 +66,7 @@ function displayPanel(app, root) {
 function aboutPanel(app, root) {
   const p = el("div", "", root, { fontSize: "19px", lineHeight: "1.6" });
   p.innerHTML = `<b>Mixology</b>: intelligent mixing engineer. Part of the suite: Voxology (vocals), Mixology (the mix), Masterology (mastering).<br>
-    This build: the full interface, live mix meters, loudness, vectorscope, and the Cubase bridge test (Milestone 1).<br>
+    This build: the full interface, live mix meters, loudness, vectorscope, the Cubase bridge (every fader in view), and Mixology Link on each track (Milestone 2).<br>
     <span class="dim">Fonts: Barlow Semi Condensed (SIL Open Font License).</span>`;
 }
 
@@ -83,29 +83,21 @@ function bridgePanel(app, root) {
       <li>Open Mixology (on the Stereo Out). This panel turns green when it hears the script.</li>
     </ol>`;
 
-  const lockCard = el("div", "card", root, { position: "relative", padding: "16px 20px", marginBottom: "14px" });
-  const lockHead = el("div", "", lockCard, { fontWeight: "600", marginBottom: "10px", color: "var(--gold)" });
-  lockHead.textContent = "Test channel";
-  const slotList = el("div", "", lockCard, { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px", marginBottom: "12px" });
-  const pauseLine = el("div", "", lockCard, { color: "var(--amber)", marginBottom: "8px" });
+  const changesCard = el("div", "card", root, { position: "relative", padding: "16px 20px", marginBottom: "14px", lineHeight: "1.45" });
+  el("div", "", changesCard, { fontWeight: "600", marginBottom: "6px", color: "var(--gold)" }).textContent = "Mixology's changes";
+  const changesText = el("div", "", changesCard, { marginBottom: "10px" });
+  const ctl = el("div", "", changesCard, { display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" });
+  const restoreBtn = el("button", "small-btn red", ctl); restoreBtn.textContent = "↺ Restore all";
+  restoreBtn.title = "Every channel Mixology changed goes back the way it was before Mixology's first move";
+  restoreBtn.addEventListener("click", () => app.command("restoreAll"));
+  const forgetBtn = el("button", "small-btn", ctl); forgetBtn.textContent = "Keep the mix as it is now";
+  forgetBtn.title = "Forget the restore points: the current mix becomes the new starting point";
+  forgetBtn.addEventListener("click", () => app.command("forget"));
+  const result = el("span", "", ctl, { marginLeft: "10px", color: "var(--cyan)" });
 
-  const ctl = el("div", "", lockCard, { display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" });
-  const input = el("input", "num", ctl);
-  input.type = "number"; input.step = "0.1"; input.value = "-6";
-  const setBtn = el("button", "small-btn", ctl); setBtn.textContent = "Set dB";
-  setBtn.addEventListener("click", () => app.command("setDb", parseFloat(input.value)));
-  input.addEventListener("keydown", (e) => { if (e.key === "Enter") setBtn.click(); });
-  const quick = [["0 dB", () => app.command("setDb", 0)], ["−6", () => app.command("setDb", -6)], ["−12", () => app.command("setDb", -12)], ["+6", () => app.command("setDb", 6)], ["−∞", () => app.command("minusInf")],
-    ["−1 dB", () => app.command("nudge", -1)], ["+1 dB", () => app.command("nudge", 1)],
-    ["Pan L", () => app.command("pan", 0)], ["Pan C", () => app.command("pan", 0.5)], ["Pan R", () => app.command("pan", 1)],
-    ["Mute", () => app.command("mute", !(cur() && cur().mute))], ["Solo", () => app.command("solo", !(cur() && cur().solo))]];
-  const quickBtns = quick.map(([label, f]) => { const b = el("button", "small-btn", ctl); b.textContent = label; b.addEventListener("click", f); return b; });
-  const ctl2 = el("div", "", lockCard, { display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", marginTop: "10px" });
-  const restoreBtn = el("button", "small-btn red", ctl2); restoreBtn.textContent = "Restore original";
-  restoreBtn.addEventListener("click", () => app.command("restore"));
-  const unlockBtn = el("button", "small-btn", ctl2); unlockBtn.textContent = "Unlock";
-  unlockBtn.addEventListener("click", () => app.command("unlock"));
-  const result = el("span", "", ctl2, { marginLeft: "10px", color: "var(--cyan)" });
+  const linkCard = el("div", "card", root, { position: "relative", padding: "14px 20px", marginBottom: "14px", lineHeight: "1.45" });
+  el("div", "", linkCard, { fontWeight: "600", marginBottom: "6px", color: "var(--gold)" }).textContent = "Mixology Link";
+  const linkInfo = el("div", "", linkCard);
 
   const bankCard = el("div", "card", root, { position: "relative", padding: "14px 20px", marginBottom: "14px", display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" });
   el("span", "", bankCard, { marginRight: "8px", fontWeight: "600", color: "var(--gold)" }).textContent = "Bank";
@@ -123,8 +115,6 @@ function bridgePanel(app, root) {
   copy.addEventListener("click", async () => { await app.command("copyLog"); app.toast("Log copied: paste it into the chat with Claude."); });
   const log = el("div", "scroll", logCard, { height: "230px", overflow: "auto", fontSize: "15px", lineHeight: "1.45", whiteSpace: "pre-wrap", userSelect: "text", fontFamily: "Consolas, 'IBM Plex Mono', monospace", color: "var(--text-dim)" });
 
-  const cur = () => app.bridge && app.bridge.slots && app.bridge.slots[app.bridge.lockedSlot];
-
   bridgeRender = (b) => {
     if (!b) return;
     const ok = b.link === "connected";
@@ -135,24 +125,18 @@ function bridgePanel(app, root) {
       ${b.portProblem ? `<div style="color:var(--amber);font-size:17px">${b.portProblem}</div>` : ""}`;
     if (!ok) setup.open = true;
 
-    slotList.innerHTML = "";
-    (b.slots || []).forEach((s, i) => {
-      const item = el("button", "small-btn", slotList, { textAlign: "left", overflow: "hidden", textOverflow: "ellipsis" });
-      const locked = b.lockedSlot === i && b.lock !== "none";
-      item.innerHTML = `<span style="display:inline-block;width:18px;height:18px;vertical-align:-3px;margin-right:6px;color:${locked ? (b.lock === "locked" ? "var(--green)" : "var(--amber)") : "var(--text-faint)"}">${icon(locked ? "lock" : "unlock", 'stroke-width="2.2"')}</span>${i + 1}. ${s.present ? s.title : "—"}${s.present && s.hasVolume ? ` <span class="dim">${s.volumeText}</span>` : ""}${s.write ? ' <span style="color:var(--red)">W</span>' : ""}`;
-      item.disabled = !ok || !s.present;
-      item.style.borderColor = locked ? (b.lock === "locked" ? "var(--green)" : "var(--amber)") : "";
-      item.addEventListener("click", () => app.command(locked ? "unlock" : "lock", i));
-    });
-    pauseLine.textContent = b.lock === "paused" ? "Paused: " + b.pauseReason : "";
-    const canWrite = ok && b.lock === "locked";
-    [setBtn, input, ...quickBtns, unlockBtn].forEach((x) => (x.disabled = !canWrite && x !== unlockBtn));
-    unlockBtn.disabled = b.lock === "none";
-    restoreBtn.disabled = !canWrite || !(b.snapshot && b.snapshot.valid);
-    restoreBtn.title = b.snapshot && b.snapshot.valid ? `Back to ${b.snapshot.volumeText} dB on '${b.snapshot.title}'` : "Saved automatically before the first move";
-    lockHead.innerHTML = b.lock === "none" ? "Test channel: <span class='dim' style='font-weight:400'>pick one below (only this channel can be moved)</span>"
-      : `Test channel: <span style="color:var(--text)">${b.lockedTitle}</span>${cur() && cur().hasVolume ? ` <span class="dim" style="font-weight:400">now ${cur().volumeText} dB, pan ${cur().panText}</span>` : ""}`;
-    result.textContent = b.moving ? "Moving..." : b.lastMove || "";
+    const changed = b.changedCount || 0;
+    changesText.innerHTML = !b.restorePoints ? "Nothing changed yet. Before Mixology first moves a channel it remembers how it was, so you can always go back."
+      : `${changed ? `<b>${changed}</b> channel${changed === 1 ? "" : "s"} changed by Mixology.` : "Everything Mixology changed is back how it was."} Restore puts them back the way they were before Mixology's first move (channels outside the 12 in view: use the bank arrows, then Restore again).`;
+    restoreBtn.disabled = !ok || !changed;
+    forgetBtn.disabled = !b.restorePoints;
+    result.textContent = b.lastMove || "";
+
+    const seen = b.linksSeen || 0, paired = b.linksPaired || 0;
+    linkInfo.innerHTML = b.linksShared === false
+      ? `<span style="color:var(--red)">Windows refused the shared memory Mixology Link uses.</span> Restart Cubase; if it keeps happening, Copy log and send it.`
+      : seen === 0 ? "No Mixology Link found yet. Insert <b>Mixology Link</b> on a track (after its other plug-ins): its level shows on that strip of the Tracks page."
+      : `${seen} Mixology Link${seen === 1 ? "" : "s"} running, <b>${paired}</b> paired with the channels in view. Links pair by track name (and colour when two tracks share a name).`;
     lawInfo.textContent = `Fader curve: ${b.lawPoints} points learned`;
     if (b.log) {
       const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 8;

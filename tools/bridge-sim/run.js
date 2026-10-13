@@ -229,10 +229,13 @@ class Rig {
     this.now += 0.01;
   }
   async run(seconds) { const end = this.now + seconds; while (this.now < end) await this.step(); }
-  async cmd(name, arg = 0) {
-    const r = this.parse(await this.session.request(`cmd ${name} ${arg} ${this.now.toFixed(3)}`));
-    return r;
+  // A command on the strip showing `slot` right now (as the UI would send it), or on a remembered ref.
+  ref(slot) { const s = this.state.slots[slot]; return { slot, hash: s ? s.hash : 0 }; }
+  async cmd(name, slot = -1, arg = 0) { return this.cmdRef(name, slot >= 0 ? this.ref(slot) : { slot: -1, hash: 0 }, arg); }
+  async cmdRef(name, ref, arg = 0) {
+    return this.parse(await this.session.request(`cmd ${name} ${ref.slot} ${ref.hash} ${arg} ${this.now.toFixed(3)}`));
   }
+  async global(name, arg = 0) { return this.cmd(name, -1, arg); }
   slotOf(title) { return this.state.slots.findIndex((s) => s.title === title); }
 }
 
@@ -255,130 +258,184 @@ const scenarios = {
     check(r.state.slots[0].title === 'Kick' && r.state.slots[7].title === 'Guitar', 'titles mirrored');
     check(r.state.slots[0].volumeText === volumeText(0.7766), 'volume text ' + r.state.slots[0].volumeText);
     check(r.state.slots[0].panText === 'C', 'pan text');
-    check(r.state.slots.every((sl) => sl.id === 0), 'script v3 reads no Cubase channel IDs (crash guard)');
+    check(r.state.slots.every((sl) => sl.id === 0), 'script v3+ reads no Cubase channel IDs (crash guard)');
     check(r.state.log.some((l) => l.includes('slot 1 "Kick"')), 'script logs the named slots');
     check(r.cubase.idCalls === 0, 'getUniqueIDString / getRuntimeID never called');
+    check(!r.state.log.some((l) => l.includes('Fader moved in Cubase')), 'connecting is not logged as fader moves');
   },
 
-  async 'sets exact dB values on the locked channel only'(r) {
+  async 'sets exact dB values on any channel'(r) {
     await r.run(0.3);
-    check((await r.cmd('lock', 0)).ok, 'lock Kick');
-    for (const target of [0, -6, -12, 6, -0.5, -24]) {
-      check((await r.cmd('setDb', target)).ok, 'setDb ' + target);
-      await r.run(0.4);
-      const kick = r.cubase.channels[0];
-      check(near(r.cubase.db(kick), target, 0.006), `Kick at ${r.cubase.db(kick).toFixed(3)} dB, wanted ${target}`);
-      check(r.state.lastMove.includes(target.toFixed(2).replace(/^(\d)/, '+$1')) || r.state.lastMove.includes(target.toFixed(2)), 'result text: ' + r.state.lastMove);
+    for (const slot of [0, 5, 11]) {
+      for (const target of [0, -6, -12, 6, -0.5, -24]) {
+        check((await r.cmd('setDb', slot, target)).ok, `setDb ${target} on slot ${slot + 1}`);
+        await r.run(0.4);
+        const ch = r.cubase.channels[slot];
+        check(near(r.cubase.db(ch), target, 0.006), `${ch.name} at ${r.cubase.db(ch).toFixed(3)} dB, wanted ${target}`);
+      }
+      check((await r.cmd('minusInf', slot)).ok, '-inf');
+      await r.run(0.3);
+      check(r.cubase.channels[slot].volume === 0, r.cubase.channels[slot].name + ' at -inf');
     }
-    check((await r.cmd('minusInf')).ok, '-inf');
-    await r.run(0.3);
-    check(r.cubase.channels[0].volume === 0, 'Kick at -inf');
-    check(r.cubase.channels.slice(1).every((c) => c.volume === 0.7766), 'no other fader moved');
+    check(r.cubase.channels.filter((c, i) => ![0, 5, 11].includes(i)).every((c) => c.volume === 0.7766), 'no other fader moved');
   },
 
-  async 'Cubase fader moves are mirrored without echo'(r) {
+  async 'all twelve faders at once'(r) {
     await r.run(0.3);
-    await r.cmd('lock', 1);
+    const targets = [-3, -6, -9, -12, -4.5, -10, -8, -11, -2, -14, -7.5, -13];
+    for (let i = 0; i < 12; i++) check((await r.cmd('setDb', i, targets[i])).ok, 'setDb slot ' + (i + 1));
+    await r.run(0.8);
+    check(!r.state.moving, 'every move finished');
+    for (let i = 0; i < 12; i++) check(near(r.cubase.db(r.cubase.channels[i]), targets[i], 0.006), `${r.cubase.channels[i].name} at ${r.cubase.db(r.cubase.channels[i]).toFixed(3)}, wanted ${targets[i]}`);
+  },
+
+  async 'Cubase fader moves are mirrored without echo, logged once'(r) {
+    await r.run(0.3);
     const before = r.cubase.setCalls;
     for (let i = 0; i < 30; i++) { r.cubase.channels[1].volume = 0.4 + i * 0.01; r.cubase.fireChannel(r.cubase.channels[1]); await r.run(0.01); }
-    await r.run(0.3);
+    await r.run(0.5);
+    for (let i = 0; i < 5; i++) { r.cubase.fireChannel(r.cubase.channels[1]); await r.run(0.4); }   // Cubase repeating itself
     check(r.cubase.setCalls === before, 'no setProcessValue echoed back');
     check(near(r.state.slots[1].volume, 0.69, 1e-5), 'Mixology sees the final position ' + r.state.slots[1].volume);
     check(r.state.slots[1].volumeText === volumeText(0.69), 'and the matching display text');
+    check(r.state.log.filter((l) => l.includes("Fader moved in Cubase: 'Snare'")).length === 1, 'logged once');
   },
 
-  async 'bank change pauses and never moves the wrong channel'(r) {
+  async 'dragging a fader in Mixology: exact positions, latest wins, logged once'(r) {
     await r.run(0.3);
-    await r.cmd('lock', 1);   // Snare
-    check((await r.cmd('bank', 4)).ok, 'shift right');
+    const ref = r.ref(6);   // Synth
+    for (let i = 0; i < 20; i++) { check((await r.cmdRef('fader', ref, 0.4 + i * 0.015)).ok, 'drag step'); await r.run(0.01); }
+    await r.cmdRef('faderEnd', ref);
+    await r.run(0.8);
+    check(near(r.cubase.channels[6].volume, 0.685, 1 / 16384), 'Synth at the last dragged position ' + r.cubase.channels[6].volume);
+    check(r.state.log.filter((l) => l.includes("Fader dragged in Mixology: 'Synth'")).length === 1, 'drag logged once');
+    check(!r.state.log.some((l) => l.includes('Fader moved in Cubase')), 'own readbacks not logged as Cubase moves');
+  },
+
+  async 'a bank change never moves the wrong channel'(r) {
+    await r.run(0.3);
+    const snare = r.ref(1);
+    check((await r.global('bank', 4)).ok, 'shift right');
     await r.run(0.3);
     check(r.state.slots[1].title === 'Hats', 'slot 2 now Hats, got ' + r.state.slots[1].title);
-    check(r.state.lock === 'paused', 'paused after bank change');
-    check(!(await r.cmd('setDb', -20)).ok, 'write refused while paused');
+    const res = await r.cmdRef('setDb', snare, -20);
+    check(!res.ok && res.message.includes('Hats'), 'a stale strip is refused: ' + res.message);
     await r.run(0.2);
     check(r.cubase.channels.every((c) => c.volume === 0.7766), 'nothing moved');
-    await r.cmd('bank', 0);   // reset
+    check((await r.cmd('setDb', 0, -5)).ok, 'Snare in its new slot can be moved');
+    await r.run(0.4);
+    check(near(r.cubase.db(r.cubase.channels[1]), -5, 0.006), 'Snare moved');
+    await r.global('bank', 0);   // reset
     await r.run(0.3);
     check(r.state.slots[0].title === 'Kick', 'reset bank starts at Kick, got ' + r.state.slots[0].title);
-    await r.cmd('bank', 2);   // next bank: past the last channel
+    await r.global('bank', 2);   // next bank: past the last channel
     await r.run(0.3);
     check(r.state.slots[0].title === '', 'slots past the last channel are empty');
   },
 
   async 'script refuses a write that races a bank change'(r) {
     await r.run(0.3);
-    await r.cmd('lock', 0);
-    await r.cmd('setDb', -18);
+    await r.cmd('setDb', 0, -18);
     r.cubase.bankOffset = 1;   // the user scrolls the mixer before the message lands...
     r.cubase.fireAll();        // ...but after Mixology sent it
     await r.run(0.4);
     check(r.cubase.channels.every((c) => c.volume === 0.7766), 'no channel moved');
-    check(r.state.lock === 'paused', 'paused');
+    check(r.state.log.some((l) => l.includes('Nothing was changed')), 'refusal reported');
   },
 
-  async 'reordered and renamed channels pause writing'(r) {
+  async 'reordered and renamed channels: stale strips refused'(r) {
     await r.run(0.3);
-    await r.cmd('lock', 2);   // Hats
+    const hats = r.ref(2);
     r.cubase.channels.push(r.cubase.channels.shift());   // Kick dragged to the end: every slot shifts
     r.cubase.fireAll();
     await r.run(0.2);
-    check(r.state.lock === 'paused', 'reordering pauses');
-    const hats = r.slotOf('Hats');
-    check((await r.cmd('lock', hats)).ok, 're-lock Hats at its new slot ' + (hats + 1));
+    check(!(await r.cmdRef('setDb', hats, -6)).ok, 'old Hats strip refused after reordering');
+    const at = r.slotOf('Hats');
+    check(at === 1, 'Hats now in slot 2');
+    check((await r.cmd('setDb', at, -6)).ok, 'Hats at its new slot');
+    await r.run(0.4);
     const hatsCh = r.cubase.channels.find((c) => c.name === 'Hats');
+    check(near(r.cubase.db(hatsCh), -6, 0.006), 'Hats moved');
+    const ref = r.ref(at);
     hatsCh.name = 'Hats Open';
     r.cubase.fireChannel(hatsCh);
     await r.run(0.2);
-    check(r.state.lock === 'paused' && r.state.pauseReason.includes('renamed'), 'rename pauses: ' + r.state.pauseReason);
+    check(!(await r.cmdRef('setDb', ref, -9)).ok, 'renamed: old strip refused');
   },
 
-  async 'automation write blocks moves at both ends'(r) {
+  async 'automation: Write blocks at both ends, Read warns'(r) {
     await r.run(0.3);
-    await r.cmd('lock', 0);
     r.cubase.channels[0].write = 1;
     r.cubase.fireChannel(r.cubase.channels[0]);
     await r.run(0.1);
-    const res = await r.cmd('setDb', -6);
+    const res = await r.cmd('setDb', 0, -6);
     check(!res.ok && res.message.includes('automation'), 'Mixology refuses: ' + res.message);
     // Race: W switched on after Mixology sent the move.
     r.cubase.channels[0].write = 0;
     r.cubase.fireChannel(r.cubase.channels[0]);
     await r.run(0.1);
-    check((await r.cmd('setDb', -6)).ok, 'allowed with W off');
+    check((await r.cmd('setDb', 0, -6)).ok, 'allowed with W off');
     r.cubase.channels[0].write = 1;            // W switched on in Cubase before the move lands
     r.cubase.fireChannel(r.cubase.channels[0]);
     await r.run(0.4);
     check(r.cubase.channels[0].volume === 0.7766, 'script refused the racing write');
     check(r.state.log.some((l) => l.includes('writing automation')), 'and said why');
+
+    r.cubase.channels[3].read = 1;
+    r.cubase.fireChannel(r.cubase.channels[3]);
+    await r.run(0.1);
+    check(r.state.slots[3].read, 'R reported');
+    const rd = await r.cmd('setDb', 3, -4);
+    check(rd.ok && rd.message.includes('WARNING') && rd.message.includes('Read'), 'Read: allowed with a warning: ' + rd.message);
   },
 
-  async 'pan, mute, solo and Restore'(r) {
+  async 'protect (padlock) holds through bank moves'(r) {
+    await r.run(0.3);
+    check((await r.cmd('protect', 8, 1)).ok, 'protect Lead Vox');
+    check(r.state.slots[8].protected, 'shown as protected');
+    check(!(await r.cmd('setDb', 8, -6)).ok, 'refused');
+    check(!(await r.cmd('mute', 8, 1)).ok, 'mute refused');
+    await r.global('bank', 4);
+    await r.run(0.3);
+    check(r.state.slots[7].title === 'Lead Vox' && r.state.slots[7].protected, 'still protected in its new slot');
+    check(!(await r.cmd('fader', 7, 0.2)).ok, 'drag refused');
+    await r.run(0.2);
+    check(r.cubase.channels[8].volume === 0.7766 && r.cubase.channels[8].mute === 0, 'Lead Vox untouched');
+  },
+
+  async 'pan, mute, solo, Restore and Restore all'(r) {
     r.cubase.channels[4].volume = 0.61;
     r.cubase.channels[4].pan = 0.3;
     r.cubase.fireChannel(r.cubase.channels[4]);
     await r.run(0.3);
-    await r.cmd('lock', 4);
-    await r.cmd('setDb', 3);
+    await r.cmd('setDb', 4, 3);
     await r.run(0.4);
-    await r.cmd('pan', 0.75);
-    await r.cmd('mute', 1);
-    await r.cmd('solo', 1);
-    await r.run(0.2);
+    await r.cmd('pan', 4, 0.75);
+    await r.cmd('mute', 4, 1);
+    await r.cmd('solo', 4, 1);
+    await r.cmd('setDb', 9, -20);
+    await r.cmd('pan', 10, 0);
+    await r.run(0.4);
     const c = r.cubase.channels[4];
     check(c.mute === 1 && c.solo === 1 && near(c.pan, 0.75, 1e-4), 'pan / mute / solo applied');
     check(r.state.slots[4].panText === 'R50', 'pan text mirrored: ' + r.state.slots[4].panText);
-    check((await r.cmd('restore')).ok, 'restore');
+    check(r.state.changed === 3, 'three channels changed, got ' + r.state.changed);
+    check((await r.cmd('restore', 4)).ok, 'restore 808');
     await r.run(0.4);
     check(near(c.volume, 0.61, 1 / 16384), 'volume restored ' + c.volume);
     check(near(c.pan, 0.3, 1 / 16384) && c.mute === 0 && c.solo === 0, 'pan / mute / solo restored');
+    const all = await r.global('restoreAll');
+    await r.run(0.4);
+    check(all.ok && all.message.includes('Restored 2'), 'restore all: ' + all.message);
+    check(near(r.cubase.channels[9].volume, 0.7766, 1 / 16384) && near(r.cubase.channels[10].pan, 0.5, 1 / 16384), 'FX and Adlibs back');
+    check(r.state.changed === 0, 'nothing left to restore');
   },
 
   async 'non-English names survive the round trip'(r) {
     await r.run(0.3);
     const i = r.slotOf('Vocal été ✓');
     check(i === 11, 'accented name found at slot 12, got ' + i);
-    check((await r.cmd('lock', i)).ok, 'lock it');
-    check((await r.cmd('setDb', -3)).ok, 'move it');
+    check((await r.cmd('setDb', i, -3)).ok, 'move it');
     await r.run(0.4);
     check(near(r.cubase.db(r.cubase.channels[11]), -3, 0.006), 'moved');
   },
@@ -387,15 +444,15 @@ const scenarios = {
     r.cubase.reversedOrder = true;
     await r.run(0.3);
     check(r.state.slots[2].title === 'Hats' && r.state.slots[2].volumeText === volumeText(0.7766), 'mirrored');
-    await r.cmd('lock', 2);
     for (const target of [-6, 2, -15]) {
-      await r.cmd('setDb', target);
+      await r.cmd('setDb', 2, target);
       await r.run(0.4);
       check(near(r.cubase.db(r.cubase.channels[2]), target, 0.006), `Hats at ${r.cubase.db(r.cubase.channels[2]).toFixed(3)}, wanted ${target}`);
     }
-    await r.cmd('bank', 4);
+    const ref = r.ref(2);
+    await r.global('bank', 4);
     await r.run(0.3);
-    check(r.state.lock === 'paused', 'bank change still pauses');
+    check(!(await r.cmdRef('setDb', ref, -1)).ok, 'stale strip refused after a bank change');
   },
 
   async 'Cubase reports only through the bound controls (no channel callbacks)'(r) {
@@ -403,17 +460,17 @@ const scenarios = {
     await r.run(0.3);
     check(r.state.slots[0].title === 'Kick' && r.state.slots[0].volumeText === volumeText(0.7766), 'names and values arrive: ' + r.state.slots[0].title);
     check(r.cubase.idCalls === 0, 'no channel-ID calls');
-    await r.cmd('lock', 0);
-    await r.cmd('setDb', -6);
+    await r.cmd('setDb', 0, -6);
     await r.run(0.4);
     check(near(r.cubase.db(r.cubase.channels[0]), -6, 0.006), 'moves land');
+    const ref = r.ref(0);
     r.cubase.channels[0].name = 'Kick 2';
     r.cubase.fireChannel(r.cubase.channels[0]);
     await r.run(0.2);
-    check(r.state.lock === 'paused', 'rename still pauses');
-    await r.cmd('refresh');
+    check(!(await r.cmdRef('setDb', ref, -3)).ok, 'rename: old strip refused');
+    await r.global('refresh');
     await r.run(0.2);
-    check(r.state.log.some((l) => l.includes('script v3: 12 named')), 'diagnostics: named channel count');
+    check(r.state.log.some((l) => /script v\d+: 12 named/.test(l)), 'diagnostics: named channel count');
     check(r.state.log.some((l) => l.includes('calls: titles 0/')), 'diagnostics: which route fired: ' + r.state.log.filter((l) => l.includes('calls:')).pop());
     check(r.state.log.some((l) => l.includes('mapping ok, errors 0')), 'diagnostics: no script errors');
   },
@@ -422,19 +479,17 @@ const scenarios = {
     r.cubase.routes = 'channel';
     await r.run(0.3);
     check(r.state.slots[3].title === 'Perc' && r.state.slots[3].panText === 'C', 'names and values arrive');
-    await r.cmd('lock', 3);
-    await r.cmd('setDb', 2);
+    await r.cmd('setDb', 3, 2);
     await r.run(0.4);
     check(near(r.cubase.db(r.cubase.channels[3]), 2, 0.006), 'moves land');
   },
 
-  async 'script restart mid-session resumes the same channel'(r) {
+  async 'script restart mid-session: writing works right after'(r) {
     await r.run(0.3);
-    await r.cmd('lock', 3);
     r.cubase.activate();   // e.g. "Reload Scripts" in Cubase
     await r.run(0.5);
-    check(r.state.lock === 'locked', 'still locked after reload: ' + r.state.lock + ' ' + r.state.pauseReason);
-    check((await r.cmd('setDb', -9)).ok, 'move after reload');
+    check(r.state.link === 'connected' && r.state.slots[3].title === 'Perc', 'reconnected with the bank');
+    check((await r.cmd('setDb', 3, -9)).ok, 'move after reload');
     await r.run(0.4);
     check(near(r.cubase.db(r.cubase.channels[3]), -9, 0.006), 'moved');
   },

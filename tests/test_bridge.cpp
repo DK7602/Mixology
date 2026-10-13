@@ -20,12 +20,8 @@ namespace
 
         Rig()
         {
-            std::uint32_t id = 1000;
             for (auto name : { "Kick", "Snare", "Hats", "Perc", "808", "Keys", "Synth", "Guitar", "Lead Vox", "FX", "Adlibs" })
-            {
-                cubase.channels.push_back ({ name });
-                cubase.channels.back().id = id++;
-            }
+                cubase.channels.push_back ({ name });   // script v3+ reports no channel IDs (0)
             session.setPortsOpen (true, now);
         }
 
@@ -49,6 +45,23 @@ namespace
             for (int s = 0; s < session.slotCount(); ++s)
                 if (session.slot (s).present && session.slot (s).title == name) return s;
             return -1;
+        }
+
+        ChannelRef ref (const std::string& name) const { return session.refOf (slotOf (name)); }
+
+        bool logHas (const std::string& text) const
+        {
+            for (const auto& l : session.logLines())
+                if (l.text.find (text) != std::string::npos) return true;
+            return false;
+        }
+
+        int logCount (const std::string& text) const
+        {
+            int n = 0;
+            for (const auto& l : session.logLines())
+                if (l.text.find (text) != std::string::npos) ++n;
+            return n;
         }
 
         double cubaseDb (int channel) const { return FakeCubase::lawDb (cubase.channels[static_cast<std::size_t> (channel)].volume); }
@@ -140,6 +153,19 @@ TEST_CASE ("FaderLaw: learns a curve and inverts it", "[bridge]")
     CHECK (copy.toNormalised (-6.0) == Catch::Approx (law.toNormalised (-6.0)));
 }
 
+
+TEST_CASE ("FaderLaw: a contradicting reading replaces stale points", "[bridge]")
+{
+    FaderLaw law;
+    law.learn (0.5, -10.0);
+    law.learn (0.6, -30.0);   // impossible: lower dB higher up -> the older point goes
+    CHECK (law.size() == 1);
+    CHECK (law.toDb (0.6) == Catch::Approx (-30.0));
+}
+
+// =================================================================================================
+// Milestone 2: every channel in the bank can be moved, with the same safety per write.
+
 TEST_CASE ("Bridge: connects, lists the bank, and reads the real fader", "[bridge]")
 {
     Rig r;
@@ -155,81 +181,81 @@ TEST_CASE ("Bridge: connects, lists the bank, and reads the real fader", "[bridg
     CHECK (r.session.slot (1).volumeDb == Catch::Approx (FakeCubase::lawDb (0.5)).margin (0.006));
 }
 
-TEST_CASE ("Bridge: sets exact dB values on the locked channel, closed loop", "[bridge]")
+TEST_CASE ("Bridge: sets exact dB values on any channel, closed loop", "[bridge]")
 {
     Rig r;
     r.run (0.2);
-    const int kick = r.slotOf ("Kick");
-    REQUIRE (r.session.lockChannel (kick, r.now).ok);
-
-    for (double target : { 0.0, -6.0, -12.0, 6.0, -0.5, -30.0 })
+    for (int ch : { 0, 3, 7 })
     {
-        REQUIRE (r.session.setVolumeDb (target, r.now).ok);
-        r.run (0.5);
-        CHECK_FALSE (r.session.moveInProgress());
-        CHECK (r.cubaseDb (0) == Catch::Approx (target).margin (BridgeSession::kDbTolerance + 0.005));
-        INFO (r.session.lastMoveResult());
+        const auto ref = r.session.refOf (ch);
+        for (double target : { 0.0, -6.0, -12.0, 6.0, -0.5, -30.0 })
+        {
+            REQUIRE (r.session.setVolumeDb (ref, target, r.now).ok);
+            r.run (0.5);
+            INFO (r.session.lastMoveResult());
+            CHECK_FALSE (r.session.moveInProgress());
+            CHECK (r.cubaseDb (ch) == Catch::Approx (target).margin (BridgeSession::kDbTolerance + 0.005));
+        }
+        REQUIRE (r.session.setVolumeDb (ref, FaderLaw::kMinusInf, r.now).ok);
+        r.run (0.3);
+        CHECK (r.cubase.channels[static_cast<std::size_t> (ch)].volume == 0.0);
     }
+    for (std::size_t c : { 1u, 2u, 4u, 5u, 6u, 8u })
+        CHECK (r.cubase.channels[c].volume == 0.7766);   // nothing else moved
+}
 
-    REQUIRE (r.session.setVolumeDb (FaderLaw::kMinusInf, r.now).ok);
-    r.run (0.3);
-    CHECK (r.cubase.channels[0].volume == 0.0);
-
-    // Nothing else moved.
-    for (std::size_t c = 1; c < r.cubase.channels.size(); ++c)
-        CHECK (r.cubase.channels[c].volume == 0.7766);
+TEST_CASE ("Bridge: moves on several channels at once all land", "[bridge]")
+{
+    Rig r;
+    r.run (0.2);
+    const double targets[] = { -3.0, -7.5, -12.0, 2.0, -20.0, -1.0, -9.0, 0.0 };
+    for (int ch = 0; ch < 8; ++ch)
+        REQUIRE (r.session.setVolumeDb (r.session.refOf (ch), targets[ch], r.now).ok);
+    r.run (0.8);
+    CHECK_FALSE (r.session.moveInProgress());
+    for (int ch = 0; ch < 8; ++ch)
+        CHECK (r.cubaseDb (ch) == Catch::Approx (targets[ch]).margin (BridgeSession::kDbTolerance + 0.005));
 }
 
 TEST_CASE ("Bridge: after learning, moves land in one or two steps", "[bridge]")
 {
     Rig r;
     r.run (0.2);
-    REQUIRE (r.session.lockChannel (0, r.now).ok);
     // Teach the curve by "watching" the user sweep a fader on another channel.
     for (int i = 1; i <= 30; ++i) { r.cubase.userMovesFader (1, i / 30.0); r.run (0.02); }
 
     const int before = r.cubase.setVolumeCount;
-    REQUIRE (r.session.setVolumeDb (-9.0, r.now).ok);
+    REQUIRE (r.session.setVolumeDb (r.ref ("Kick"), -9.0, r.now).ok);
     r.run (0.3);
     CHECK (r.cubase.setVolumeCount - before <= 2);
     CHECK (r.cubaseDb (0) == Catch::Approx (-9.0).margin (0.06));
 }
 
-TEST_CASE ("Bridge: nothing is written without a lock", "[bridge]")
+TEST_CASE ("Bridge: a strip that now shows another channel is refused here", "[bridge]")
 {
     Rig r;
     r.run (0.2);
-    CHECK_FALSE (r.session.setVolumeDb (-6.0, r.now).ok);
-    CHECK_FALSE (r.session.setMute (true, r.now).ok);
+    const auto snare = r.ref ("Snare");             // slot 1, as the UI showed it
+    r.session.bank (BankAction::shiftRight, r.now);  // slot 1 now shows "Hats"
+    r.run (0.2);
+    REQUIRE (r.session.slot (1).title == "Hats");
+
+    auto res = r.session.setVolumeDb (snare, -20.0, r.now);
+    CHECK_FALSE (res.ok);
+    CHECK (res.message.find ("Hats") != std::string::npos);
+    CHECK_FALSE (r.session.setMute (snare, true, r.now).ok);
+    CHECK_FALSE (r.session.setVolumeNormalised (snare, 0.1, r.now).ok);
     r.run (0.2);
     CHECK (r.cubase.setVolumeCount == 0);
-}
-
-TEST_CASE ("Bridge: a bank change pauses writing and never moves the wrong channel", "[bridge]")
-{
-    Rig r;
-    r.run (0.2);
-    REQUIRE (r.session.lockChannel (r.slotOf ("Snare"), r.now).ok);
-    REQUIRE (r.session.setVolumeDb (-3.0, r.now).ok);
-    r.run (0.3);
-
-    r.session.bank (BankAction::shiftRight, r.now);   // slot 1 now shows "Hats"
-    r.run (0.2);
-    CHECK (r.session.lock() == BridgeSession::Lock::paused);
-    CHECK_FALSE (r.session.setVolumeDb (-20.0, r.now).ok);
-    r.run (0.2);
-    CHECK (r.cubaseDb (2) == Catch::Approx (FakeCubase::lawDb (0.7766)));   // Hats untouched
+    CHECK_FALSE (r.cubase.channels[2].mute);
 }
 
 TEST_CASE ("Bridge: the script refuses a write that races a bank change", "[bridge]")
 {
     Rig r;
     r.run (0.2);
-    REQUIRE (r.session.lockChannel (0, r.now).ok);
-    r.run (0.05);
-
     // The write leaves Mixology, then the bank moves in Cubase before it arrives.
-    REQUIRE (r.session.setVolumeDb (-18.0, r.now).ok);
+    REQUIRE (r.session.setVolumeDb (r.ref ("Kick"), -18.0, r.now).ok);
     auto pending = r.session.takeOutgoing();
     r.cubase.bankOffset = 1;   // the user scrolled the mixer
     for (auto& m : pending) r.cubase.receive (m);
@@ -237,72 +263,160 @@ TEST_CASE ("Bridge: the script refuses a write that races a bank change", "[brid
 
     CHECK (r.cubase.setVolumeCount == 0);
     CHECK (r.cubase.channels[1].volume == 0.7766);   // Snare (now in slot 0) untouched
-    CHECK (r.session.lock() == BridgeSession::Lock::paused);
+    CHECK_FALSE (r.session.moveInProgress());
+    CHECK (r.session.lastMoveResult().find ("Nothing was changed") != std::string::npos);
+    CHECK (r.session.slot (0).title == "Snare");      // the refusal triggered a fresh dump
 }
 
-TEST_CASE ("Bridge: renaming or reordering tracks pauses writing", "[bridge]")
+TEST_CASE ("Bridge: renaming or reordering stops a move in flight", "[bridge]")
 {
     SECTION ("rename")
     {
         Rig r;
         r.run (0.2);
-        REQUIRE (r.session.lockChannel (0, r.now).ok);   // Kick
+        const auto kick = r.ref ("Kick");
         r.cubase.rename (0, "Kick In");
         r.run (0.1);
-        CHECK (r.session.lock() == BridgeSession::Lock::paused);
-        CHECK (r.session.pauseReason().find ("Kick In") != std::string::npos);
+        CHECK_FALSE (r.session.setVolumeDb (kick, -6.0, r.now).ok);   // the old picture is refused
+        CHECK (r.session.setVolumeDb (r.ref ("Kick In"), -6.0, r.now).ok);
+        r.run (0.3);
+        CHECK (r.cubaseDb (0) == Catch::Approx (-6.0).margin (0.06));
     }
-    SECTION ("reorder")
+    SECTION ("reorder during a move")
     {
         Rig r;
         r.run (0.2);
-        REQUIRE (r.session.lockChannel (2, r.now).ok);   // Hats
-        r.cubase.moveChannel (5, 0);                       // Keys dragged to the top: Hats shifts to slot 3
-        r.run (0.1);
-        CHECK (r.session.lock() == BridgeSession::Lock::paused);
-        CHECK_FALSE (r.session.setVolumeDb (-6.0, r.now).ok);
-        // Re-locking Hats in its new slot works.
-        REQUIRE (r.session.lockChannel (r.slotOf ("Hats"), r.now).ok);
-        REQUIRE (r.session.setVolumeDb (-6.0, r.now).ok);
+        REQUIRE (r.session.setVolumeDb (r.ref ("Hats"), -30.0, r.now).ok);
+        auto pending = r.session.takeOutgoing();
+        r.cubase.moveChannel (5, 0);   // Keys dragged to the top: Hats shifts to slot 3
+        r.run (0.05);
+        for (auto& m : pending) r.cubase.receive (m);   // arrives too late: refused by the script
         r.run (0.3);
-        CHECK (r.cubaseDb (3) == Catch::Approx (-6.0).margin (0.06));
+        CHECK (r.cubase.setVolumeCount == 0);
+        CHECK_FALSE (r.session.moveInProgress());
+        for (const auto& c : r.cubase.channels) CHECK (c.volume == 0.7766);
     }
 }
 
-TEST_CASE ("Bridge: duplicate names elsewhere in the bank don't confuse the lock", "[bridge]")
+TEST_CASE ("Bridge: two channels with the same name: the slot decides, Restore refuses", "[bridge]")
 {
     Rig r;
     r.cubase.channels[3].name = "Kick";   // two channels named Kick
     r.run (0.2);
-    REQUIRE (r.session.lockChannel (3, r.now).ok);
-    REQUIRE (r.session.setVolumeDb (-10.0, r.now).ok);
+    CHECK (r.session.nameIsDuplicated (0));
+    CHECK (r.session.nameIsDuplicated (3));
+    CHECK_FALSE (r.session.nameIsDuplicated (1));
+
+    REQUIRE (r.session.setVolumeDb (r.session.refOf (3), -10.0, r.now).ok);
     r.run (0.3);
     CHECK (r.cubaseDb (3) == Catch::Approx (-10.0).margin (0.06));
     CHECK (r.cubase.channels[0].volume == 0.7766);
+
+    auto res = r.session.restoreChannel (r.session.refOf (3), r.now);
+    CHECK_FALSE (res.ok);
+    CHECK (res.message.find ("Two channels") != std::string::npos);
 }
 
-TEST_CASE ("Bridge: channels writing automation are never moved", "[bridge]")
+TEST_CASE ("Bridge: channels writing automation are never moved; Read gets a warning", "[bridge]")
 {
     Rig r;
     r.cubase.channels[0].write = true;
+    r.cubase.channels[1].read = true;
     r.run (0.2);
-    REQUIRE (r.session.lockChannel (0, r.now).ok);
-    auto res = r.session.setVolumeDb (-6.0, r.now);
+
+    auto res = r.session.setVolumeDb (r.ref ("Kick"), -6.0, r.now);
     CHECK_FALSE (res.ok);
     CHECK (res.message.find ("automation") != std::string::npos);
-    r.run (0.2);
-    CHECK (r.cubase.setVolumeCount == 0);
+    CHECK_FALSE (r.session.setPan (r.ref ("Kick"), 0.2, r.now).ok);
+
+    auto snare = r.session.setVolumeDb (r.ref ("Snare"), -6.0, r.now);
+    CHECK (snare.ok);
+    CHECK (snare.warning.find ("Read") != std::string::npos);
+    r.run (0.3);
+    CHECK (r.session.setVolumeDb (r.ref ("Snare"), -7.0, r.now).warning.empty());   // warned once
+    r.run (0.3);
+    CHECK (r.cubase.channels[0].volume == 0.7766);
+    CHECK (r.cubaseDb (1) == Catch::Approx (-7.0).margin (0.06));
 }
 
-TEST_CASE ("Bridge: Cubase fader moves are seen and never echoed back", "[bridge]")
+TEST_CASE ("Bridge: protected channels are never written, wherever they are in the bank", "[bridge]")
 {
     Rig r;
     r.run (0.2);
-    REQUIRE (r.session.lockChannel (0, r.now).ok);
+    REQUIRE (r.session.setProtected (r.ref ("Snare"), true, r.now).ok);
+    CHECK (r.session.isProtected (r.session.slot (1).hash));
+
+    auto res = r.session.setVolumeDb (r.ref ("Snare"), -6.0, r.now);
+    CHECK_FALSE (res.ok);
+    CHECK (res.message.find ("protected") != std::string::npos);
+    CHECK_FALSE (r.session.setMute (r.ref ("Snare"), true, r.now).ok);
+    CHECK_FALSE (r.session.setVolumeNormalised (r.ref ("Snare"), 0.2, r.now).ok);
+
+    // Still protected after the bank moves (it is the channel that is protected, not the slot).
+    r.session.bank (BankAction::shiftRight, r.now);
+    r.run (0.2);
+    REQUIRE (r.session.slot (0).title == "Snare");
+    CHECK_FALSE (r.session.setVolumeDb (r.session.refOf (0), -6.0, r.now).ok);
+    CHECK (r.session.setVolumeDb (r.session.refOf (1), -6.0, r.now).ok);   // Hats is not protected
+    r.run (0.3);
+    CHECK (r.cubase.channels[1].volume == 0.7766);
+
+    // The list survives a save / load (it is stored with the project).
+    auto list = r.session.protectedList();
+    BridgeSession other;
+    other.setProtectedList (list);
+    CHECK (other.isProtected (nameHash ("Snare")));
+    CHECK_FALSE (other.isProtected (nameHash ("Hats")));
+
+    REQUIRE (r.session.setProtected (r.session.refOf (0), false, r.now).ok);
+    CHECK (r.session.setVolumeDb (r.session.refOf (0), -6.0, r.now).ok);
+}
+
+TEST_CASE ("Bridge: Cubase fader moves are seen, never echoed, and logged once", "[bridge]")
+{
+    Rig r;
+    r.run (0.2);
     for (int i = 0; i < 20; ++i) { r.cubase.userMovesFader (0, 0.5 + i * 0.01); r.run (0.01); }
     r.run (0.5);
     CHECK (r.cubase.setVolumeCount == 0);   // no feedback loop
     CHECK (r.session.slot (0).volume == Catch::Approx (0.69).margin (1.0e-5));
+    CHECK (r.logCount ("Fader moved in Cubase: 'Kick'") == 1);
+
+    // Cubase repeating the same value (it does, e.g. on Refresh) is not a move.
+    for (int i = 0; i < 5; ++i) { r.cubase.sendVolume (0); r.run (0.5); }
+    r.session.requestDump (r.now);
+    r.run (0.5);
+    CHECK (r.logCount ("Fader moved in Cubase: 'Kick'") == 1);
+    CHECK_FALSE (r.logHas ("Fader moved in Cubase: 'Snare'"));   // the first report is where it started
+}
+
+TEST_CASE ("Bridge: dragging in Mixology sends exact positions, latest wins, logged once", "[bridge]")
+{
+    Rig r;
+    r.run (0.2);
+    const auto kick = r.ref ("Kick");
+    for (int i = 0; i < 10; ++i)
+    {
+        REQUIRE (r.session.setVolumeNormalised (kick, 0.5 + i * 0.02, r.now).ok);
+        r.run (0.005);   // faster than the round trip: moves overlap
+    }
+    r.session.noteDragFinished (kick, r.now);
+    r.run (1.0);
+    CHECK (r.cubase.channels[0].volume == Catch::Approx (0.68).margin (1.0 / 16384.0));
+    CHECK_FALSE (r.session.moveInProgress());
+    CHECK (r.logCount ("Fader dragged in Mixology: 'Kick'") == 1);
+    CHECK_FALSE (r.logHas ("Fader moved in Cubase"));   // our own readbacks are not Cubase moves
+    for (std::size_t c = 1; c < r.cubase.channels.size(); ++c)
+        CHECK (r.cubase.channels[c].volume == 0.7766);
+}
+
+TEST_CASE ("Bridge: nudges add up while Cubase is still answering", "[bridge]")
+{
+    Rig r;
+    r.run (0.2);
+    for (int i = 0; i < 6; ++i) REQUIRE (r.session.nudgeDb (r.ref ("Perc"), -0.5, r.now).ok);
+    r.run (0.6);
+    CHECK (r.cubaseDb (3) == Catch::Approx (FakeCubase::lawDb (0.7766) - 3.0).margin (0.06));
 }
 
 TEST_CASE ("Bridge: Restore puts back volume, pan, mute and solo", "[bridge]")
@@ -311,107 +425,94 @@ TEST_CASE ("Bridge: Restore puts back volume, pan, mute and solo", "[bridge]")
     r.cubase.channels[0].volume = 0.6123;
     r.cubase.channels[0].pan = 0.3;
     r.run (0.2);
-    REQUIRE (r.session.lockChannel (0, r.now).ok);
-    REQUIRE (r.session.setVolumeDb (2.0, r.now).ok);
+    const auto kick = r.ref ("Kick");
+    REQUIRE (r.session.setVolumeDb (kick, 2.0, r.now).ok);
     r.run (0.3);
-    REQUIRE (r.session.setPan (0.8, r.now).ok);
-    REQUIRE (r.session.setMute (true, r.now).ok);
+    REQUIRE (r.session.setPan (kick, 0.8, r.now).ok);
+    REQUIRE (r.session.setMute (kick, true, r.now).ok);
     r.run (0.2);
     CHECK (r.cubase.channels[0].mute);
+    CHECK (r.session.changedCount() == 1);
 
-    REQUIRE (r.session.restore (r.now).ok);
+    REQUIRE (r.session.restoreChannel (kick, r.now).ok);
     r.run (0.3);
     CHECK (r.cubase.channels[0].volume == Catch::Approx (0.6123).margin (1.0 / 16384.0));
     CHECK (r.cubase.channels[0].pan == Catch::Approx (0.3).margin (1.0e-6));
     CHECK_FALSE (r.cubase.channels[0].mute);
+    CHECK (r.session.changedCount() == 0);
+    CHECK (r.session.lastMoveResult().find ("Restored 'Kick'") != std::string::npos);
 }
 
-TEST_CASE ("Bridge: losing Cubase pauses, reconnecting to the same channel resumes", "[bridge]")
+TEST_CASE ("Bridge: Restore all brings back every changed channel in view", "[bridge]")
 {
     Rig r;
     r.run (0.2);
-    REQUIRE (r.session.lockChannel (4, r.now).ok);   // 808
+    for (const char* name : { "Kick", "Hats", "808", "Guitar" })
+        REQUIRE (r.session.setVolumeDb (r.ref (name), -15.0, r.now).ok);
+    REQUIRE (r.session.setSolo (r.ref ("Keys"), true, r.now).ok);
+    r.run (0.6);
+    CHECK (r.session.changedCount() == 5);
+
+    // Kick leaves the bank; Hats gets protected after it was changed.
+    r.session.bank (BankAction::shiftRight, r.now);
+    r.run (0.2);
+    REQUIRE (r.session.setProtected (r.ref ("Hats"), true, r.now).ok);
+
+    auto sum = r.session.restoreAll (r.now);
+    r.run (0.5);
+    CHECK (sum.restored == 3);       // 808, Guitar, Keys
+    CHECK (sum.outsideBank == 1);    // Kick
+    CHECK (sum.skipped == 1);        // Hats (protected)
+    CHECK (r.cubase.channels[4].volume == Catch::Approx (0.7766).margin (1.0 / 16384.0));
+    CHECK (r.cubase.channels[7].volume == Catch::Approx (0.7766).margin (1.0 / 16384.0));
+    CHECK_FALSE (r.cubase.channels[5].solo);
+    CHECK (r.cubaseDb (2) == Catch::Approx (-15.0).margin (0.06));   // protected: left alone
+
+    r.session.bank (BankAction::reset, r.now);
+    r.run (0.2);
+    sum = r.session.restoreAll (r.now);
+    r.run (0.5);
+    CHECK (sum.restored == 1);       // Kick, now in view
+    CHECK (r.cubase.channels[0].volume == Catch::Approx (0.7766).margin (1.0 / 16384.0));
+}
+
+TEST_CASE ("Bridge: losing Cubase stops moves; after reconnecting, writing works again", "[bridge]")
+{
+    Rig r;
+    r.run (0.2);
+    REQUIRE (r.session.setVolumeDb (r.ref ("808"), -4.0, r.now).ok);
     r.cubase.alive = false;
     r.run (BridgeSession::kLostAfter + 0.5);
     CHECK (r.session.link() == BridgeSession::Link::lost);
-    CHECK (r.session.lock() == BridgeSession::Lock::paused);
+    CHECK_FALSE (r.session.moveInProgress());
+    CHECK_FALSE (r.session.setVolumeDb (r.session.refOf (4), -4.0, r.now).ok);
 
+    r.cubase.channels[4].name = "Bass Gtr";   // the project changed while disconnected
     r.cubase.alive = true;
     r.run (1.5);
     CHECK (r.session.link() == BridgeSession::Link::connected);
-    CHECK (r.session.lock() == BridgeSession::Lock::locked);
-    CHECK (r.session.setVolumeDb (-4.0, r.now).ok);
-}
-
-TEST_CASE ("Bridge: reconnecting to a different channel in that slot stays paused", "[bridge]")
-{
-    Rig r;
-    r.run (0.2);
-    REQUIRE (r.session.lockChannel (4, r.now).ok);
-    r.cubase.alive = false;
-    r.run (BridgeSession::kLostAfter + 0.5);
-    r.cubase.channels[4].name = "Bass Gtr";   // project changed while disconnected
-    r.cubase.alive = true;
-    r.run (1.5);
-    CHECK (r.session.link() == BridgeSession::Link::connected);
-    CHECK (r.session.lock() == BridgeSession::Lock::paused);
-    CHECK_FALSE (r.session.setVolumeDb (-4.0, r.now).ok);
+    CHECK (r.session.slot (4).title == "Bass Gtr");
+    CHECK (r.session.setVolumeDb (r.ref ("Bass Gtr"), -4.0, r.now).ok);
+    r.run (0.3);
+    CHECK (r.cubaseDb (4) == Catch::Approx (-4.0).margin (0.06));
 }
 
 TEST_CASE ("Bridge: a script reload mid-session is handled", "[bridge]")
 {
     Rig r;
     r.run (0.2);
-    REQUIRE (r.session.lockChannel (1, r.now).ok);
     r.cubase.activate();   // user reloads scripts in Cubase
     r.run (0.3);
     CHECK (r.session.link() == BridgeSession::Link::connected);
-    CHECK (r.session.lock() == BridgeSession::Lock::locked);
-}
-
-TEST_CASE ("Bridge: log shows each move's result (manual check)", "[bridge][.print]")
-{
-    Rig r;
-    r.run (0.2);
-    REQUIRE (r.session.lockChannel (0, r.now).ok);
-    for (double target : { 0.0, -6.0, -12.0, 6.0 })
-    {
-        r.session.setVolumeDb (target, r.now);
-        r.run (0.5);
-    }
-    for (auto& l : r.session.logLines()) printf ("%6.2f  %s\n", l.time, l.text.c_str());
-}
-
-TEST_CASE ("Bridge: two channels with the same name are told apart by Cubase's channel ID", "[bridge]")
-{
-    Rig r;
-    r.run (0.2);
-    REQUIRE (r.session.lockChannel (0, r.now).ok);    // "Kick", id 1000
-    // Swap in a different channel that has the same name (e.g. a duplicated track) at the same slot.
-    r.cubase.channels[0].id = 4242;
-    r.cubase.sendSlot (0);
-    r.run (0.1);
-    CHECK (r.session.lock() == BridgeSession::Lock::paused);
-    CHECK_FALSE (r.session.setVolumeDb (-6.0, r.now).ok);
-}
-
-TEST_CASE ("Bridge: a rename keeps the ID, is reported as a rename, and still pauses", "[bridge]")
-{
-    Rig r;
-    r.run (0.2);
-    REQUIRE (r.session.lockChannel (1, r.now).ok);
-    r.cubase.rename (1, "Snare Top");
-    r.run (0.1);
-    CHECK (r.session.lock() == BridgeSession::Lock::paused);
-    CHECK (r.session.pauseReason().find ("renamed") != std::string::npos);
+    CHECK (r.session.slot (1).title == "Snare");
+    CHECK (r.session.setVolumeDb (r.ref ("Snare"), -2.0, r.now).ok);
 }
 
 TEST_CASE ("Bridge: a stale fader report during a move is not taken as the result", "[bridge]")
 {
     Rig r;
     r.run (0.2);
-    REQUIRE (r.session.lockChannel (0, r.now).ok);
-    REQUIRE (r.session.setVolumeDb (-20.0, r.now).ok);
+    REQUIRE (r.session.setVolumeDb (r.ref ("Kick"), -20.0, r.now).ok);
     // A late report of the OLD position arrives before Cubase applies the move.
     r.cubase.sendVolume (0);
     r.run (0.5);
@@ -419,28 +520,16 @@ TEST_CASE ("Bridge: a stale fader report during a move is not taken as the resul
     CHECK (r.session.lastMoveResult().find ("-20.00") != std::string::npos);
 }
 
-TEST_CASE ("Bridge: dragging the fader in Mixology sends exact positions, latest wins", "[bridge]")
+TEST_CASE ("Bridge: log shows each move's result (manual check)", "[bridge][.print]")
 {
     Rig r;
     r.run (0.2);
-    REQUIRE (r.session.lockChannel (0, r.now).ok);
-    for (int i = 0; i < 10; ++i)
+    for (double target : { 0.0, -6.0, -12.0, 6.0 })
     {
-        REQUIRE (r.session.setVolumeNormalised (0.5 + i * 0.02, r.now).ok);
-        r.run (0.005);   // faster than the round trip: moves overlap
+        r.session.setVolumeDb (r.ref ("Kick"), target, r.now);
+        r.run (0.5);
     }
-    r.run (0.3);
-    CHECK (r.cubase.channels[0].volume == Catch::Approx (0.68).margin (1.0 / 16384.0));
-    CHECK_FALSE (r.session.moveInProgress());
-    for (std::size_t c = 1; c < r.cubase.channels.size(); ++c)
-        CHECK (r.cubase.channels[c].volume == 0.7766);
-}
-
-TEST_CASE ("FaderLaw: a contradicting reading replaces stale points", "[bridge]")
-{
-    FaderLaw law;
-    law.learn (0.5, -10.0);
-    law.learn (0.6, -30.0);   // impossible: lower dB higher up -> the older point goes
-    CHECK (law.size() == 1);
-    CHECK (law.toDb (0.6) == Catch::Approx (-30.0));
+    r.session.restoreAll (r.now);
+    r.run (0.5);
+    for (auto& l : r.session.logLines()) printf ("%6.2f  %s\n", l.time, l.text.c_str());
 }

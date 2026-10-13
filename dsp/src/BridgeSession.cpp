@@ -10,16 +10,16 @@ namespace mixology
 
     namespace
     {
-        constexpr double kMaxDb = 6.0;          // top of a Cubase channel fader
-        constexpr double kUserMoveSettle = 0.3; // log a Cubase-side fader move once it has settled
+        constexpr double kMaxDb = 6.0;   // top of a Cubase channel fader
 
         std::string quoted (const std::string& s) { return "'" + s + "'"; }
         std::string slotName (int slot) { return "slot " + std::to_string (slot + 1); }
+        bool isMinusInf (double db) { return db <= FaderLaw::kMinusInf + 1.0; }
     }
 
     std::string formatDb (double db)
     {
-        if (db <= FaderLaw::kMinusInf + 1.0) return "-inf dB";
+        if (isMinusInf (db)) return "-inf dB";
         char buf[32];
         std::snprintf (buf, sizeof (buf), "%+.2f dB", db);
         return buf;
@@ -59,12 +59,7 @@ namespace mixology
             if (linkState != Link::offline)
                 addLog (now, "MIDI ports closed" + (detail.empty() ? std::string() : ": " + detail));
             linkState = Link::offline;
-            if (lockState == Lock::locked)
-            {
-                pause ("The MIDI ports are closed.", now);
-                resumeIfSameAfterReconnect = true;
-            }
-            move.active = false;
+            cancelMoves ({}, now);
         }
         changed();
     }
@@ -107,31 +102,40 @@ namespace mixology
             {
                 linkState = Link::lost;
                 addLog (now, "Lost contact with Cubase (no reply for " + std::to_string (static_cast<int> (kLostAfter)) + " s). Trying again...");
-                if (lockState == Lock::locked)
-                {
-                    pause ("Lost contact with Cubase.", now);
-                    resumeIfSameAfterReconnect = true;
-                }
-                move.active = false;
+                cancelMoves ({}, now);
                 changed();
             }
         }
 
-        if (move.active && now - move.sentAt > kReplyTimeout)
+        for (int i = 0; i < static_cast<int> (meta.size()); ++i)
         {
-            move.active = false;
-            moveResult = "No reply from Cubase: the move may not have happened.";
-            addLog (now, moveResult);
-            changed();
-        }
-
-        if (lastUserMoveLog > 0.0 && now - lastUserMoveLog > kUserMoveSettle)
-        {
-            lastUserMoveLog = -1.0e9;
-            if (lockSlot >= 0 && lockSlot < slotCount())
+            auto& mt = meta[static_cast<std::size_t> (i)];
+            auto& mv = mt.move;
+            if (mv.active && now - mv.sentAt > kReplyTimeout)
             {
-                const auto& s = slot (lockSlot);
-                addLog (now, "Fader moved in Cubase: " + quoted (s.title) + " now shows " + s.volumeText + " dB");
+                mv.active = false;
+                const auto& s = slot (i);
+                if (mv.kind == MoveKind::drag)
+                {
+                    // Drag readbacks overlap; the last one may simply not match. Report where it ended up.
+                    if (mv.logResult) addLog (now, "Fader dragged in Mixology: " + quoted (s.title) + " now shows " + s.volumeText + " dB");
+                    mt.loggedText = s.volumeText;
+                }
+                else
+                {
+                    moveResult = "No reply from Cubase for " + quoted (s.title) + ": the move may not have happened.";
+                    addLog (now, moveResult);
+                }
+                changed();
+            }
+
+            if (mt.cubaseMovedAt > 0.0 && now - mt.cubaseMovedAt > kUserMoveSettle)
+            {
+                mt.cubaseMovedAt = -1.0;
+                const auto& s = slot (i);
+                if (s.present && s.volumeText != mt.loggedText && ! s.automationRead)
+                    addLog (now, "Fader moved in Cubase: " + quoted (s.title) + " now shows " + s.volumeText + " dB");
+                mt.loggedText = s.volumeText;
             }
         }
     }
@@ -159,8 +163,40 @@ namespace mixology
     BridgeSlot& BridgeSession::slotRef (int i)
     {
         if (i >= slotCount())
-            slots.resize (static_cast<std::size_t> (std::min (i + 1, kMaxSlots)));
+        {
+            const auto n = static_cast<std::size_t> (std::min (i + 1, kMaxSlots));
+            slots.resize (n);
+            meta.resize (n);
+        }
         return slots[static_cast<std::size_t> (i)];
+    }
+
+    BridgeSession::SlotMeta& BridgeSession::metaRef (int i)
+    {
+        slotRef (i);
+        return meta[static_cast<std::size_t> (i)];
+    }
+
+    ChannelRef BridgeSession::refOf (int i) const
+    {
+        if (i < 0 || i >= slotCount() || ! slot (i).present) return {};
+        return { i, slot (i).hash };
+    }
+
+    bool BridgeSession::moveInProgress (int slotIndex) const
+    {
+        for (int i = 0; i < static_cast<int> (meta.size()); ++i)
+            if ((slotIndex < 0 || i == slotIndex) && meta[static_cast<std::size_t> (i)].move.active) return true;
+        return false;
+    }
+
+    bool BridgeSession::nameIsDuplicated (int slotIndex) const
+    {
+        if (slotIndex < 0 || slotIndex >= slotCount() || ! slot (slotIndex).present) return false;
+        const auto h = slot (slotIndex).hash;
+        for (int i = 0; i < slotCount(); ++i)
+            if (i != slotIndex && slot (i).present && slot (i).hash == h) return true;
+        return false;
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -199,11 +235,14 @@ namespace mixology
             {
                 if (! slotOk) return;
                 auto& s = slotRef (m.slot);
-                const bool wasWriting = s.automationWrite;
                 s.automationRead = (m.flag & 1) != 0;
                 s.automationWrite = (m.flag & 2) != 0;
-                if (m.slot == lockSlot && s.automationWrite && ! wasWriting)
-                    addLog (now, quoted (s.title) + " is writing automation (W is on): Mixology won't move it until W is off.");
+                auto& mv = metaRef (m.slot).move;
+                if (s.automationWrite && mv.active)
+                {
+                    mv.active = false;
+                    addLog (now, quoted (s.title) + " started writing automation (W is on): Mixology stopped moving it.");
+                }
                 changed();
                 return;
             }
@@ -211,25 +250,22 @@ namespace mixology
             case Cmd::ack:
             {
                 const auto status = static_cast<AckStatus> (m.flag);
-                if (move.active && m.token == move.token)
+                if (status == AckStatus::applied) return;
+
+                std::string what;
+                for (int i = 0; i < static_cast<int> (meta.size()); ++i)
                 {
-                    if (status == AckStatus::applied)
+                    auto& mv = meta[static_cast<std::size_t> (i)].move;
+                    if (mv.active && mv.token == m.token)
                     {
-                        move.acked = true;
-                    }
-                    else
-                    {
-                        move.active = false;
-                        moveResult = std::string ("Cubase ") + ackStatusText (status) + ". Nothing was changed.";
-                        addLog (now, moveResult);
+                        mv.active = false;
+                        what = quoted (slot (i).title) + ": ";
                     }
                 }
-                else if (status != AckStatus::applied)
-                {
-                    addLog (now, std::string ("Cubase ") + ackStatusText (status) + ".");
-                }
-                if (status == AckStatus::nameMismatch && lockState == Lock::locked)
-                    pause ("Cubase reported that " + slotName (lockSlot) + " holds a different channel now.", now);
+                moveResult = what + "Cubase " + ackStatusText (status) + ". Nothing was changed.";
+                addLog (now, moveResult);
+                if (status == AckStatus::nameMismatch || status == AckStatus::emptySlot)
+                    requestDump (now);   // our picture of the bank is out of date
                 changed();
                 return;
             }
@@ -252,17 +288,12 @@ namespace mixology
         remoteVersion = scriptVer;
         linkState = Link::connected;
 
-        slots.assign (static_cast<std::size_t> (std::clamp (count, 1, kMaxSlots)), BridgeSlot {});
+        const auto n = static_cast<std::size_t> (std::clamp (count, 1, kMaxSlots));
+        slots.assign (n, BridgeSlot {});
+        meta.assign (n, SlotMeta {});
         addLog (now, std::string (wasConnected ? "Cubase script restarted" : "Connected to Cubase")
                          + " (Mixology Bridge script v" + std::to_string (scriptVer) + ", "
                          + std::to_string (slotCount()) + " channels per bank).");
-
-        if (lockState == Lock::locked)
-        {
-            pause ("Reconnected: checking that the locked channel is still there...", now);
-            resumeIfSameAfterReconnect = true;
-        }
-        move.active = false;
         requestDump (now);
         changed();
     }
@@ -270,54 +301,29 @@ namespace mixology
     void BridgeSession::onTitle (const Message& m, double now)
     {
         auto& s = slotRef (m.slot);
-        const std::string oldTitle = s.title;
+        auto& mt = metaRef (m.slot);
+        const bool sameChannel = s.present && ! m.text.empty() && s.hash == m.hash && s.title == m.text;
+
+        if (! sameChannel)
+        {
+            if (mt.move.active)
+                addLog (now, "Stopped moving " + quoted (s.title) + ": " + slotName (m.slot) + " now shows "
+                                 + (m.text.empty() ? std::string ("nothing") : quoted (m.text)) + ".");
+            mt = SlotMeta {};
+            s = BridgeSlot {};
+        }
         s.present = ! m.text.empty();
         s.title = m.text;
         s.hash = m.hash;
         s.channelId = m.channelId;
-        if (! s.present)
-        {
-            s.hasVolume = s.hasPan = s.hasColour = false;
-            s.mute = s.solo = s.automationRead = s.automationWrite = false;
-        }
         changed();
-
-        if (m.slot != lockSlot || lockState == Lock::none) return;
-
-        const bool same = isLockedChannel (s);
-        if (lockState == Lock::locked && ! same)
-        {
-            const bool renamed = s.present && lockId != 0 && s.channelId == lockId;
-            pause (slotName (m.slot) + (renamed ? " was renamed from " : " changed from ") + quoted (lockTitle) + " to "
-                       + (s.present ? quoted (s.title) : std::string ("(empty)"))
-                       + (renamed ? " (same Cubase channel ID)." : " (bank moved, tracks reordered or renamed).")
-                       + " Nothing will be written until you lock a channel again.",
-                   now);
-            resumeIfSameAfterReconnect = false;
-        }
-        else if (lockState == Lock::paused && resumeIfSameAfterReconnect && linkState == Link::connected)
-        {
-            resumeIfSameAfterReconnect = false;
-            if (same)
-            {
-                lockState = Lock::locked;
-                pausedBecause.clear();
-                addLog (now, quoted (lockTitle) + " is still in " + slotName (m.slot) + ": writing allowed again.");
-            }
-            else
-            {
-                pausedBecause = "After reconnecting, " + slotName (m.slot) + " holds "
-                                + (s.present ? quoted (s.title) : std::string ("nothing")) + " instead of "
-                                + quoted (lockTitle) + ". Lock a channel again to continue.";
-                addLog (now, pausedBecause);
-            }
-        }
-        (void) oldTitle;
     }
 
     void BridgeSession::onVolume (const Message& m, double now)
     {
         auto& s = slotRef (m.slot);
+        auto& mt = metaRef (m.slot);
+        const bool first = ! s.hasVolume;
         s.hasVolume = true;
         s.volume = m.value;
         s.volumeText = m.text;
@@ -332,286 +338,423 @@ namespace mixology
         }
         changed();
 
-        if (m.slot != lockSlot) return;
+        if (first)
+        {
+            mt.loggedText = s.volumeText;   // where the fader started: not a move
+            return;
+        }
 
         // Our move's readback is the first report near the position we sent. Anything else while a move is
         // running (a stale report, someone grabbing the fader) is not taken as the result.
-        if (move.active && now - move.sentAt <= kReplyTimeout && std::abs (m.value - move.sentValue) <= 0.01)
+        auto& mv = mt.move;
+        if (mv.active && mv.hash == s.hash && now - mv.sentAt <= kReplyTimeout && std::abs (m.value - mv.sentValue) <= 0.01)
         {
-            if (move.byValue)
+            if (mv.kind != MoveKind::setDb)
             {
-                move.active = false;
-                moveResult = "Set " + quoted (s.title) + " to " + s.volumeText + " dB";
+                mv.active = false;
+                mt.loggedText = s.volumeText;
+                if (mv.kind == MoveKind::restore)
+                {
+                    moveResult = "Restored " + quoted (s.title) + ": Cubase shows " + s.volumeText + " dB";
+                    addLog (now, moveResult);
+                }
+                else if (mv.logResult)
+                {
+                    addLog (now, "Fader dragged in Mixology: " + quoted (s.title) + " now shows " + s.volumeText + " dB");
+                }
                 return;
             }
 
             const double got = s.volumeDb;
-            const bool wantInf = move.targetDb <= FaderLaw::kMinusInf + 1.0;
-            const bool landed = wantInf ? got <= FaderLaw::kMinusInf + 1.0
-                                        : std::abs (got - move.targetDb) <= kDbExact;
+            const bool wantInf = isMinusInf (mv.targetDb);
+            const bool landed = wantInf ? isMinusInf (got) : std::abs (got - mv.targetDb) <= kDbExact;
             if (landed)
             {
-                move.active = false;
+                mv.active = false;
+                mt.loggedText = s.volumeText;
                 moveResult = "Set " + quoted (s.title) + " to " + formatDb (got) + " (Cubase shows " + s.volumeText + ")"
-                             + (move.step > 1 ? ", " + std::to_string (move.step) + " steps" : std::string());
+                             + (mv.step > 1 ? ", " + std::to_string (mv.step) + " steps" : std::string());
                 addLog (now, moveResult);
                 return;
             }
 
-            const double next = law.toNormalised (move.targetDb);
-            const bool noProgress = std::abs (next - move.sentValue) * kValueMax < 1.0;
-            if (move.step >= kMaxRefineSteps || noProgress)
+            const double next = law.toNormalised (mv.targetDb);
+            const bool noProgress = std::abs (next - mv.sentValue) * kValueMax < 1.0;
+            if (mv.step >= kMaxRefineSteps || noProgress)
             {
-                move.active = false;
-                if (! wantInf && std::abs (got - move.targetDb) <= kDbTolerance)
+                mv.active = false;
+                mt.loggedText = s.volumeText;
+                if (! wantInf && std::abs (got - mv.targetDb) <= kDbTolerance)
                     moveResult = "Set " + quoted (s.title) + " to " + formatDb (got) + " (Cubase shows " + s.volumeText + ")";
                 else
-                    moveResult = "Closest Cubase allows: " + formatDb (got) + " (asked for " + formatDb (move.targetDb) + ")";
+                    moveResult = "Closest Cubase allows for " + quoted (s.title) + ": " + formatDb (got) + " (asked for " + formatDb (mv.targetDb) + ")";
                 addLog (now, moveResult);
                 return;
             }
-            ++move.step;
-            sendVolume (next, now);
+            ++mv.step;
+            sendVolume (m.slot, next, now);
             return;
         }
 
-        // Not our move: the user (or automation playback) moved the fader in Cubase.
-        lastUserMoveLog = now;
+        // Reports right after our own writes are their echo (drag readbacks overlap). Anything later is a move
+        // made in Cubase (mouse, controller, automation): logged once it settles, if the value really changed.
+        if (now - mt.lastOwnWrite > kEchoWindow && ! mv.active)
+            mt.cubaseMovedAt = now;
     }
 
     // ---------------------------------------------------------------------------------------------
-    // Commands
+    // Writing
 
-    void BridgeSession::pause (const std::string& why, double now)
+    void BridgeSession::cancelMoves (const std::string& why, double now)
     {
-        lockState = Lock::paused;
-        pausedBecause = why;
-        move.active = false;
-        addLog (now, "PAUSED: " + why);
-        changed();
+        bool any = false;
+        for (auto& mt : meta)
+        {
+            any = any || mt.move.active;
+            mt.move.active = false;
+        }
+        if (any && ! why.empty()) addLog (now, why);
     }
 
-    bool BridgeSession::isLockedChannel (const BridgeSlot& s) const
+    BridgeSession::Result BridgeSession::checkWritable (ChannelRef ref, Field field) const
     {
-        // Same name AND (when Cubase reports one) the same channel ID.
-        return s.present && s.hash == lockHash && s.title == lockTitle && s.channelId == lockId;
+        if (linkState != Link::connected) return { false, "Not connected to Cubase." };
+        if (ref.slot < 0 || ref.slot >= slotCount()) return { false, "No such channel." };
+        const auto& s = slots[static_cast<std::size_t> (ref.slot)];
+        if (! s.present) return { false, "That strip is empty." };
+        if (s.hash != ref.hash)
+            return { false, "That strip now shows " + quoted (s.title) + " (the bank or the track order changed). Nothing was moved." };
+        if (isProtected (s.hash)) return { false, quoted (s.title) + " is protected (padlock). Click the padlock to let Mixology move it." };
+        if (s.automationWrite) return { false, quoted (s.title) + " is writing automation (W is on). Switch W off first." };
+        if (field == Field::volume && ! s.hasVolume) return { false, "Waiting for Cubase to report " + quoted (s.title) + "'s fader." };
+        if (field == Field::pan && ! s.hasPan) return { false, quoted (s.title) + " has no pan control." };
+        return { true, {} };
     }
 
-    Message BridgeSession::writeMessage (Cmd cmd)
+    BridgeSession::Result BridgeSession::warningsFor (int slotIndex, Result ok, double now)
     {
+        const auto& s = slot (slotIndex);
+        if (ok.ok && s.automationRead && ! readWarned[s.hash])
+        {
+            readWarned[s.hash] = true;
+            ok.warning = quoted (s.title) + " has automation Read (R) on: if it has volume automation, playback will move the fader back.";
+            addLog (now, ok.warning);
+        }
+        return ok;
+    }
+
+    Message BridgeSession::writeMessage (Cmd cmd, int slotIndex)
+    {
+        const auto& s = slot (slotIndex);
         Message m;
         m.cmd = cmd;
-        m.slot = lockSlot;
+        m.slot = slotIndex;
         m.token = nextToken();
-        m.hash = lockHash;
-        m.channelId = lockId;
+        m.hash = s.hash;
+        m.channelId = s.channelId;
         return m;
     }
 
-    BridgeSession::Result BridgeSession::checkWritable() const
+    void BridgeSession::takeRestorePointIfNeeded (int slotIndex, double now)
     {
-        if (linkState != Link::connected) return { false, "Not connected to Cubase." };
-        if (lockState == Lock::none) return { false, "Lock a channel first." };
-        if (lockState == Lock::paused) return { false, "Paused: " + pausedBecause };
-        if (lockSlot < 0 || lockSlot >= slotCount()) return { false, "The locked slot is gone." };
-        const auto& s = slots[static_cast<std::size_t> (lockSlot)];
-        if (! isLockedChannel (s))
-            return { false, "The locked channel isn't in its slot any more." };
-        if (s.automationWrite) return { false, quoted (s.title) + " is writing automation (W is on). Switch W off first." };
-        if (! s.hasVolume) return { false, "Waiting for Cubase to report the fader." };
-        return { true, {} };
-    }
-
-    BridgeSession::Result BridgeSession::lockChannel (int slotIndex, double now)
-    {
-        if (linkState != Link::connected) return { false, "Not connected to Cubase." };
-        if (slotIndex < 0 || slotIndex >= slotCount()) return { false, "No such slot." };
-        const auto& s = slots[static_cast<std::size_t> (slotIndex)];
-        if (! s.present) return { false, "That slot is empty." };
-
-        if (original.valid && original.hash != s.hash)
-        {
-            addLog (now, "Restore point for " + quoted (original.title) + " dropped (a different channel is now locked).");
-            original = {};
-        }
-        lockState = Lock::locked;
-        lockSlot = slotIndex;
-        lockTitle = s.title;
-        lockHash = s.hash;
-        lockId = s.channelId;
-        pausedBecause.clear();
-        resumeIfSameAfterReconnect = false;
-        move = {};
-        addLog (now, "Locked " + quoted (s.title) + " (" + slotName (slotIndex) + (s.channelId != 0 ? ", Cubase ID " + std::to_string (s.channelId) : std::string (", no Cubase ID"))
-                         + "). Only this channel can be moved.");
-        changed();
-        return { true, {} };
-    }
-
-    void BridgeSession::unlock (double now)
-    {
-        if (lockState != Lock::none)
-            addLog (now, "Unlocked " + quoted (lockTitle) + ".");
-        lockState = Lock::none;
-        lockSlot = -1;
-        lockTitle.clear();
-        lockHash = lockId = 0;
-        pausedBecause.clear();
-        move = {};
-        changed();
-    }
-
-    void BridgeSession::takeSnapshotIfNeeded (double now)
-    {
-        if (original.valid && original.hash == lockHash) return;
-        const auto& s = slots[static_cast<std::size_t> (lockSlot)];
-        original.valid = true;
-        original.slot = lockSlot;
-        original.title = s.title;
-        original.hash = s.hash;
-        original.volume = s.volume;
-        original.volumeText = s.volumeText;
-        original.hasPan = s.hasPan;
-        original.pan = s.pan;
-        original.mute = s.mute;
-        original.solo = s.solo;
+        const auto& s = slot (slotIndex);
+        if (restore.count (s.hash)) return;
+        RestorePoint p;
+        p.title = s.title;
+        p.hash = s.hash;
+        p.ambiguous = nameIsDuplicated (slotIndex);
+        p.volume = s.volume;
+        p.volumeText = s.volumeText;
+        p.hasPan = s.hasPan;
+        p.pan = s.pan;
+        p.panText = s.panText;
+        p.mute = s.mute;
+        p.solo = s.solo;
+        restore[s.hash] = p;
         addLog (now, "Restore point saved for " + quoted (s.title) + ": " + s.volumeText + " dB"
                          + (s.hasPan ? ", pan " + s.panText : std::string())
-                         + (s.mute ? ", muted" : "") + (s.solo ? ", soloed" : "") + ".");
+                         + (s.mute ? ", muted" : "") + (s.solo ? ", soloed" : "") + "."
+                         + (p.ambiguous ? " (Another channel has the same name: Restore can't tell them apart.)" : ""));
     }
 
-    void BridgeSession::sendVolume (double value, double now)
+    void BridgeSession::sendVolume (int slotIndex, double value, double now)
     {
-        auto m = writeMessage (Cmd::setVolume);
+        auto m = writeMessage (Cmd::setVolume, slotIndex);
         m.value = std::clamp (value, 0.0, 1.0);
         send (m);
 
-        move.active = true;
-        move.sentValue = m.value;
-        move.sentAt = now;
-        move.token = m.token;
-        move.acked = false;
+        auto& mt = metaRef (slotIndex);
+        mt.lastOwnWrite = now;
+        mt.cubaseMovedAt = -1.0;
+        mt.move.active = true;
+        mt.move.hash = slot (slotIndex).hash;
+        mt.move.sentValue = m.value;
+        mt.move.sentAt = now;
+        mt.move.token = m.token;
         changed();
     }
 
-    BridgeSession::Result BridgeSession::setVolumeDb (double db, double now)
+    void BridgeSession::startMove (int slotIndex, double db, double now)
     {
-        auto ok = checkWritable();
+        auto& mv = metaRef (slotIndex).move;
+        mv = {};
+        mv.kind = MoveKind::setDb;
+        mv.targetDb = db;
+        mv.step = 1;
+        moveResult.clear();
+        sendVolume (slotIndex, law.toNormalised (db), now);
+    }
+
+    BridgeSession::Result BridgeSession::setVolumeDb (ChannelRef ref, double db, double now)
+    {
+        auto ok = checkWritable (ref, Field::volume);
         if (! ok.ok) return ok;
-        if (move.active) return { false, "A move is still in progress." };
         if (! std::isfinite (db) || db < -144.0) db = FaderLaw::kMinusInf;
         db = std::min (db, kMaxDb);
 
-        takeSnapshotIfNeeded (now);
-        move = {};
-        move.targetDb = db;
-        move.step = 1;
-        moveResult.clear();
-        addLog (now, "Moving " + quoted (lockTitle) + " to " + formatDb (db) + "...");
-        sendVolume (law.toNormalised (db), now);
-        return { true, {} };
+        takeRestorePointIfNeeded (ref.slot, now);
+        startMove (ref.slot, db, now);   // replaces a move in progress on this channel (latest wins)
+        return warningsFor (ref.slot, ok, now);
     }
 
-    BridgeSession::Result BridgeSession::nudgeDb (double deltaDb, double now)
+    BridgeSession::Result BridgeSession::nudgeDb (ChannelRef ref, double deltaDb, double now)
     {
-        auto ok = checkWritable();
+        auto ok = checkWritable (ref, Field::volume);
         if (! ok.ok) return ok;
-        const auto& s = slots[static_cast<std::size_t> (lockSlot)];
-        if (s.volumeDb <= FaderLaw::kMinusInf + 1.0) return { false, "The fader is at -inf: set a value instead." };
-        return setVolumeDb (std::round ((s.volumeDb + deltaDb) * 100.0) / 100.0, now);
+        const auto& s = slot (ref.slot);
+        const auto& mv = meta[static_cast<std::size_t> (ref.slot)].move;
+        // Several nudges in a row (mouse wheel) add up even while Cubase hasn't answered yet.
+        const double from = mv.active && mv.kind == MoveKind::setDb ? mv.targetDb : s.volumeDb;
+        if (isMinusInf (from)) return { false, quoted (s.title) + " is at -inf: type a value instead." };
+        return setVolumeDb (ref, std::round ((from + deltaDb) * 100.0) / 100.0, now);
     }
 
-    BridgeSession::Result BridgeSession::setVolumeNormalised (double position, double now)
+    BridgeSession::Result BridgeSession::setVolumeNormalised (ChannelRef ref, double position, double now)
     {
-        auto ok = checkWritable();
+        auto ok = checkWritable (ref, Field::volume);
         if (! ok.ok) return ok;
-        takeSnapshotIfNeeded (now);
-        move = {};
-        move.byValue = true;
-        move.targetDb = law.toDb (position);
-        move.step = kMaxRefineSteps;
-        sendVolume (position, now);
-        return { true, {} };
+        takeRestorePointIfNeeded (ref.slot, now);
+        auto& mv = metaRef (ref.slot).move;
+        mv = {};
+        mv.kind = MoveKind::drag;
+        mv.logResult = false;   // logged once, when the drag ends
+        mv.targetDb = law.toDb (position);
+        sendVolume (ref.slot, position, now);
+        return warningsFor (ref.slot, ok, now);
     }
 
-    void BridgeSession::noteDragFinished (double now)
+    void BridgeSession::noteDragFinished (ChannelRef ref, double now)
     {
-        if (lockSlot < 0 || lockSlot >= slotCount() || lockState != Lock::locked) return;
-        const auto& s = slots[static_cast<std::size_t> (lockSlot)];
+        if (ref.slot < 0 || ref.slot >= slotCount()) return;
+        const auto& s = slot (ref.slot);
+        if (! s.present || s.hash != ref.hash) return;
+        auto& mt = meta[static_cast<std::size_t> (ref.slot)];
+        if (mt.move.active && mt.move.kind == MoveKind::drag)
+        {
+            mt.move.logResult = true;   // logged when Cubase confirms the last position
+            return;
+        }
         addLog (now, "Fader dragged in Mixology: " + quoted (s.title) + " now shows " + s.volumeText + " dB");
+        mt.loggedText = s.volumeText;
     }
 
-    BridgeSession::Result BridgeSession::setPan (double normalised, double now)
+    BridgeSession::Result BridgeSession::setPan (ChannelRef ref, double normalised, double now)
     {
-        auto ok = checkWritable();
+        auto ok = checkWritable (ref, Field::pan);
         if (! ok.ok) return ok;
-        takeSnapshotIfNeeded (now);
-        auto m = writeMessage (Cmd::setPan);
+        takeRestorePointIfNeeded (ref.slot, now);
+        auto m = writeMessage (Cmd::setPan, ref.slot);
         m.value = std::clamp (normalised, 0.0, 1.0);
         send (m);
+        changed();
+        return warningsFor (ref.slot, ok, now);
+    }
+
+    BridgeSession::Result BridgeSession::setMute (ChannelRef ref, bool on, double now)
+    {
+        auto ok = checkWritable (ref, Field::mute);
+        if (! ok.ok) return ok;
+        takeRestorePointIfNeeded (ref.slot, now);
+        auto m = writeMessage (Cmd::setMute, ref.slot);
+        m.flag = on ? 1 : 0;
+        send (m);
+        addLog (now, std::string (on ? "Muting " : "Unmuting ") + quoted (slot (ref.slot).title) + ".");
+        return { true, {} };
+    }
+
+    BridgeSession::Result BridgeSession::setSolo (ChannelRef ref, bool on, double now)
+    {
+        auto ok = checkWritable (ref, Field::solo);
+        if (! ok.ok) return ok;
+        takeRestorePointIfNeeded (ref.slot, now);
+        auto m = writeMessage (Cmd::setSolo, ref.slot);
+        m.flag = on ? 1 : 0;
+        send (m);
+        addLog (now, std::string (on ? "Soloing " : "Unsoloing ") + quoted (slot (ref.slot).title) + ".");
+        return { true, {} };
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Protect
+
+    BridgeSession::Result BridgeSession::setProtected (ChannelRef ref, bool on, double now)
+    {
+        if (ref.slot < 0 || ref.slot >= slotCount()) return { false, "No such channel." };
+        const auto& s = slot (ref.slot);
+        if (! s.present) return { false, "That strip is empty." };
+        if (s.hash != ref.hash) return { false, "That strip now shows " + quoted (s.title) + "." };
+        if (on == isProtected (s.hash)) return { true, {} };
+
+        if (on)
+        {
+            protectedChannels[s.hash] = s.title;
+            auto& mv = metaRef (ref.slot).move;
+            mv.active = false;
+            addLog (now, "Protected " + quoted (s.title) + ": Mixology won't move it."
+                             + (nameIsDuplicated (ref.slot) ? " (Every channel with this name is protected.)" : ""));
+        }
+        else
+        {
+            protectedChannels.erase (s.hash);
+            addLog (now, quoted (s.title) + " is no longer protected.");
+        }
         changed();
         return { true, {} };
     }
 
-    BridgeSession::Result BridgeSession::setMute (bool on, double now)
+    std::vector<BridgeSession::Protected> BridgeSession::protectedList() const
     {
-        auto ok = checkWritable();
-        if (! ok.ok) return ok;
-        takeSnapshotIfNeeded (now);
-        auto m = writeMessage (Cmd::setMute);
-        m.flag = on ? 1 : 0;
-        send (m);
-        addLog (now, std::string (on ? "Muting " : "Unmuting ") + quoted (lockTitle) + ".");
-        return { true, {} };
+        std::vector<Protected> out;
+        for (const auto& [hash, title] : protectedChannels)
+            out.push_back ({ hash, title });
+        return out;
     }
 
-    BridgeSession::Result BridgeSession::setSolo (bool on, double now)
+    void BridgeSession::setProtectedList (const std::vector<Protected>& list)
     {
-        auto ok = checkWritable();
-        if (! ok.ok) return ok;
-        takeSnapshotIfNeeded (now);
-        auto m = writeMessage (Cmd::setSolo);
-        m.flag = on ? 1 : 0;
-        send (m);
-        addLog (now, std::string (on ? "Soloing " : "Unsoloing ") + quoted (lockTitle) + ".");
-        return { true, {} };
+        protectedChannels.clear();
+        for (const auto& p : list)
+            if (p.hash != 0) protectedChannels[p.hash] = p.title;
+        changed();
     }
 
-    BridgeSession::Result BridgeSession::restore (double now)
+    // ---------------------------------------------------------------------------------------------
+    // Restore
+
+    bool BridgeSession::isChanged (const RestorePoint& p, int* slotOut) const
     {
-        if (! original.valid) return { false, "Nothing to restore yet (no moves made)." };
-        auto ok = checkWritable();
+        int found = -1, count = 0;
+        for (int i = 0; i < slotCount(); ++i)
+            if (slot (i).present && slot (i).hash == p.hash) { found = i; ++count; }
+        if (slotOut != nullptr) *slotOut = count == 1 ? found : -1;
+        if (count != 1) return true;   // not in view (or not unique): assume it still differs
+
+        const auto& s = slot (found);
+        const bool volumeDiffers = std::abs (s.volume - p.volume) > 1.0e-4 && s.volumeText != p.volumeText;
+        const bool panDiffers = p.hasPan && s.hasPan && std::abs (s.pan - p.pan) > 1.0e-4;
+        return volumeDiffers || panDiffers || s.mute != p.mute || s.solo != p.solo;
+    }
+
+    int BridgeSession::changedCount() const
+    {
+        int n = 0;
+        for (const auto& [hash, p] : restore)
+            if (isChanged (p)) ++n;
+        return n;
+    }
+
+    BridgeSession::Result BridgeSession::restoreChannel (ChannelRef ref, double now)
+    {
+        auto ok = checkWritable (ref, Field::volume);
         if (! ok.ok) return ok;
-        if (original.hash != lockHash) return { false, "The restore point belongs to " + quoted (original.title) + "." };
-        if (move.active) return { false, "A move is still in progress." };
+        const auto& s = slot (ref.slot);
+        auto it = restore.find (s.hash);
+        if (it == restore.end()) return { false, "Mixology hasn't changed " + quoted (s.title) + "." };
+        const auto& p = it->second;
+        if (p.ambiguous || nameIsDuplicated (ref.slot))
+            return { false, "Two channels are called " + quoted (s.title) + ": rename one so Mixology can tell which to restore." };
 
-        const auto& s = slots[static_cast<std::size_t> (lockSlot)];
-        addLog (now, "Restoring " + quoted (original.title) + " to " + original.volumeText + " dB"
-                         + (original.hasPan ? ", pan " + s.panText + " -> original" : std::string()) + "...");
+        addLog (now, "Restoring " + quoted (p.title) + " to " + p.volumeText + " dB"
+                         + (p.hasPan ? ", pan " + p.panText : std::string())
+                         + (p.mute ? ", muted" : "") + (p.solo ? ", soloed" : "") + "...");
 
-        if (original.hasPan && std::abs (s.pan - original.pan) > 1.0e-6)
+        if (p.hasPan && s.hasPan && std::abs (s.pan - p.pan) > 1.0e-6)
         {
-            auto m = writeMessage (Cmd::setPan);
-            m.value = original.pan;
+            auto m = writeMessage (Cmd::setPan, ref.slot);
+            m.value = p.pan;
             send (m);
         }
-        for (auto [cmd, want, have] : { std::tuple { Cmd::setMute, original.mute, s.mute },
-                                        std::tuple { Cmd::setSolo, original.solo, s.solo } })
+        for (auto [cmd, want, have] : { std::tuple { Cmd::setMute, p.mute, s.mute },
+                                        std::tuple { Cmd::setSolo, p.solo, s.solo } })
         {
             if (want == have) continue;
-            auto m = writeMessage (cmd);
+            auto m = writeMessage (cmd, ref.slot);
             m.flag = want ? 1 : 0;
             send (m);
         }
 
-        move = {};
-        const auto db = FaderLaw::parseDb (original.volumeText);
-        move.targetDb = db ? *db : law.toDb (original.volume);
-        move.step = kMaxRefineSteps;   // exact position: no refinement needed
-        moveResult.clear();
-        sendVolume (original.volume, now);
+        if (std::abs (s.volume - p.volume) > 1.0e-7)
+        {
+            auto& mv = metaRef (ref.slot).move;
+            mv = {};
+            mv.kind = MoveKind::restore;   // the exact position Cubase reported before: no refinement needed
+            mv.targetDb = law.toDb (p.volume);
+            moveResult.clear();
+            sendVolume (ref.slot, p.volume, now);
+        }
+        else
+        {
+            moveResult = "Restored " + quoted (p.title) + ".";
+        }
+        changed();
         return { true, {} };
     }
+
+    BridgeSession::RestoreSummary BridgeSession::restoreAll (double now)
+    {
+        RestoreSummary sum;
+        if (linkState != Link::connected) { sum.message = "Not connected to Cubase."; return sum; }
+
+        for (const auto& [hash, p] : restore)
+        {
+            int at = -1;
+            if (! isChanged (p, &at)) continue;
+            if (at < 0)
+            {
+                bool inView = false;
+                for (int i = 0; i < slotCount(); ++i) inView = inView || (slot (i).present && slot (i).hash == hash);
+                if (inView) ++sum.skipped; else ++sum.outsideBank;
+                continue;
+            }
+            if (restoreChannel (refOf (at), now).ok) ++sum.restored;
+            else ++sum.skipped;
+        }
+
+        if (sum.restored + sum.outsideBank + sum.skipped == 0)
+            sum.message = restore.empty() ? "Mixology hasn't changed anything yet." : "Everything Mixology changed is already back how it was.";
+        else
+        {
+            sum.message = "Restored " + std::to_string (sum.restored) + " channel" + (sum.restored == 1 ? "" : "s") + ".";
+            if (sum.outsideBank > 0)
+                sum.message += " " + std::to_string (sum.outsideBank) + " more " + (sum.outsideBank == 1 ? "is" : "are")
+                               + " outside the bank: use the bank arrows, then Restore again.";
+            if (sum.skipped > 0)
+                sum.message += " " + std::to_string (sum.skipped) + " skipped (protected, writing automation, or two channels with the same name).";
+        }
+        addLog (now, sum.message);
+        changed();
+        return sum;
+    }
+
+    void BridgeSession::forgetRestorePoints (double now)
+    {
+        if (restore.empty()) return;
+        restore.clear();
+        addLog (now, "Restore points cleared: the mix as it is now is the new starting point.");
+        changed();
+    }
+
+    // ---------------------------------------------------------------------------------------------
 
     BridgeSession::Result BridgeSession::bank (BankAction action, double now)
     {

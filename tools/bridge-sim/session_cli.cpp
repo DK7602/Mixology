@@ -1,7 +1,10 @@
 // Line-based wrapper around mixology::BridgeSession for the end-to-end simulator (run.js).
 // stdin:  "in <hex>"                 a SysEx frame from the Cubase script
 //         "tick <now>"               advance the session clock
-//         "cmd <name> <arg> <now>"   a UI command (lock, setDb, nudge, pan, mute, solo, restore, bank, unlock)
+//         "cmd <name> <slot> <hash> <arg> <now>"
+//                                    a UI command on the strip showing channel <hash> in <slot>: setDb, minusInf,
+//                                    nudge, fader, faderEnd, pan, mute, solo, protect, restore; or a global one
+//                                    (slot / hash ignored): restoreAll, bank, refresh, forget
 // stdout: zero or more "out <hex>" lines (frames for the script), then "state <json>", then "end".
 
 #include "mixology/BridgeSession.h"
@@ -47,19 +50,20 @@ namespace
     {
         std::ostringstream j;
         j << "{\"link\":" << esc (toString (s.link()))
-          << ",\"lock\":" << esc (s.lock() == BridgeSession::Lock::none ? "none" : s.lock() == BridgeSession::Lock::locked ? "locked" : "paused")
-          << ",\"lockedSlot\":" << s.lockedSlot()
-          << ",\"pauseReason\":" << esc (s.pauseReason())
+          << ",\"changed\":" << s.changedCount()
           << ",\"moving\":" << (s.moveInProgress() ? "true" : "false")
           << ",\"lastMove\":" << esc (s.lastMoveResult())
           << ",\"slots\":[";
         for (int i = 0; i < s.slotCount(); ++i)
         {
             const auto& sl = s.slot (i);
-            j << (i ? "," : "") << "{\"title\":" << esc (sl.title) << ",\"volume\":" << sl.volume
+            j << (i ? "," : "") << "{\"title\":" << esc (sl.title) << ",\"hash\":" << sl.hash << ",\"volume\":" << sl.volume
               << ",\"volumeText\":" << esc (sl.volumeText) << ",\"pan\":" << sl.pan << ",\"panText\":" << esc (sl.panText)
               << ",\"mute\":" << (sl.mute ? "true" : "false") << ",\"solo\":" << (sl.solo ? "true" : "false")
-              << ",\"write\":" << (sl.automationWrite ? "true" : "false") << ",\"id\":" << sl.channelId << "}";
+              << ",\"read\":" << (sl.automationRead ? "true" : "false")
+              << ",\"write\":" << (sl.automationWrite ? "true" : "false") << ",\"id\":" << sl.channelId
+              << ",\"protected\":" << (s.isProtected (sl.hash) && sl.present ? "true" : "false")
+              << ",\"duplicate\":" << (s.nameIsDuplicated (i) ? "true" : "false") << "}";
         }
         j << "],\"log\":[";
         bool first = true;
@@ -107,21 +111,26 @@ int main()
         else if (op == "cmd")
         {
             std::string name;
+            ChannelRef ref;
             double arg = 0.0, now = 0.0;
-            in >> name >> arg >> now;
+            in >> name >> ref.slot >> ref.hash >> arg >> now;
             BridgeSession::Result r { true, {} };
-            if (name == "lock") r = session.lockChannel (static_cast<int> (arg), now);
-            else if (name == "unlock") session.unlock (now);
-            else if (name == "setDb") r = session.setVolumeDb (arg, now);
-            else if (name == "minusInf") r = session.setVolumeDb (FaderLaw::kMinusInf, now);
-            else if (name == "nudge") r = session.nudgeDb (arg, now);
-            else if (name == "pan") r = session.setPan (arg, now);
-            else if (name == "mute") r = session.setMute (arg != 0.0, now);
-            else if (name == "solo") r = session.setSolo (arg != 0.0, now);
-            else if (name == "restore") r = session.restore (now);
+            if (name == "setDb") r = session.setVolumeDb (ref, arg, now);
+            else if (name == "minusInf") r = session.setVolumeDb (ref, FaderLaw::kMinusInf, now);
+            else if (name == "nudge") r = session.nudgeDb (ref, arg, now);
+            else if (name == "fader") r = session.setVolumeNormalised (ref, arg, now);
+            else if (name == "faderEnd") session.noteDragFinished (ref, now);
+            else if (name == "pan") r = session.setPan (ref, arg, now);
+            else if (name == "mute") r = session.setMute (ref, arg != 0.0, now);
+            else if (name == "solo") r = session.setSolo (ref, arg != 0.0, now);
+            else if (name == "protect") r = session.setProtected (ref, arg != 0.0, now);
+            else if (name == "restore") r = session.restoreChannel (ref, now);
+            else if (name == "restoreAll") { auto sum = session.restoreAll (now); r = { sum.restored > 0, sum.message }; }
             else if (name == "bank") r = session.bank (static_cast<bridge::BankAction> (static_cast<int> (arg)), now);
+            else if (name == "refresh") session.requestDump (now);
+            else if (name == "forget") session.forgetRestorePoints (now);
             else r = { false, "unknown command" };
-            std::cout << "result " << (r.ok ? "ok " : "fail ") << r.message << "\n";
+            std::cout << "result " << (r.ok ? "ok " : "fail ") << r.message << (r.warning.empty() ? "" : " WARNING " + r.warning) << "\n";
             flush (session);
         }
         else if (op == "quit")

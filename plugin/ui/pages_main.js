@@ -58,7 +58,7 @@ export function buildOverview(root, app) {
   const analyze = el("button", "btn big active", root, box(0, 0, 252, 112));
   analyze.innerHTML = `ANALYZE MIX<span class="sub">Scan tracks and build a mix</span>`;
   analyze.addEventListener("click", () =>
-    app.toast("Analyze Mix arrives in Milestone 3: it listens through Mixology Link on each track. Right now Mixology hears your full mix and can move one locked Cubase fader (Tracks page)."));
+    app.toast("Analyze Mix arrives in Milestone 3: it listens through Mixology Link on each track. Right now Mixology hears your full mix, shows each track's level through Mixology Link, and can move every Cubase fader in view (Tracks page)."));
   ops.forEach((o, i) => {
     const b = el("button", "btn", root, box(0, 130 + i * 120, 252, 104));
     b.innerHTML = icon(o.icon) + `<span>${o.label}</span>`;
@@ -206,13 +206,15 @@ export function buildOverview(root, app) {
     const f = app.frame || {};
     const b = app.bridge || {};
     const st = f.shortTerm ?? -100, tp = f.truePeak ?? -100;
-    const key = [b.link, (b.slots || []).filter((s) => s.present).length, b.lock, Math.round(st), Math.round(tp)].join("|");
+    const key = [b.link, (b.slots || []).filter((s) => s.present).length, b.linksPaired, b.linksSeen, Math.round(st), Math.round(tp)].join("|");
     if (key === lastKey) return;
     lastKey = key;
     list.innerHTML = "";
     const n = (b.slots || []).filter((s) => s.present).length;
     if (b.link === "connected")
-      card("check", "#39e26b", `Cubase connected: ${n} channel${n === 1 ? "" : "s"} in view`, b.lock === "locked" ? `Test channel locked: ${b.lockedTitle}` : "Lock a test channel on the Tracks page", () => app.showPage("tracks"));
+      card("check", "#39e26b", `Cubase connected: ${n} channel${n === 1 ? "" : "s"} in view`, b.linksPaired
+        ? `${b.linksPaired} with Mixology Link · move any fader on the Tracks page`
+        : "Move any fader on the Tracks page. Add Mixology Link to tracks to see their levels", () => app.showPage("tracks"));
     else
       card("link", "#ffc04a", "Not connected to Cubase", b.portProblem ? "Ports missing: open the setup steps" : "Open Settings > Cubase Bridge for the setup", () => app.openSettings("bridge"));
     if (st > -70)
@@ -254,16 +256,18 @@ export function buildOverview(root, app) {
 }
 
 // =============================================================================================
-// TRACKS: the Cubase bank, live. Milestone 1: one locked channel can be moved from here.
+// TRACKS: the Cubase bank, live. Every strip moves its real MixConsole channel (Milestone 2).
+// Each command names the channel the strip showed (slot + name hash): if the bank moved in between,
+// Mixology refuses instead of moving another channel.
 
 const STRIPS = 12;
 
 export function buildTracks(root, app) {
   const panel = el("div", "panel", root, box(0, 0, 1412, 842));
 
-  // Top bar: link status, bank buttons, hint
+  // Top bar: link status, bank buttons, Restore, hint
   const bar = el("div", "", panel, { position: "absolute", left: "16px", right: "16px", top: "10px", height: "48px", display: "flex", alignItems: "center", gap: "12px", fontSize: "18px" });
-  const status = el("div", "", bar, { minWidth: "360px" });
+  const status = el("div", "", bar, { minWidth: "300px", whiteSpace: "nowrap" });
   const bankBtns = el("div", "", bar, { display: "flex", gap: "8px" });
   for (const [label, action, tip] of [["◀◀", 1, "Previous 12 channels"], ["◀", 3, "Shift one channel left"], ["▶", 4, "Shift one channel right"], ["▶▶", 2, "Next 12 channels"]]) {
     const b = el("button", "small-btn", bankBtns);
@@ -271,6 +275,9 @@ export function buildTracks(root, app) {
     b.title = tip;
     b.addEventListener("click", () => app.command("bank", action));
   }
+  const restoreBtn = el("button", "small-btn", bar, { whiteSpace: "nowrap" });
+  restoreBtn.title = "Put every channel Mixology changed back the way it was before Mixology's first move";
+  restoreBtn.addEventListener("click", () => app.command("restoreAll"));
   const hint = el("div", "", bar, { flex: "1", minWidth: "0", textAlign: "right", color: "var(--text-dim)", fontSize: "17px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });
 
   const W = 100, GAP = 6, X0 = 10, TOP = 66;
@@ -282,7 +289,11 @@ export function buildTracks(root, app) {
     const colourBar = el("div", "", s, { position: "absolute", left: "10px", right: "10px", top: "5px", height: "3px", borderRadius: "2px" });
     const name = el("div", "", s, { position: "absolute", left: "4px", right: "4px", top: "12px", textAlign: "center", fontSize: "20px", fontWeight: "500", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });
     const lock = el("button", "", s, { position: "absolute", right: "4px", top: "44px", width: "28px", height: "28px", border: "0", padding: "3px", borderRadius: "7px", background: "transparent", cursor: "pointer", color: "var(--text-faint)" });
-    lock.title = "Lock: let Mixology move this channel (test channel)";
+    const undo = el("button", "", s, { position: "absolute", right: "4px", top: "76px", width: "28px", height: "24px", border: "0", padding: "0", borderRadius: "7px", background: "transparent", cursor: "pointer", color: "var(--info)", fontSize: "20px", lineHeight: "24px", display: "none" });
+    undo.textContent = "↺";
+    undo.title = "Restore this channel (how it was before Mixology's first move)";
+    const badge = el("div", "", s, { position: "absolute", left: "5px", top: "46px", width: "20px", height: "20px", borderRadius: "5px", fontSize: "14px", fontWeight: "700", textAlign: "center", lineHeight: "20px", display: "none" });
+    const linkDot = el("div", "", s, { position: "absolute", left: "4px", top: "72px", width: "22px", height: "22px", display: "none" });
     const ic = el("div", "", s, { position: "absolute", left: "26px", top: "46px", width: "48px", height: "48px" });
     const sBtn = el("button", "small-btn", s, { position: "absolute", left: "8px", top: "106px", width: "40px", padding: "0", fontSize: "20px" });
     sBtn.textContent = "S";
@@ -302,29 +313,35 @@ export function buildTracks(root, app) {
     });
     el("div", "", cap, { position: "absolute", left: "4px", right: "4px", top: "16px", height: "2px", background: "#30343a" });
 
-    const val = el("div", "", s, { position: "absolute", left: "0", right: "0", top: "602px", textAlign: "center", fontSize: "26px", fontWeight: "600" });
+    const val = el("div", "", s, { position: "absolute", left: "0", right: "0", top: "602px", textAlign: "center", fontSize: "26px", fontWeight: "600", cursor: "text" });
+    val.title = "Click to type an exact level";
     const pan = new Knob(s, { x: 0, y: 640, w: 100, size: 66, min: -100, max: 100, def: 0, bipolar: true, step: 1, format: (v) => fmt.pan(v), valueGap: 2 });
 
-    const strip = { s, colourBar, name, lock, ic, sBtn, mBtn, zone, cap, val, pan, mL, mR, scale, index: i, data: null };
+    const strip = { s, colourBar, name, lock, undo, badge, linkDot, ic, sBtn, mBtn, zone, cap, val, pan, mL, mR, scale, index: i, data: null };
     strips.push(strip);
 
-    // Interaction (only the locked channel writes; everything goes through the bridge's safety checks)
-    const isLocked = () => app.bridge && app.bridge.lock === "locked" && app.bridge.lockedSlot === i;
-    const refuse = () => app.toast(app.bridge && app.bridge.lock === "paused"
-      ? "Paused: " + app.bridge.pauseReason
-      : "Click the padlock on this channel first: while we test the bridge, Mixology only moves the one channel you lock.");
-    lock.addEventListener("click", () => {
-      if (!strip.data || !strip.data.present) return;
-      if (app.bridge.lockedSlot === i && app.bridge.lock !== "none") app.command("unlock");
-      else app.command("lock", i);
-    });
-    sBtn.addEventListener("click", () => { if (!isLocked()) return refuse(); app.command("solo", !strip.data.solo); });
-    mBtn.addEventListener("click", () => { if (!isLocked()) return refuse(); app.command("mute", !strip.data.mute); });
+    // The channel this strip shows right now; commands carry it so a moved bank can't redirect them.
+    const ref = (value) => ({ slot: i, hash: strip.data ? strip.data.hash : 0, value });
+    const live = () => strip.data && strip.data.present && app.bridge && app.bridge.link === "connected";
+    const send = (name, value) => (live() ? app.command(name, ref(value)) : Promise.resolve());
+    const guarded = () => {
+      if (!live()) return false;
+      if (strip.data.protected) { app.toast(`'${strip.data.title}' is protected. Click its padlock to let Mixology move it.`); return false; }
+      if (strip.data.write) { app.toast(`'${strip.data.title}' is writing automation (W is on). Switch W off first.`); return false; }
+      return true;
+    };
 
-    let dragging = false, lastSent = 0, pending = null, startY = 0, startPos = 0;
+    lock.addEventListener("click", () => { if (live()) send("protect", !strip.data.protected); });
+    undo.addEventListener("click", () => send("restore"));
+    sBtn.addEventListener("click", () => { if (guarded()) send("solo", !strip.data.solo); });
+    mBtn.addEventListener("click", () => { if (guarded()) send("mute", !strip.data.mute); });
+
+    // Fader drag: exact positions, about 28 per second, latest wins. Cubase's readback is ignored while
+    // dragging and shortly after, so the cap never jumps back under the mouse.
+    let dragging = false, holdUntil = 0, lastSent = 0, pending = null, startY = 0, startPos = 0;
     const capTop = (pos) => (1 - pos) * (FADER_H - 34);
     cap.addEventListener("pointerdown", (e) => {
-      if (!isLocked()) return refuse();
+      if (!guarded() || !strip.data.hasVolume) return;
       dragging = true;
       startY = e.clientY;
       startPos = strip.data.volume;
@@ -337,24 +354,56 @@ export function buildTracks(root, app) {
       cap.style.top = capTop(pos) + "px";
       pending = pos;
       const now = performance.now();
-      if (now - lastSent > 35) { lastSent = now; app.command("fader", pos); pending = null; }
+      if (now - lastSent > 35) { lastSent = now; send("fader", pos); pending = null; }
     });
     const end = () => {
       if (!dragging) return;
       dragging = false;
-      if (pending !== null) app.command("fader", pending);
-      setTimeout(() => app.command("faderEnd"), 120);
+      holdUntil = performance.now() + 400;
+      if (pending !== null) send("fader", pending);
+      pending = null;
+      setTimeout(() => send("faderEnd"), 120);
     };
     cap.addEventListener("pointerup", end);
     cap.addEventListener("pointercancel", end);
-    cap.addEventListener("dblclick", () => { if (isLocked()) app.command("setDb", 0); });
-    strip.isDragging = () => dragging;
+    cap.addEventListener("dblclick", () => { if (guarded()) send("setDb", 0); });
+    zone.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      if (!guarded()) return;
+      send("nudge", (e.deltaY < 0 ? 1 : -1) * (e.shiftKey ? 0.1 : 0.5));
+    }, { passive: false });
+    strip.isDragging = () => dragging || performance.now() < holdUntil;
     strip.capTop = capTop;
 
+    // Click the level to type an exact value ("-6", "0", "-inf").
+    val.addEventListener("click", () => {
+      if (!guarded() || val.querySelector("input")) return;
+      const input = el("input", "num", val, { width: "84px", fontSize: "22px", textAlign: "center" });
+      input.value = strip.data.volumeDb === null || strip.data.volumeDb === undefined ? "" : (Math.round(strip.data.volumeDb * 10) / 10).toString();
+      input.focus();
+      input.select();
+      let done = false;
+      const finish = (apply) => {
+        if (done) return;
+        done = true;   // removing the field blurs it: don't finish twice
+        const text = input.value.trim().replace(",", ".").replace("−", "-");
+        input.remove();
+        render(app.bridge);
+        if (!apply || text === "") return;
+        if (/^-?\s*(inf|oo|∞)/i.test(text)) return send("minusInf");
+        const db = parseFloat(text);
+        if (isFinite(db)) send("setDb", db);
+      };
+      input.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") finish(true); if (e.key === "Escape") finish(false); });
+      input.addEventListener("blur", () => finish(true));
+    });
+
     pan.o.onChange = (v) => {
-      if (!isLocked()) { refuse(); pan.set(strip.data ? Math.round((strip.data.pan - 0.5) * 200) : 0); return; }
-      app.command("pan", (v + 100) / 200);
+      if (!guarded()) { pan.set(strip.data && strip.data.present ? Math.round((strip.data.pan - 0.5) * 200) : 0); return; }
+      send("pan", (v + 100) / 200);
     };
+    pan.o.onDragStart = () => { strip.panDragging = true; };
+    pan.o.onDragEnd = () => { strip.panDragging = false; strip.panHoldUntil = performance.now() + 400; };
   }
 
   // Master strip: Mixology's own input (it sits on the Stereo Out)
@@ -377,23 +426,35 @@ export function buildTracks(root, app) {
   coverBtn.textContent = "Open the Cubase Bridge setup";
   coverBtn.addEventListener("click", () => app.openSettings("bridge"));
 
+  const LINK_TIPS = {
+    matched: "Mixology Link is on this track: the meters show its level after the fader",
+    ambiguous: "Mixology Link found, but another track has the same name: rename one so Mixology can pair it",
+  };
+
   function render(b) {
     const connected = b && b.link === "connected";
     const slots = (b && b.slots) || [];
     status.innerHTML = connected
-      ? `<span class="status-dot ok"></span>Cubase connected <span class="dim">(Mixology Bridge v${b.script})</span>`
+      ? `<span class="status-dot ok"></span>Cubase connected <span class="dim">(Bridge v${b.script})</span>`
       : `<span class="status-dot ${b && b.link === "waiting" ? "warn" : "bad"}"></span>${b && b.link === "waiting" ? "Waiting for Cubase..." : b && b.link === "lost" ? "Lost contact with Cubase" : "Not connected to Cubase"}`;
     bankBtns.style.opacity = connected ? "1" : "0.4";
+    const changed = (b && b.changedCount) || 0;
+    restoreBtn.textContent = changed ? `↺ Restore (${changed})` : "↺ Restore";
+    restoreBtn.style.opacity = connected && changed ? "1" : "0.45";
+    restoreBtn.style.color = changed ? "var(--info)" : "";
     const named = slots.filter((d) => d && d.present).length;
-    hint.innerHTML = !connected ? "" : named === 0 ? `<span style="color:var(--amber)">\u25CF</span> Connected, but Cubase hasn't reported any channels yet. Settings \u203A Cubase Bridge \u203A <b>Refresh</b>, then <b>Copy log</b>.`
-      : b.lock === "locked" ? `<span style="color:var(--green)">●</span> Test channel: <b style="color:var(--text)">${b.lockedTitle}</b>. Drag its fader, pan, S / M.`
-      : b.lock === "paused" ? `<span style="color:var(--amber)">● Paused:</span> ${b.pauseReason}` : "Click a padlock to pick the test channel Mixology may move.";
+    const paired = (b && b.linksPaired) || 0;
+    hint.innerHTML = !connected ? ""
+      : named === 0 ? `<span style="color:var(--amber)">●</span> Connected, but Cubase hasn't reported any channels yet. Settings › Cubase Bridge › <b>Refresh</b>, then <b>Copy log</b>.`
+      : paired === 0 ? "Drag, scroll or click a level to move it. Meters: add Mixology Link to your tracks."
+      : `Drag, scroll or click a level to move it. <span style="color:var(--green)">${paired}</span> with Mixology Link.`;
     cover.style.display = connected ? "none" : "grid";
     coverText.innerHTML = b && b.portProblem
       ? `<b>Mixology can't reach Cubase yet.</b><br>${b.portProblem}`
       : `<b>Waiting for Cubase.</b><br>Mixology talks to the real MixConsole through a small Cubase MIDI Remote script and two virtual MIDI ports. It takes about five minutes to set up once.`;
 
     const marks = (b && b.marks) || [];
+    const light = document.documentElement.dataset.theme === "light";
     strips.forEach((st, i) => {
       const d = slots[i];
       st.data = d;
@@ -402,24 +463,58 @@ export function buildTracks(root, app) {
       const role = present ? guessRole(d.title) : "other";
       const R = ROLES[role];
       st.name.textContent = present ? d.title : "—";
-      st.name.title = present ? d.title : "";
+      st.name.title = present ? d.title + (d.duplicate ? "\nAnother channel in view has the same name." : "") : "";
+      st.name.style.color = present && d.duplicate ? "var(--amber)" : "";
       st.colourBar.style.background = present && d.colour ? d.colour : "transparent";
       if (st.role !== role) { st.ic.innerHTML = icon(R.icon); st.role = role; }
       st.ic.style.color = R.colour;
       st.ic.style.filter = `drop-shadow(0 0 6px ${R.colour})`;
-      const locked = connected && b.lockedSlot === i && b.lock !== "none";
-      st.lock.innerHTML = icon(locked ? "lock" : "unlock", 'stroke-width="2.2"');
-      st.lock.style.color = locked ? (b.lock === "locked" ? "var(--green)" : "var(--amber)") : "var(--text-faint)";
-      st.s.style.boxShadow = locked && b.lock === "locked" ? "0 0 0 2px var(--green), 0 0 16px rgba(57,226,107,0.35)" : "";
-      st.sBtn.classList.toggle("red", !!(present && d.solo));
+
+      // Padlock: closed = protected (Mixology never moves it).
+      const prot = present && d.protected;
+      st.lock.innerHTML = icon(prot ? "lock" : "unlock", 'stroke-width="2.2"');
+      st.lock.style.color = prot ? "var(--gold)" : "var(--text-faint)";
+      st.lock.title = prot ? "Protected: Mixology won't move this channel. Click to allow." : "Click to protect: Mixology will never move this channel";
+      st.s.style.boxShadow = prot ? "inset 0 0 0 1.5px rgba(227,178,96,0.55)" : "";
+      st.undo.style.display = present && d.changed && !prot ? "block" : "none";
+
+      // Automation: W blocks moves, R warns (playback may move the fader back).
+      st.badge.style.display = present && (d.write || d.read) ? "block" : "none";
+      if (present && d.write) {
+        st.badge.textContent = "W";
+        Object.assign(st.badge.style, { background: "#c80000", color: "#fff", boxShadow: "0 0 8px rgba(255,30,30,0.7)" });
+        st.badge.title = "Writing automation: Mixology won't move this channel";
+      } else if (present && d.read) {
+        st.badge.textContent = "R";
+        Object.assign(st.badge.style, { background: "#2fae4f", color: "#fff", boxShadow: "0 0 8px rgba(57,226,107,0.5)" });
+        st.badge.title = "Reading automation: if this channel has volume automation, playback moves the fader back";
+      }
+
+      const ls = present ? d.linkStatus : "none";
+      st.linkDot.style.display = ls === "matched" || ls === "ambiguous" ? "block" : "none";
+      if (st.linkKey !== ls) {
+        st.linkKey = ls;
+        st.linkDot.innerHTML = icon("link", 'stroke-width="2.4"');
+        st.linkDot.style.color = ls === "matched" ? "var(--green)" : "var(--amber)";
+        st.linkDot.title = LINK_TIPS[ls] || "";
+      }
+      if (ls !== "matched") { st.mL.set(-100); st.mR.set(-100); }
+
       st.sBtn.style.background = present && d.solo ? "linear-gradient(180deg,#ffe36b,#d8a400)" : "";
       st.sBtn.style.color = present && d.solo ? "#1a1300" : "";
       st.mBtn.classList.toggle("red", !!(present && d.mute));
+      const blocked = present && (prot || d.write);
+      for (const c of [st.sBtn, st.mBtn, st.cap]) c.style.cursor = blocked ? "not-allowed" : "";
+      st.cap.style.cursor = blocked ? "not-allowed" : "ns-resize";
+      st.cap.style.filter = blocked ? "grayscale(0.6) brightness(0.8)" : "";
       if (!st.isDragging()) st.cap.style.top = st.capTop(present && d.hasVolume ? d.volume : 0.78) + "px";
-      st.val.textContent = present && d.hasVolume ? (d.volumeText.match(/oo|inf|∞/i) ? MINUS_INF : formatFaderText(d.volumeText)) : "";
-      st.val.style.color = document.documentElement.dataset.theme === "light" ? `color-mix(in srgb, ${R.colour} 62%, #000)` : R.colour;
-      if (present && document.activeElement !== st.pan.root) st.pan.set(Math.round((d.pan - 0.5) * 200));
-      st.pan.root.style.opacity = present ? "1" : "0.5";
+      if (!st.val.querySelector("input"))
+        st.val.textContent = present && d.hasVolume ? (d.volumeText.match(/oo|inf|∞/i) ? MINUS_INF : formatFaderText(d.volumeText)) : "";
+      st.val.style.color = light ? `color-mix(in srgb, ${R.colour} 62%, #000)` : R.colour;
+      st.val.style.cursor = present && !blocked ? "text" : "default";
+      const panBusy = st.panDragging || performance.now() < (st.panHoldUntil || 0) || document.activeElement === st.pan.root;
+      if (present && !panBusy) st.pan.set(Math.round((d.pan - 0.5) * 200));
+      st.pan.root.style.opacity = present && d.hasPan !== false ? "1" : "0.5";
       if (st.marksKey !== JSON.stringify(marks)) {
         st.marksKey = JSON.stringify(marks);
         st.scale.innerHTML = "";
@@ -445,7 +540,7 @@ export function buildTracks(root, app) {
 
   return {
     onFrame(f) {
-      // Per-channel meters arrive with Mixology Link (Milestone 2/3). The preview simulates them.
+      // Per-channel meters come from Mixology Link on each track (null = no Link paired).
       if (f.trackMeters) strips.forEach((st, i) => { const m = f.trackMeters[i]; if (m) { st.mL.set(m[0]); st.mR.set(m[1]); } });
       mmL.set(f.peakL ?? -100);
       mmR.set(f.peakR ?? -100);

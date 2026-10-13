@@ -67,13 +67,21 @@ jobs:
           "WEBVIEW2_DIR=$root" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release ${{ runner.os == 'Windows' && format('-DJUCE_WEBVIEW2_PACKAGE_LOCATION={0}', env.WEBVIEW2_DIR) || '' }}
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMIX_BUILD_LINKCHECK=ON ${{ runner.os == 'Windows' && format('-DJUCE_WEBVIEW2_PACKAGE_LOCATION={0}', env.WEBVIEW2_DIR) || '' }}
 
       - name: Build
         run: cmake --build build --config Release --parallel 4
 
       - name: Unit tests
         run: ctest --test-dir build -C Release --output-on-failure
+
+      # Two real Mixology Link instances hosted like Cubase does, read from another module (like Mixology):
+      # proves the plug-ins find each other through the OS's shared memory on this platform.
+      - name: Mixology Link cross-library check
+        shell: bash
+        run: |
+          exe=$(find build/tools/linkcheck -type f \( -name MixologyLinkCheck.exe -o -name MixologyLinkCheck \) | head -1)
+          "$exe" "build/link/MixologyLink_artefacts/Release/VST3/Mixology Link.vst3"
 
       # One folder with everything to install: the plug-in, the Cubase script, the manual and the test steps.
       - name: Package
@@ -82,10 +90,12 @@ jobs:
           P="Mixology-${{ matrix.name }}"
           mkdir -p "$P/Cubase MIDI Remote"
           cp -R build/plugin/Mixology_artefacts/Release/VST3 "$P/"
+          cp -R "build/link/MixologyLink_artefacts/Release/VST3/Mixology Link.vst3" "$P/VST3/"
           cp -R build/plugin/Mixology_artefacts/Release/Standalone "$P/" || true
           cp -R build/plugin/Mixology_artefacts/Release/AU "$P/" 2>/dev/null || true
+          cp -R build/link/MixologyLink_artefacts/Release/AU/* "$P/AU/" 2>/dev/null || true
           cp -R bridge/cubase/Mixology "$P/Cubase MIDI Remote/"
-          cp docs/MANUAL.md docs/M1_TEST.md "$P/"
+          cp docs/MANUAL.md docs/M2_TEST.md "$P/"
           cp docs/INSTALL.txt "$P/INSTALL.txt"
 
       - name: Upload
@@ -100,8 +110,9 @@ jobs:
         run: |
           curl -sSL -o pluginval.zip https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_macOS.zip
           unzip -q pluginval.zip
-          pluginval.app/Contents/MacOS/pluginval --strictness-level 10 --timeout-ms 1800000 --skip-gui-tests --validate-in-process \
-            --validate "build/plugin/Mixology_artefacts/Release/VST3/Mixology.vst3"
+          for p in "build/plugin/Mixology_artefacts/Release/VST3/Mixology.vst3" "build/link/MixologyLink_artefacts/Release/VST3/Mixology Link.vst3"; do
+            pluginval.app/Contents/MacOS/pluginval --strictness-level 10 --timeout-ms 1800000 --skip-gui-tests --validate-in-process --validate "$p"
+          done
 
       # Steinberg's own VST3 validator, built from the VST3 SDK (cached by SDK commit).
       - name: Find VST3 SDK version (Windows)
@@ -139,13 +150,17 @@ jobs:
           Expand-Archive pluginval.zip -DestinationPath pluginval
           New-Item -ItemType Directory -Force pluginval-logs | Out-Null
           # pluginval.exe is a GUI-subsystem program: start it with -Wait -PassThru or a failure shows green.
-          $args = @("--strictness-level", "10", "--skip-gui-tests", "--validate-in-process", "--timeout-ms", "1800000",
-                    "--vst3validator", "`"$PWD\vst3validator\validator.exe`"", "--output-dir", "`"$PWD\pluginval-logs`"",
-                    "--validate", "`"$PWD\build\plugin\Mixology_artefacts\Release\VST3\Mixology.vst3`"")
-          $p = Start-Process -FilePath ".\pluginval\pluginval.exe" -ArgumentList $args -Wait -PassThru -NoNewWindow
-          Write-Host "pluginval exit code: $($p.ExitCode)"
+          $failed = 0
+          foreach ($plugin in @("build\plugin\Mixology_artefacts\Release\VST3\Mixology.vst3", "build\link\MixologyLink_artefacts\Release\VST3\Mixology Link.vst3")) {
+            $args = @("--strictness-level", "10", "--skip-gui-tests", "--validate-in-process", "--timeout-ms", "1800000",
+                      "--vst3validator", "`"$PWD\vst3validator\validator.exe`"", "--output-dir", "`"$PWD\pluginval-logs`"",
+                      "--validate", "`"$PWD\$plugin`"")
+            $p = Start-Process -FilePath ".\pluginval\pluginval.exe" -ArgumentList $args -Wait -PassThru -NoNewWindow
+            Write-Host "pluginval exit code for ${plugin}: $($p.ExitCode)"
+            if ($p.ExitCode -ne 0) { $failed = 1 }
+          }
           Get-ChildItem pluginval-logs -Filter *.txt | ForEach-Object { Get-Content $_.FullName | Select-String -Pattern "failed|FAILED|ERROR|Result:" }
-          exit $p.ExitCode
+          exit $failed
 
       - name: Upload validation logs
         if: always() && runner.os == 'Windows'

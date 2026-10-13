@@ -1,6 +1,6 @@
 MIXOLOGY - install (Windows, Cubase)
 
-1. Copy  VST3\Mixology.vst3  to  C:\Program Files\Common Files\VST3\
+1. Copy  VST3\Mixology.vst3  and  VST3\Mixology Link.vst3  to  C:\Program Files\Common Files\VST3\
    (Chrome may call the zip "dangerous" because it isn't code-signed yet: choose Keep.)
 2. Install loopMIDI (free, Tobias Erichsen) and add two ports named exactly:
      Mixology to Cubase
@@ -11,6 +11,8 @@ MIXOLOGY - install (Windows, Cubase)
 4. Start Cubase. Studio > Studio Setup > MIDI Port Setup: untick "In 'All MIDI Inputs'" for both
    Mixology ports. Studio > VST Plug-in Manager: rescan if Mixology doesn't show up.
 5. Insert Mixology on the Stereo Out. Settings (gear) > Cubase Bridge should turn green.
+6. Insert Mixology Link on the tracks you want to see in Mixology (after the track's other plug-ins).
 
-Then follow M1_TEST.md (the Cubase bridge test) and send back the results + the copied log.
+Already set up for Milestone 1? Only step 1 is new (the Cubase script is unchanged, still v3).
+Then follow M2_TEST.md and send back the results + the copied log.
 The full manual is MANUAL.md (also inside Mixology: the ? button).

@@ -132,6 +132,7 @@ void BridgeHub::handleIncomingMidiMessage (juce::MidiInput*, const juce::MidiMes
 void BridgeHub::timerCallback()
 {
     const double t = now();
+    applyPendingProtected();   // a project loaded its padlocks off the message thread
 
     if (toCubase == nullptr && t - lastOpenAttempt > kReopenInterval)
         openPorts();
@@ -145,6 +146,12 @@ void BridgeHub::timerCallback()
         bridge.receive (m.data(), m.size(), t);
 
     bridge.tick (t);
+
+    if (t - lastLinkUpdate >= 1.0 / 30.0)
+    {
+        lastLinkUpdate = t;
+        updateLinks();
+    }
 
     for (const auto& m : bridge.takeOutgoing())
         if (toCubase != nullptr)
@@ -168,9 +175,130 @@ juce::String BridgeHub::logText() const
     return text;
 }
 
+void BridgeHub::updateLinks()
+{
+    using namespace mixology::link;
+    auto& registry = processRegistry();
+    const auto ms = nowMs();
+    registry.mainHeartbeat (ms);
+
+    const auto links = registry.links (ms);
+    std::vector<ChannelKey> keys;
+    for (int i = 0; i < bridge.slotCount(); ++i)
+    {
+        const auto& s = bridge.slot (i);
+        keys.push_back ({ s.present, s.hash, s.hasColour, s.rgb });
+    }
+    const auto matches = matchLinks (keys, links);
+
+    std::vector<StripLink> next (keys.size());
+    std::vector<bool> told (links.size(), false);
+    for (std::size_t i = 0; i < matches.size(); ++i)
+    {
+        auto& sl = next[i];
+        sl.status = matches[i].status;
+        if (matches[i].status == MatchStatus::matched)
+        {
+            const auto& l = links[static_cast<std::size_t> (matches[i].link)];
+            sl.slot = l.slot;
+            sl.generation = l.generation;
+            sl.peakL = l.peakL;
+            sl.peakR = l.channels == 1 ? l.peakL : l.peakR;
+            sl.momentary = l.momentary;
+            sl.trimDb = l.trimDb;
+            sl.audio = l.audio;
+            registry.reportMatch (l.slot, l.generation, MatchStatus::matched, ms);
+            told[static_cast<std::size_t> (matches[i].link)] = true;
+        }
+    }
+    // Links whose name is in view more than once (or twice among the Links) hear why they aren't paired.
+    for (std::size_t i = 0; i < matches.size(); ++i)
+        if (matches[i].status == MatchStatus::ambiguous)
+            for (std::size_t l = 0; l < links.size(); ++l)
+                if (! told[l] && links[l].nameHash == keys[i].hash)
+                {
+                    registry.reportMatch (links[l].slot, links[l].generation, MatchStatus::ambiguous, ms);
+                    told[l] = true;
+                }
+
+    // Only what the strips show as text / badges bumps the state version; meters go with every frame.
+    bool structural = next.size() != stripLinks.size() || static_cast<int> (links.size()) != linksSeen;
+    for (std::size_t i = 0; ! structural && i < next.size(); ++i)
+        structural = next[i].status != stripLinks[i].status || next[i].slot != stripLinks[i].slot
+                     || std::abs (next[i].trimDb - stripLinks[i].trimDb) > 0.05f || next[i].audio != stripLinks[i].audio;
+    stripLinks = std::move (next);
+    linksSeen = static_cast<int> (links.size());
+    if (structural) ++linkVersion;
+}
+
+juce::var BridgeHub::trackMeters() const
+{
+    // The Link sits before the fader; the strip shows the level after it (Link peak + fader dB), like the
+    // MixConsole's own meters, so pulling a fader down in Mixology moves its meter too.
+    juce::Array<juce::var> out;
+    for (std::size_t i = 0; i < stripLinks.size() && static_cast<int> (i) < bridge.slotCount(); ++i)
+    {
+        const auto& sl = stripLinks[i];
+        if (sl.status != mixology::link::MatchStatus::matched) { out.add (juce::var()); continue; }
+        const auto& s = bridge.slot (static_cast<int> (i));
+        const float fader = s.hasVolume ? static_cast<float> (std::max (s.volumeDb, -200.0)) : 0.0f;
+        juce::Array<juce::var> lr;
+        lr.add (std::round (std::max (-100.0f, sl.peakL + fader) * 10.0f) / 10.0f);
+        lr.add (std::round (std::max (-100.0f, sl.peakR + fader) * 10.0f) / 10.0f);
+        out.add (lr);
+    }
+    return out;
+}
+
+juce::String BridgeHub::protectedState() const
+{
+    const juce::ScopedLock sl (protectedLock);
+    return hasPendingProtected ? protectedPending : protectedCache;
+}
+
+void BridgeHub::setProtectedState (const juce::String& text)
+{
+    {
+        const juce::ScopedLock sl (protectedLock);
+        protectedPending = text;
+        hasPendingProtected = true;
+    }
+    if (juce::MessageManager::existsAndIsCurrentThread())
+        applyPendingProtected();
+}
+
+void BridgeHub::applyPendingProtected()
+{
+    juce::String text;
+    {
+        const juce::ScopedLock sl (protectedLock);
+        if (! hasPendingProtected) return;
+        text = protectedPending;
+        hasPendingProtected = false;
+    }
+    std::vector<mixology::BridgeSession::Protected> list;
+    for (const auto& line : juce::StringArray::fromLines (text))
+    {
+        const auto hash = static_cast<std::uint32_t> (line.upToFirstOccurrenceOf ("\t", false, false).getLargeIntValue());
+        if (hash != 0)
+            list.push_back ({ hash, line.fromFirstOccurrenceOf ("\t", false, false).toStdString() });
+    }
+    bridge.setProtectedList (list);
+    cacheProtected();
+}
+
+void BridgeHub::cacheProtected()
+{
+    juce::StringArray lines;
+    for (const auto& p : bridge.protectedList())
+        lines.add (juce::String (static_cast<juce::int64> (p.hash)) + "\t" + juce::String::fromUTF8 (p.title.c_str()));
+    const juce::ScopedLock sl (protectedLock);
+    protectedCache = lines.joinIntoString ("\n");
+}
+
 juce::var BridgeHub::getState (bool includeLog)
 {
-    using Lock = mixology::BridgeSession::Lock;
+    using mixology::link::MatchStatus;
 
     auto* o = new juce::DynamicObject();
     o->setProperty ("enabled", enabled);
@@ -180,6 +308,7 @@ juce::var BridgeHub::getState (bool includeLog)
     o->setProperty ("toCubase", kToCubase);
     o->setProperty ("fromCubase", kFromCubase);
 
+    int paired = 0;
     juce::Array<juce::var> slots;
     for (int i = 0; i < bridge.slotCount(); ++i)
     {
@@ -187,10 +316,12 @@ juce::var BridgeHub::getState (bool includeLog)
         auto* so = new juce::DynamicObject();
         so->setProperty ("present", s.present);
         so->setProperty ("title", juce::String::fromUTF8 (s.title.c_str()));
+        so->setProperty ("hash", static_cast<juce::int64> (s.hash));
         so->setProperty ("hasVolume", s.hasVolume);
         so->setProperty ("volume", s.volume);
         so->setProperty ("volumeText", juce::String::fromUTF8 (s.volumeText.c_str()));
         so->setProperty ("volumeDb", s.volumeDb <= mixology::FaderLaw::kMinusInf ? juce::var() : juce::var (s.volumeDb));
+        so->setProperty ("hasPan", s.hasPan);
         so->setProperty ("pan", s.pan);
         so->setProperty ("panText", juce::String::fromUTF8 (s.panText.c_str()));
         so->setProperty ("mute", s.mute);
@@ -198,15 +329,35 @@ juce::var BridgeHub::getState (bool includeLog)
         so->setProperty ("read", s.automationRead);
         so->setProperty ("write", s.automationWrite);
         so->setProperty ("colour", s.hasColour ? juce::var (juce::String::formatted ("#%06X", s.rgb)) : juce::var());
+        so->setProperty ("protected", s.present && bridge.isProtected (s.hash));
+        so->setProperty ("duplicate", bridge.nameIsDuplicated (i));
+        so->setProperty ("moving", bridge.moveInProgress (i));
+
+        bool changed = false;
+        if (s.present)
+            if (auto it = bridge.restorePoints().find (s.hash); it != bridge.restorePoints().end())
+            {
+                int at = -1;
+                changed = bridge.isChanged (it->second, &at) && at == i;
+            }
+        so->setProperty ("changed", changed);
+
+        const auto sl = i < static_cast<int> (stripLinks.size()) ? stripLinks[static_cast<std::size_t> (i)] : StripLink {};
+        so->setProperty ("linkStatus", sl.status == MatchStatus::matched ? "matched" : sl.status == MatchStatus::ambiguous ? "ambiguous" : "none");
+        if (sl.status == MatchStatus::matched)
+        {
+            ++paired;
+            so->setProperty ("trim", std::round (sl.trimDb * 10.0f) / 10.0f);
+            so->setProperty ("linkAudio", sl.audio);
+        }
         slots.add (juce::var (so));
     }
     o->setProperty ("slots", slots);
-
-    o->setProperty ("lock", bridge.lock() == Lock::none ? "none" : bridge.lock() == Lock::locked ? "locked" : "paused");
-    o->setProperty ("lockedSlot", bridge.lockedSlot());
-    o->setProperty ("lockedTitle", juce::String::fromUTF8 (bridge.lockedTitle().c_str()));
-    o->setProperty ("pauseReason", juce::String::fromUTF8 (bridge.pauseReason().c_str()));
-    o->setProperty ("moving", bridge.moveInProgress());
+    o->setProperty ("changedCount", bridge.changedCount());
+    o->setProperty ("restorePoints", static_cast<int> (bridge.restorePoints().size()));
+    o->setProperty ("linksSeen", linksSeen);
+    o->setProperty ("linksPaired", paired);
+    o->setProperty ("linksShared", mixology::link::processRegistryShared());
     o->setProperty ("lastMove", juce::String::fromUTF8 (bridge.lastMoveResult().c_str()));
     o->setProperty ("lawPoints", static_cast<int> (bridge.faderLaw().size()));
 
@@ -220,13 +371,6 @@ juce::var BridgeHub::getState (bool includeLog)
         marks.add (juce::var (mk));
     }
     o->setProperty ("marks", marks);
-
-    const auto& snap = bridge.snapshot();
-    auto* sn = new juce::DynamicObject();
-    sn->setProperty ("valid", snap.valid);
-    sn->setProperty ("title", juce::String::fromUTF8 (snap.title.c_str()));
-    sn->setProperty ("volumeText", juce::String::fromUTF8 (snap.volumeText.c_str()));
-    o->setProperty ("snapshot", juce::var (sn));
 
     o->setProperty ("logVersion", static_cast<juce::int64> (bridge.logVersion()));
     if (includeLog)
@@ -243,33 +387,61 @@ juce::var BridgeHub::getState (bool includeLog)
 
 juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
 {
+    using Result = mixology::BridgeSession::Result;
     const double t = now();
-    mixology::BridgeSession::Result r { true, {} };
+    Result r { true, {} };
+    std::string info;   // shown to the user even when all went well
 
-    if (name == "lock")          r = bridge.lockChannel (static_cast<int> (arg), t);
-    else if (name == "unlock")   bridge.unlock (t);
-    else if (name == "setDb")    r = bridge.setVolumeDb (static_cast<double> (arg), t);
-    else if (name == "minusInf") r = bridge.setVolumeDb (mixology::FaderLaw::kMinusInf, t);
-    else if (name == "nudge")    r = bridge.nudgeDb (static_cast<double> (arg), t);
-    else if (name == "fader")    r = bridge.setVolumeNormalised (static_cast<double> (arg), t);
-    else if (name == "faderEnd") bridge.noteDragFinished (t);
-    else if (name == "pan")      r = bridge.setPan (static_cast<double> (arg), t);
-    else if (name == "mute")     r = bridge.setMute (static_cast<bool> (arg), t);
-    else if (name == "solo")     r = bridge.setSolo (static_cast<bool> (arg), t);
-    else if (name == "restore")  r = bridge.restore (t);
-    else if (name == "bank")     r = bridge.bank (static_cast<mixology::bridge::BankAction> (juce::jlimit (0, 4, static_cast<int> (arg))), t);
-    else if (name == "refresh")  bridge.requestDump (t);
+    mixology::ChannelRef ref;
+    ref.slot = static_cast<int> (arg.getProperty ("slot", -1));
+    ref.hash = static_cast<std::uint32_t> (static_cast<juce::int64> (arg.getProperty ("hash", 0)));
+    const auto value = arg.isObject() ? arg.getProperty ("value", 0) : arg;
+    const double number = value.isVoid() ? 0.0 : static_cast<double> (value);
+
+    if (name == "setDb")          r = bridge.setVolumeDb (ref, number, t);
+    else if (name == "minusInf")  r = bridge.setVolumeDb (ref, mixology::FaderLaw::kMinusInf, t);
+    else if (name == "nudge")     r = bridge.nudgeDb (ref, number, t);
+    else if (name == "fader")     r = bridge.setVolumeNormalised (ref, number, t);
+    else if (name == "faderEnd")  bridge.noteDragFinished (ref, t);
+    else if (name == "pan")       r = bridge.setPan (ref, number, t);
+    else if (name == "mute")      r = bridge.setMute (ref, static_cast<bool> (value), t);
+    else if (name == "solo")      r = bridge.setSolo (ref, static_cast<bool> (value), t);
+    else if (name == "protect")
+    {
+        r = bridge.setProtected (ref, static_cast<bool> (value), t);
+        cacheProtected();
+    }
+    else if (name == "restore")   r = bridge.restoreChannel (ref, t);
+    else if (name == "restoreAll")
+    {
+        info = bridge.restoreAll (t).message;
+    }
+    else if (name == "forget")    bridge.forgetRestorePoints (t);
+    else if (name == "trim")
+    {
+        const bool valid = ref.slot >= 0 && ref.slot < bridge.slotCount() && ref.slot < static_cast<int> (stripLinks.size())
+                           && bridge.slot (ref.slot).present && bridge.slot (ref.slot).hash == ref.hash;
+        const auto& sl = valid ? stripLinks[static_cast<std::size_t> (ref.slot)] : StripLink {};
+        if (! valid) r = { false, "That strip shows another channel now." };
+        else if (bridge.isProtected (ref.hash)) r = { false, "That channel is protected (padlock)." };
+        else if (sl.status != mixology::link::MatchStatus::matched) r = { false, "No Mixology Link is paired with this channel." };
+        else mixology::link::processRegistry().requestTrim (sl.slot, sl.generation, static_cast<float> (juce::jlimit (-24.0, 24.0, number)));
+    }
+    else if (name == "bank")      r = bridge.bank (static_cast<mixology::bridge::BankAction> (juce::jlimit (0, 4, static_cast<int> (number))), t);
+    else if (name == "refresh")   bridge.requestDump (t);
     else if (name == "reconnect")
     {
         closePorts ("Reconnect pressed");
         portProblem.clear();
         openPorts();
     }
-    else if (name == "copyLog")  juce::SystemClipboard::copyTextToClipboard (logText());
-    else                         r = { false, "Unknown command." };
+    else if (name == "copyLog")   juce::SystemClipboard::copyTextToClipboard (logText());
+    else                          r = { false, "Unknown command." };
 
     auto* o = new juce::DynamicObject();
     o->setProperty ("ok", r.ok);
     o->setProperty ("message", juce::String::fromUTF8 (r.message.c_str()));
+    o->setProperty ("warning", juce::String::fromUTF8 (r.warning.c_str()));
+    o->setProperty ("info", juce::String::fromUTF8 (info.c_str()));
     return juce::var (o);
 }

@@ -41,6 +41,7 @@ export const native = {
 // Shared context for the pages
 
 const listeners = { frame: [], bridge: [], theme: [], preset: [] };
+const lastToast = { text: "", time: 0 };
 export const app = {
   native,
   bridge: null,       // latest bridge state (see BridgeHub::getState)
@@ -53,9 +54,16 @@ export const app = {
   command: async (name, arg) => {
     const r = await native.bridgeCommand(name, arg === undefined ? 0 : arg);
     if (r && r.ok === false && r.message) app.toast(r.message);
+    else if (r && r.warning) app.toast(r.warning);
+    else if (r && r.info) app.toast(r.info);
     return r;
   },
   toast(text) {
+    // The same message again within 2 s (e.g. while dragging a protected channel's knob) is shown once.
+    const now = performance.now();
+    if (text === lastToast.text && now - lastToast.time < 2000) return;
+    lastToast.text = text;
+    lastToast.time = now;
     const t = el("div", "", stage, {
       position: "absolute", left: "50%", bottom: "28px", transform: "translateX(-50%)", zIndex: 200,
       padding: "12px 22px", borderRadius: "12px", fontSize: "19px", maxWidth: "900px", textAlign: "center",

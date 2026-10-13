@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mixology/BridgeSession.h"
+#include "mixology/LinkRegistry.h"
 
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_events/juce_events.h>
@@ -34,13 +35,23 @@ public:
 
     mixology::BridgeSession& session() { return bridge; }
 
-    /** Everything the Settings > Cubase Bridge panel shows. */
+    /** Everything the Tracks page and Settings > Cubase Bridge show. */
     juce::var getState (bool includeLog);
-    std::uint64_t stateVersion() const { return bridge.stateVersion(); }
+    std::uint64_t stateVersion() const { return bridge.stateVersion() + linkVersion; }
 
-    /** UI commands: lock(slot), unlock, setDb(db), nudge(delta), pan(0..1), mute(bool), solo(bool),
-        restore, bank(action), reconnect, copyLog. Returns { ok, message }. */
+    /** Per strip: [peak L, peak R] dBFS from its paired Mixology Link, or null. */
+    juce::var trackMeters() const;
+
+    /** UI commands. Strip commands take { slot, hash, value } (the strip as the UI showed it):
+        setDb, minusInf, nudge, fader, faderEnd, pan, mute, solo, protect, restore, trim.
+        Global ones: restoreAll, forget, bank(action), refresh, reconnect, copyLog.
+        Returns { ok, message, warning }. */
     juce::var command (const juce::String& name, const juce::var& arg);
+
+    /** Protected channels, saved with the project (Mixology's plug-in state). Safe from any thread: the host
+        may save or load state off the message thread, so both go through a small locked copy. */
+    juce::String protectedState() const;
+    void setProtectedState (const juce::String&);
 
     juce::String logText() const;
 
@@ -53,7 +64,27 @@ private:
 
     void openPorts();
     void closePorts (const juce::String& why);
+    void updateLinks();
+    void applyPendingProtected();
+    void cacheProtected();
     static double now();
+
+    juce::CriticalSection protectedLock;
+    juce::String protectedCache, protectedPending;
+    bool hasPendingProtected = false;
+
+    struct StripLink
+    {
+        mixology::link::MatchStatus status = mixology::link::MatchStatus::none;
+        int slot = -1;                 // registry slot of the paired Link
+        std::uint32_t generation = 0;
+        float peakL = -100.0f, peakR = -100.0f, momentary = -100.0f, trimDb = 0.0f;
+        bool audio = false;
+    };
+    std::vector<StripLink> stripLinks;
+    int linksSeen = 0;
+    std::uint64_t linkVersion = 0;
+    double lastLinkUpdate = 0.0;
 
     bool enabled = false;
     mixology::BridgeSession bridge;

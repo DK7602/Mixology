@@ -57,7 +57,7 @@ mockups: the beaker / atom logo, the chrome MIXOLOGY title and the seven Space s
   light / dark mode. Browser preview with simulated data (mock.js) so the look can be checked without Cubase.
 - The plug-in loads in Cubase and passes audio through untouched.
 
-### M1 - Cubase bridge proof (this build, you test it)
+### M1 - Cubase bridge proof: PASSED (2026-10-13, Cubase Artist 14.0.41, script v3)
 Goal: prove that Mixology can move ONE real MixConsole fader safely, and see you move it.
 - `Mixology Bridge` MIDI Remote script + SysEx protocol (framework-free C++ with tests).
 - In Mixology: Settings > Cubase Bridge panel: port status, channel name, live fader dB, "Lock this channel",
@@ -68,18 +68,23 @@ Goal: prove that Mixology can move ONE real MixConsole fader safely, and see you
   0.1 dB; moving the Cubase fader shows in Mixology within 0.1 s; renaming / reordering / banking never moves another
   channel; no automation gets written; playback never stutters; Restore puts the fader back.
 
-### M2 - Tracks page goes live
-- Bank of channels with real names, colours, fader, pan, mute, solo, both directions, no feedback loops.
+### M2 - Tracks page goes live (built: you test it, docs/M2_TEST.md)
+- Bank of channels with real names, colours, fader, pan, mute, solo, both directions, no feedback loops. Every write
+  names the channel the strip showed (slot + name hash) and is refused if that changed. Type a dB value, wheel nudges,
+  per-channel and "Restore all" restore points.
 - Mixology Link plug-in (first version: Trim + meters + identity). Link and bridge identities are matched by name and
-  colour; a channel without a confident match is shown but can't be written.
-- Lock / exclude channels, Stereo Out excluded from Auto Mix, warning + skip for channels whose volume automation is
-  in Read mode (playback would undo our move).
+  colour; without a confident match nothing is paired (amber chain icon). Links and Mixology are separate libraries,
+  so they meet in a named shared-memory block (one per Cubase process).
+- Protect channels (padlock, saved with the project), Stereo Out never in the bank, Write automation blocks moves,
+  Read automation warns (playback would undo our move). "Exclude from Analyze / Auto Mix" moved to M3, where it
+  first does something.
 - Test whether moves land in Cubase's MixConsole History (undo); our own Restore works either way.
 
 ### M3 - Listening (analysis)
 - Every Link publishes loudness (momentary / short-term), true peak, crest factor, a 1/3-octave spectrum, stereo width
-  and correlation into a lock-free shared registry, tagged with song position (the same proven method as
-  Voxology's Unmask link).
+  and correlation into the shared registry (M2 already carries peaks, loudness and Trim), tagged with song position
+  (the same proven method as Voxology's Unmask link).
+- Exclude channels from Analyze Mix / Auto Mix (e.g. a reference track or a printed stem).
 - Track roles guessed from name + sound (kick, snare, hats, perc, 808 / bass, keys, synth, guitar, lead vox, ad-libs,
   FX), always editable.
 - Analyze Mix listens across the song (play 20-60 s of the loudest parts, or the whole song) instead of one moment.
@@ -111,18 +116,19 @@ Goal: prove that Mixology can move ONE real MixConsole fader safely, and see you
 ## Things we test instead of assume
 | Question | Where it gets answered |
 | --- | --- |
-| Can a VST3 open the virtual MIDI ports while Cubase also uses them? | M1 (fallback: tray relay app) |
-| Exact dB <-> fader value curve in Cubase 14 | M1 (calibrated from Cubase's own display text) |
-| Do remote moves write automation when a track is in Write / Latch? | M1 / M2 |
-| Do remote moves show in MixConsole History (undo)? | M2 |
-| Does every channel type (mono, stereo, group, FX, instrument) bank and report correctly? | M2 |
-| Track name / colour from VST3 channel context in Cubase Artist 14 | M2 |
+| Can a VST3 open the virtual MIDI ports while Cubase also uses them? | M1: yes (loopMIDI) |
+| Exact dB <-> fader value curve in Cubase 14 | M1: learned from Cubase's display text, lands exactly |
+| Do remote moves write automation when a track is in Write / Latch? | M1 / M2 (Mixology refuses with W on) |
+| Do remote moves show in MixConsole History (undo)? | M2 (open) |
+| Does every channel type (mono, stereo, group, FX, instrument) bank and report correctly? | M1: yes |
+| Track name / colour from VST3 channel context in Cubase Artist 14 | M2 (open) |
+| Can two plug-in libraries share memory inside Cubase? | M2 (named shared memory; checked in CI on Windows) |
 | CPU with a Link on every track | M3 |
 
-## Your one-time setup (for M1)
+## Your one-time setup (done in M1)
 1. Install loopMIDI (free, Tobias Erichsen) and create two ports named exactly `Mixology to Cubase` and
    `Cubase to Mixology`. (Windows 11 with the new Windows MIDI Services can use its built-in loopback instead.)
 2. Copy the `Mixology` folder from `bridge/cubase` into
    `Documents\Steinberg\Cubase\MIDI Remote\Driver Scripts\Local\` and restart Cubase.
 3. In Studio Setup > MIDI Port Setup untick "In 'All MIDI Inputs'" for both Mixology ports.
-Full steps and the test checklist: docs/M1_TEST.md.
+Full steps: docs/M1_TEST.md (passed). Milestone 2 adds Mixology Link: copy `Mixology Link.vst3` next to Mixology.

@@ -2,6 +2,9 @@ add_library(mixology_dsp STATIC
     src/BridgeProtocol.cpp
     src/BridgeSession.cpp
     src/FaderLaw.cpp
+    src/LinkRegistry.cpp
+    src/SharedBlock.cpp
+    src/TrackMeter.cpp
     src/KWeighting.cpp
     src/TruePeakDetector.cpp
     src/LoudnessMeter.cpp)
@@ -13,6 +16,11 @@ if(MSVC)
     target_compile_options(mixology_dsp PRIVATE /W4 /fp:precise)
 else()
     target_compile_options(mixology_dsp PRIVATE -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wno-sign-conversion)
+endif()
+
+# POSIX shared memory (shm_open) lives in librt on older glibc.
+if(UNIX AND NOT APPLE)
+    target_link_libraries(mixology_dsp PRIVATE rt)
 endif()
 
 set_target_properties(mixology_dsp PROPERTIES POSITION_INDEPENDENT_CODE ON FOLDER "Mixology")

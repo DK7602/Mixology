@@ -1,5 +1,8 @@
 # Milestone 1 test: Mixology moves one real Cubase fader
 
+**Passed** in Cubase Artist 14.0.41 (2026-10-13). Kept for reference: from Milestone 2 there is no "test channel"
+any more (every strip moves, the padlock now protects a channel). Current test: [M2_TEST.md](M2_TEST.md).
+
 Goal: prove that Mixology can move ONE MixConsole fader you choose, exactly, see you move it, and never
 touch the wrong channel. About 20 minutes. Work in a **copy** of a project (or a new project with a few
 audio tracks), not your only copy of a song.

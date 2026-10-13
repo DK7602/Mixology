@@ -6,7 +6,8 @@ FetchContent_Declare(Catch2
 FetchContent_MakeAvailable(Catch2)
 
 add_executable(mixology_tests
-    test_bridge.cpp)
+    test_bridge.cpp
+    test_link.cpp)
 
 target_link_libraries(mixology_tests PRIVATE mixology_dsp Catch2::Catch2WithMain)
 set_target_properties(mixology_tests PROPERTIES FOLDER "Mixology")

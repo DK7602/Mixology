@@ -212,6 +212,9 @@ void MixWebEditor::timerCallback()
     if (currentPage == "stereo" || currentPage == "master")
         addStereo (*frame);
 
+    if (currentPage == "tracks")
+        frame->setProperty ("trackMeters", hub.trackMeters());   // from each track's Mixology Link
+
     if (hub.stateVersion() != sentBridgeVersion)
     {
         sentBridgeVersion = hub.stateVersion();

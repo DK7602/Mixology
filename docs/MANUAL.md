@@ -1,6 +1,6 @@
 # Mixology manual
 
-Manual for version 0.1.0 (first build: the interface, live meters, and the Cubase bridge test).
+Manual for version 0.2.0 (the interface, live meters, every Cubase fader in view, and Mixology Link).
 
 **Voxology** makes each vocal sound great. **Mixology** makes all your tracks work together.
 **Masterology** turns the finished mix into the master.
@@ -13,8 +13,8 @@ Manual for version 0.1.0 (first build: the interface, live meters, and the Cubas
 | Overview analyzer, loudness, peaks, headroom check | Live (what Mixology hears on its channel) |
 | Stereo page: vectorscope and correlation | Live |
 | Master page: loudness history, hand-off check for Masterology | Live |
-| Tracks page: your real Cubase channels (names, faders, pan, mute, solo) | Live, through the Cubase bridge |
-| Moving one Cubase fader from Mixology (test channel) | Live: this is what we're testing now |
+| Tracks page: your real Cubase channels (names, faders, pan, mute, solo), 12 at a time | Live, both ways, through the Cubase bridge |
+| Mixology Link on a track: its level on the Tracks page, a Trim | Live: this is what we're testing now |
 | EQ, Dynamics, Space, Tone controls | Preview: they move but don't process audio yet |
 | Analyze Mix, Auto Mix, Vocal Pocket, Mix Assistant suggestions | Coming (Milestones 3 and 4) |
 
@@ -24,6 +24,9 @@ Mixology passes your audio through untouched in this build.
 
 Insert **Mixology** on the **Stereo Out** (after your mix, before Masterology). It measures the whole mix
 there. The Tracks page shows your channels through the Cubase bridge.
+
+Insert **Mixology Link** on the tracks you want Mixology to hear one by one, after the track's other plug-ins.
+It is light (no latency, very little CPU) and passes the sound through, apart from its Trim.
 
 ## Light or dark
 
@@ -35,7 +38,8 @@ Mixology remembers your choice.
 - **Overview**: the mix analyzer (your whole mix, coloured by frequency), L / R peak meters and
   loudness, quick tone knobs, and the Mix Assistant (what Mixology hears right now).
 - **Tracks**: the MixConsole as Mixology sees it, 12 channels at a time. Arrows move the bank.
-  The colour bar on top of each strip is the Cubase track colour.
+  The colour bar on top of each strip is the Cubase track colour. Every strip moves its real Cubase channel
+  (see "Moving faders" below). Meters show on strips whose track has Mixology Link.
 - **EQ**: six bands. Drag a point to change frequency and gain; scroll on it to change the width (Q).
 - **Dynamics**: Compressor, Multiband, Transient, Gate / Expand, Limiter.
 - **Space**: Reverb, Delay, Chorus, Phaser, Hall, Room, Special FX, each with its own controls,
@@ -62,23 +66,48 @@ ports. Nothing is installed inside Cubase except a small script.
    `Mixology to Cubase`, output `Cubase to Mixology`.
 5. Open Mixology. **Settings (gear) > Cubase Bridge** turns green, and the Tracks page shows your channels.
 
-## Moving a fader (the test channel)
+## Moving faders
 
-While we prove the bridge, Mixology only moves **one channel you choose**:
+Every strip on the Tracks page moves its real MixConsole channel:
 
-1. On the **Tracks** page, click the **padlock** on a channel. It turns green.
-2. Drag that channel's fader, pan, **S** or **M**, or use **Settings > Cubase Bridge** to type an exact
-   value (for example `-6`) and press **Set dB**.
-3. **Restore original** puts the channel back to how it was before Mixology's first move.
+- **Drag** the fader. **Double-click** the fader cap for 0 dB.
+- **Mouse wheel** over a fader: 0.5 dB per notch (hold Shift for 0.1 dB).
+- **Click the level** under the fader and type an exact value (`-6`, `0`, `-inf`), then Enter. Mixology keeps
+  adjusting until Cubase shows exactly that number.
+- **Pan** knob, **S** (solo) and **M** (mute).
+- Moves made in Cubase show up in Mixology right away.
+
+**Padlock = protect.** Click a strip's padlock and it turns gold: Mixology will never move that channel (later
+also Auto Mix won't). It is saved with the project and follows the channel when the bank moves.
+
+**Restore.** Before Mixology changes a channel the first time, it remembers how it was. A small **↺** on a strip
+puts that channel back; **↺ Restore** on the top bar puts back every channel Mixology changed (channels outside the
+12 in view: move the bank to them and press Restore again). Settings > Cubase Bridge > **Keep the mix as it is
+now** makes the current mix the new starting point.
 
 Safety rules (always on):
 
-- Only the locked channel can move. Every move carries the channel's name and Cubase's channel ID, and the
-  Cubase script refuses it if anything else sits in that slot when it arrives.
-- If the channel moves (bank change, tracks reordered or hidden) or is renamed, Mixology **pauses** and
-  asks you to lock it again.
-- A channel with automation **Write (W)** on is never moved, so no automation gets recorded by accident.
+- Every move names the channel you were looking at. If the bank moved or tracks were reordered or renamed in
+  between, the move is refused (in Mixology, and again by the Cubase script) instead of landing on another channel.
+- A channel with automation **Write (W)** on is never moved (red **W** on the strip), so no automation gets
+  recorded by accident. With **Read (R)** on (green **R**) you get a warning: if that channel has volume
+  automation, playback moves the fader back.
 - The Stereo Out is never part of the bank.
+- Two channels with the same name: both can be moved, but Restore and Mixology Link can't tell them apart
+  (the name shows in amber). Give one a different name.
+
+## Mixology Link
+
+Mixology Link is a small plug-in for each track. Version 1:
+
+- **Shows the track's level** on its strip in Mixology's Tracks page (the meter shows the level after the fader,
+  like Cubase's own meters). Its own window shows peaks and loudness too.
+- **Knows which track it is on**: Cubase tells it the track's name and colour. Mixology pairs it with the channel
+  of the same name (green chain icon on the strip). If two tracks share a name, the colour decides; if that's the
+  same too, the chain turns amber and nothing is paired until you rename one.
+- **Trim**: a clean volume change before the fader (-24 to +24 dB). Later, Auto Mix uses it for gain staging.
+
+Milestone 3 teaches the Links to listen properly (spectrum, roles, masking) for Analyze Mix and the Mix Assistant.
 
 ## Mix styles
 
@@ -104,7 +133,11 @@ Mixology never limits the mix bus; that's Masterology's job.
 - **The script disappears after restarting Cubase**: a known Cubase issue with some script surfaces. Add it
   again with **+** in the MIDI Remote tab.
 - **Connected, but no channels on the Tracks page**: press **Refresh** in Settings > Cubase Bridge. If
-  the slots stay empty, check that the script says v2 or later, then **Copy log** and send it.
-- **Paused**: the locked channel moved or was renamed. Click its padlock again.
+  the slots stay empty, check that the script says v3 or later, then **Copy log** and send it.
+- **"That strip now shows ..."**: the bank or the track order changed between your click and the move. Nothing
+  was moved; just try again on the strip as it is now.
+- **A strip has no meter**: insert Mixology Link on that track. If the Link is there but the chain icon is amber,
+  another track has the same name: rename one.
+- **The Link window says "Track name not reported"**: tell us (Cubase normally passes the name on).
 - **Strange notes on an instrument track**: untick "In 'All MIDI Inputs'" for both Mixology ports (setup step 3).
 - **Send us the log**: Settings > Cubase Bridge > **Copy log**, then paste it into the chat.

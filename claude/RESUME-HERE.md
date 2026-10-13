@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-13, v0.1.0)
+# Mixology: resume here (updated 2026-10-13, v0.2.0)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -24,9 +24,10 @@ sends higher-resolution art, re-run it.
 
 ## Architecture (decided)
 - Mixology (main plug-in) on the Stereo Out: big UI, analysis hub, owns the Cubase bridge.
-- Mixology Link (M2+): small plug-in per track: analysis (shared in-process registry like Voxology's
-  UnmaskLink) + later that track's EQ / dynamics / tone / stereo + trim; on an FX channel: Space.
-  Track name / colour via VST3 channel context (JUCE updateTrackProperties).
+- Mixology Link (M2+): small plug-in per track: meters + Trim now, analysis in M3, later that track's EQ /
+  dynamics / tone / stereo; on an FX channel: Space. Track name / colour via VST3 channel context (JUCE
+  updateTrackProperties). It is a SEPARATE library from Mixology, so a static singleton (Voxology's UnmaskLink
+  trick) can't work: they share a named memory block (dsp SharedBlock + LinkRegistry).
 - Bridge: Cubase MIDI Remote script (bridge/cubase/Mixology/Bridge/Mixology_Bridge.js, ES5) <-> two loopMIDI
   ports ("Mixology to Cubase", "Cubase to Mixology") <-> BridgeHub in the plug-in (opens the ports itself,
   only after the editor first opens, so scans / pluginval never touch MIDI). No tray app (fallback if
@@ -34,7 +35,39 @@ sends higher-resolution art, re-run it.
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
 
-## Milestone 1 status: BUILT, NOT YET TESTED IN CUBASE
+## Milestone 2 status (v0.2.0): BUILT, WAITING FOR THE USER'S CUBASE TEST (docs/M2_TEST.md)
+- Tracks page: all 12 strips write. Every command carries ChannelRef {slot, name hash} = what the strip showed;
+  BridgeSession refuses if the slot now holds another channel, the script re-checks slot + hash on arrival.
+  No lock / pause any more. Per-slot closed-loop dB moves (latest wins), wheel nudges add up (nudge from the active
+  target), drags = exact positions, logged once when Cubase confirms the last one.
+- Padlock = PROTECT (gold): session refuses all writes to that name hash; saved in Mixology's plug-in state
+  ("protected" attribute: "hash<TAB>title" lines). R automation: allowed, warned once per channel; W: refused.
+- Restore points per channel (keyed by name hash, ambiguous if the name repeats in the bank -> restore refused).
+  restoreChannel / restoreAll (outside-bank + skipped counts), forgetRestorePoints ("Keep the mix as it is now").
+  Session lifetime only (not saved with the project yet).
+- Log: "Fader moved in Cubase" only for real Cubase-side moves (reports within 0.6 s of our own write = echo),
+  once per settled value, never for channels with R on, not for the first report after (re)connect / bank.
+- Mixology Link (link/, VST3 "Mixology Link", code Mxk1): Trim param (-24..+24, smoothed), TrackMeter (50 ms peaks,
+  momentary / short-term, no true peak = cheap), identity from updateTrackProperties (VST3 channel context), 10 Hz
+  timer: heartbeat, trim requests -> setValueNotifyingHost. Web window 600x400 (link.html/css/js; shares styles.css,
+  ui.js, fonts, logo, wordmark through its own binary data). Theme follows Mixology's settings file (read-only).
+- Shared registry: dsp LinkRegistry (layout v1, 256 slots, seqlock identity, atomics) in a SharedBlock named
+  "MixologyLink.v1.<pid>" (Windows CreateFileMapping Local\, POSIX shm_open). Each library has its own handle
+  (processRegistry()). Main: BridgeHub::updateLinks at 30 Hz: heartbeat, matchLinks (name hash; colour only to break
+  ties, both ways), reportMatch back to each Link (its window shows Paired / two tracks share the name).
+  Strip meters = Link peak + fader dB (post-fader, like Cubase's meters).
+- Checks: 37 Catch2 cases (bridge + link + TrackMeter), bridge-sim 17 scenarios / 161 checks (script v3 unchanged),
+  tools/linkcheck (MIX_BUILD_LINKCHECK=ON): hosts 2 real Link VST3s + reads them from another module: 22 checks
+  (Linux local pass; CI runs it on Windows). pluginval strictness 10 SUCCESS for Mixology Link (Linux).
+- Open questions for the user: Link shows the real track name / colour in Cubase Artist 14? Remote moves in
+  Edit > History? R automation + play after a move?
+
+## Milestone 1 status: PASSED in Cubase Artist 14.0.41 (script v3, 2026-10-13)
+User ran M1_TEST 1-22: all worked (Set dB exact, drag, pan, M/S, Cubase->Mixology, rename / reorder / bank pause,
+W refused, Restore, window reopen, Reload Scripts -> "Lost contact" then reconnected and resumed, mono / stereo /
+group / FX / instrument). Not reported: step 16 (R + playback) and 18 (History). Log noise found in the real log:
+"Fader moved in Cubase" repeated with the same value and after Mixology drags -> fixed in M2.
+M1 design notes (superseded by M2 where noted):
 - Safety: writes only to the LOCKED slot; each write carries name hash + Cubase channel-ID hash
   (getUniqueIDString, else getRuntimeID); script refuses on mismatch / empty / automation-write.
   Rename / reorder / bank / hide -> PAUSE until re-lock; reconnect resumes only if same slot+name+id.
@@ -98,6 +131,7 @@ Download: Actions -> latest green run -> artifact "Mixology-Windows" (VST3, Stan
 MANUAL.md, M1_TEST.md, INSTALL.txt).
 
 ## Next
-1. User runs docs/M1_TEST.md in Cubase Artist 14 and sends results + log. Fix what fails.
-2. M2: Tracks page fully live (all 12 strips writable with per-channel lock / exclude), Mixology Link v1
-   (trim + meters + identity pairing), automation-read warning, bank follows Cubase selection option.
+1. User runs docs/M2_TEST.md (copy both VST3s; script unchanged) and sends results + log. Fix what fails.
+2. M3: Links listen (1/3-octave spectrum, crest, width, song-position tags), roles, Analyze Mix, Mix Assistant,
+   exclude-from-analysis. Maybe: bank follows Cubase's selected track (mTrackSelection), restore points saved
+   with the project.

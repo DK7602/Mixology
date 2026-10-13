@@ -21,6 +21,7 @@
   --amber: #ffc04a;
   --blue: #2f86ff;
   --cyan: #19d3ff;
+  --info: #19d3ff;      /* cyan text; darker in light mode so it reads on white */
   --green: #39e26b;
   --magenta: #ff36e1;
   --yellow: #ffe23a;
@@ -61,6 +62,7 @@
 }
 
 :root[data-theme="light"] {
+  --info: #0a7fae;
   --bg: #cdd3dc;
   --frame-fill: radial-gradient(120% 80% at 50% 0%, #ffffff 0%, #eef1f5 55%, #e2e6ec 100%);
   --header-fill: linear-gradient(180deg, #fbfcfe 0%, #eceff4 100%);

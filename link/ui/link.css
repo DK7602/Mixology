@@ -1,0 +1,56 @@
+/* Mixology Link: a 600 x 400 canvas in the same look as Mixology (tokens and building blocks come from
+   styles.css). */
+
+#lstage { position: absolute; left: 0; top: 0; width: 600px; height: 400px; transform-origin: 0 0; }
+
+#lframe {
+  position: absolute; inset: 3px; border-radius: 16px;
+  border: 2.5px solid transparent;
+  background:
+    var(--frame-fill) padding-box,
+    linear-gradient(135deg, var(--gold-hi), var(--gold-lo) 18%, var(--gold) 36%, var(--gold-lo) 54%, var(--gold-hi) 72%, var(--gold-mid) 88%, var(--gold-hi)) border-box;
+  box-shadow: 0 0 12px rgba(255, 170, 60, 0.25), inset 0 0 20px rgba(0, 0, 0, 0.3);
+}
+
+#lstage #logoBtn {
+  position: absolute; left: 14px; top: 12px; width: 128px; height: 76px; border-radius: 12px;
+}
+#lstage #logoBtn img { width: 128px; }
+
+#lwordmark {
+  position: absolute; left: 150px; top: 8px; width: 236px; pointer-events: none;
+  filter: drop-shadow(-4px 0 6px rgba(30, 140, 255, 0.45)) drop-shadow(4px 0 6px rgba(255, 40, 40, 0.45));
+}
+:root[data-theme="light"] #lwordmark { filter: drop-shadow(0 1px 1px rgba(10, 20, 40, 0.55)) drop-shadow(-3px 0 4px rgba(30, 140, 255, 0.35)) drop-shadow(3px 0 4px rgba(255, 40, 40, 0.35)); }
+
+#lsubtitle {
+  position: absolute; left: 150px; top: 60px; width: 236px; text-align: center;
+  font-weight: 600; font-size: 14px; letter-spacing: 0.32em; white-space: nowrap;
+}
+#lsubtitle .a { color: var(--cyan); text-shadow: 0 0 8px rgba(25, 211, 255, 0.55); }
+#lsubtitle .b { color: var(--red); text-shadow: 0 0 8px rgba(255, 45, 45, 0.55); }
+:root[data-theme="light"] #lsubtitle .a { color: #0098c8; text-shadow: none; }
+:root[data-theme="light"] #lsubtitle .b { color: #e01010; text-shadow: none; }
+
+#lstatus {
+  position: absolute; left: 400px; top: 20px; width: 184px; height: 60px;
+  font-size: 14px; line-height: 1.25; color: var(--text-dim);
+  display: flex; align-items: center; gap: 8px;
+}
+#lstatus .dot { flex: none; width: 12px; height: 12px; border-radius: 50%; }
+
+#ltrack { left: 16px; top: 100px; width: 568px; height: 66px; overflow: hidden; }
+#lcolour { position: absolute; left: 0; top: 0; bottom: 0; width: 8px; }
+#lname {
+  position: absolute; left: 22px; right: 16px; top: 7px; font-size: 26px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#lsub { position: absolute; left: 22px; right: 16px; top: 40px; font-size: 14px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+#lmeters { left: 16px; top: 178px; width: 300px; height: 206px; }
+#ltrim { left: 328px; top: 178px; width: 256px; height: 206px; }
+
+.lreading { position: absolute; left: 112px; right: 12px; font-size: 14px; color: var(--text-dim); }
+.lreading b { display: block; font-size: 24px; font-weight: 600; color: var(--text); letter-spacing: 0.01em; }
+.lscale { position: absolute; font-size: 11px; color: var(--text-faint); text-align: right; width: 22px; }
+.lnote { position: absolute; left: 12px; right: 12px; bottom: 8px; font-size: 12.5px; line-height: 1.3; color: var(--text-dim); text-align: center; }

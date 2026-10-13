@@ -84,6 +84,7 @@ void MixologyAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     juce::XmlElement xml ("MixologyState");
     xml.setAttribute ("version", JucePlugin_VersionString);
     xml.setAttribute ("ui", getUiState());
+    xml.setAttribute ("protected", bridgeHub->protectedState());   // the padlocks on the Tracks page
     copyXmlToBinary (xml, destData);
 }
 
@@ -91,7 +92,10 @@ void MixologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName ("MixologyState"))
+        {
             setUiState (xml->getStringAttribute ("ui"));
+            bridgeHub->setProtectedState (xml->getStringAttribute ("protected"));
+        }
 }
 
 juce::AudioProcessorEditor* MixologyAudioProcessor::createEditor()
