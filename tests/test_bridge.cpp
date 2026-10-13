@@ -539,6 +539,8 @@ TEST_CASE ("Bridge: a plan sets levels and pans across the whole project, with i
     add ("FX", -10.0);
 
     REQUIRE (r.session.applyPlan ("Balance", steps, r.now).ok);
+    CHECK_FALSE (r.session.scanAllChannels (r.now).ok);   // no fader read while a plan runs
+    CHECK_FALSE (r.session.scanning());
     r.run (8.0);
     REQUIRE_FALSE (r.session.applying());
     CHECK (r.cubaseDb (0) == Catch::Approx (-4.0).margin (0.06));

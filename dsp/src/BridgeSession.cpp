@@ -871,6 +871,7 @@ namespace mixology
     BridgeSession::Result BridgeSession::scanAllChannels (double now)
     {
         if (linkState != Link::connected) return { false, "Not connected to Cubase." };
+        if (scan.active && scan.plan) return { false, "Mixology is still applying " + plan.what + "." };
         if (scan.active) return { true, {} };
         cancelMoves ({}, now);
         scan = {};

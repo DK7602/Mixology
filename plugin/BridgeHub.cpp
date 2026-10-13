@@ -702,7 +702,9 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
         style.bass = st.getProperty ("bass", 4.0);
         style.scoop = st.getProperty ("scoop", 1.5);
         style.air = st.getProperty ("air", 2.0);
-        if (mixology::link::processRegistry().links (mixology::link::nowMs()).empty())
+        if (bridge.applying())
+            r = { false, "Mixology is still applying " + bridge.planProgress().what + ": try again in a second." };
+        else if (mixology::link::processRegistry().links (mixology::link::nowMs()).empty())
             r = { false, "No Mixology Link found. Insert Mixology Link on your tracks (after their other plug-ins), then press Analyze Mix." };
         else
         {
