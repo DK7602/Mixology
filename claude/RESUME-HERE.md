@@ -83,6 +83,10 @@ getUniqueIDString(). Hypothesis (not proven): Cubase returns a NULL ID string fo
 next suspects: the 12-channel bank on that project's channel types, action bindings to mResetBank/mShift*.
 CONFIRMED by the user: with script v3 both crashing projects (Sample Snagger, Test) open and close fine. Never call
 getUniqueIDString / getRuntimeID during load again; if channel IDs are wanted later, test them on demand only.
+FIRST WORKING CUBASE CONNECTION (script v3, Sample Snagger project): 3 channels named, faders 0.0, pans C. Diagnostics
+"calls: titles 36/12, volume 27/3, text 27/12" = BOTH routes fire in Cubase Artist 14.0.41, so v1's empty bank was
+caused by setFollowVisibility(true) (don't use it). Titles > 63 bytes arrive truncated (hash is of the full name; the
+plug-in compares truncated title + hash consistently). Next: user runs M1_TEST steps 3+ (Set dB, drag, pan, M/S).
 Other MIDI Remote scripts on the user's machine: Arturia KeyLab Essential 61 mk3, Novation Launchkey mk4 49, Akai
 APC40 mkII / MPK249, Korg nanoKONTROL; MIDI ports appear via Windows MIDI Services ("I|Windows MIDI|Mixology to Cubase").
 

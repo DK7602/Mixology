@@ -271,7 +271,7 @@ export function buildTracks(root, app) {
     b.title = tip;
     b.addEventListener("click", () => app.command("bank", action));
   }
-  const hint = el("div", "", bar, { flex: "1", textAlign: "right", color: "var(--text-dim)", fontSize: "17px" });
+  const hint = el("div", "", bar, { flex: "1", minWidth: "0", textAlign: "right", color: "var(--text-dim)", fontSize: "17px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });
 
   const W = 100, GAP = 6, X0 = 10, TOP = 66;
   const FADER_TOP = 160, FADER_H = 430;
