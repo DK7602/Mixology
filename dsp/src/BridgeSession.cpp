@@ -129,6 +129,12 @@ namespace mixology
                 changed();
             }
 
+            if (mt.learnAt > 0.0 && now - mt.learnAt >= kLearnSettle)
+            {
+                mt.learnAt = -1.0;
+                law.learn (mt.learnValue, mt.learnDb);
+            }
+
             if (mt.cubaseMovedAt > 0.0 && now - mt.cubaseMovedAt > kUserMoveSettle)
             {
                 mt.cubaseMovedAt = -1.0;
@@ -330,7 +336,9 @@ namespace mixology
         if (auto db = FaderLaw::parseDb (m.text))
         {
             s.volumeDb = *db;
-            law.learn (m.value, *db);
+            mt.learnAt = now;   // learned in tick() if no newer report comes (the pair has settled)
+            mt.learnValue = m.value;
+            mt.learnDb = *db;
         }
         else
         {
@@ -378,7 +386,20 @@ namespace mixology
                 return;
             }
 
-            const double next = law.toNormalised (mv.targetDb);
+            // Next try: through this readback and the previous one (secant), or on the learned curve shifted by
+            // how far it was off here. Readbacks refine this move without being learned until they settle.
+            double next = law.toNormalised (mv.targetDb);
+            if (! wantInf && ! isMinusInf (got))
+            {
+                if (mv.hasPrev && std::abs (got - mv.prevDb) > 1.0e-6 && std::abs (mv.sentValue - mv.prevValue) > 1.0e-9)
+                    next = mv.sentValue + (mv.targetDb - got) * (mv.sentValue - mv.prevValue) / (got - mv.prevDb);
+                else
+                    next = law.toNormalised (mv.targetDb - (got - law.toDb (mv.sentValue)));
+                next = std::clamp (next, std::max (0.0, mv.sentValue - 0.25), std::min (1.0, mv.sentValue + 0.25));
+            }
+            mv.hasPrev = ! isMinusInf (got);
+            mv.prevValue = mv.sentValue;
+            mv.prevDb = got;
             const bool noProgress = std::abs (next - mv.sentValue) * kValueMax < 1.0;
             if (mv.step >= kMaxRefineSteps || noProgress)
             {

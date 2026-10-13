@@ -68,6 +68,13 @@ sends higher-resolution art, re-run it.
   add level / pan / width targets per style.
 - Light look uses the user's own chrome title art (plugin/ui/assets/wordmark_light.png, from their upload 2026-10-13,
   already transparent; trimmed to 1200 x 154). app.js / link.js swap the <img> src with the theme. Dark keeps wordmark.png.
+- User M2 test (2026-10-13): "everything worked" except B.3: the type-in box wrapped under the number, behind the
+  pan knob (fixed: it replaces the number in place). Their screenshot also showed the -24 / -36 / -48 scale marks
+  piled up: the FaderLaw had learned mid-move pairs (new position + old text, Cubase reports them while a fader
+  moves). Fix: BridgeSession learns a pair only after 0.25 s without a newer report on that slot (kLearnSettle);
+  setDb refinement uses its own readbacks (shifted curve, then secant) instead of learning them; saved curves
+  without "faderLawFormat" 2 are dropped once; the strip scale skips a mark closer than 18 px to the previous one.
+  Test: "a fast Cubase-side drag with lagging text doesn't bend the fader curve" (fails with the old learning).
 - CI gotcha: MSVC has no M_PI (test_link.cpp failed the first M2 run).
 
 ## Milestone 1 status: PASSED in Cubase Artist 14.0.41 (script v3, 2026-10-13)

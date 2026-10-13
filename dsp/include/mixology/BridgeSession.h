@@ -24,7 +24,9 @@
     - Before Mixology first changes a channel, its volume / pan / mute / solo are saved (Restore).
     - dB moves are closed-loop per channel: Cubase reports its own display text after each move, so a move
       is refined until Cubase shows the requested value (exactly, or within 0.05 dB when its fader steps
-      can't land on it). A new move on the same channel replaces the old one (latest wins). */
+      can't land on it). A new move on the same channel replaces the old one (latest wins).
+    - The fader curve (FaderLaw) only learns pairs that have settled: while a fader moves, Cubase may report
+      the new position with the old text, and one such pair would bend the curve (seen in Cubase Artist 14). */
 namespace mixology
 {
     struct BridgeSlot
@@ -112,6 +114,7 @@ namespace mixology
         static constexpr int kMaxRefineSteps = 6;
         static constexpr double kEchoWindow = 0.6;     // reports this soon after our own write are its echo
         static constexpr double kUserMoveSettle = 0.3; // a Cubase-side move is logged once it has settled
+        static constexpr double kLearnSettle = 0.25;   // a (position, dB) pair is learned once no newer report came
         static constexpr std::size_t kMaxLogLines = 500;
 
         explicit BridgeSession (std::uint16_t nonce = 1);
@@ -187,6 +190,8 @@ namespace mixology
             std::uint16_t token = 0;
             int step = 0;
             bool logResult = true;  // drags are logged once, when they end
+            bool hasPrev = false;   // the previous readback of this move (for the next refinement step)
+            double prevValue = 0.0, prevDb = 0.0;
         };
 
         struct SlotMeta
@@ -195,6 +200,8 @@ namespace mixology
             double lastOwnWrite = -1.0e9;   // when Mixology last wrote this slot's volume
             double cubaseMovedAt = -1.0;    // a Cubase-side move waiting to settle before it is logged
             std::string loggedText;         // the last volume text logged for this slot
+            double learnAt = -1.0;          // a reported (position, dB) pair waiting to settle before it is learned
+            double learnValue = 0.0, learnDb = 0.0;
         };
 
         enum class Field { volume, pan, mute, solo };

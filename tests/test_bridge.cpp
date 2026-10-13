@@ -221,8 +221,8 @@ TEST_CASE ("Bridge: after learning, moves land in one or two steps", "[bridge]")
 {
     Rig r;
     r.run (0.2);
-    // Teach the curve by "watching" the user sweep a fader on another channel.
-    for (int i = 1; i <= 30; ++i) { r.cubase.userMovesFader (1, i / 30.0); r.run (0.02); }
+    // Teach the curve by "watching" the user set a fader on another channel to many positions.
+    for (int i = 1; i <= 30; ++i) { r.cubase.userMovesFader (1, i / 30.0); r.run (0.3); }
 
     const int before = r.cubase.setVolumeCount;
     REQUIRE (r.session.setVolumeDb (r.ref ("Kick"), -9.0, r.now).ok);
@@ -533,3 +533,41 @@ TEST_CASE ("Bridge: log shows each move's result (manual check)", "[bridge][.pri
     r.run (0.5);
     for (auto& l : r.session.logLines()) printf ("%6.2f  %s\n", l.time, l.text.c_str());
 }
+
+TEST_CASE ("Bridge: a fast Cubase-side drag with lagging text doesn't bend the fader curve", "[bridge]")
+{
+    Rig r;
+    r.run (0.2);
+    // Settled readings first (as after a few normal moves), then fast drags whose text lags behind.
+    for (double n : { 0.9, 0.78, 0.6, 0.45, 0.3, 0.15 }) { r.cubase.userMovesFader (2, n); r.run (0.4); }
+    for (int k = 0; k < 4; ++k)
+    {
+        r.cubase.userDragsWithLaggingText (1, 0.8, 0.05, 40);
+        r.run (0.02);
+        r.cubase.userDragsWithLaggingText (1, 0.05, 0.8, 40);
+        r.run (0.02);
+    }
+    r.cubase.sendVolume (1);   // the drag ends: Cubase's final, matching report
+    r.run (0.5);
+
+    // Every learned point sits on Cubase's real curve, and the scale marks stay apart.
+    const auto& law = r.session.faderLaw();
+    for (double n : { 0.2, 0.3, 0.5, 0.7, 0.9 })   // inside the settled readings' range
+        CHECK (law.toDb (n) == Catch::Approx (FakeCubase::lawDb (n)).margin (1.5));
+    double previous = 2.0;
+    for (double db : { 6.0, 0.0, -6.0, -12.0, -24.0, -36.0, -48.0 })
+    {
+        const double pos = law.toNormalised (db);
+        CHECK (previous - pos > 0.02);   // marks never pile up
+        previous = pos;
+    }
+
+    // And exact moves still land.
+    for (double target : { -24.0, -36.0, -3.0 })
+    {
+        REQUIRE (r.session.setVolumeDb (r.ref ("Kick"), target, r.now).ok);
+        r.run (0.6);
+        CHECK (r.cubaseDb (0) == Catch::Approx (target).margin (BridgeSession::kDbTolerance + 0.005));
+    }
+}
+

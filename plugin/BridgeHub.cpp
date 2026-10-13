@@ -41,7 +41,10 @@ BridgeHub::BridgeHub()
     : bridge (static_cast<std::uint16_t> (juce::Random::getSystemRandom().nextInt (0x3FFF) + 1)),
       settingsFile (std::make_unique<juce::PropertiesFile> (settingsOptions()))
 {
-    bridge.faderLaw().deserialise (settingsFile->getValue ("faderLaw").toStdString());
+    // Curves saved before format 2 could hold pairs learned mid-move (new position, old text): start fresh.
+    if (settingsFile->getIntValue ("faderLawFormat", 1) >= 2)
+        bridge.faderLaw().deserialise (settingsFile->getValue ("faderLaw").toStdString());
+    settingsFile->setValue ("faderLawFormat", 2);
     lawPointsSaved = bridge.faderLaw().size();
 }
 

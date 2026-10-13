@@ -378,7 +378,12 @@ export function buildTracks(root, app) {
     // Click the level to type an exact value ("-6", "0", "-inf").
     val.addEventListener("click", () => {
       if (!guarded() || val.querySelector("input")) return;
-      const input = el("input", "num", val, { width: "84px", fontSize: "22px", textAlign: "center" });
+      // The box takes the number's place (same spot, on top of everything), not a new line under it.
+      val.textContent = "";
+      const input = el("input", "num", val, {
+        position: "absolute", left: "8px", top: "-4px", width: "84px", height: "38px", zIndex: "5",
+        fontSize: "22px", textAlign: "center", padding: "0 4px", boxSizing: "border-box",
+      });
       input.value = strip.data.volumeDb === null || strip.data.volumeDb === undefined ? "" : (Math.round(strip.data.volumeDb * 10) / 10).toString();
       input.focus();
       input.select();
@@ -518,9 +523,13 @@ export function buildTracks(root, app) {
       if (st.marksKey !== JSON.stringify(marks)) {
         st.marksKey = JSON.stringify(marks);
         st.scale.innerHTML = "";
+        let lastTop = -100;
         for (const m of marks) {
           if (m.db > 0) continue;
-          const lab = el("div", "", st.scale, { position: "absolute", left: "2px", top: (st.capTop(m.pos) + 8) + "px" });
+          const top = st.capTop(m.pos) + 8;
+          if (top - lastTop < 18) continue;   // too close to the mark above: never draw two on top of each other
+          lastTop = top;
+          const lab = el("div", "", st.scale, { position: "absolute", left: "2px", top: top + "px" });
           lab.textContent = m.db === 0 ? "0" : "−" + Math.abs(m.db);
         }
       }

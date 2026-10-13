@@ -158,6 +158,25 @@ struct FakeCubase
         const int slot = channel - bankOffset;
         if (slot >= 0 && slot < bankSize) sendVolume (slot);
     }
+    // What Cubase Artist 14 can do while a fader is dragged: report the new position with the previous
+    // position's text; the matching text only comes with the next report.
+    void userDragsWithLaggingText (int channel, double from, double to, int steps, std::vector<double>* times = nullptr)
+    {
+        (void) times;
+        auto& c = channels[static_cast<std::size_t> (channel)];
+        const int slot = channel - bankOffset;
+        double previous = c.volume;
+        for (int i = 0; i <= steps; ++i)
+        {
+            c.volume = from + (to - from) * i / steps;
+            if (slot < 0 || slot >= bankSize) continue;
+            mixology::bridge::Message v; v.cmd = mixology::bridge::Cmd::slotVolume; v.slot = slot;
+            v.value = c.volume; v.text = displayText (previous);
+            out (v);
+            previous = c.volume;
+        }
+    }
+
     void rename (int channel, const std::string& name)
     {
         channels[static_cast<std::size_t> (channel)].name = name;
