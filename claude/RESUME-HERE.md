@@ -41,7 +41,7 @@ sends higher-resolution art, re-run it.
   Restore point taken before the first write. dB moves closed-loop on Cubase's display text (exact 2-decimal
   match, else within 0.05 dB, max 6 steps); FaderLaw learns (position, dB) pairs, saved in
   %APPDATA%/Mixology/Mixology.settings. Drags send exact positions (latest wins), logged once at the end.
-- Script: 12-slot mixer bank zone, excludes inputs/outputs (Stereo Out never in bank), followVisibility.
+- Script: 12-slot mixer bank zone, excludes inputs/outputs (Stereo Out never in bank); v2 dropped followVisibility.
   Values + display text are flushed together in mOnIdle (API 1.1+) so pairs always match; also flushed after
   each incoming message. Titles deduplicated (Cubase repeats them).
 - UNVERIFIED in real Cubase (M1_TEST.md asks): mute/solo via default value binding; bank via
@@ -61,6 +61,15 @@ sends higher-resolution art, re-run it.
 - Analyzer spectrum: Masterology's 4.5 dB/oct tilt; a balanced mix reads about -40 -> displayed with +40 offset.
 - Browser preview: see README (mock.js simulates audio + a 14-channel Cubase project).
 - Screenshots: Playwright with /opt/pw-browsers/chromium_headless_shell-*/chrome-linux/headless_shell.
+
+## First Cubase test (2026-10-13, user, Cubase Artist 14, script v1)
+loopMIDI + script + plug-in connected fine ("Connected to Cubase (script v1)", pings OK) but ALL 12 slots empty:
+Cubase never delivered channel titles to channel.mOnTitleChange (the dump logged no slots). Script v2: no
+setFollowVisibility (Steinberg's examples never call it), titles / values / text read from BOTH the channel host
+values and the bound custom value variables (surface side = the route Steinberg's examples use), every callback
+guarded, and each dump logs a diagnostics block ("calls: titles a/b ..." = channel route / control route,
+idle count, mapping, errors). Log text is split into <= 56-char pieces (protocol text limit 63 bytes).
+Simulator models routes 'channel' / 'control' / 'both' (tools/bridge-sim). Waiting for the v2 log.
 
 ## CI
 Every push: engine + bridge simulator under ASan/UBSan (Linux), Windows build + tests + package + pluginval 10 +

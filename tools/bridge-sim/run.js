@@ -47,8 +47,14 @@ function makeCubase(names) {
     mapping: { name: 'activeMapping' },
   };
 
-  sim.visible = () => sim.channels.filter((c) => c.visible);
+  // routes: which callbacks Cubase fires. 'channel' = only the channel / host values, 'control' = only
+  // the bound controls (custom value variables), 'both'. Real Cubase Artist 14 is still being pinned down.
+  sim.routes = 'both';
+  sim.followVisibility = false;
+  sim.visible = () => sim.channels.filter((c) => c.visible || !sim.followVisibility);
   sim.channelAt = (slot) => sim.visible()[sim.bankOffset + slot] || null;
+  const viaChannel = () => sim.routes !== 'control';
+  const viaControl = () => sim.routes !== 'channel';
 
   function fireSlot(k) {
     const bc = sim.bankChannels[k];
@@ -56,28 +62,41 @@ function makeCubase(names) {
     const ch = sim.channelAt(k);
     const values = () => { if (ch) for (const key of Object.keys(bc.mValue)) bc.mValue[key]._fire(); };
     if (sim.reversedOrder) values();   // Cubase's callback order isn't documented: test both
-    if (bc.mOnTitleChange) bc.mOnTitleChange(sim.device, sim.mapping, ch ? ch.name : '');
+    if (viaChannel() && bc.mOnTitleChange) bc.mOnTitleChange(sim.device, sim.mapping, ch ? ch.name : '');
+    if (viaControl())
+      for (const key of Object.keys(bc.mValue))
+        for (const cv of bc.mValue[key]._bound) if (cv.mOnTitleChange) cv.mOnTitleChange(sim.device, ch ? ch.name : '', key.slice(1));
     if (!ch) return;
-    if (bc.mOnColorChange) bc.mOnColorChange(sim.device, sim.mapping, ch.rgb[0], ch.rgb[1], ch.rgb[2], 1, true);
+    if (viaChannel() && bc.mOnColorChange) bc.mOnColorChange(sim.device, sim.mapping, ch.rgb[0], ch.rgb[1], ch.rgb[2], 1, true);
+    if (viaControl())
+      for (const cv of bc.mValue.mVolume._bound) if (cv.mOnColorChange) cv.mOnColorChange(sim.device, ch.rgb[0], ch.rgb[1], ch.rgb[2], 1, true);
     if (!sim.reversedOrder) values();
   }
   sim.fireAll = () => sim.bankChannels.forEach((_, k) => fireSlot(k));
   sim.fireChannel = (ch) => {
-    const slot = sim.visible().indexOf(ch) - sim.bankOffset;
+    const slot = sim.visible().indexOf(ch) - sim.bankOffset;   // (respects followVisibility)
     if (slot >= 0 && slot < sim.bankChannels.length) fireSlot(slot);
   };
 
   function hostValue(slot, prop) {
     const hv = {
-      mOnProcessValueChange: null, mOnDisplayValueChange: null,
+      mOnProcessValueChange: null, mOnDisplayValueChange: null, _bound: [],
       _fire() {
         const ch = sim.channelAt(slot);
         if (!ch) return;
         const v = ch[prop];
         const text = prop === 'volume' ? volumeText(v) : prop === 'pan' ? panText(v) : v ? 'On' : 'Off';
-        const display = () => { if (hv.mOnDisplayValueChange) hv.mOnDisplayValueChange(sim.device, sim.mapping, text, prop === 'volume' ? 'dB' : ''); };
+        const units = prop === 'volume' ? 'dB' : '';
+        const display = () => {
+          if (viaChannel() && hv.mOnDisplayValueChange) hv.mOnDisplayValueChange(sim.device, sim.mapping, text, units);
+          if (viaControl()) for (const cv of hv._bound) if (cv.mOnDisplayValueChange) cv.mOnDisplayValueChange(sim.device, text, units);
+        };
+        const value = () => {
+          if (viaChannel() && hv.mOnProcessValueChange) hv.mOnProcessValueChange(sim.device, sim.mapping, v);
+          if (viaControl()) for (const cv of hv._bound) if (cv.mOnProcessValueChange) cv.mOnProcessValueChange(sim.device, v, 0);
+        };
         if (sim.reversedOrder) display();
-        if (hv.mOnProcessValueChange) hv.mOnProcessValueChange(sim.device, sim.mapping, v);
+        value();
         if (!sim.reversedOrder) display();
       },
       _set(v) {
@@ -94,7 +113,7 @@ function makeCubase(names) {
   function action(fn) { return { _trigger: () => { fn(); sim.fireAll(); } }; }
   const zone = {
     excludeInputChannels() { return zone; }, excludeOutputChannels() { return zone; },
-    setFollowVisibility() { return zone; },
+    setFollowVisibility(v) { sim.followVisibility = !!v; return zone; },
     mAction: {
       mResetBank: action(() => { sim.bankOffset = 0; }),
       mPrevBank: action(() => { sim.bankOffset = Math.max(0, sim.bankOffset - sim.bankChannels.length); }),
@@ -123,6 +142,7 @@ function makeCubase(names) {
     mHostAccess: { mMixConsole: { makeMixerBankZone() { return zone; } } },
     makeValueBinding(cv, hv) {
       cv._binding = { apply: (v) => hv._set(v) };
+      hv._bound.push(cv);
       return { setValueTakeOverModeJump() { return this; } };
     },
     makeActionBinding(cv, act) {
@@ -188,7 +208,7 @@ class Rig {
     this.now = 0;
     this.state = null;
     this.toScript = [];
-    this.cubase.activate();
+    this.activated = false;   // Cubase starts the script on the first step, so a scenario can set modes first
   }
   parse(lines) {
     let result = null;
@@ -200,6 +220,7 @@ class Rig {
     return result;
   }
   async step() {
+    if (!this.activated) { this.activated = true; this.cubase.activate(); }
     this.cubase.idle();
     for (const f of this.cubase.sent.splice(0)) this.session.push('in ' + hex(f) + ' ' + this.now.toFixed(3));
     this.parse(await this.session.request('tick ' + this.now.toFixed(3)));
@@ -293,17 +314,18 @@ const scenarios = {
     check(r.state.lock === 'paused', 'paused');
   },
 
-  async 'renamed, hidden and reordered channels pause writing'(r) {
+  async 'reordered and renamed channels pause writing'(r) {
     await r.run(0.3);
     await r.cmd('lock', 2);   // Hats
-    r.cubase.channels[0].visible = false;   // hide Kick: every slot shifts
+    r.cubase.channels.push(r.cubase.channels.shift());   // Kick dragged to the end: every slot shifts
     r.cubase.fireAll();
     await r.run(0.2);
-    check(r.state.lock === 'paused', 'hiding a channel pauses');
+    check(r.state.lock === 'paused', 'reordering pauses');
     const hats = r.slotOf('Hats');
     check((await r.cmd('lock', hats)).ok, 're-lock Hats at its new slot ' + (hats + 1));
-    r.cubase.channels[2].name = 'Hats Open';
-    r.cubase.fireChannel(r.cubase.channels[2]);
+    const hatsCh = r.cubase.channels.find((c) => c.name === 'Hats');
+    hatsCh.name = 'Hats Open';
+    r.cubase.fireChannel(hatsCh);
     await r.run(0.2);
     check(r.state.lock === 'paused' && r.state.pauseReason.includes('renamed'), 'rename pauses: ' + r.state.pauseReason);
   },
@@ -361,7 +383,6 @@ const scenarios = {
 
   async 'callback order reversed (display text before value, values before title)'(r) {
     r.cubase.reversedOrder = true;
-    r.cubase.activate();
     await r.run(0.3);
     check(r.state.slots[2].title === 'Hats' && r.state.slots[2].volumeText === volumeText(0.7766), 'mirrored');
     await r.cmd('lock', 2);
@@ -373,6 +394,36 @@ const scenarios = {
     await r.cmd('bank', 4);
     await r.run(0.3);
     check(r.state.lock === 'paused', 'bank change still pauses');
+  },
+
+  async 'Cubase reports only through the bound controls (no channel callbacks)'(r) {
+    r.cubase.routes = 'control';
+    await r.run(0.3);
+    check(r.state.slots[0].title === 'Kick' && r.state.slots[0].volumeText === volumeText(0.7766), 'names and values arrive: ' + r.state.slots[0].title);
+    check(r.state.slots[0].id !== 0, 'channel id from the cached mapping');
+    await r.cmd('lock', 0);
+    await r.cmd('setDb', -6);
+    await r.run(0.4);
+    check(near(r.cubase.db(r.cubase.channels[0]), -6, 0.006), 'moves land');
+    r.cubase.channels[0].name = 'Kick 2';
+    r.cubase.fireChannel(r.cubase.channels[0]);
+    await r.run(0.2);
+    check(r.state.lock === 'paused', 'rename still pauses');
+    await r.cmd('refresh');
+    await r.run(0.2);
+    check(r.state.log.some((l) => l.includes('script v2: 12 named')), 'diagnostics: named channel count');
+    check(r.state.log.some((l) => l.includes('calls: titles 0/')), 'diagnostics: which route fired: ' + r.state.log.filter((l) => l.includes('calls:')).pop());
+    check(r.state.log.some((l) => l.includes('mapping ok, errors 0')), 'diagnostics: no script errors');
+  },
+
+  async 'Cubase reports only through the channel callbacks'(r) {
+    r.cubase.routes = 'channel';
+    await r.run(0.3);
+    check(r.state.slots[3].title === 'Perc' && r.state.slots[3].panText === 'C', 'names and values arrive');
+    await r.cmd('lock', 3);
+    await r.cmd('setDb', 2);
+    await r.run(0.4);
+    check(near(r.cubase.db(r.cubase.channels[3]), 2, 0.006), 'moves land');
   },
 
   async 'script restart mid-session resumes the same channel'(r) {

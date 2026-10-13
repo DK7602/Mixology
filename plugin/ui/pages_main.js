@@ -384,7 +384,9 @@ export function buildTracks(root, app) {
       ? `<span class="status-dot ok"></span>Cubase connected <span class="dim">(Mixology Bridge v${b.script})</span>`
       : `<span class="status-dot ${b && b.link === "waiting" ? "warn" : "bad"}"></span>${b && b.link === "waiting" ? "Waiting for Cubase..." : b && b.link === "lost" ? "Lost contact with Cubase" : "Not connected to Cubase"}`;
     bankBtns.style.opacity = connected ? "1" : "0.4";
-    hint.innerHTML = !connected ? "" : b.lock === "locked" ? `<span style="color:var(--green)">●</span> Test channel: <b style="color:var(--text)">${b.lockedTitle}</b>. Drag its fader, pan, S / M.`
+    const named = slots.filter((d) => d && d.present).length;
+    hint.innerHTML = !connected ? "" : named === 0 ? `<span style="color:var(--amber)">\u25CF</span> Connected, but Cubase hasn't reported any channels yet. Settings \u203A Cubase Bridge \u203A <b>Refresh</b>, then <b>Copy log</b>.`
+      : b.lock === "locked" ? `<span style="color:var(--green)">●</span> Test channel: <b style="color:var(--text)">${b.lockedTitle}</b>. Drag its fader, pan, S / M.`
       : b.lock === "paused" ? `<span style="color:var(--amber)">● Paused:</span> ${b.pauseReason}` : "Click a padlock to pick the test channel Mixology may move.";
     cover.style.display = connected ? "none" : "grid";
     coverText.innerHTML = b && b.portProblem

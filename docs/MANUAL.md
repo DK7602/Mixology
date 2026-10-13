@@ -103,6 +103,8 @@ Mixology never limits the mix bus; that's Masterology's job.
   Manager.
 - **The script disappears after restarting Cubase**: a known Cubase issue with some script surfaces. Add it
   again with **+** in the MIDI Remote tab.
+- **Connected, but no channels on the Tracks page**: press **Refresh** in Settings > Cubase Bridge. If
+  the slots stay empty, check that the script says v2 or later, then **Copy log** and send it.
 - **Paused**: the locked channel moved or was renamed. Click its padlock again.
 - **Strange notes on an instrument track**: untick "In 'All MIDI Inputs'" for both Mixology ports (setup step 3).
 - **Send us the log**: Settings > Cubase Bridge > **Copy log**, then paste it into the chat.

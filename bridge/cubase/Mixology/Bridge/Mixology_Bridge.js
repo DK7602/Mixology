@@ -12,7 +12,7 @@
 // Messages are SysEx frames  F0 7D 4D 58 <protocol> <command> <payload> F7 .
 // The layout MUST match dsp/include/mixology/BridgeProtocol.h in the Mixology source.
 
-var SCRIPT_VERSION = 1;
+var SCRIPT_VERSION = 2;
 var PROTOCOL_VERSION = 1;
 var BANK_SIZE = 12;                              // matches the 12 strips on Mixology's Tracks page
 var PORT_FROM_MIXOLOGY = 'Mixology to Cubase';   // Cubase receives on this port
@@ -175,20 +175,40 @@ driver.makeDetectionUnit().detectPortPair(fromMixology, toMixology)
 var surface = driver.mSurface;
 var page = driver.mMapping.makePage('Mixology');
 
-// One bank of channels as you see them in the MixConsole (hidden channels skipped).
+// One bank of MixConsole channels, set up exactly like Steinberg's own example scripts.
 // Inputs and outputs (including Stereo Out) are excluded: Mixology never touches the main bus here.
+// v1 also called setFollowVisibility(true) (Steinberg's examples don't); with it, Cubase Artist 14 reported no channels.
 var zone = page.mHostAccess.mMixConsole.makeMixerBankZone('Mixology Bank')
     .excludeInputChannels()
-    .excludeOutputChannels()
-    .setFollowVisibility(true);
+    .excludeOutputChannels();
+
+// What Cubase has reported so far: sent with every dump so a test log shows which callbacks work.
+var diag = { chTitle: 0, svTitle: 0, hostVol: 0, svVol: 0, hostText: 0, svText: 0, idle: 0, errors: 0, lastError: '' };
+var cachedMapping = null;
+
+// Every callback runs through guard(): an error is counted and reported instead of silently
+// stopping the rest of the callback.
+function guard(name, fn) {
+    return function () {
+        try {
+            return fn.apply(this, arguments);
+        } catch (e) {
+            diag.errors++;
+            diag.lastError = name + ': ' + String(e);
+            if (typeof console !== 'undefined') console.log('Mixology Bridge error in ' + diag.lastError);
+        }
+    };
+}
 
 function send(device, cmd, msg) {
     if (!device) return;
     toMixology.sendMidi(device, encode(cmd, msg || {}));
 }
 
+// Log text travels in pieces of at most 63 bytes (the protocol's text limit), so long lines are split.
 function log(device, text) {
-    send(device, CMD.log, { text: String(text) });
+    text = String(text);
+    for (var i = 0; i < text.length; i += 56) send(device, CMD.log, { text: (i ? '  ' : '') + text.substr(i, 56) });
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -232,59 +252,60 @@ function makeSlot(index) {
     page.makeValueBinding(s.muteVar, channel.mValue.mMute);
     page.makeValueBinding(s.soloVar, channel.mValue.mSolo);
 
-    channel.mOnTitleChange = function (device, mapping, title) {
-        title = title || '';
-        var id = channelId(channel, mapping);
+    // Cubase reports a channel through two routes: the channel object itself, and the control bound to
+    // it (the route Steinberg's examples use). Both are listened to; whichever fires keeps the slot current.
+    function setTitle(title, mapping) {
+        title = title ? String(title) : '';
+        var id = channelId(channel, mapping || cachedMapping);
         var hash = title ? nameHash(title) : 0;
-        if (title === s.title && hash === s.hash && id.hash === s.id) return;   // Cubase repeats titles a lot
+        if (title === s.title && hash === s.hash && (title ? id.hash : 0) === s.id) return;   // Cubase repeats titles a lot
         s.title = title;
         s.hash = hash;
         s.id = title ? id.hash : 0;
         s.idRaw = id.raw;
         s.titleDirty = s.volumeDirty = s.panDirty = s.muteDirty = s.soloDirty = s.automationDirty = s.colourDirty = true;
-    };
-    channel.mOnColorChange = function (device, mapping, r, g, b, a, isActive) {
+    }
+    function setColour(r, g, b) {
         var rgb = (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255);
         if (rgb === s.rgb && s.hasColour) return;
         s.rgb = rgb;
         s.hasColour = 1;
         s.colourDirty = true;
-    };
+    }
+    function setVolume(value) { s.volume = value; s.volumeDirty = true; }
+    function setVolumeText(text) { s.volumeText = String(text); s.volumeDirty = true; }
+    function setPan(value) { s.pan = value; s.panDirty = true; }
+    function setPanText(text) { s.panText = String(text); s.panDirty = true; }
+    function setMute(value) { s.mute = value > 0.5 ? 1 : 0; s.muteDirty = true; }
+    function setSolo(value) { s.solo = value > 0.5 ? 1 : 0; s.soloDirty = true; }
 
-    // Value and display text arrive as separate callbacks; both are sent together from flush(), so
-    // Mixology always gets a matching (position, "-6.02") pair.
-    channel.mValue.mVolume.mOnProcessValueChange = function (device, mapping, value) {
-        s.volume = value;
-        s.volumeDirty = true;
-    };
-    channel.mValue.mVolume.mOnDisplayValueChange = function (device, mapping, value, units) {
-        s.volumeText = String(value);
-        s.volumeDirty = true;
-    };
-    channel.mValue.mPan.mOnProcessValueChange = function (device, mapping, value) {
-        s.pan = value;
-        s.panDirty = true;
-    };
-    channel.mValue.mPan.mOnDisplayValueChange = function (device, mapping, value, units) {
-        s.panText = String(value);
-        s.panDirty = true;
-    };
-    channel.mValue.mMute.mOnProcessValueChange = function (device, mapping, value) {
-        s.mute = value > 0.5 ? 1 : 0;
-        s.muteDirty = true;
-    };
-    channel.mValue.mSolo.mOnProcessValueChange = function (device, mapping, value) {
-        s.solo = value > 0.5 ? 1 : 0;
-        s.soloDirty = true;
-    };
-    channel.mValue.mAutomationRead.mOnProcessValueChange = function (device, mapping, value) {
+    // Route 1: the channel and its host values (callbacks carry the active mapping).
+    channel.mOnTitleChange = guard('channel title', function (device, mapping, title) { diag.chTitle++; setTitle(title, mapping); });
+    channel.mOnColorChange = guard('channel colour', function (device, mapping, r, g, b) { setColour(r, g, b); });
+    channel.mValue.mVolume.mOnProcessValueChange = guard('volume', function (device, mapping, value) { diag.hostVol++; setVolume(value); });
+    channel.mValue.mVolume.mOnDisplayValueChange = guard('volume text', function (device, mapping, value) { diag.hostText++; setVolumeText(value); });
+    channel.mValue.mPan.mOnProcessValueChange = guard('pan', function (device, mapping, value) { setPan(value); });
+    channel.mValue.mPan.mOnDisplayValueChange = guard('pan text', function (device, mapping, value) { setPanText(value); });
+    channel.mValue.mMute.mOnProcessValueChange = guard('mute', function (device, mapping, value) { setMute(value); });
+    channel.mValue.mSolo.mOnProcessValueChange = guard('solo', function (device, mapping, value) { setSolo(value); });
+    channel.mValue.mAutomationRead.mOnProcessValueChange = guard('read', function (device, mapping, value) {
         s.read = value > 0.5 ? 1 : 0;
         s.automationDirty = true;
-    };
-    channel.mValue.mAutomationWrite.mOnProcessValueChange = function (device, mapping, value) {
+    });
+    channel.mValue.mAutomationWrite.mOnProcessValueChange = guard('write', function (device, mapping, value) {
         s.write = value > 0.5 ? 1 : 0;
         s.automationDirty = true;
-    };
+    });
+
+    // Route 2: the bound controls (no mapping in these callbacks; the cached one is used for the ID).
+    s.volumeVar.mOnTitleChange = guard('control title', function (device, objectTitle, valueTitle) { diag.svTitle++; setTitle(objectTitle, null); });
+    s.volumeVar.mOnColorChange = guard('control colour', function (device, r, g, b) { setColour(r, g, b); });
+    s.volumeVar.mOnProcessValueChange = guard('control volume', function (device, value) { diag.svVol++; setVolume(value); });
+    s.volumeVar.mOnDisplayValueChange = guard('control volume text', function (device, value) { diag.svText++; setVolumeText(value); });
+    s.panVar.mOnProcessValueChange = guard('control pan', function (device, value) { setPan(value); });
+    s.panVar.mOnDisplayValueChange = guard('control pan text', function (device, value) { setPanText(value); });
+    s.muteVar.mOnProcessValueChange = guard('control mute', function (device, value) { setMute(value); });
+    s.soloVar.mOnProcessValueChange = guard('control solo', function (device, value) { setSolo(value); });
     return s;
 }
 
@@ -348,21 +369,32 @@ function announce(device, token) {
 
 function dump(device) {
     flush(device, true);
+    var named = 0;
     for (var i = 0; i < slots.length; i++) {
         var s = slots[i];
-        if (s.title) log(device, 'slot ' + (i + 1) + ' "' + s.title + '" id ' + (s.idRaw || 'none'));
+        if (!s.title) continue;
+        named++;
+        log(device, 'slot ' + (i + 1) + ' "' + s.title + '" id ' + (s.idRaw || 'none'));
     }
+    // Counts are "channel route / control route" (see makeSlot).
+    log(device, 'script v' + SCRIPT_VERSION + ': ' + named + ' named channel(s) in the bank');
+    log(device, 'calls: titles ' + diag.chTitle + '/' + diag.svTitle + ', volume ' + diag.hostVol + '/' + diag.svVol
+        + ', text ' + diag.hostText + '/' + diag.svText);
+    log(device, 'idle ' + diag.idle + (cachedMapping ? ', mapping ok' : ', no mapping yet') + ', errors ' + diag.errors);
+    if (diag.errors) log(device, 'last error: ' + diag.lastError);
 }
 
-page.mOnActivate = function (device, mapping) {
+page.mOnActivate = guard('activate', function (device, mapping) {
+    cachedMapping = mapping;
     announce(device, 0);
-};
+});
 
 // API 1.1+ (Cubase 13 and later). On Cubase 12 this is never called and updates go out with each
 // message from Mixology instead (it pings every second).
-driver.mOnIdle = function (device) {
+driver.mOnIdle = guard('idle', function (device) {
+    diag.idle++;
     flush(device, false);
-};
+});
 
 // ------------------------------------------------------------------------------------------------
 // Receiving commands from Mixology
@@ -384,7 +416,7 @@ function checkTarget(device, m) {
     return s;
 }
 
-fromMixology.mOnSysex = function (device, data) {
+fromMixology.mOnSysex = guard('message', function (device, data) {
     var m = decode(data);
     if (!m) return;   // not ours (or another protocol version): ignore
 
@@ -421,4 +453,4 @@ fromMixology.mOnSysex = function (device, data) {
             break;
     }
     flush(device, false);
-};
+});
