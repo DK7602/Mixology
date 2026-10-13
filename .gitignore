@@ -1,0 +1,10 @@
+build*/
+cmake-build-*/
+out/
+.vs/
+.vscode/
+.idea/
+*.user
+.DS_Store
+plugin/ui/juce/
+__pycache__/

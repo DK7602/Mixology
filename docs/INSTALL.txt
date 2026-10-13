@@ -1,0 +1,16 @@
+MIXOLOGY - install (Windows, Cubase)
+
+1. Copy  VST3\Mixology.vst3  to  C:\Program Files\Common Files\VST3\
+   (Chrome may call the zip "dangerous" because it isn't code-signed yet: choose Keep.)
+2. Install loopMIDI (free, Tobias Erichsen) and add two ports named exactly:
+     Mixology to Cubase
+     Cubase to Mixology
+3. Copy the folder  "Cubase MIDI Remote\Mixology"  into
+     Documents\Steinberg\Cubase\MIDI Remote\Driver Scripts\Local\
+   so you end up with  ...\Local\Mixology\Bridge\Mixology_Bridge.js
+4. Start Cubase. Studio > Studio Setup > MIDI Port Setup: untick "In 'All MIDI Inputs'" for both
+   Mixology ports. Studio > VST Plug-in Manager: rescan if Mixology doesn't show up.
+5. Insert Mixology on the Stereo Out. Settings (gear) > Cubase Bridge should turn green.
+
+Then follow M1_TEST.md (the Cubase bridge test) and send back the results + the copied log.
+The full manual is MANUAL.md (also inside Mixology: the ? button).

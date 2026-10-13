@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Mixology</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="styles.css">
+<script src="mock.js"></script>
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<div id="viewport">
+<div id="stage">
+  <div id="frame"></div>
+
+  <header id="header">
+    <div id="gears"></div>
+    <button id="logoBtn" type="button" title="Switch light / dark look" aria-label="Switch light / dark look">
+      <img src="assets/logo.png" alt="Mixology">
+    </button>
+    <img id="wordmark" src="assets/wordmark.png" alt="MIXOLOGY">
+    <div id="subtitle"><span class="a">INTELLIGENT</span> <span class="b">MIXING ENGINEER</span></div>
+    <div id="preset" title="Mix style: what Auto Mix and the Mix Assistant aim for">
+      <button type="button" id="preset-prev" aria-label="Previous style"></button>
+      <div class="name" id="preset-name">Hip Hop - Modern Clean</div>
+      <button type="button" id="preset-next" aria-label="Next style"></button>
+    </div>
+  </header>
+
+  <nav id="tabs" aria-label="Pages">
+    <button class="tab" data-page="overview">OVERVIEW</button>
+    <button class="tab" data-page="tracks">TRACKS</button>
+    <button class="tab" data-page="eq">EQ</button>
+    <button class="tab" data-page="dynamics">DYNAMICS</button>
+    <button class="tab" data-page="space">SPACE</button>
+    <button class="tab" data-page="tone">TONE</button>
+    <button class="tab" data-page="stereo">STEREO</button>
+    <button class="tab" data-page="master">MASTER</button>
+    <button class="tab" id="tab-presets">PRESETS</button>
+    <button class="tab icon" id="tab-settings" aria-label="Settings" title="Settings and Cubase bridge"></button>
+    <button class="tab icon" id="tab-help" aria-label="Help" title="Manual"></button>
+  </nav>
+
+  <main id="pages">
+    <section class="page" id="page-overview"></section>
+    <section class="page" id="page-tracks"></section>
+    <section class="page" id="page-eq"></section>
+    <section class="page" id="page-dynamics"></section>
+    <section class="page" id="page-space"></section>
+    <section class="page" id="page-tone"></section>
+    <section class="page" id="page-stereo"></section>
+    <section class="page" id="page-master"></section>
+  </main>
+
+  <div id="overlay">
+    <div id="sheet">
+      <div id="sheet-title"></div>
+      <button class="close" type="button" id="sheet-close" aria-label="Close"></button>
+      <div id="sheet-body" class="scroll"></div>
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html>

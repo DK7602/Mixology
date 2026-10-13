@@ -1,0 +1,156 @@
+name: Build & Test
+
+# Every push builds Windows. For a Mac build: Actions -> Build & Test -> Run workflow, tick "Also build macOS".
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      mac:
+        description: "Also build macOS (VST3 / AU / Standalone)"
+        type: boolean
+        default: false
+
+# A newer push cancels the older build on the same branch (saves minutes).
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Engine tests under AddressSanitizer + UndefinedBehaviorSanitizer (Linux, no JUCE), plus the end-to-end
+  # bridge simulator: the real Cubase MIDI Remote script (run in Node against a fake MixConsole) talking to
+  # the real C++ bridge session.
+  engine:
+    name: Engine + bridge simulator (ASan + UBSan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Configure
+        run: cmake -S . -B build-asan -DMIX_BUILD_PLUGIN=OFF -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -O1"
+      - name: Build
+        run: cmake --build build-asan --parallel 4
+      - name: Tests (unit + bridge end-to-end)
+        run: ctest --test-dir build-asan --output-on-failure
+      - name: Cubase script syntax (ES5 only)
+        run: npx --yes acorn@8.12.1 --ecma5 --silent bridge/cubase/Mixology/Bridge/Mixology_Bridge.js
+
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.mac
+          && '[{"name":"macOS","os":"macos-14"},{"name":"Windows","os":"windows-latest"}]'
+          || '[{"name":"Windows","os":"windows-latest"}]') }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache fetched dependencies (JUCE, Catch2)
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: deps-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'tests/CMakeLists.txt') }}
+
+      - name: Fetch WebView2 SDK (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $v = "1.0.3485.44"
+          $root = ("$env:RUNNER_TEMP/nuget") -replace '\\','/'
+          Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/$v" -OutFile webview2.zip
+          Expand-Archive webview2.zip -DestinationPath "$root/Microsoft.Web.WebView2.$v"
+          "WEBVIEW2_DIR=$root" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release ${{ runner.os == 'Windows' && format('-DJUCE_WEBVIEW2_PACKAGE_LOCATION={0}', env.WEBVIEW2_DIR) || '' }}
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4
+
+      - name: Unit tests
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      # One folder with everything to install: the plug-in, the Cubase script, the manual and the test steps.
+      - name: Package
+        shell: bash
+        run: |
+          P="Mixology-${{ matrix.name }}"
+          mkdir -p "$P/Cubase MIDI Remote"
+          cp -R build/plugin/Mixology_artefacts/Release/VST3 "$P/"
+          cp -R build/plugin/Mixology_artefacts/Release/Standalone "$P/" || true
+          cp -R build/plugin/Mixology_artefacts/Release/AU "$P/" 2>/dev/null || true
+          cp -R bridge/cubase/Mixology "$P/Cubase MIDI Remote/"
+          cp docs/MANUAL.md docs/M1_TEST.md "$P/"
+          cp docs/INSTALL.txt "$P/INSTALL.txt"
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mixology-${{ matrix.name }}
+          path: Mixology-${{ matrix.name }}
+          if-no-files-found: error
+
+      - name: pluginval (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          curl -sSL -o pluginval.zip https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_macOS.zip
+          unzip -q pluginval.zip
+          pluginval.app/Contents/MacOS/pluginval --strictness-level 10 --timeout-ms 1800000 --skip-gui-tests --validate-in-process \
+            --validate "build/plugin/Mixology_artefacts/Release/VST3/Mixology.vst3"
+
+      # Steinberg's own VST3 validator, built from the VST3 SDK (cached by SDK commit).
+      - name: Find VST3 SDK version (Windows)
+        if: runner.os == 'Windows'
+        id: vst3sdk
+        shell: bash
+        run: echo "sha=$(git ls-remote https://github.com/steinbergmedia/vst3sdk.git HEAD | cut -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache VST3 validator (Windows)
+        if: runner.os == 'Windows'
+        id: validator-cache
+        uses: actions/cache@v4
+        with:
+          path: vst3validator
+          key: vst3validator-${{ runner.os }}-${{ steps.vst3sdk.outputs.sha }}
+
+      - name: Build VST3 validator (Windows)
+        if: runner.os == 'Windows' && steps.validator-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          git clone --quiet --depth 1 --recursive --shallow-submodules https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
+          cmake -S "$RUNNER_TEMP/vst3sdk" -B "$RUNNER_TEMP/vst3build" -DSMTG_ENABLE_VSTGUI_SUPPORT=OFF \
+            -DSMTG_ENABLE_VST3_PLUGIN_EXAMPLES=OFF -DSMTG_ENABLE_VST3_HOSTING_EXAMPLES=ON
+          cmake --build "$RUNNER_TEMP/vst3build" --config Release --target validator --parallel 4
+          mkdir -p vst3validator
+          cp "$(find "$RUNNER_TEMP/vst3build" -name validator.exe | head -1)" vst3validator/
+
+      # Strictness 10 = pluginval's maximum (every sample rate and block size, random automation,
+      # state save / restore, bus layouts) plus Steinberg's validator. GUI tests are skipped (no display).
+      - name: pluginval, strictness 10 + VST3 validator (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Windows.zip -OutFile pluginval.zip
+          Expand-Archive pluginval.zip -DestinationPath pluginval
+          New-Item -ItemType Directory -Force pluginval-logs | Out-Null
+          # pluginval.exe is a GUI-subsystem program: start it with -Wait -PassThru or a failure shows green.
+          $args = @("--strictness-level", "10", "--skip-gui-tests", "--validate-in-process", "--timeout-ms", "1800000",
+                    "--vst3validator", "`"$PWD\vst3validator\validator.exe`"", "--output-dir", "`"$PWD\pluginval-logs`"",
+                    "--validate", "`"$PWD\build\plugin\Mixology_artefacts\Release\VST3\Mixology.vst3`"")
+          $p = Start-Process -FilePath ".\pluginval\pluginval.exe" -ArgumentList $args -Wait -PassThru -NoNewWindow
+          Write-Host "pluginval exit code: $($p.ExitCode)"
+          Get-ChildItem pluginval-logs -Filter *.txt | ForEach-Object { Get-Content $_.FullName | Select-String -Pattern "failed|FAILED|ERROR|Result:" }
+          exit $p.ExitCode
+
+      - name: Upload validation logs
+        if: always() && runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pluginval-logs-${{ matrix.name }}
+          path: pluginval-logs
+          if-no-files-found: ignore
