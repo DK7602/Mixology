@@ -2,8 +2,8 @@
 
 Usage:  python3 -I tools/art/extract_assets.py <Images folder from the handoff zip> <output folder>
 Writes: logo.png      beaker + atom + waveforms, transparent (glow kept as alpha: looks the same on dark)
-        wordmark.png  chrome MIXOLOGY letters, transparent, solid metal (the dark look)
-        (wordmark_light.png, the light look's title, is the user's own art, not cut from the mockups)
+        (wordmark.png, the chrome MIXOLOGY title, is the user's own art now: the cut-out version clipped the Y.
+         wordmark() below is kept for reference but no longer writes it.)
         gears.jpg     the gear texture from the header's right side
         scene_*.jpg   the seven Space pictures (reverb, delay, chorus, phaser, hall, room, special)
 
@@ -158,7 +158,7 @@ def scenes():
 
 if __name__ == "__main__":
     logo()
-    wordmark()
+    # wordmark()   # replaced by the user's full title art (plugin/ui/assets/wordmark.png)
     gears()
     scenes()
     print("written to", OUT)

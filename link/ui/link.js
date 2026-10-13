@@ -19,7 +19,6 @@ const native = { getLinkInfo: fn("getLinkInfo"), setTrim: fn("setTrim"), trimGes
 // Light / dark: follows Mixology's saved choice; the logo switches this window.
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
-  $("lwordmark").src = theme === "light" ? "wordmark_light.png" : "wordmark.png";   // the light look has its own title
 }
 $("logoBtn").addEventListener("click", () => applyTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light"));
 

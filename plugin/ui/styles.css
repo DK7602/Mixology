@@ -146,11 +146,11 @@ button { font-family: inherit; }
 #logoBtn img { width: 318px; height: auto; pointer-events: none; }
 
 #wordmark {
-  position: absolute; left: 352px; top: 6px; width: 590px;
+  position: absolute; left: 352px; top: 12px; width: 590px;
   filter: drop-shadow(-6px 0 10px rgba(30, 140, 255, 0.45)) drop-shadow(6px 0 10px rgba(255, 40, 40, 0.45));
   pointer-events: none;
 }
-:root[data-theme="light"] #wordmark { top: 12px; filter: drop-shadow(0 2px 3px rgba(10, 20, 40, 0.22)); }
+:root[data-theme="light"] #wordmark { filter: drop-shadow(0 2px 3px rgba(10, 20, 40, 0.22)); }
 
 #subtitle {
   position: absolute; left: 352px; top: 96px; width: 590px; text-align: center;
