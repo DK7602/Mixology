@@ -81,6 +81,8 @@ getUniqueIDString(). Hypothesis (not proven): Cubase returns a NULL ID string fo
 (it has a Cubase 14 Drum Track: 'Drum Machine' tab) and crashes converting it. Script v3 makes NO channel-ID calls
 (protocol field kept, always 0; identity = name hash + slot). Simulator asserts idCalls === 0. If v3 still crashes,
 next suspects: the 12-channel bank on that project's channel types, action bindings to mResetBank/mShift*.
+CONFIRMED by the user: with script v3 both crashing projects (Sample Snagger, Test) open and close fine. Never call
+getUniqueIDString / getRuntimeID during load again; if channel IDs are wanted later, test them on demand only.
 Other MIDI Remote scripts on the user's machine: Arturia KeyLab Essential 61 mk3, Novation Launchkey mk4 49, Akai
 APC40 mkII / MPK249, Korg nanoKONTROL; MIDI ports appear via Windows MIDI Services ("I|Windows MIDI|Mixology to Cubase").
 
