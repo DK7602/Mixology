@@ -399,18 +399,30 @@ namespace mixology::mix
                 const TrackReport* t = nullptr;
                 const ChannelNow* ch = nullptr;
                 double pan = 0.0, to = 0.0;
-                bool fixed = false;   // already decided by a rule
+                bool fixed = false;   // already decided by a rule (or not ours to move)
                 std::string why;
             };
             std::vector<T> ts;
+            std::vector<std::string> stereoPanners;
             for (const auto& t : r.tracks)
             {
                 if (! counts (t)) continue;
                 const auto* ch = look.of (t);
                 if (ch == nullptr || ! ch->hasPan) continue;
+                if (ch->panUnknown)
+                {
+                    // Counted as centred (it plays its own stereo image), never moved.
+                    ts.push_back ({ &t, ch, 0.0, 0.0, true, {} });
+                    stereoPanners.push_back (t.name);
+                    continue;
+                }
                 ts.push_back ({ &t, ch, ch->pan, ch->pan, false, {} });
             }
             if (ts.empty()) return {};
+            if (! stereoPanners.empty())
+                plan.notes.push_back (joinNames (stereoPanners) + (stereoPanners.size() == 1 ? " uses" : " use")
+                                      + " Cubase's Stereo Combined Panner (Cubase only tells Mixology its left edge): pan "
+                                      + (stereoPanners.size() == 1 ? "it" : "them") + " in Cubase if needed.");
 
             // The pans Cubase reports must agree with what the Stereo Out hears. A stereo track with Cubase's Combined
             // Panner reports one side of it (e.g. "L100" for a full-width track): then the numbers can't be trusted.
@@ -440,6 +452,7 @@ namespace mixology::mix
             // 1. Low end and the lead vocal in the middle.
             for (auto& x : ts)
             {
+                if (x.ch->panUnknown) continue;
                 const auto role = x.t->role;
                 const auto pn = pairName (x.t->name);
                 const bool lead = role == Role::vox && ! pn.explicitPair && pn.order == 0;
@@ -556,7 +569,7 @@ namespace mixology::mix
             for (const auto& x : ts)
             {
                 const double to = std::round (x.to);
-                if (std::abs (to - x.pan) < 3.0) continue;
+                if (x.ch->panUnknown || std::abs (to - x.pan) < 3.0) continue;
                 if (x.ch->locked)
                 {
                     plan.notes.push_back (quoted (x.t->name) + ": protected (padlock), so its pan stays " + panText (x.pan) + " (it would have gone " + panText (to) + ").");

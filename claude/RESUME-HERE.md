@@ -97,6 +97,10 @@ User asked (2026-10-13): "Once fixed move forward with M4?" after the M3 test vi
   expected lean differs > 6 dB from the measured mix balance (Combined Panner note); BridgeSession tracks mute /
   solo per channel (isAudible); hub skips muted / soloed-out Links in analysisTick and roleCurves (reference
   kept); Undo re-plans the sheet when done; the wrong "protected" note when the vocal goes down is gone.
+- User confirmed (2026-10-13): the Electric tracks are centred in Cubase. So the bridge's "L100" was the Stereo
+  Combined Panner's left edge (MIDI Remote mPan reports only that). Now: a paired stereo Link + pan value 0 ->
+  slot.stereoPanner (strip shows "Stereo", knob refuses with a toast) and ChannelNow.panUnknown (Stereo Architect
+  counts it centred and never moves it). Limitation: a narrowed Combined Panner (e.g. L50 / R50) reads "L50".
 
 ## Milestone 3 status (v0.3.0): BUILT, tested by the user (video): worked; follow-ups done in M4
 - dsp: Fft (radix-2), TrackAnalyzer (4096-pt, mid/side in one complex FFT, 31 ISO 1/3-oct bands re full-scale

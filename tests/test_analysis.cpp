@@ -905,3 +905,25 @@ TEST_CASE ("Reference Match: your mix against your reference song", "[analysis]"
     CHECK (r2.reference.chosen);
     CHECK_FALSE (r2.reference.heard);
 }
+
+TEST_CASE ("Plans: stereo tracks on Cubase's Combined Panner are never panned", "[plan]")
+{
+    // Cubase reports "L100" for a full-width stereo track on the Combined Panner (its left edge only).
+    auto tracks = [] (int) { return std::vector<TrackSample> {
+        sample ("Kick", kickFrame()), sample ("Vocals", vocalFrame (-12.0)),
+        sample ("Electric Rhythm", padFrame (-14.0)), sample ("Electric Rhythm (D)", padFrame (-14.0)) }; };
+    const auto r = listen (tracks).evaluate ({});
+    std::vector<ChannelNow> chans;
+    for (const auto& t : tracks (0))
+    {
+        chans.push_back (channel (t.name, 0.0, t.name.rfind ("Electric", 0) == 0 ? -100.0 : 0.0));
+        chans.back().panUnknown = t.name.rfind ("Electric", 0) == 0;
+    }
+    chans[0].pan = 40.0;   // the kick is really off-centre: that one still gets fixed
+    const auto p = makePlan (Tool::stereo, r, chans);
+    CHECK (change (p, "Electric Rhythm", "pan") == nullptr);
+    CHECK (change (p, "Electric Rhythm (D)", "pan") == nullptr);
+    REQUIRE (change (p, "Kick", "pan") != nullptr);
+    CHECK (noted (p, "Stereo Combined Panner"));
+    CHECK_FALSE (noted (p, "probably stereo tracks"));   // the pans agree with the mix once those are centred
+}

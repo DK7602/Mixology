@@ -258,5 +258,8 @@ Mixology never limits the mix bus; that's Masterology's job.
   from the same download (an older Link can't talk to a newer Mixology). After an update, copy **both**
   .vst3 folders again and restart Cubase.
 - **Analyze Mix waits at "Press play in Cubase"**: it only listens while the song plays.
+- **A stereo track shows "Stereo" under its pan knob**: it uses Cubase's Stereo Combined Panner. Cubase only tells
+  Mixology the panner's left edge (a full-width track would read "L100"), so Mixology never pans those tracks:
+  pan them in Cubase.
 - **Strange notes on an instrument track**: untick "In 'All MIDI Inputs'" for both Mixology ports (setup step 3).
 - **Send us the log**: Settings > Cubase Bridge > **Copy log**, then paste it into the chat.

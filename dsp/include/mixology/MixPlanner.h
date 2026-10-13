@@ -34,6 +34,7 @@ namespace mixology::mix
         double faderDb = 0.0;
         bool hasPan = false;
         double pan = 0.0;          // -100 = L100, 0 = centre, +100 = R100
+        bool panUnknown = false;   // a stereo track on Cubase's Combined Panner: Cubase only reports its left edge
         bool locked = false;       // protected (padlock)
         bool hasLink = false;      // a Mixology Link sits on it (its Assist EQ can be set)
         AssistSettings assist;     // that Link's Assist EQ now

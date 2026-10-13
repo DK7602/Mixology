@@ -489,6 +489,12 @@ export function buildTracks(root, app) {
     });
 
     pan.o.onChange = (v) => {
+      if (strip.data && strip.data.stereoPanner) {
+        pan.set(0);
+        pan.valueEl.textContent = "Stereo";
+        app.toast(`'${strip.data.title}' uses Cubase's Stereo Combined Panner: Cubase only tells Mixology its left edge. Pan it in Cubase.`);
+        return;
+      }
       if (!guarded()) { pan.set(strip.data && strip.data.present ? Math.round((strip.data.pan - 0.5) * 200) : 0); return; }
       send("pan", (v + 100) / 200);
     };
@@ -605,8 +611,10 @@ export function buildTracks(root, app) {
       st.val.style.color = light ? `color-mix(in srgb, ${R.colour} 62%, #000)` : R.colour;
       st.val.style.cursor = present && !blocked ? "text" : "default";
       const panBusy = st.panDragging || performance.now() < (st.panHoldUntil || 0) || document.activeElement === st.pan.root;
-      if (present && !panBusy) st.pan.set(Math.round((d.pan - 0.5) * 200));
-      st.pan.root.style.opacity = present && d.hasPan !== false ? "1" : "0.5";
+      if (present && !panBusy) st.pan.set(d.stereoPanner ? 0 : Math.round((d.pan - 0.5) * 200));
+      if (present && d.stereoPanner) st.pan.valueEl.textContent = "Stereo";
+      st.pan.root.title = present && d.stereoPanner ? "Cubase's Stereo Combined Panner: Cubase only tells Mixology its left edge (\"L100\" at full width). Pan this track in Cubase." : "";
+      st.pan.root.style.opacity = present && d.hasPan !== false && !d.stereoPanner ? "1" : "0.5";
       if (st.marksKey !== JSON.stringify(marks)) {
         st.marksKey = JSON.stringify(marks);
         st.scale.innerHTML = "";

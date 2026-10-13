@@ -75,7 +75,7 @@
       const set = B.settings[c.hash] || {};
       return { role: roleOf(c), roleSet: !!set.role, excluded: !!set.excluded, present: true, title: c.name, hash: c.hash, hasVolume: true, volume: c.volume, volumeText: text(c.volume), volumeDb: lawDb(c.volume), hasPan: true, pan: c.pan, panText: panText(c.pan),
         mute: c.mute, solo: c.solo, read: c.read, write: c.write, colour: c.colour, protected: c.protected, duplicate: false, changed: isChanged(c),
-        linkStatus: c.link ? "matched" : "none", trim: c.trim, linkAudio: true };
+        linkStatus: c.link ? "matched" : "none", trim: c.trim, linkAudio: true, stereoPanner: c.name === "Keys" };
     });
     return {
       enabled: true, link: "connected", portProblem: "", script: 3, toCubase: "Mixology to Cubase", fromCubase: "Cubase to Mixology", slots,

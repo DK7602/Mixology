@@ -268,6 +268,7 @@ void BridgeHub::updateLinks()
             sl.momentary = l.momentary;
             sl.trimDb = l.trimDb;
             sl.audio = l.audio;
+            sl.channels = l.channels;
             registry.reportMatch (l.slot, l.generation, MatchStatus::matched, ms);
             told[static_cast<std::size_t> (matches[i].link)] = true;
         }
@@ -676,6 +677,9 @@ juce::var BridgeHub::getState (bool includeLog)
             ++paired;
             so->setProperty ("trim", std::round (sl.trimDb * 10.0f) / 10.0f);
             so->setProperty ("linkAudio", sl.audio);
+            // A stereo track reading exactly L100: Cubase's Stereo Combined Panner, whose left edge is all the
+            // MIDI Remote reports (full width = "L100"). Its real position is unknown to Mixology.
+            so->setProperty ("stereoPanner", sl.channels == 2 && s.hasPan && s.pan <= 0.0005);
         }
         slots.add (juce::var (so));
     }
@@ -921,7 +925,12 @@ std::vector<mixology::mix::ChannelNow> BridgeHub::channelsNow() const
         c.hasPan = f.hasPan;
         c.pan = (f.pan - 0.5) * 200.0;
         c.locked = bridge.isProtected (hash);
-        if (const auto* l = uniqueLink (links, hash)) { c.hasLink = true; c.assist = l->assist; }
+        if (const auto* l = uniqueLink (links, hash))
+        {
+            c.hasLink = true;
+            c.assist = l->assist;
+            c.panUnknown = l->channels == 2 && f.hasPan && f.pan <= 0.0005;   // Stereo Combined Panner (see getState)
+        }
         seen.insert (hash);
         out.push_back (c);
     }

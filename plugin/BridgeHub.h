@@ -152,6 +152,7 @@ private:
         std::uint32_t generation = 0;
         float peakL = -100.0f, peakR = -100.0f, momentary = -100.0f, trimDb = 0.0f;
         bool audio = false;
+        int channels = 0;
     };
     std::vector<StripLink> stripLinks;
     int linksSeen = 0;
