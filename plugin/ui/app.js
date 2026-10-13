@@ -7,6 +7,7 @@ import { buildOverview, buildTracks } from "./pages_main.js";
 import { buildEq, buildDynamics, buildSpace } from "./pages_process.js";
 import { buildTone, buildStereo, buildMaster } from "./pages_output.js";
 import { openSettings, openHelp, openPresets, hookBridge } from "./sheets.js";
+import { hookTools } from "./tools.js";
 import { styleByKey } from "./mixstyles.js";
 
 // ---------------------------------------------------------------------------------------------
@@ -150,6 +151,7 @@ async function start() {
   store.load(settings.ui);
   store.setSaver((json) => native.setUiState(json));
   hookBridge(app);
+  hookTools(app);
 
   const build = {
     overview: buildOverview, tracks: buildTracks, eq: buildEq, dynamics: buildDynamics, space: buildSpace,

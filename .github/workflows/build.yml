@@ -96,7 +96,7 @@ jobs:
           cp -R build/plugin/Mixology_artefacts/Release/AU "$P/" 2>/dev/null || true
           cp -R build/link/MixologyLink_artefacts/Release/AU/* "$P/AU/" 2>/dev/null || true
           cp -R bridge/cubase/Mixology "$P/Cubase MIDI Remote/"
-          cp docs/MANUAL.md docs/M3_TEST.md "$P/"
+          cp docs/MANUAL.md docs/M4_TEST.md "$P/"
           cp docs/INSTALL.txt "$P/INSTALL.txt"
 
       - name: Upload

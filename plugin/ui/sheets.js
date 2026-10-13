@@ -4,12 +4,14 @@ import { $, el, icon, fmt, popupMenu } from "./ui.js";
 import { GENRES } from "./mixstyles.js";
 import { ROLES, ROLE_ORDER } from "./roles.js";
 
-function sheet(title) {
+export function sheet(title) {
   const pop = $("style-pop");
   if (pop) pop.remove();
   $("sheet-title").textContent = title;
   const body = $("sheet-body");
   body.innerHTML = "";
+  body.className = "";
+  body.removeAttribute("style");
   $("overlay").classList.add("shown");
   return body;
 }
@@ -199,7 +201,7 @@ export function openPresets(app) {
   const body = sheet("MIX STYLES");
   body.className = "scroll";
   const note = el("p", "", body, { fontSize: "18px", color: "var(--text-dim)", margin: "0 0 6px 0", lineHeight: "1.4" });
-  note.textContent = "Pick your genre, then the style. It tells Mixology what you're going for: today it sets the Tone page's target; from Milestone 4 it also steers Auto Mix and the Mix Assistant.";
+  note.textContent = "Pick your genre, then the style. It tells Mixology what you're going for: the Tone page's target, the Mix Assistant's advice, and the levels Auto Mix and Balance aim for.";
   const now = el("p", "", body, { fontSize: "19px", margin: "0 0 16px 0" });
   now.innerHTML = `Now: <b style="color:var(--gold)">${app.style.fullName}</b>`;
 

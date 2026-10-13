@@ -1,6 +1,6 @@
-// Mix styles: pick a genre, then a style. Each style is a tonal target for the Tone page today
-// (bass weight, low-mid scoop, top sheen, all in dB against a flat, tilted reference); Milestone 4 adds
-// level / pan / width targets for Auto Mix per style.
+// Mix styles: pick a genre, then a style. Each style is a tonal target (bass weight, low-mid scoop, top sheen,
+// all in dB against a flat, tilted reference) for the Tone page and Analyze Mix; the genre also sets the
+// level targets Balance and Auto Mix aim for (MixPlanner).
 
 const g = (id, name, icon, colour, styles) => ({ id, name, icon, colour, styles: styles.map(([sid, sname, bass, scoop, air, about]) => ({ id: sid, name: sname, bass, scoop, air, about })) });
 

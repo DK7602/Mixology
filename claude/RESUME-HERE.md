@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-13, v0.3.0)
+# Mixology: resume here (updated 2026-10-13, v0.4.0)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -35,7 +35,52 @@ sends higher-resolution art, re-run it.
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
 
-## Milestone 3 status (v0.3.0): BUILT, WAITING FOR THE USER'S CUBASE TEST (docs/M3_TEST.md)
+## Milestone 4 status (v0.4.0): BUILT, WAITING FOR THE USER'S CUBASE TEST (docs/M4_TEST.md)
+User asked (2026-10-13): "Once fixed move forward with M4?" after the M3 test video + a Duck Under list cut off.
+- M3 follow-ups done first: vocal level vs the WHOLE mix (mix loudness minus vocals, so a printed Beat without a
+  Link counts) with per-genre targets (vocalTargetFor: rock -1, cinematic -2, electronic/jazz 0, trap/afro +0.5,
+  pop/country/rnb/folk +1.5, else +1); left/right balance (TrackAnalyzer balanceDb, registry layout 3) and the
+  "lean-left/right" suggestion; "electric" -> guitar (C++ + JS); Overview role curves smoothed; dropdown menus
+  (ui.js fitMenu) open upward / scroll when long (the Duck Under list was cut off).
+- BridgeSession plans: applyPlan(what, steps) with PlanStep {hash, setVolume db | exact position, checkFrom fromDb
+  (skip if moved > 0.3 dB since the plan), setPan, setMute, setSolo}. Walk = the scan machinery (Scan.plan):
+  in-place round on the current bank, then reset + next pages, waiting for each page's closed-loop moves
+  (kPlanSettleSeconds 3) before banking, then back to the original first channel. PlanProgress {done, skipped,
+  notes, message, undo (exact positions before), serial}. restoreAll uses a plan when a changed channel is outside
+  the bank; isChanged() for out-of-view channels compares with knownFaders (now with volume/pan/texts).
+  session_cli: "plan <now> name|db|pan;..." and "undo <now>"; bridge-sim scenario on 30 channels.
+- Mixology Link: Assist EQ (dsp AssistEq: HP 12 dB/oct, mud bell Q1, pocket bell Q1.2; bit-exact when neutral,
+  30 ms glide, low cut parks at 10 Hz). Params lowcut (0 = Off, <20 Off), mudfreq, mudgain, pocketfreq, pocketgain.
+  Registry layout 4: assistNow[5] + assistRequestSeq (odd/even seqlock) + assistRequest[5]; kNoRequestSeen so a
+  Link in a reused slot never applies an old request (trim too). Link window 600x470 with an ASSIST EQ strip
+  (text, curve, Clear). linkcheck: -6.00 dB on the tone, cleared = bit exact.
+- MixPlanner (dsp): makePlan(Tool, Report, ChannelNow[]) -> Plan {changes {hash, name, role, kind level|pan|
+  lowcut|mud|pocket, from, to, wanted, big, hz, why}, notes, summary}. Balance: role groups (energy sums), genre
+  weights vs kick (weightsFor), median-anchored, only |dev| > 2.5 moves (to within 1 dB); vocal vs rest from
+  report.vocalRatio, split half/half (locks shift it; fader top +6 handed to the rest); ad-libs vs vocal; headroom
+  shift so predicted peak <= -6 dBTP (never up); 6 dB cap per Apply (wanted vs to). Unheard channels (no Link)
+  = one group from report.unheardLoudness, riding with the rest. Stereo: centre kick/bass (>5), snare (>25), lead
+  (>15); pairName() pairs ("(D)", L/R, Dbl, numbers; role other needs an explicit tag); a pair with one side
+  already out keeps it and mirrors the other; vocal doubles only spread when 2+; lean fix by trying mirror /
+  half / centre on heavy-side tracks with the report's measured mixBalance as bias. Clean Up: low cut on rumble
+  tracks + vocals with >= 3 % below 100 Hz (role table), mud dips when mix-target 200-500 Hz > 2.5 dB on the top
+  3 carriers (bass only if nothing else). Pocket: maskDb > -6 -> 2/3/4 dB at the band of most overlap.
+- Report additions: vocalRatio/vocalTarget, track maskDb / rumble / reference, unheardLoudness, mixWidth,
+  ReferenceReport (TrackSettings.reference, saved as 4th field in "tracks" state): bands lined up like mixBands,
+  5 regions with text, loudnessDiff, widthDiff.
+- Hub: commands plan(tool) -> {plan with id}, planApply {id, picked, allowBig} (faders/pans -> bridge plan;
+  EQ -> requestAssist from the Link's current assist), planUndo (bridge undo from PlanProgress.undo + previous
+  assist), setReference {hash, value}, refListen "ref"|"mix" (unmute+solo / unsolo+mute through a plan; Trim
+  matched = trimNow - loudnessDiff). state.apply {active, what, done, total, message, notes, serial, canUndo,
+  undoWhat, hearingReference}.
+- UI: tools.js (openToolSheet, openReferenceSheet, hookTools); Overview buttons live; sheet() exported from
+  sheets.js and resets body styles. mock.js simulates plans / apply / undo / reference.
+- Tests: 77 Catch2 (incl. plans, reference, Assist EQ, registry assist), bridge-sim 19 scenarios / 183 checks,
+  linkcheck all pass, pluginval 10 both plug-ins (Linux), ASan/UBSan clean.
+- Open: does a muted track's insert still get audio in Cubase (reference via its Link)? Ducking (sidechain) waits
+  for M5. Calibrate genre weights / thresholds from the user's results.
+
+## Milestone 3 status (v0.3.0): BUILT, tested by the user (video): worked; follow-ups done in M4
 - dsp: Fft (radix-2), TrackAnalyzer (4096-pt, mid/side in one complex FFT, 31 ISO 1/3-oct bands re full-scale
   sine, sideShare, K-weighted loudness, rms, peak, corr, width), AudioRing, MixAnalysis (Moment = mix frame +
   TrackSamples {hash, name, faderDb, frame}; evaluate(settings, unheard) -> Report: roles you > name (same regexes
@@ -177,8 +222,7 @@ Download: Actions -> latest green run -> artifact "Mixology-Windows" (VST3, Stan
 MANUAL.md, M1_TEST.md, INSTALL.txt).
 
 ## Next
-1. User runs docs/M3_TEST.md (copy BOTH VST3s: registry v2) and sends results, screenshots, log. Tune thresholds
-   and texts from what they hear (calibration of tonal targets and vocal targets is a first guess).
-2. M4: Auto Mix (levels / pans from style targets, preview, apply via bridge, Restore), Low End tool (kick / 808),
-   Vocal Pocket (dips via Link: needs Link EQ), Stereo Architect, Clean Up, Reference Match. Style level / pan /
-   width targets per style (mixstyles.js). Maybe: restore points saved with the project.
+1. User runs docs/M4_TEST.md (copy BOTH VST3s: registry layout 4) and sends results, screenshots, log. Tune
+   genre weights, thresholds and texts from what they hear.
+2. M5: processing pages (EQ, Dynamics, Tone, Stereo in each Link; Space on FX Links; ducking / sidechain), Master
+   page. Maybe: restore points saved with the project.

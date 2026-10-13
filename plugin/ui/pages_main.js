@@ -3,6 +3,7 @@
 import { el, box, icon, fmt, clamp, Knob, Meter, select, graph, freqToX, previewTag, store, popupMenu } from "./ui.js";
 import { ROLES, ROLE_ORDER, GROUPS, guessRole } from "./roles.js";
 import { openSuggestion, openTracksSheet } from "./sheets.js";
+import { openToolSheet, openReferenceSheet } from "./tools.js";
 
 export { ROLES, guessRole };
 
@@ -13,12 +14,12 @@ export { ROLES, guessRole };
 export function buildOverview(root, app) {
   // ---- left: operations
   const ops = [
-    { id: "auto", label: "AUTO MIX", icon: "wand", when: "Milestone 4" },
-    { id: "balance", label: "BALANCE", icon: "sliders", when: "Milestone 4" },
-    { id: "clean", label: "CLEAN UP", icon: "wave", when: "Milestone 4" },
-    { id: "pocket", label: "VOCAL POCKET", icon: "mic", when: "Milestone 4" },
-    { id: "stereo", label: "STEREO ARCHITECT", icon: "rings", when: "Milestone 4" },
-    { id: "ref", label: "REFERENCE MATCH", icon: "target", when: "Milestone 4" },
+    { id: "auto", label: "AUTO MIX", icon: "wand", tip: "Levels, pans, low cuts and vocal pocket together: see every change first, then Apply" },
+    { id: "balance", label: "BALANCE", icon: "sliders", tip: "Fader levels for your style, and room for Masterology" },
+    { id: "clean", label: "CLEAN UP", icon: "wave", tip: "Low cuts and mud dips (Assist EQ in each Mixology Link)" },
+    { id: "pocket", label: "VOCAL POCKET", icon: "mic", tip: "Dips in the instruments that cover the vocal's words" },
+    { id: "stereo", label: "STEREO ARCHITECT", icon: "rings", tip: "Pans: low end centred, pairs spread, a lopsided mix evened out" },
+    { id: "ref", label: "REFERENCE MATCH", icon: "target", tip: "Your mix against a song you like, level-matched" },
   ];
   const analyze = el("button", "btn big active", root, box(0, 0, 252, 112));
   analyze.innerHTML = `ANALYZE MIX<span class="sub">Scan tracks and build a mix</span>`;
@@ -31,7 +32,8 @@ export function buildOverview(root, app) {
   ops.forEach((o, i) => {
     const b = el("button", "btn", root, box(0, 130 + i * 120, 252, 104));
     b.innerHTML = icon(o.icon) + `<span>${o.label}</span>`;
-    b.addEventListener("click", () => app.toast(`${o.label.charAt(0) + o.label.slice(1).toLowerCase()} arrives in ${o.when}.`));
+    b.title = o.tip;
+    b.addEventListener("click", () => (o.id === "ref" ? openReferenceSheet(app) : openToolSheet(app, o.id)));
   });
 
   // ---- centre: analyzer

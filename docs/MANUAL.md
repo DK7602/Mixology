@@ -1,6 +1,7 @@
 # Mixology manual
 
-Manual for version 0.3.0 (the interface, live meters, every Cubase fader in view, Mixology Link, and Analyze Mix).
+Manual for version 0.4.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, and the
+smart tools: Auto Mix, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match).
 
 **Voxology** makes each vocal sound great. **Mixology** makes all your tracks work together.
 **Masterology** turns the finished mix into the master.
@@ -14,12 +15,13 @@ Manual for version 0.3.0 (the interface, live meters, every Cubase fader in view
 | Stereo page: vectorscope and correlation | Live |
 | Master page: loudness history, hand-off check for Masterology | Live |
 | Tracks page: your real Cubase channels (names, faders, pan, mute, solo), 12 at a time | Live, both ways, through the Cubase bridge |
-| Mixology Link on a track: its level on the Tracks page, a Trim | Live |
-| Analyze Mix and the Mix Assistant's advice; track roles; the analyzer's track colours | Live: this is what we're testing now |
-| EQ, Dynamics, Space, Tone controls | Preview: they move but don't process audio yet |
-| Auto Mix, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match | Coming (Milestone 4) |
+| Mixology Link on a track: its level on the Tracks page, a Trim, the Assist EQ | Live |
+| Analyze Mix and the Mix Assistant's advice; track roles; the analyzer's track colours | Live |
+| Auto Mix, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match | Live: this is what we're testing now |
+| EQ, Dynamics, Space, Tone controls | Preview: they move but don't process audio yet (Milestone 5) |
 
-Mixology passes your audio through untouched in this build.
+Mixology itself passes your audio through untouched. What changes your sound: the Cubase faders and pans it
+moves, and the Assist EQ / Trim in each Mixology Link.
 
 ## Where to put it
 
@@ -107,10 +109,15 @@ Mixology Link is a small plug-in for each track. Version 1:
 - **Knows which track it is on**: Cubase tells it the track's name and colour. Mixology pairs it with the channel
   of the same name (green chain icon on the strip). If two tracks share a name, the colour decides; if that's the
   same too, the chain turns amber and nothing is paired until you rename one.
-- **Trim**: a clean volume change before the fader (-24 to +24 dB). Later, Auto Mix uses it for gain staging.
+- **Trim**: a clean volume change before the fader (-24 to +24 dB). Reference Match uses it to level-match your
+  reference song.
+- **Assist EQ** (bottom of its window): a **Low Cut** (12 dB / octave), a **Mud** dip (200 - 600 Hz) and a
+  **Pocket** dip (1 - 6 kHz). Clean Up and Vocal Pocket set them; you can also change them like any plug-in
+  parameter in Cubase (automation works). **Clear** takes them out. When they're off, the Link passes the audio
+  through bit for bit.
 
-From Milestone 3 each Link also listens to its track about five times a second (tone in 31 bands, loudness,
-punch, stereo width) for Analyze Mix and the analyzer's track colours. It runs on a background thread and
+Each Link also listens to its track about five times a second (tone in 31 bands, loudness, punch, stereo width,
+left / right balance) for Analyze Mix and the analyzer's track colours. It runs on a background thread and
 costs very little.
 
 ## Analyze Mix and the Mix Assistant
@@ -149,6 +156,39 @@ sound when the name doesn't say. Click a strip's icon on the Tracks page (or the
 yourself, or to **leave a track out of Analyze Mix** (a reference song, a printed stem). Your choices are saved
 with the project and the advice updates straight away, without listening again.
 
+## The smart tools (left of the analyzer)
+
+Every tool works from the last **Analyze Mix**, so analyze first (and again after big changes). Each one opens a
+list: every change it wants to make, **now → new**, and why, in plain words. Untick anything you don't want.
+**Nothing changes until you press Apply.** Afterwards **Undo** puts back exactly what that tool changed.
+
+- **Balance**: fader levels. Each kind of instrument against the others (kick, 808 / bass, snare, hats, keys,
+  synths, guitars) using your genre's usual balance; only clear outliers move. Then the lead vocal against the
+  rest of the mix (your style's target), ad-libs under the vocal, and room for Masterology: if the mix peaks
+  above about -6 dBTP, everything comes down together. Tracks of one kind move together, so their balance among
+  themselves stays yours. Channels without a Link (e.g. a printed beat) move with the rest of the beat.
+- **Stereo Architect**: pans. Kick, bass, snare and the lead vocal in the middle. Pairs and doubles
+  ("Gtr L" / "Gtr R", "Electric Rhythm" / "Electric Rhythm (D)", "Keys 1" / "Keys 2") spread left and right:
+  if one is already out on a side, it stays and its partner mirrors it. A mix that leans to one side is evened
+  out with the tracks pulling it there.
+- **Clean Up**: Assist EQ. Low cuts on tracks with rumble they don't need (and on vocals: about 90 Hz), and mud
+  dips (200 - 500 Hz) on the tracks carrying it when the mix is muddier than your style.
+- **Vocal Pocket**: Assist EQ. Gentle dips (2 - 4 dB) at 1.6 - 4 kHz in the instruments that cover the vocal's
+  words, each where it overlaps the vocal most.
+- **Auto Mix**: all four together.
+- **Reference Match**: put a finished song you like on its own track under yours (same bars), insert Mixology
+  Link on it and mute the track (its Link still hears it). Analyze Mix, then pick it in Reference Match. You see
+  both tonal curves, five regions in words ("2.4 dB less low end"), loudness and width. **Hear the reference**
+  plays it alone, its Trim matched to your mix's loudness, so you compare sound, not volume; **Back to your mix**
+  mutes it again. The reference is always left out of the mix advice. Loudness differences are Masterology's
+  job: don't push your mix up to match a mastered song.
+
+**Safety.** Protected channels (padlock) are never touched (faders, pans or EQ). Channels writing automation (W)
+are skipped. A fader moves at most 6 dB per Apply unless you press **Allow moves over 6 dB**. If you moved a fader
+since Analyze Mix, the tool leaves it alone (analyze again). When channels are outside the 12 in view, the bank
+steps through your project and comes back by itself (a second or two per page); nothing else can be moved
+meanwhile. **Restore all** (Tracks page) still takes everything back to before Mixology's first change.
+
 ## Mix styles
 
 The style in the header (for example "Hip Hop - Modern Clean") is what Mixology aims for. Click it (or
@@ -173,7 +213,7 @@ through the styles of the genre you're in.
 | Cinematic | Epic Trailer, Orchestral, Soft Score |
 
 The style sets the Tone page's target curve and what Analyze Mix compares your mix with (tone, how loud the
-vocal sits). In Milestone 4 it also steers Auto Mix (levels, panning, width). The style is saved with the
+vocal sits). Its genre also sets the levels Balance and Auto Mix aim for. The style is saved with the
 project.
 
 ## How it works with Voxology and Masterology

@@ -562,7 +562,7 @@ namespace mixology::mix
                                      "When they hit together, " + fmt0 (overlap * 100.0) + " % of their low end (40 - 160 Hz) sits in the same place. That makes the bottom muddy and the kick lose its punch.",
                                      "Yes, for most " + style.name + " mixes: a clean low end is what makes it hit on big speakers and in the car.",
                                      { "Let each own a spot: the kick's punch around 60 - 100 Hz, the 808 / bass below 60 Hz (a small EQ dip in each where the other lives).",
-                                       "Or duck the 808 for a moment each time the kick hits (sidechain compression). Mixology's Low End tool will do this for you (Milestone 4)." }, names });
+                                       "Or duck the 808 for a moment each time the kick hits (sidechain compression on the 808, triggered by the kick)." }, names });
                 if (balance < -12.0)
                     out.push_back ({ "kick-quiet", "info", "kick", "The kick hides under the bass",
                                      "In the low end the kick is " + fmt1 (-balance) + " dB under the 808 / bass while both play.",
@@ -656,7 +656,7 @@ namespace mixology::mix
                                  joinNames (names) + (names.size() == 1 ? " is" : " are") + " nearly as loud as the vocal at 1.6 - 4 kHz while it sings: the range where words are understood.",
                                  strong ? "Yes, if lyrics get lost in busy parts." : "Only if the vocal disappears in the busy parts.",
                                  { "Dip " + joinNames (names) + " 2 - 3 dB around 2 - 3 kHz (a medium EQ bell), or pan " + (names.size() == 1 ? "it" : "them") + " a little off-centre.",
-                                   "Vocal Pocket (Milestone 4) will make these dips for you, only while the vocal sings." }, names });
+                                   "Vocal Pocket (left of the analyzer) makes these dips for you, in each track's Mixology Link." }, names });
             }
         }
 

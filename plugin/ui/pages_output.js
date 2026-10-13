@@ -157,7 +157,7 @@ export function buildStereo(root, app) {
   let mod = store.get("stereoModule", "width");
   moduleList(root, STEREO_MODULES, 0, 0, 252, 104, 18, mod, (id) => {
     mod = id; store.set("stereoModule", id);
-    if (id === "mono" || id === "pan" || id === "freq") app.toast({ mono: "Mono Check (listen in mono) goes live with the processing in Milestone 5. The scope and correlation below are live now.", pan: "Pan Assist arrives with Auto Mix (Milestone 4).", freq: "Frequency Width view arrives in Milestone 3." }[id]);
+    if (id === "mono" || id === "pan" || id === "freq") app.toast({ mono: "Mono Check (listen in mono) goes live with the processing in Milestone 5. The scope and correlation below are live now.", pan: "Pan Assist: use Stereo Architect on the Overview. It plans pans for every track (pairs spread, low end centred).", freq: "Frequency Width view arrives with the processing pages (Milestone 5)." }[id]);
   });
 
   const centre = el("div", "panel", root, box(266, 0, 790, 842));

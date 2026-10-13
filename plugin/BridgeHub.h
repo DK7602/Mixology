@@ -3,6 +3,7 @@
 #include "mixology/BridgeSession.h"
 #include "mixology/LinkRegistry.h"
 #include "mixology/MixAnalysis.h"
+#include "mixology/MixPlanner.h"
 
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_events/juce_events.h>
@@ -40,7 +41,7 @@ public:
 
     /** Everything the Tracks page and Settings > Cubase Bridge show. */
     juce::var getState (bool includeLog);
-    std::uint64_t stateVersion() const { return bridge.stateVersion() + linkVersion + analysisVersion; }
+    std::uint64_t stateVersion() const { return bridge.stateVersion() + linkVersion + analysisVersion + applyVersion; }
 
     /** Per strip: [peak L, peak R] dBFS from its paired Mixology Link, or null. */
     juce::var trackMeters() const;
@@ -55,7 +56,9 @@ public:
     /** UI commands. Strip commands take { slot, hash, value } (the strip as the UI showed it):
         setDb, minusInf, nudge, fader, faderEnd, pan, mute, solo, protect, restore, trim.
         Global ones: restoreAll, forget, bank(action), refresh, reconnect, copyLog.
-        Returns { ok, message, warning }. */
+        Analyze Mix: analyze, analyzeFinish, analyzeCancel, setRole, setExcluded, setReference.
+        Milestone 4: plan(tool) -> { plan }, planApply { id, picked, allowBig }, planUndo, refListen ("ref" / "mix").
+        Returns { ok, message, warning, info }. */
     juce::var command (const juce::String& name, const juce::var& arg);
 
     /** Protected channels, saved with the project (Mixology's plug-in state). Safe from any thread: the host
@@ -83,6 +86,36 @@ private:
     void cacheTrackSettings();
     void finishAnalysis();
     juce::var analysisState() const;
+
+    // ---- Milestone 4: plans you approve, then apply (faders and pans through the bridge, EQ through the Links)
+    std::vector<mixology::mix::ChannelNow> channelsNow() const;
+    juce::var planToVar (const mixology::mix::Plan&) const;
+    juce::var applyState() const;
+    mixology::BridgeSession::Result applyCurrentPlan (const juce::var& picked, bool allowBig, std::string& info);
+    mixology::BridgeSession::Result undoLastApply (std::string& info);
+    mixology::BridgeSession::Result listenToReference (bool reference, std::string& info);
+    const mixology::link::LinkInfo* uniqueLink (const std::vector<mixology::link::LinkInfo>&, std::uint32_t hash) const;
+
+    mixology::mix::Plan currentPlan;
+    std::uint64_t currentPlanId = 0;
+    struct AssistUndo
+    {
+        int slot = -1;
+        std::uint32_t generation = 0;
+        mixology::AssistSettings before;
+    };
+    struct LastApply
+    {
+        bool valid = false;
+        std::string title;
+        bool waitingForBridge = false;
+        std::uint64_t bridgeSerial = 0;     // the bridge plan's serial once it has finished
+        std::vector<mixology::BridgeSession::PlanStep> bridgeUndo;
+        std::vector<AssistUndo> assist;
+    };
+    LastApply lastApply;
+    std::uint64_t applyVersion = 0, seenPlanSerial = 0;
+    bool hearingReference = false;
     std::optional<mixology::mix::Role> roleFor (std::uint32_t hash, const std::string& name) const;
 
     enum class Analyze { idle, reading, listening, done };

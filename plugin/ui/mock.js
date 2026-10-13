@@ -18,7 +18,9 @@
     ["Lead Vox", -2, 0.5, "#4fd66b", 1], ["FX", -14, 0.7, "#d6d23a", 0], ["Adlibs", -7.5, 0.6, "#d68a3a", 1], ["Vox Double", -13, 0.3, "#6bd64f", 0],
     ["Pad", -16, 0.5, "#5a7bd6", 0], ["Riser", -18, 0.5, "#c7c7c7", 0],
   ].map(([name, db, pan, colour, link]) => ({ name, hash: hashOf(name), volume: toNorm(db), pan, mute: false, solo: false, read: name === "FX", write: false, colour, link: !!link, trim: 0, protected: name === "Lead Vox" }));
-  const B = { offset: 0, lastMove: "", log: [], version: 1, restore: {}, an: { state: "idle", seconds: 0, playing: true, report: null }, settings: {} };
+  const B = { offset: 0, lastMove: "", log: [], version: 1, restore: {}, an: { state: "idle", seconds: 0, playing: true, report: null }, settings: {},
+    apply: { active: false, what: "", done: 0, total: 0, skipped: 0, message: "", notes: [], serial: 0, canUndo: false, undoWhat: "", hearingReference: false },
+    planId: 0, plan: null, undo: null };
   const ROLE_OF = { Kick: "kick", Snare: "snare", Hats: "hats", Perc: "perc", "808": "bass", Keys: "keys", Synth: "synth", Guitar: "guitar", "Lead Vox": "vox", FX: "fx", Adlibs: "adlibs", "Vox Double": "adlibs", Pad: "synth", Riser: "fx" };
   const roleOf = (c) => (B.settings[c.hash] && B.settings[c.hash].role) || ROLE_OF[c.name] || "other";
   function fakeReport() {
@@ -26,15 +28,31 @@
     const tracks = linked.map((c, i) => ({ hash: c.hash, name: c.name, role: roleOf(c), roleFrom: B.settings[c.hash] && B.settings[c.hash].role ? "you" : i % 4 === 3 ? "sound" : "name",
       excluded: !!(B.settings[c.hash] && B.settings[c.hash].excluded), faderKnown: true, activity: 0.8, loudness: +(lawDb(c.volume) - 12 + (i % 3)).toFixed(1), peak: +(lawDb(c.volume) - 3 + (i === 0 ? 4 : 0)).toFixed(1), width: c.name === "Keys" ? 0.31 : 0.04 }));
     const sg = (id, kind, icon, title, text, need, steps, tracks) => ({ id, kind, icon, title, text, need, steps, tracks });
+    const refHash = Object.keys(B.settings).find((h) => B.settings[h].reference);
+    const refTrack = refHash && tracks.find((t) => String(t.hash) === String(refHash));
+    if (refTrack) { refTrack.excluded = true; refTrack.reference = true; }
+    const bandsOf = (tilt) => Array.from({ length: 31 }, (_, b) => +(tilt(b)).toFixed(1));
+    const mixBands = bandsOf((b) => 2.5 * Math.exp(-((b - 5) ** 2) / 6) + 1.8 * Math.exp(-((b - 12) ** 2) / 5) - 0.12 * (b - 15) - (b > 26 ? (b - 26) * 1.2 : 0));
+    const reference = !refTrack ? { chosen: false } : {
+      chosen: true, heard: true, hash: refTrack.hash, name: refTrack.name, loudness: -8.1, loudnessDiff: 4.7, width: 0.34, widthDiff: -0.06,
+      bands: bandsOf((b) => 4 * Math.exp(-((b - 4) ** 2) / 5) - 0.1 * (b - 15) + (b > 25 ? 0.6 : 0)),
+      regions: [
+        { name: "Low end (40 - 125 Hz)", diff: -2.4, text: `Your mix has 2.4 dB less low end than '${refTrack.name}'.` },
+        { name: "Low mids (200 - 500 Hz)", diff: 2.9, text: `Your mix has 2.9 dB more low mids than '${refTrack.name}'.` },
+        { name: "Mids (630 Hz - 2 kHz)", diff: 0.6, text: `About the same as '${refTrack.name}'.` },
+        { name: "Presence (2.5 - 5 kHz)", diff: -0.9, text: `About the same as '${refTrack.name}'.` },
+        { name: "Air (8 - 16 kHz)", diff: -3.1, text: `Your mix has 3.1 dB less air than '${refTrack.name}'.` },
+      ] };
     return {
+      reference, mixWidth: 0.28,
       seconds: B.an.seconds, style: (window.__mixStyle || "Hip Hop - Modern Clean"), mixLoudness: -12.8, mixPeak: -4.1, mixCorrelation: 0.62,
-      unheard: chans.filter((c) => !c.link).map((c) => c.name).slice(0, 4), mixBands: [], targetBands: [], tracks,
+      unheard: chans.filter((c) => !c.link).map((c) => c.name).slice(0, 4), mixBands, targetBands: [], tracks,
       suggestions: [
         sg("kick-bass", "warn", "kick", "Kick and bass fight for the low end", "When they hit together, 72 % of their low end (40 - 160 Hz) sits in the same place. That makes the bottom muddy and the kick lose its punch.",
           "Yes, for most Hip Hop mixes: a clean low end is what makes it hit on big speakers and in the car.",
-          ["Let each own a spot: the kick's punch around 60 - 100 Hz, the 808 / bass below 60 Hz (a small EQ dip in each where the other lives).", "Or duck the 808 for a moment each time the kick hits (sidechain compression). Mixology's Low End tool will do this for you (Milestone 4)."], ["Kick", "808"]),
+          ["Let each own a spot: the kick's punch around 60 - 100 Hz, the 808 / bass below 60 Hz (a small EQ dip in each where the other lives).", "Or duck the 808 for a moment each time the kick hits (sidechain compression on the 808, triggered by the kick)."], ["Kick", "808"]),
         sg("vocal-pocket", "warn", "mic", "Instruments cover the vocal's words", "'Keys' and 'Snare' are nearly as loud as the vocal at 1.6 - 4 kHz while it sings: the range where words are understood.",
-          "Yes, if lyrics get lost in busy parts.", ["Dip 'Keys' and 'Snare' 2 - 3 dB around 2 - 3 kHz (a medium EQ bell), or pan them a little off-centre.", "Vocal Pocket (Milestone 4) will make these dips for you, only while the vocal sings."], ["Keys", "Snare"]),
+          "Yes, if lyrics get lost in busy parts.", ["Dip 'Keys' and 'Snare' 2 - 3 dB around 2 - 3 kHz (a medium EQ bell), or pan them a little off-centre.", "Vocal Pocket (left of the analyzer) makes these dips for you, in each track's Mixology Link."], ["Keys", "Snare"]),
         sg("highpass", "info", "lowcut", "Low rumble in tracks that don't need it", "'Adlibs' has a lot of energy below 100 Hz. It adds mud and fights the kick and bass without being heard as part of the sound.",
           "Usually yes: it's free headroom and a cleaner low end.", ["Put a low cut (high-pass) on it: about 80 - 100 Hz for vocals, 60 - 80 Hz for keys, guitars and synths."], ["Adlibs"]),
         sg("unheard", "info", "link", "5 channels without Mixology Link", "'Perc', 'Synth', 'Guitar' and 'FX' and 1 more play in your mix, but Mixology can't hear them one by one, so the advice below leaves them out.",
@@ -63,6 +81,7 @@
       enabled: true, link: "connected", portProblem: "", script: 3, toCubase: "Mixology to Cubase", fromCubase: "Cubase to Mixology", slots,
       changedCount: chans.filter(isChanged).length, restorePoints: Object.keys(B.restore).length, scanning: B.an.state === "reading",
       analysis: { state: B.an.state, seconds: B.an.seconds, enough: 20, max: 60, playing: B.an.playing, heard: chans.filter((c) => c.link).length, report: B.an.report },
+      apply: { ...B.apply },
       linksSeen: chans.filter((c) => c.link).length, linksPaired: slots.filter((s) => s.linkStatus === "matched").length, linksShared: true,
       lastMove: B.lastMove, lawPoints: 37, marks: [6, 0, -6, -12, -24, -36, -48].map((db) => ({ db, pos: toNorm(db) })),
       logVersion: B.log.length, log: withLog ? B.log.slice() : undefined,
@@ -87,6 +106,78 @@
     }
     if (name === "analyzeFinish") { if (B.an.seconds < 1) return fail("Nothing heard yet: press play in Cubase."); B.an.state = "done"; B.an.report = fakeReport(); B.version++; return { ok: true }; }
     if (name === "analyzeCancel") { B.an.state = B.an.report ? "done" : "idle"; B.version++; return { ok: true }; }
+    if (name === "plan") {
+      const titles = { auto: "Auto Mix", balance: "Balance", clean: "Clean Up", pocket: "Vocal Pocket", stereo: "Stereo Architect" };
+      const title = titles[value] || "Auto Mix";
+      B.planId++;
+      if (!B.an.report) return { ok: true, plan: { id: B.planId, tool: value, title, valid: false, summary: `Press Analyze Mix first and play the song for 20 - 60 seconds: ${title} works from what it hears.`, notes: [], changes: [] } };
+      const ch = (n) => chans.find((c) => c.name === n);
+      const lvl = (n, d, why, big) => { const f = lawDb(ch(n).volume); return { hash: ch(n).hash, name: n, role: roleOf(ch(n)), kind: "level", from: +f.toFixed(1), to: +(f + Math.max(-6, Math.min(6, d))).toFixed(1), wanted: +(f + d).toFixed(1), big: !!big, hz: 0, why }; };
+      const pan = (n, to, why) => ({ hash: ch(n).hash, name: n, role: roleOf(ch(n)), kind: "pan", from: Math.round((ch(n).pan - 0.5) * 200), to, wanted: to, big: false, hz: 0, why });
+      const eq = (n, kind, from, to, hz, why) => ({ hash: ch(n).hash, name: n, role: roleOf(ch(n)), kind, from, to, wanted: to, big: false, hz, why });
+      const parts = {
+        balance: [lvl("Hats", -3.4, "the hats sit 4.4 dB louder against the rest of the beat than Hip Hop - Modern Clean usually has"),
+          lvl("Kick", -1.5, "makes room for the vocal"), lvl("808", -1.5, "makes room for the vocal"), lvl("Snare", -1.5, "makes room for the vocal"),
+          lvl("Adlibs", 1.5, "follows the lead vocal")],
+        stereo: [pan("Hats", 15, "the mix leans left by 1.9 dB: this evens it out"), pan("Keys", -45, "pairs with 'Synth': one left, one right sounds wide and keeps the middle free for the vocal")],
+        clean: [eq("Adlibs", "lowcut", 0, 100, 100, "41% of its energy is below 100 Hz, where it only muddies the kick and bass"),
+          eq("Keys", "mud", 0, -2.5, 315, "the mix has 3.6 dB more 200 - 500 Hz than Hip Hop - Modern Clean usually does; this is one of the tracks carrying it")],
+        pocket: [eq("Keys", "pocket", 0, -3, 2500, "at 1.6 - 4 kHz it is 2.1 dB under the vocal while it sings, covering its words"),
+          eq("Snare", "pocket", 0, -2, 3150, "at 1.6 - 4 kHz it is 4.8 dB under the vocal while it sings, covering its words")],
+      };
+      const changes = value === "auto" ? [...parts.balance, ...parts.stereo, ...parts.clean, ...parts.pocket] : parts[value] || [];
+      const notes = ["'Lead Vox': protected (padlock), so it stays where it is (it would have moved +1.5 dB)."];
+      if (value === "auto" || value === "clean" || value === "pocket") notes.push("'Synth' has no Mixology Link Mixology can reach: vocal pocket skipped.");
+      B.plan = { id: B.planId, tool: value, title, valid: true, summary: `${changes.length} changes for ${window.__mixStyle || "Hip Hop - Modern Clean"}: levels: the hats -3.4 dB, the kick -1.5 dB; pans: 2 tracks; 1 low cut, 1 mud dip; 2 pocket dips.`, notes, changes };
+      return { ok: true, plan: B.plan };
+    }
+    if (name === "planApply") {
+      if (!B.plan || arg.id !== B.plan.id) return fail("That plan is out of date: open it again.");
+      const picked = (arg.picked || []).map((i) => B.plan.changes[i]).filter(Boolean);
+      if (!picked.length) return fail("Tick at least one change.");
+      const before = chans.map((c) => ({ c, v: c.volume, p: c.pan }));
+      Object.assign(B.apply, { active: true, what: B.plan.title, done: 0, total: new Set(picked.filter((c) => c.kind === "level" || c.kind === "pan").map((c) => c.name)).size, skipped: 0, notes: [], canUndo: false, undoWhat: B.plan.title });
+      B.version++;
+      let k = 0;
+      const tick = setInterval(() => {
+        const c = picked[k++];
+        if (c) {
+          const t = chans.find((x) => x.hash === c.hash);
+          if (c.kind === "level") { snap(t); t.volume = toNorm(arg.allowBig ? c.wanted : c.to); }
+          if (c.kind === "pan") { snap(t); t.pan = (c.to + 100) / 200; }
+          B.apply.done = Math.min(B.apply.total, B.apply.done + 1);
+          B.version++;
+          return;
+        }
+        clearInterval(tick);
+        Object.assign(B.apply, { active: false, message: `${B.plan.title}: changed ${B.apply.total} channels.`, serial: B.apply.serial + 1, canUndo: true });
+        B.undo = before;
+        log(B.apply.message);
+      }, 250);
+      return { ok: true, info: `${B.plan.title}: moving channels in Cubase, Assist EQ on tracks.` };
+    }
+    if (name === "planUndo") {
+      if (!B.undo) return fail("Nothing to undo.");
+      for (const u of B.undo) { u.c.volume = u.v; u.c.pan = u.p; }
+      B.undo = null;
+      Object.assign(B.apply, { canUndo: false, message: "Undo done.", serial: B.apply.serial + 1 });
+      B.version++;
+      return { ok: true, info: "Undoing: everything it changed goes back." };
+    }
+    if (name === "setReference") {
+      for (const h of Object.keys(B.settings)) if (B.settings[h]) B.settings[h].reference = false;
+      if (value) (B.settings[arg.hash] = B.settings[arg.hash] || {}).reference = true;
+      B.apply.hearingReference = false;
+      if (B.an.report) B.an.report = fakeReport();
+      B.version++;
+      return { ok: true };
+    }
+    if (name === "refListen") {
+      if (!B.an.report || !B.an.report.reference.chosen) return fail("Choose your reference song first.");
+      B.apply.hearingReference = value === "ref";
+      B.version++;
+      return { ok: true, info: value === "ref" ? `Playing '${B.an.report.reference.name}' alone, matched to your mix's loudness (its Trim: -4.7 dB).` : "Back to your mix." };
+    }
     if (name === "setRole" || name === "setExcluded") {
       const set = (B.settings[arg.hash] = B.settings[arg.hash] || {});
       if (name === "setRole") set.role = value || undefined; else set.excluded = !!value;

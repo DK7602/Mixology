@@ -97,7 +97,12 @@ with the project. Song-position tagging was not needed: moments are taken togeth
 - Overview analyzer shows each role in its colour; Mix Assistant gives real suggestions in plain language with a
   "Do I need to fix it?" line, like Voxology's Learn.
 
-### M4 - Auto Mix and the smart tools
+### M4 - Auto Mix and the smart tools (built: you test it, docs/M4_TEST.md)
+Built: plans you approve before anything changes (MixPlanner: Balance, Stereo Architect, Clean Up, Vocal Pocket,
+Auto Mix), applied across the whole project (BridgeSession::applyPlan pages the bank and comes back; per-apply Undo
+with exact positions; Restore all reaches every page too). Mixology Link gained the Assist EQ (low cut, mud dip,
+pocket dip; registry layout 4). Reference Match compares the mix with a reference song (muted, heard by its Link)
+and switches A / B level-matched (solo + Trim). Ducking (sidechain) stays with the processing pages (M5).
 - Auto Mix: relative levels and pans from genre targets (Hip Hop Modern Clean, Trap, G-Funk, Boom Bap, R&B...),
   preview old -> new for every fader, Apply moves the real faders, one-click Restore.
 - Vocal Pocket: finds the instruments masking the lead vocal and proposes gentle, track-specific dips.
@@ -130,6 +135,7 @@ with the project. Song-position tagging was not needed: moments are taken togeth
 | Track name / colour from VST3 channel context in Cubase Artist 14 | M2: yes (Mixology Link shows both) |
 | Can two plug-in libraries share memory inside Cubase? | M2 (named shared memory; checked in CI on Windows) |
 | CPU with a Link on every track | M3 |
+| Does a muted track's insert still get audio (reference song heard by its Link)? | M4 test, step 18 |
 
 ## Your one-time setup (done in M1)
 1. Install loopMIDI (free, Tobias Erichsen) and create two ports named exactly `Mixology to Cubase` and

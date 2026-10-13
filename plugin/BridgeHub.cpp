@@ -157,6 +157,7 @@ void BridgeHub::timerCallback()
                 auto& ts = trackSettings[hash];
                 ts.role = mixology::mix::roleFromKey (f[1].toStdString());
                 ts.excluded = f[2] == "1";
+                ts.reference = f[3] == "1";
             }
             cacheTrackSettings();
             ++analysisVersion;
@@ -175,6 +176,16 @@ void BridgeHub::timerCallback()
         bridge.receive (m.data(), m.size(), t);
 
     bridge.tick (t);
+    if (bridge.planProgress().serial != seenPlanSerial)
+    {
+        seenPlanSerial = bridge.planProgress().serial;
+        if (lastApply.valid && lastApply.waitingForBridge && seenPlanSerial >= lastApply.bridgeSerial)
+        {
+            lastApply.waitingForBridge = false;
+            lastApply.bridgeUndo = bridge.planProgress().undo;
+        }
+        ++applyVersion;
+    }
 
     if (t - lastLinkUpdate >= 1.0 / 30.0)
     {
@@ -342,8 +353,9 @@ void BridgeHub::cacheTrackSettings()
 {
     juce::StringArray lines;
     for (const auto& [hash, ts] : trackSettings)
-        if (ts.role || ts.excluded)
-            lines.add (juce::String (static_cast<juce::int64> (hash)) + "\t" + (ts.role ? mixology::mix::roleKey (*ts.role) : "") + "\t" + (ts.excluded ? "1" : "0"));
+        if (ts.role || ts.excluded || ts.reference)
+            lines.add (juce::String (static_cast<juce::int64> (hash)) + "\t" + (ts.role ? mixology::mix::roleKey (*ts.role) : "") + "\t" + (ts.excluded ? "1" : "0")
+                       + "\t" + (ts.reference ? "1" : "0"));
     const juce::ScopedLock sl (protectedLock);
     trackSettingsCache = lines.joinIntoString ("\n");
 }
@@ -461,9 +473,34 @@ juce::var BridgeHub::analysisState() const
             to->setProperty ("peak", std::round (t.peakBeforeFader * 10.0) / 10.0);
             to->setProperty ("width", std::round (t.width * 100.0) / 100.0);
             to->setProperty ("balance", std::round (t.balance * 10.0) / 10.0);
+            to->setProperty ("reference", t.reference);
             tracks.add (juce::var (to));
         }
         r->setProperty ("tracks", tracks);
+        r->setProperty ("mixWidth", std::round (report.mixWidth * 100.0) / 100.0);
+
+        const auto& ref = report.reference;
+        auto* ro = new juce::DynamicObject();
+        ro->setProperty ("chosen", ref.chosen);
+        ro->setProperty ("heard", ref.heard);
+        ro->setProperty ("hash", static_cast<juce::int64> (ref.hash));
+        ro->setProperty ("name", juce::String::fromUTF8 (ref.name.c_str()));
+        ro->setProperty ("loudness", std::round (ref.loudness * 10.0) / 10.0);
+        ro->setProperty ("loudnessDiff", std::round (ref.loudnessDiff * 10.0) / 10.0);
+        ro->setProperty ("width", std::round (ref.width * 100.0) / 100.0);
+        ro->setProperty ("widthDiff", std::round (ref.widthDiff * 100.0) / 100.0);
+        ro->setProperty ("bands", numbers (ref.bands));
+        juce::Array<juce::var> regions;
+        for (const auto& rg : ref.regions)
+        {
+            auto* g = new juce::DynamicObject();
+            g->setProperty ("name", juce::String::fromUTF8 (rg.name.c_str()));
+            g->setProperty ("diff", std::round (rg.diff * 10.0) / 10.0);
+            g->setProperty ("text", juce::String::fromUTF8 (rg.text.c_str()));
+            regions.add (juce::var (g));
+        }
+        ro->setProperty ("regions", regions);
+        r->setProperty ("reference", juce::var (ro));
 
         juce::Array<juce::var> sugs;
         for (const auto& sg : report.suggestions)
@@ -596,6 +633,7 @@ juce::var BridgeHub::getState (bool includeLog)
     o->setProperty ("lastMove", juce::String::fromUTF8 (bridge.lastMoveResult().c_str()));
     o->setProperty ("scanning", bridge.scanning());
     o->setProperty ("analysis", analysisState());
+    o->setProperty ("apply", applyState());
     o->setProperty ("lawPoints", static_cast<int> (bridge.faderLaw().size()));
 
     // Where the fader scale marks sit on Cubase's fader (learned curve; a rough guess until learned).
@@ -634,6 +672,7 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
     ref.hash = static_cast<std::uint32_t> (static_cast<juce::int64> (arg.getProperty ("hash", 0)));
     const auto value = arg.isObject() ? arg.getProperty ("value", 0) : arg;
     const double number = value.isVoid() ? 0.0 : static_cast<double> (value);
+    juce::var planResult;
 
     if (name == "setDb")          r = bridge.setVolumeDb (ref, number, t);
     else if (name == "minusInf")  r = bridge.setVolumeDb (ref, mixology::FaderLaw::kMinusInf, t);
@@ -699,6 +738,36 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
             ++analysisVersion;
         }
     }
+    else if (name == "setReference")
+    {
+        const auto hash = static_cast<std::uint32_t> (static_cast<juce::int64> (arg.getProperty ("hash", 0)));
+        for (auto& [h, ts] : trackSettings) ts.reference = false;
+        if (static_cast<bool> (value) && hash != 0) trackSettings[hash].reference = true;
+        hearingReference = false;
+        cacheTrackSettings();
+        if (report.valid && analysis.hasMoments()) report = analysis.evaluate (trackSettings, report.unheard);
+        ++analysisVersion;
+    }
+    else if (name == "plan")
+    {
+        const auto tool = mixology::mix::toolFromKey (value.toString().toStdString());
+        if (! tool) r = { false, "Unknown tool." };
+        else
+        {
+            currentPlan = mixology::mix::makePlan (*tool, report, channelsNow());
+            ++currentPlanId;
+            planResult = planToVar (currentPlan);
+        }
+    }
+    else if (name == "planApply")
+    {
+        if (static_cast<juce::int64> (arg.getProperty ("id", 0)) != static_cast<juce::int64> (currentPlanId))
+            r = { false, "That plan is out of date: open it again." };
+        else
+            r = applyCurrentPlan (arg.getProperty ("picked", juce::var()), static_cast<bool> (arg.getProperty ("allowBig", false)), info);
+    }
+    else if (name == "planUndo")  r = undoLastApply (info);
+    else if (name == "refListen") r = listenToReference (value.toString() == "ref", info);
     else if (name == "trim")
     {
         const bool valid = ref.slot >= 0 && ref.slot < bridge.slotCount() && ref.slot < static_cast<int> (stripLinks.size())
@@ -725,5 +794,239 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
     o->setProperty ("message", juce::String::fromUTF8 (r.message.c_str()));
     o->setProperty ("warning", juce::String::fromUTF8 (r.warning.c_str()));
     o->setProperty ("info", juce::String::fromUTF8 (info.c_str()));
+    if (! planResult.isVoid()) o->setProperty ("plan", planResult);
     return juce::var (o);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Milestone 4: plans
+
+const mixology::link::LinkInfo* BridgeHub::uniqueLink (const std::vector<mixology::link::LinkInfo>& links, std::uint32_t hash) const
+{
+    const mixology::link::LinkInfo* found = nullptr;
+    for (const auto& l : links)
+        if (l.identity.hasName && l.nameHash == hash)
+        {
+            if (found != nullptr) return nullptr;   // two Links with this name: can't tell which
+            found = &l;
+        }
+    return found;
+}
+
+std::vector<mixology::mix::ChannelNow> BridgeHub::channelsNow() const
+{
+    const auto links = mixology::link::processRegistry().links (mixology::link::nowMs());
+    std::vector<mixology::mix::ChannelNow> out;
+    std::set<std::uint32_t> seen;
+    for (const auto& [hash, f] : bridge.knownFaders())
+    {
+        mixology::mix::ChannelNow c;
+        c.hash = hash;
+        c.name = f.title;
+        c.faderKnown = true;
+        c.faderDb = std::max (f.db, -200.0);
+        c.hasPan = f.hasPan;
+        c.pan = (f.pan - 0.5) * 200.0;
+        c.locked = bridge.isProtected (hash);
+        if (const auto* l = uniqueLink (links, hash)) { c.hasLink = true; c.assist = l->assist; }
+        seen.insert (hash);
+        out.push_back (c);
+    }
+    for (const auto& l : links)
+    {
+        if (! l.identity.hasName || seen.count (l.nameHash) != 0) continue;
+        mixology::mix::ChannelNow c;   // a Link whose channel Cubase hasn't shown (bridge off): EQ only
+        c.hash = l.nameHash;
+        c.name = l.identity.name;
+        c.locked = bridge.isProtected (l.nameHash);
+        c.hasLink = uniqueLink (links, l.nameHash) != nullptr;
+        c.assist = l.assist;
+        seen.insert (l.nameHash);
+        out.push_back (c);
+    }
+    return out;
+}
+
+juce::var BridgeHub::planToVar (const mixology::mix::Plan& p) const
+{
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("id", static_cast<juce::int64> (currentPlanId));
+    o->setProperty ("tool", mixology::mix::toolKey (p.tool));
+    o->setProperty ("title", juce::String (p.title));
+    o->setProperty ("valid", p.valid);
+    o->setProperty ("summary", juce::String::fromUTF8 (p.summary.c_str()));
+    juce::Array<juce::var> notes;
+    for (const auto& n : p.notes) notes.add (juce::String::fromUTF8 (n.c_str()));
+    o->setProperty ("notes", notes);
+    juce::Array<juce::var> changes;
+    for (const auto& c : p.changes)
+    {
+        auto* co = new juce::DynamicObject();
+        co->setProperty ("hash", static_cast<juce::int64> (c.hash));
+        co->setProperty ("name", juce::String::fromUTF8 (c.name.c_str()));
+        co->setProperty ("role", mixology::mix::roleKey (c.role));
+        co->setProperty ("kind", juce::String (c.kind));
+        co->setProperty ("from", std::round (c.from * 10.0) / 10.0);
+        co->setProperty ("to", std::round (c.to * 10.0) / 10.0);
+        co->setProperty ("wanted", std::round (c.wanted * 10.0) / 10.0);
+        co->setProperty ("big", c.big);
+        co->setProperty ("hz", std::round (c.hz));
+        co->setProperty ("why", juce::String::fromUTF8 (c.why.c_str()));
+        changes.add (juce::var (co));
+    }
+    o->setProperty ("changes", changes);
+    return juce::var (o);
+}
+
+juce::var BridgeHub::applyState() const
+{
+    const auto& pr = bridge.planProgress();
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("active", bridge.applying());
+    o->setProperty ("what", juce::String::fromUTF8 (pr.what.c_str()));
+    o->setProperty ("done", pr.done);
+    o->setProperty ("total", pr.total);
+    o->setProperty ("skipped", pr.skipped);
+    o->setProperty ("message", juce::String::fromUTF8 (pr.message.c_str()));
+    juce::Array<juce::var> notes;
+    for (const auto& n : pr.notes) notes.add (juce::String::fromUTF8 (n.c_str()));
+    o->setProperty ("notes", notes);
+    o->setProperty ("serial", static_cast<juce::int64> (pr.serial));
+    o->setProperty ("canUndo", lastApply.valid && ! lastApply.waitingForBridge);
+    o->setProperty ("undoWhat", juce::String::fromUTF8 (lastApply.title.c_str()));
+    o->setProperty ("hearingReference", hearingReference);
+    return juce::var (o);
+}
+
+mixology::BridgeSession::Result BridgeHub::applyCurrentPlan (const juce::var& picked, bool allowBig, std::string& info)
+{
+    using PlanStep = mixology::BridgeSession::PlanStep;
+    if (! currentPlan.valid) return { false, "Nothing to apply." };
+    if (bridge.busy()) return { false, "Mixology is still busy with the last change: wait a second." };
+    const auto* list = picked.getArray();
+    if (list == nullptr || list->isEmpty()) return { false, "Tick at least one change." };
+
+    auto& registry = mixology::link::processRegistry();
+    const auto links = registry.links (mixology::link::nowMs());
+    std::map<std::uint32_t, PlanStep> steps;
+    std::map<std::uint32_t, mixology::AssistSettings> eq;
+    std::vector<std::string> noLink;
+    for (const auto& v : *list)
+    {
+        const int i = static_cast<int> (v);
+        if (i < 0 || i >= static_cast<int> (currentPlan.changes.size())) continue;
+        const auto& c = currentPlan.changes[static_cast<std::size_t> (i)];
+        if (c.kind == "level" || c.kind == "pan")
+        {
+            auto& st = steps[c.hash];
+            st.hash = c.hash;
+            st.title = c.name;
+            if (c.kind == "level")
+            {
+                st.setVolume = true;
+                st.db = allowBig ? c.wanted : c.to;
+                st.checkFrom = true;
+                st.fromDb = c.from;
+            }
+            else
+            {
+                st.setPan = true;
+                st.pan = std::clamp ((c.to + 100.0) / 200.0, 0.0, 1.0);
+            }
+            continue;
+        }
+        const auto* l = uniqueLink (links, c.hash);
+        if (l == nullptr) { noLink.push_back (c.name); continue; }
+        auto it = eq.find (c.hash);
+        if (it == eq.end()) it = eq.emplace (c.hash, l->assist).first;
+        auto& a = it->second;
+        if (c.kind == "lowcut") a.lowCutHz = static_cast<float> (c.to);
+        else if (c.kind == "mud") { a.mudDb = static_cast<float> (c.to); a.mudHz = static_cast<float> (c.hz); }
+        else if (c.kind == "pocket") { a.pocketDb = static_cast<float> (c.to); a.pocketHz = static_cast<float> (c.hz); }
+    }
+    if (steps.empty() && eq.empty())
+        return { false, noLink.empty() ? std::string ("Tick at least one change.") : "Mixology Link isn't reachable on those tracks any more." };
+    if (! steps.empty() && bridge.link() != mixology::BridgeSession::Link::connected)
+        return { false, "Not connected to Cubase, so faders and pans can't move (Settings > Cubase Bridge)." };
+
+    LastApply next;
+    next.valid = true;
+    next.title = currentPlan.title;
+    if (! steps.empty())
+    {
+        std::vector<PlanStep> v;
+        for (auto& [h, st] : steps) v.push_back (st);
+        const auto r = bridge.applyPlan (currentPlan.title, std::move (v), now());
+        if (! r.ok) return r;
+        next.waitingForBridge = true;
+        next.bridgeSerial = bridge.planProgress().serial + 1;
+    }
+    for (const auto& [hash, a] : eq)
+    {
+        const auto* l = uniqueLink (links, hash);
+        next.assist.push_back ({ l->slot, l->generation, l->assist });
+        registry.requestAssist (l->slot, l->generation, a);
+    }
+    lastApply = std::move (next);
+    ++applyVersion;
+
+    std::vector<std::string> parts;
+    if (! steps.empty()) parts.push_back ("moving " + std::to_string (steps.size()) + " channel" + (steps.size() == 1 ? "" : "s") + " in Cubase");
+    if (! eq.empty()) parts.push_back ("Assist EQ on " + std::to_string (eq.size()) + " track" + (eq.size() == 1 ? "" : "s"));
+    info = currentPlan.title + ": " + (parts.size() == 2 ? parts[0] + ", " + parts[1] : parts[0]) + ".";
+    if (! noLink.empty()) info += " (" + std::to_string (noLink.size()) + " skipped: no Mixology Link.)";
+    return { true, {} };
+}
+
+mixology::BridgeSession::Result BridgeHub::undoLastApply (std::string& info)
+{
+    if (! lastApply.valid) return { false, "Nothing to undo." };
+    if (bridge.busy() || lastApply.waitingForBridge) return { false, "Wait until Mixology has finished applying." };
+    if (! lastApply.bridgeUndo.empty())
+    {
+        if (bridge.link() != mixology::BridgeSession::Link::connected) return { false, "Not connected to Cubase: can't put the faders back yet." };
+        const auto r = bridge.applyPlan ("Undo " + lastApply.title, lastApply.bridgeUndo, now());
+        if (! r.ok) return r;
+    }
+    auto& registry = mixology::link::processRegistry();
+    for (const auto& a : lastApply.assist) registry.requestAssist (a.slot, a.generation, a.before);
+    info = "Undoing " + lastApply.title + ": everything it changed goes back.";
+    lastApply = {};
+    ++applyVersion;
+    return { true, {} };
+}
+
+mixology::BridgeSession::Result BridgeHub::listenToReference (bool toReference, std::string& info)
+{
+    const auto& ref = report.reference;
+    if (! ref.chosen) return { false, "Choose your reference song first." };
+    if (bridge.link() != mixology::BridgeSession::Link::connected) return { false, "Not connected to Cubase: Mixology can't solo the reference." };
+    mixology::BridgeSession::PlanStep st;
+    st.hash = ref.hash;
+    st.title = ref.name;
+    st.setMute = true;
+    st.mute = ! toReference;
+    st.setSolo = true;
+    st.solo = toReference;
+    const auto r = bridge.applyPlan (toReference ? "Hear the reference" : "Back to your mix", { st }, now());
+    if (! r.ok) return r;
+    hearingReference = toReference;
+    ++applyVersion;
+
+    if (toReference && ref.heard)
+    {
+        // Level-matched: the reference's Trim brings it to your mix's loudness, so you compare sound, not volume.
+        const auto links = mixology::link::processRegistry().links (mixology::link::nowMs());
+        if (const auto* l = uniqueLink (links, ref.hash))
+        {
+            const float trim = static_cast<float> (std::clamp (l->trimDb - ref.loudnessDiff, -24.0, 24.0));
+            if (std::abs (trim - l->trimDb) > 0.2f)
+            {
+                mixology::link::processRegistry().requestTrim (l->slot, l->generation, trim);
+                info = "Playing '" + ref.name + "' alone, matched to your mix's loudness (its Trim: " + (trim > 0 ? "+" : "") + juce::String (trim, 1).toStdString() + " dB).";
+            }
+        }
+    }
+    if (info.empty()) info = toReference ? "Playing '" + ref.name + "' alone." : "Back to your mix ('" + ref.name + "' muted).";
+    return { true, {} };
 }
