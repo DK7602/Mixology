@@ -119,9 +119,9 @@ Goal: prove that Mixology can move ONE real MixConsole fader safely, and see you
 | Can a VST3 open the virtual MIDI ports while Cubase also uses them? | M1: yes (loopMIDI) |
 | Exact dB <-> fader value curve in Cubase 14 | M1: learned from Cubase's display text, lands exactly |
 | Do remote moves write automation when a track is in Write / Latch? | M1 / M2 (Mixology refuses with W on) |
-| Do remote moves show in MixConsole History (undo)? | M2 (open) |
+| Do remote moves show in Cubase's undo? | M2: not in Edit History (user, Artist 14). Mixology's Restore is the undo |
 | Does every channel type (mono, stereo, group, FX, instrument) bank and report correctly? | M1: yes |
-| Track name / colour from VST3 channel context in Cubase Artist 14 | M2 (open) |
+| Track name / colour from VST3 channel context in Cubase Artist 14 | M2: yes (Mixology Link shows both) |
 | Can two plug-in libraries share memory inside Cubase? | M2 (named shared memory; checked in CI on Windows) |
 | CPU with a Link on every track | M3 |
 

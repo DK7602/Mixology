@@ -75,6 +75,9 @@ sends higher-resolution art, re-run it.
   setDb refinement uses its own readbacks (shifted curve, then secant) instead of learning them; saved curves
   without "faderLawFormat" 2 are dropped once; the strip scale skips a mark closer than 18 px to the previous one.
   Test: "a fast Cubase-side drag with lagging text doesn't bend the fader curve" (fails with the old learning).
+- User answers (M2): Link shows the real track name + colour in Artist 14 (VST3 channel context works). Edit History
+  stays empty after Mixology's moves (so Restore is the only undo for them). R + volume automation: user didn't know
+  automation yet; explained, optional 2-minute test offered (step E16 of M1 still unanswered).
 - CI gotcha: MSVC has no M_PI (test_link.cpp failed the first M2 run).
 
 ## Milestone 1 status: PASSED in Cubase Artist 14.0.41 (script v3, 2026-10-13)
