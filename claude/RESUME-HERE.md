@@ -43,7 +43,7 @@ sends higher-resolution art, re-run it.
   makeActionBinding + setProcessValue(1) then 0; display text format; whether channel IDs follow channels;
   whether remote moves land in MixConsole History; whether a plug-in can open loopMIDI ports while Cubase
   has them (loopMIDI is multi-client, expected OK).
-- Tests: 25 Catch2 cases (tests/test_bridge.cpp vs FakeCubase) + tools/bridge-sim/run.js (11 scenarios, 70+
+- Tests: 24 Catch2 cases (tests/test_bridge.cpp vs FakeCubase) + tools/bridge-sim/run.js (11 scenarios, 65
   checks: the real JS script in Node with a fake MIDI Remote API <-> real C++ session via session_cli),
   both in CI (ASan/UBSan job). pluginval strictness 10 SUCCESS locally (Linux).
 
