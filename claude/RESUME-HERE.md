@@ -167,6 +167,7 @@ Other MIDI Remote scripts on the user's machine: Arturia KeyLab Essential 61 mk3
 APC40 mkII / MPK249, Korg nanoKONTROL; MIDI ports appear via Windows MIDI Services ("I|Windows MIDI|Mixology to Cubase").
 
 ## CI
+M3 green run: 38461991599 (57 tests on Windows, Link check with analysis, pluginval 10 + validator, both plug-ins).
 M2 green run: 38444281357 (Windows build, unit tests, Link cross-library check on Windows, pluginval 10 +
 VST3 validator for BOTH plug-ins). Artifact Mixology-Windows has VST3/Mixology.vst3 + VST3/Mixology Link.vst3.
 Every push: engine + bridge simulator under ASan/UBSan (Linux), Windows build + tests + package + pluginval 10 +
