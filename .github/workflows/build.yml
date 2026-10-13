@@ -89,7 +89,8 @@ jobs:
         run: |
           P="Mixology-${{ matrix.name }}"
           mkdir -p "$P/Cubase MIDI Remote"
-          cp -R build/plugin/Mixology_artefacts/Release/VST3 "$P/"
+          mkdir -p "$P/VST3"   # only the two plug-ins (no linker leftovers like Mixology.exp / .lib)
+          cp -R build/plugin/Mixology_artefacts/Release/VST3/Mixology.vst3 "$P/VST3/"
           cp -R "build/link/MixologyLink_artefacts/Release/VST3/Mixology Link.vst3" "$P/VST3/"
           cp -R build/plugin/Mixology_artefacts/Release/Standalone "$P/" || true
           cp -R build/plugin/Mixology_artefacts/Release/AU "$P/" 2>/dev/null || true
