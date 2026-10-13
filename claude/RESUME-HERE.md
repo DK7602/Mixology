@@ -66,6 +66,8 @@ sends higher-resolution art, re-run it.
   Header arrows step within the genre; name click / PRESETS tab -> genre grid -> style pop-up (#style-pop).
   Saved as "genre.style" key in the UI state ("preset"); old numeric index migrated (LEGACY list). Milestone 4 must
   add level / pan / width targets per style.
+- Light look uses the user's own chrome title art (plugin/ui/assets/wordmark_light.png, from their upload 2026-10-13,
+  already transparent; trimmed to 1200 x 154). app.js / link.js swap the <img> src with the theme. Dark keeps wordmark.png.
 - CI gotcha: MSVC has no M_PI (test_link.cpp failed the first M2 run).
 
 ## Milestone 1 status: PASSED in Cubase Artist 14.0.41 (script v3, 2026-10-13)

@@ -80,6 +80,8 @@ export const app = {
 
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
+  // The light look has its own chrome title (made for a white background).
+  $("wordmark").src = theme === "light" ? "assets/wordmark_light.png" : "assets/wordmark.png";
   app.emit("theme", theme);
 }
 $("logoBtn").addEventListener("click", () => {

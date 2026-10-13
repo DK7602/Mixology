@@ -17,10 +17,11 @@ const fn = (name) => { const f = Juce.getNativeFunction(name); return (...a) => 
 const native = { getLinkInfo: fn("getLinkInfo"), setTrim: fn("setTrim"), trimGesture: fn("trimGesture") };
 
 // Light / dark: follows Mixology's saved choice; the logo switches this window.
-$("logoBtn").addEventListener("click", () => {
-  const root = document.documentElement;
-  root.dataset.theme = root.dataset.theme === "light" ? "dark" : "light";
-});
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  $("lwordmark").src = theme === "light" ? "wordmark_light.png" : "wordmark.png";   // the light look has its own title
+}
+$("logoBtn").addEventListener("click", () => applyTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light"));
 
 // Meters: L / R bars with a dB scale, plus the readings.
 const meters = $("lmeters");
@@ -78,7 +79,7 @@ function frame(f) {
 
 async function start() {
   const info = (await native.getLinkInfo()) || {};
-  document.documentElement.dataset.theme = info.theme === "light" ? "light" : "dark";
+  applyTheme(info.theme === "light" ? "light" : "dark");
   if (typeof info.trim === "number") trim.set(info.trim);
   fit();
   window.__JUCE__.backend.addEventListener("linkFrame", frame);

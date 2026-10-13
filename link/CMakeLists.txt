@@ -39,6 +39,7 @@ juce_add_binary_data(MixologyLinkUIData
         "${MIX_UI}/ui.js"
         "${MIX_UI}/assets/logo.png"
         "${MIX_UI}/assets/wordmark.png"
+        "${MIX_UI}/assets/wordmark_light.png"
         ${LINK_FONTS}
         "${juce_SOURCE_DIR}/modules/juce_gui_extra/native/javascript/index.js"
         "${juce_SOURCE_DIR}/modules/juce_gui_extra/native/javascript/check_native_interop.js")

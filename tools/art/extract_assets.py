@@ -2,7 +2,8 @@
 
 Usage:  python3 -I tools/art/extract_assets.py <Images folder from the handoff zip> <output folder>
 Writes: logo.png      beaker + atom + waveforms, transparent (glow kept as alpha: looks the same on dark)
-        wordmark.png  chrome MIXOLOGY letters, transparent, solid metal (works on dark and light)
+        wordmark.png  chrome MIXOLOGY letters, transparent, solid metal (the dark look)
+        (wordmark_light.png, the light look's title, is the user's own art, not cut from the mockups)
         gears.jpg     the gear texture from the header's right side
         scene_*.jpg   the seven Space pictures (reverb, delay, chorus, phaser, hall, room, special)
 

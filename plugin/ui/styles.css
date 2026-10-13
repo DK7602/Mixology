@@ -150,7 +150,7 @@ button { font-family: inherit; }
   filter: drop-shadow(-6px 0 10px rgba(30, 140, 255, 0.45)) drop-shadow(6px 0 10px rgba(255, 40, 40, 0.45));
   pointer-events: none;
 }
-:root[data-theme="light"] #wordmark { filter: drop-shadow(0 2px 2px rgba(10, 20, 40, 0.55)) drop-shadow(-4px 0 6px rgba(30, 140, 255, 0.35)) drop-shadow(4px 0 6px rgba(255, 40, 40, 0.35)); }
+:root[data-theme="light"] #wordmark { top: 12px; filter: drop-shadow(0 2px 3px rgba(10, 20, 40, 0.22)); }
 
 #subtitle {
   position: absolute; left: 352px; top: 96px; width: 590px; text-align: center;
