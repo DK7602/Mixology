@@ -61,6 +61,12 @@ sends higher-resolution art, re-run it.
   (Linux local pass; CI runs it on Windows). pluginval strictness 10 SUCCESS for Mixology Link (Linux).
 - Open questions for the user: Link shows the real track name / colour in Cubase Artist 14? Remote moves in
   Edit > History? R automation + play after a move?
+- Mix styles (user request 2026-10-13: "rock, country, more pop, gospel, worship, all genres", pick a genre then a
+  style in a pop-up): plugin/ui/mixstyles.js = 14 genres / 75 styles (bass, scoop, air targets + one-line about).
+  Header arrows step within the genre; name click / PRESETS tab -> genre grid -> style pop-up (#style-pop).
+  Saved as "genre.style" key in the UI state ("preset"); old numeric index migrated (LEGACY list). Milestone 4 must
+  add level / pan / width targets per style.
+- CI gotcha: MSVC has no M_PI (test_link.cpp failed the first M2 run).
 
 ## Milestone 1 status: PASSED in Cubase Artist 14.0.41 (script v3, 2026-10-13)
 User ran M1_TEST 1-22: all worked (Set dB exact, drag, pan, M/S, Cubase->Mixology, rename / reorder / bank pause,
