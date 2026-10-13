@@ -106,6 +106,13 @@ TEST_CASE ("Analysis: stereo width and correlation", "[analysis]")
         std::vector<float> r (N, 0.0f);
         const auto f = a.analyse (l.data(), r.data(), sr);
         CHECK (f.width == Catch::Approx (0.5).margin (0.02));
+        CHECK (f.balanceDb == Catch::Approx (40.0));   // all left (capped)
+    }
+    SECTION ("left / right balance")
+    {
+        const auto l = sine (440.0, 0.15), r = sine (440.0, 0.3);
+        CHECK (a.analyse (l.data(), r.data(), sr).balanceDb == Catch::Approx (-6.02).margin (0.05));   // leans right
+        CHECK (a.analyse (r.data(), r.data(), sr).balanceDb == Catch::Approx (0.0).margin (1e-3));
     }
 }
 
@@ -177,10 +184,14 @@ namespace
         AnalysisFrame f;
         f.silent = true;
         std::array<double, kBands> e {}, side {};
+        double left = 0.0, right = 0.0;
         for (const auto& t : tracks)
         {
             if (t.frame.silent) continue;
             f.silent = false;
+            const double ms = std::pow (10.0, (t.frame.rmsDb + t.faderDb) / 10.0), lr = std::pow (10.0, t.frame.balanceDb / 10.0);
+            left += 2.0 * ms * lr / (1.0 + lr);
+            right += 2.0 * ms / (1.0 + lr);
             for (int b = 0; b < kBands; ++b)
             {
                 const auto i = static_cast<std::size_t> (b);
@@ -203,8 +214,11 @@ namespace
         f.peakDb = static_cast<float> (peakDb);
         f.width = static_cast<float> (totalSide / total);
         f.correlation = static_cast<float> (1.0 - 2.0 * f.width);
+        f.balanceDb = static_cast<float> (10.0 * std::log10 (left / right));
         return f;
     }
+
+    AnalysisFrame panned (AnalysisFrame f, double balanceDb) { f.balanceDb = static_cast<float> (balanceDb); return f; }
 
     TrackSample sample (const std::string& name, const AnalysisFrame& f, double fader = 0.0)
     {
@@ -341,6 +355,55 @@ TEST_CASE ("Analyze Mix: vocal level against the beat", "[analysis]")
             fits = find (listen (beat (level)).evaluate ({}), "vocal-ok") != nullptr;
         CHECK (fits);
     }
+}
+
+TEST_CASE ("Analyze Mix: vocal level against a beat that has no Link", "[analysis]")
+{
+    // Only the vocal has a Link; the printed beat is heard on the Stereo Out only.
+    auto run = [] (double vocal) {
+        Analysis a;
+        a.begin (Style {});
+        for (int i = 0; i < 150; ++i)
+        {
+            Moment m;
+            m.tracks = { sample ("Lead Vox", vocalFrame (vocal)) };
+            auto everything = m.tracks;
+            everything.push_back (sample ("Beat", kickFrame()));
+            everything.push_back (sample ("Beat 808", bassFrame()));
+            m.mix = mixOf (everything);
+            a.add (m);
+        }
+        return a.evaluate ({}, { "Beat", "Beat 808" });
+    };
+    const auto buried = run (-30.0);
+    REQUIRE (find (buried, "vocal-low") != nullptr);
+    CHECK (find (buried, "vocal-low")->kind == "warn");
+    CHECK (find (run (-6.0), "vocal-low") == nullptr);
+}
+
+TEST_CASE ("Analyze Mix: the mix leans to one side", "[analysis]")
+{
+    auto band = [] (bool lopsided) {
+        return [=] (int) { return std::vector<TrackSample> {
+            sample ("Kick", kickFrame()), sample ("808", bassFrame()), sample ("Lead Vox", vocalFrame (-12.0)),
+            sample ("Electric Rhythm", panned (padFrame (-16.0), 40.0)),
+            sample ("Electric Rhythm (D)", panned (padFrame (-16.0), lopsided ? 40.0 : -40.0)),
+            sample ("Electric Lead", panned (padFrame (-17.0), lopsided ? 40.0 : 0.0)) }; };
+    };
+    const auto r = listen (band (true)).evaluate ({});
+    const auto* s = find (r, "lean-left");
+    REQUIRE (s != nullptr);
+    CHECK (s->kind == "warn");
+    CHECK (mentions (s, "Electric Rhythm"));
+    CHECK (mentions (s, "Electric Rhythm (D)"));
+    CHECK_FALSE (mentions (s, "Kick"));
+    CHECK (r.mixBalance > 3.0);
+    CHECK (track (r, "Electric Lead")->balance > 30.0);
+    CHECK (track (r, "Electric Lead")->role == Role::guitar);   // "Electric" names are guitars
+
+    const auto even = listen (band (false)).evaluate ({});
+    CHECK (find (even, "lean-left") == nullptr);
+    CHECK (find (even, "lean-right") == nullptr);
 }
 
 TEST_CASE ("Analyze Mix: instruments covering the vocal's words", "[analysis]")

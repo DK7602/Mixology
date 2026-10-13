@@ -139,13 +139,17 @@ export function buildOverview(root, app) {
         ctx.shadowColor = colour;
         ctx.shadowBlur = dark ? 8 : 2;
         ctx.beginPath();
-        let started = false;
+        const pts = [];
         c.forEach((v, b) => {
           const hz = 1000 * Math.pow(2, (b - 17) / 3);
           if (hz < 20 || hz > 20000) return;
-          const x = 34 + freqToX(hz, W), y = yOf(clamp(v + OFFSET, DB_MIN - 6, DB_MAX), plotH);
-          started ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-          started = true;
+          const sv = 0.25 * (c[b - 1] ?? v) + 0.5 * v + 0.25 * (c[b + 1] ?? v);
+          pts.push([34 + freqToX(hz, W), yOf(clamp(sv + OFFSET, DB_MIN - 6, DB_MAX), plotH)]);
+        });
+        pts.forEach(([x, y], i) => {
+          if (!i) { ctx.moveTo(x, y); return; }
+          const [px, py] = pts[i - 1];
+          i === pts.length - 1 ? ctx.quadraticCurveTo(px, py, x, y) : ctx.quadraticCurveTo(px, py, (px + x) / 2, (py + y) / 2);
         });
         ctx.stroke();
       });
@@ -289,7 +293,13 @@ export function buildOverview(root, app) {
       meters.r.set(f.peakR ?? -100);
       meters.lufs.set((f.momentary ?? -100) + 0);
       if (f.roleCurves) {
-        curves = f.roleCurves;
+        // Calm the lines down: blend over time, then a light smoothing across neighbouring bands.
+        const prev = curves;
+        curves = f.roleCurves.map((c, gi) => {
+          if (!c) return null;
+          const old = prev && prev[gi] && prev[gi].length === c.length ? prev[gi] : null;
+          return old ? c.map((v, b) => 0.8 * old[b] + 0.2 * v) : c.slice();
+        });
         legendItems.forEach((it, i) => { it.style.opacity = curves[i] ? "1" : "0.4"; });
       }
       if (f.spectrum) {

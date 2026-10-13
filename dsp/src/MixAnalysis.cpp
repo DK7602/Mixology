@@ -67,26 +67,25 @@ namespace mixology::mix
             return e;
         }
 
-        enum class Family { urban, pop, band, acoustic };
-        Family familyOf (const std::string& styleKey)
+        // How far above (+) or below (-) the rest of the mix the lead vocal usually sits, per genre (dB, measured
+        // as K-weighted loudness while the vocal sings). Vocal-led genres sit it forward; rock keeps it in the band.
+        double vocalTarget (const std::string& styleKey)
         {
             const auto genre = styleKey.substr (0, styleKey.find ('.'));
-            if (genre == "hiphop" || genre == "trap" || genre == "rnb" || genre == "afro" || genre == "latin") return Family::urban;
-            if (genre == "pop" || genre == "electronic") return Family::pop;
-            if (genre == "rock" || genre == "country" || genre == "gospel" || genre == "worship") return Family::band;
-            return Family::acoustic;
+            if (genre == "rock") return -1.0;
+            if (genre == "cinematic") return -2.0;
+            if (genre == "electronic" || genre == "jazz") return 0.0;
+            if (genre == "trap" || genre == "afro") return 0.5;
+            if (genre == "pop" || genre == "country" || genre == "rnb" || genre == "folk") return 1.5;
+            return 1.0;   // hip hop, gospel, worship, latin
         }
 
-        // How far above (+) or below (-) the rest of the mix the lead vocal usually sits, per family.
-        double vocalTarget (Family f)
+        // Left and right energy of a frame (from its level and balance), optionally after a fader.
+        std::pair<double, double> leftRight (const AnalysisFrame& f, double faderDb = 0.0)
         {
-            switch (f)
-            {
-                case Family::urban: return 1.0;
-                case Family::pop:   return 1.0;
-                case Family::band:  return -1.0;
-                default:            return -1.0;
-            }
+            const double ms = toE (f.rmsDb + faderDb);       // mean square of the average channel
+            const double r = toE (f.balanceDb);              // left / right
+            return { 2.0 * ms * r / (1.0 + r), 2.0 * ms / (1.0 + r) };
         }
         constexpr double kVocalTolerance = 3.0;
 
@@ -97,7 +96,7 @@ namespace mixology::mix
             bool faderKnown = false;
             double maxLoud = -120.0;
             int seen = 0, active = 0;
-            double loudE = 0.0, crestSum = 0.0, widthSum = 0.0, corrSum = 0.0, peak = -120.0;
+            double loudE = 0.0, crestSum = 0.0, widthSum = 0.0, corrSum = 0.0, peak = -120.0, leftE = 0.0, rightE = 0.0;
             std::array<double, kBands> bandE {}, sideE {};
             std::vector<int> momentIndex;   // moments where it was active
         };
@@ -165,7 +164,7 @@ namespace mixology::mix
                 { Role::perc,   std::regex ("perc|shaker|tamb|conga|bongo|tom|cowbell|drum", f) },
                 { Role::bass,   std::regex ("808|bass|sub\\b|subs", f) },
                 { Role::keys,   std::regex ("key|piano|rhodes|organ|\\bep\\b|wurl", f) },
-                { Role::guitar, std::regex ("guitar|gtr|acoustic|strat", f) },
+                { Role::guitar, std::regex ("guitar|gtr|acoustic|strat|electric", f) },
                 { Role::synth,  std::regex ("synth|pad|lead|pluck|arp|string|brass|bell|choir|sample|melod|loop", f) },
                 { Role::fx,     std::regex ("\\bfx\\b|riser|sweep|impact|reverse|noise|verb|delay|transition", f) },
             };
@@ -252,6 +251,9 @@ namespace mixology::mix
                 a.crestSum += t.frame.peakDb - t.frame.rmsDb;
                 a.widthSum += t.frame.width;
                 a.corrSum += t.frame.correlation;
+                const auto [l, rgt] = leftRight (t.frame, t.faderDb);
+                a.leftE += l;
+                a.rightE += rgt;
                 for (int b = 0; b < kBands; ++b)
                 {
                     const auto i = static_cast<std::size_t> (b);
@@ -286,6 +288,7 @@ namespace mixology::mix
                     if (b <= kLowTo) { lowE += a.bandE[i]; lowSide += a.sideE[i]; }
                 }
                 t.lowWidth = lowE > 0.0 ? lowSide / lowE : 0.0;
+                t.balance = a.rightE > 0.0 && a.leftE > 0.0 ? std::clamp (toDb (a.leftE) - toDb (a.rightE), -40.0, 40.0) : 0.0;
             }
 
             const auto it = settings.find (key);
@@ -305,7 +308,7 @@ namespace mixology::mix
 
         // ---- the mix ---------------------------------------------------------------------------
         std::array<double, kBands> mixE {}, mixSide {};
-        double mixLoudE = 0.0, mixCorr = 0.0;
+        double mixLoudE = 0.0, mixCorr = 0.0, mixLeft = 0.0, mixRight = 0.0;
         int mixN = 0;
         for (const auto& m : moments)
         {
@@ -313,6 +316,9 @@ namespace mixology::mix
             ++mixN;
             mixLoudE += toE (m.mix.loudness);
             mixCorr += m.mix.correlation;
+            const auto [ml, mr] = leftRight (m.mix);
+            mixLeft += ml;
+            mixRight += mr;
             r.mixPeak = std::max (r.mixPeak, static_cast<double> (m.mix.peakDb));
             for (int b = 0; b < kBands; ++b)
             {
@@ -326,6 +332,7 @@ namespace mixology::mix
         {
             r.mixLoudness = toDb (mixLoudE / mixN);
             r.mixCorrelation = mixCorr / mixN;
+            r.mixBalance = mixLeft > 0.0 && mixRight > 0.0 ? toDb (mixLeft) - toDb (mixRight) : 0.0;
             for (int b = 0; b < kBands; ++b) mixDb[static_cast<std::size_t> (b)] = toDb (mixE[static_cast<std::size_t> (b)] / mixN);
         }
 
@@ -364,7 +371,6 @@ namespace mixology::mix
         };
 
         auto& out = r.suggestions;
-        const auto family = familyOf (style.key);
 
         // ---- 1. listening time and unheard channels --------------------------------------------
         if (r.secondsHeard < kEnoughSeconds)
@@ -379,35 +385,41 @@ namespace mixology::mix
                              { "Insert Mixology Link on each of them, after their other plug-ins, then Analyze Mix again." }, unheard });
 
         // ---- 2. vocal level against the beat ---------------------------------------------------
-        std::vector<std::uint32_t> vocals, others;
+        // The beat = everything but the vocals. Measured two ways and the larger one kept: the tracks with a Link
+        // added up, and the whole mix (Mixology on the Stereo Out) minus the vocals, which also counts channels
+        // without a Link (e.g. a printed beat).
+        std::vector<std::uint32_t> vocals, others, adlibs;
         for (const auto& t : r.tracks)
         {
             if (! counts (t)) continue;
             if (t.role == Role::vox) vocals.push_back (t.hash);
-            else if (t.role != Role::adlibs) others.push_back (t.hash);
+            else if (t.role == Role::adlibs) adlibs.push_back (t.hash);
+            else others.push_back (t.hash);
         }
-        if (! vocals.empty() && ! others.empty())
+        if (! vocals.empty())
         {
             std::vector<double> ratios;
             for (const auto& m : moments)
             {
-                double vE = 0.0, bE = 0.0, vMax = -120.0;
+                double vE = 0.0, aE = 0.0, bE = 0.0;
                 for (const auto& t : m.tracks)
                 {
                     const auto key = keyOf (t);
                     const auto& a = acc.at (key);
                     if (! activeIn (t, a.maxLoud)) continue;
-                    const double l = t.frame.loudness + t.faderDb;
-                    if (std::find (vocals.begin(), vocals.end(), key) != vocals.end()) { vE += toE (l); vMax = std::max (vMax, l); }
-                    else if (std::find (others.begin(), others.end(), key) != others.end()) bE += toE (l);
+                    const double e = toE (t.frame.loudness + t.faderDb);
+                    if (std::find (vocals.begin(), vocals.end(), key) != vocals.end()) vE += e;
+                    else if (std::find (adlibs.begin(), adlibs.end(), key) != adlibs.end()) aE += e;
+                    else if (std::find (others.begin(), others.end(), key) != others.end()) bE += e;
                 }
-                if (vE > 0.0 && bE > 0.0) ratios.push_back (toDb (vE) - toDb (bE));
+                if (! m.mix.silent) bE = std::max (bE, toE (m.mix.loudness) - vE - aE);
+                if (vE > 0.0 && bE > 1.0e-12) ratios.push_back (toDb (vE) - toDb (bE));
             }
             if (ratios.size() >= 5)
             {
                 std::nth_element (ratios.begin(), ratios.begin() + static_cast<long> (ratios.size() / 2), ratios.end());
                 const double ratio = ratios[ratios.size() / 2];
-                const double target = vocalTarget (family);
+                const double target = vocalTarget (style.key);
                 std::vector<std::string> names;
                 for (auto k : vocals) names.push_back (trackOf (k).name);
                 if (ratio < target - kVocalTolerance)
@@ -625,6 +637,30 @@ namespace mixology::mix
                                  "Yes: check it in mono before you finish the mix.",
                                  { outOfPhase.empty() ? std::string ("Find the widest effects (wideners, stereo delays) and narrow them a little.")
                                                       : "Flip the phase of one side on " + joinNames (outOfPhase) + " (or remove the widener on it), then compare in mono." }, outOfPhase });
+        }
+
+        // ---- 7b. left / right balance ----------------------------------------------------------
+        if (mixN >= 5 && std::abs (r.mixBalance) >= 1.5)
+        {
+            const bool left = r.mixBalance > 0.0;
+            std::vector<std::pair<double, std::string>> pulling;
+            for (const auto& t : r.tracks)
+                if (counts (t) && (left ? t.balance > 6.0 : t.balance < -6.0) && t.loudness > r.mixLoudness - 18.0)
+                    pulling.push_back ({ t.loudness, t.name });
+            std::sort (pulling.begin(), pulling.end(), [] (auto& a, auto& b) { return a.first > b.first; });
+            std::vector<std::string> names;
+            for (const auto& p : pulling) names.push_back (p.second);
+            const std::string side = left ? "left" : "right", other = left ? "right" : "left";
+            const bool strong = std::abs (r.mixBalance) >= 3.0;
+            out.push_back ({ left ? "lean-left" : "lean-right", strong ? "warn" : "info", "pan",
+                             "The mix leans to the " + side,
+                             "The mix is " + fmt1 (std::abs (r.mixBalance)) + " dB louder on the " + side + " than on the " + other + "."
+                                 + (names.empty() ? std::string() : " Pulling it there: " + joinNames (names, 4) + ".")
+                                 + " On headphones and in the car the song feels lopsided.",
+                             strong ? "Yes: a lopsided mix sounds unfinished." : "Only if it feels lopsided on headphones.",
+                             { names.size() >= 2 ? "Pan some of " + joinNames (names, 4) + " to the " + other + " (for example: one guitar left, its double right)."
+                                                 : std::string ("Balance what is panned hard to the ") + side + " with something of similar weight on the " + other + ".",
+                               "Check nothing loud is panned to one side by mistake (Pan on the Tracks page shows L / R)." }, names });
         }
 
         // ---- 8. tracks you can hardly hear, tracks running very hot ----------------------------

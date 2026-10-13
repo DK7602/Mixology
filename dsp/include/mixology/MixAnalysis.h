@@ -83,6 +83,7 @@ namespace mixology::mix
         double width = 0.0;        // 0 mono .. 1 all sides
         double lowWidth = 0.0;     // the same below 160 Hz
         double crest = 0.0;        // peak minus RMS (dB): punchy / transient sounds score high
+        double balance = 0.0;      // left minus right (dB) after the fader: + leans left
         std::vector<double> bands; // average spectrum after the fader (dB per 1/3 octave)
     };
 
@@ -107,7 +108,7 @@ namespace mixology::mix
         std::vector<Suggestion> suggestions;
         std::vector<double> mixBands;     // average mix spectrum (dB), and the style's target, both
         std::vector<double> targetBands;  // normalised to the same overall level
-        double mixLoudness = -120.0, mixPeak = -120.0, mixCorrelation = 1.0;
+        double mixLoudness = -120.0, mixPeak = -120.0, mixCorrelation = 1.0, mixBalance = 0.0;
         std::vector<std::string> unheard; // channels in Cubase without a Link (not part of this analysis)
     };
 

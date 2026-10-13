@@ -431,6 +431,7 @@ juce::var BridgeHub::analysisState() const
         r->setProperty ("mixLoudness", report.mixLoudness);
         r->setProperty ("mixPeak", report.mixPeak);
         r->setProperty ("mixCorrelation", report.mixCorrelation);
+        r->setProperty ("mixBalance", std::round (report.mixBalance * 10.0) / 10.0);
         auto list = [] (const std::vector<std::string>& v) {
             juce::Array<juce::var> a;
             for (const auto& x : v) a.add (juce::String::fromUTF8 (x.c_str()));
@@ -459,6 +460,7 @@ juce::var BridgeHub::analysisState() const
             to->setProperty ("loudness", std::round (t.loudness * 10.0) / 10.0);
             to->setProperty ("peak", std::round (t.peakBeforeFader * 10.0) / 10.0);
             to->setProperty ("width", std::round (t.width * 100.0) / 100.0);
+            to->setProperty ("balance", std::round (t.balance * 10.0) / 10.0);
             tracks.add (juce::var (to));
         }
         r->setProperty ("tracks", tracks);

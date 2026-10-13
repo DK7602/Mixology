@@ -368,6 +368,22 @@ document.addEventListener("pointerdown", (e) => {
   if (openMenu && !openMenu.contains(e.target)) { openMenu.remove(); openMenu = null; }
 });
 
+/** Keeps a menu on the stage: opens it upward when there is more room above its button, and makes it
+    scroll when it is still too long. r = the button's rectangle, sr = the stage's, k = the stage's scale. */
+function fitMenu(m, r, sr, k, left) {
+  const below = (sr.bottom - r.bottom) / k - 16, above = (r.top - sr.top) / k - 16;
+  const h = m.offsetHeight;
+  if (h > below && above > below) {
+    const maxH = Math.min(h, above);
+    m.style.maxHeight = maxH + "px";
+    m.style.top = (r.top - sr.top) / k - 4 - maxH + "px";
+  } else if (h > below) m.style.maxHeight = Math.max(120, below) + "px";
+  m.style.overflowY = "auto";
+  const mr = m.getBoundingClientRect();
+  if (mr.right > sr.right) m.style.left = Math.max(8, left - (mr.right - sr.right) / k - 8) + "px";
+  m.querySelector(".sel")?.scrollIntoView({ block: "nearest" });
+}
+
 export function select(parent, x, y, w, options, value, onChange, opts = {}) {
   const s = el("div", "select", parent, { left: x + "px", top: y + "px", width: w + "px", height: (opts.h || 44) + "px" });
   const text = el("span", "", s);
@@ -388,13 +404,15 @@ export function select(parent, x, y, w, options, value, onChange, opts = {}) {
     const stage = document.getElementById("stage");
     const r = s.getBoundingClientRect(), sr = stage.getBoundingClientRect();
     const k = sr.width / 1440;
-    const m = el("div", "menu", stage, { left: (r.left - sr.left) / k + "px", top: (r.bottom - sr.top) / k + 4 + "px", minWidth: w + "px" });
+    const left = (r.left - sr.left) / k;
+    const m = el("div", "menu scroll", stage, { left: left + "px", top: (r.bottom - sr.top) / k + 4 + "px", minWidth: w + "px" });
     for (const o of options) {
       const v = o.value ?? o, label = o.label ?? o;
       const item = el("div", v === api.value ? "sel" : "", m);
       item.textContent = label;
       item.addEventListener("click", () => { api.set(v); m.remove(); openMenu = null; if (onChange) onChange(v); });
     }
+    fitMenu(m, r, sr, k, left);
     openMenu = m;
   });
   return api;
@@ -407,7 +425,7 @@ export function popupMenu(anchor, items, onPick, width = 240) {
   const r = anchor.getBoundingClientRect(), sr = stage.getBoundingClientRect();
   const k = sr.width / 1440;
   let left = (r.left - sr.left) / k, top = (r.bottom - sr.top) / k + 4;
-  const m = el("div", "menu", stage, { left: left + "px", top: top + "px", minWidth: width + "px", maxHeight: "620px", overflowY: "auto" });
+  const m = el("div", "menu scroll", stage, { left: left + "px", top: top + "px", minWidth: width + "px" });
   for (const it of items) {
     if (it.divider) { el("div", "", m, { height: "1px", margin: "6px 4px", padding: "0", background: "var(--panel-edge)", pointerEvents: "none" }); continue; }
     const item = el("div", it.sel ? "sel" : "", m, { display: "flex", alignItems: "center", gap: "10px" });
@@ -418,10 +436,7 @@ export function popupMenu(anchor, items, onPick, width = 240) {
     el("span", "", item).textContent = it.label;
     item.addEventListener("click", () => { m.remove(); openMenu = null; onPick(it.value); });
   }
-  // keep it on the stage
-  const mr = m.getBoundingClientRect();
-  if (mr.bottom > sr.bottom) m.style.top = Math.max(8, top - (mr.bottom - sr.bottom) / k - 8) + "px";
-  if (mr.right > sr.right) m.style.left = Math.max(8, left - (mr.right - sr.right) / k - 8) + "px";
+  fitMenu(m, r, sr, k, left);
   setTimeout(() => { openMenu = m; }, 0);   // the click that opened it must not close it
   return m;
 }

@@ -23,7 +23,7 @@
       Link's message thread picks the request up and applies it like a user move (host sees it, undo works). */
 namespace mixology::link
 {
-    constexpr std::uint32_t kLayoutVersion = 2;   // 2: analysis frames (Milestone 3)
+    constexpr std::uint32_t kLayoutVersion = 3;   // 2: analysis frames (Milestone 3), 3: + left / right balance
     constexpr int kMaxLinks = 256;
     constexpr std::size_t kNameBytes = 128;
     constexpr std::uint64_t kAliveMs = 2000;   // a Link without a heartbeat for this long is gone
@@ -65,7 +65,7 @@ namespace mixology::link
         std::atomic<std::int64_t> songSample;      // song position (samples) at that moment
         std::array<std::atomic<float>, kBands> bandDb;
         std::array<std::atomic<float>, kBands> sideShare;
-        std::atomic<float> aLoudness, aRms, aPeak, aCorrelation, aWidth;
+        std::atomic<float> aLoudness, aRms, aPeak, aCorrelation, aWidth, aBalance;
     };
 
     struct alignas (64) Header

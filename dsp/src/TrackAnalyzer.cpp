@@ -86,6 +86,8 @@ namespace mixology
         f.peakDb = peak > 1.0e-7 ? static_cast<float> (20.0 * std::log10 (peak)) : kSilentDb;
         f.silent = meanSquare < 1.0e-10;   // below about -100 dBFS
         f.correlation = ll * rr > 1.0e-20 ? static_cast<float> (lr / std::sqrt (ll * rr)) : 1.0f;
+        if (ll + rr > 1.0e-12)
+            f.balanceDb = static_cast<float> (std::clamp (10.0 * std::log10 ((ll + 1.0e-12) / (rr + 1.0e-12)), -40.0, 40.0));
         if (f.silent) return f;
 
         fft.forward (buffer);

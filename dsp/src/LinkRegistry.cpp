@@ -185,6 +185,7 @@ namespace mixology::link
         s->aPeak.store (f.peakDb, kRelaxed);
         s->aCorrelation.store (f.correlation, kRelaxed);
         s->aWidth.store (f.width, kRelaxed);
+        s->aBalance.store (f.balanceDb, kRelaxed);
         s->analysisFlags.store ((f.silent ? 1u : 0u) | (playing ? 2u : 0u), kRelaxed);
         s->songSample.store (songSample, kRelaxed);
         s->analysisMs.store (nowMs, kRelaxed);
@@ -210,6 +211,7 @@ namespace mixology::link
             out.peakDb = s->aPeak.load (kRelaxed);
             out.correlation = s->aCorrelation.load (kRelaxed);
             out.width = s->aWidth.load (kRelaxed);
+            out.balanceDb = s->aBalance.load (kRelaxed);
             const auto flags = s->analysisFlags.load (kRelaxed);
             const auto pos = s->songSample.load (kRelaxed);
             const auto when = s->analysisMs.load (kRelaxed);

@@ -128,13 +128,16 @@ Mix Assistant tells you, in plain words, what stands out, with **Do I need to fi
 What it looks at:
 
 - **Vocal level**: how loud the lead vocal sits against the rest of the mix while it sings, compared with your
-  style.
+  style (country, pop, R&B and folk sit the vocal more forward than rock). The rest of the mix is what Mixology
+  hears on the Stereo Out, so a beat without a Link still counts.
 - **Kick and 808 / bass**: whether they fight over the same low frequencies when they hit together.
 - **Words covered**: instruments as loud as the vocal at 1.6 - 4 kHz (where words are understood).
 - **Tone against your style**: muddy low mids, harsh upper mids, too much or too little low end, dull or very
   bright top.
 - **Low rumble** in tracks that don't need low end (vocals, keys...): a low cut makes room.
 - **Stereo**: low end that isn't centred; tracks or a mix that could fall apart in mono.
+- **Left / right balance**: a mix that is louder on one side, and the tracks pulling it there (for example
+  several guitars all panned hard left).
 - **Tracks you can hardly hear**, tracks running very hot, and headroom for Masterology.
 - **Channels without Mixology Link**: listed, so you know what the advice leaves out.
 
@@ -199,7 +202,8 @@ Mixology never limits the mix bus; that's Masterology's job.
   another track has the same name: rename one.
 - **The Link window says "Track name not reported"**: tell us (Cubase normally passes the name on).
 - **Analyze Mix says "No Mixology Link found"**: insert Mixology Link on your tracks first. Both plug-ins must be
-  from the same download (an older Link can't talk to a newer Mixology).
+  from the same download (an older Link can't talk to a newer Mixology). After an update, copy **both**
+  .vst3 folders again and restart Cubase.
 - **Analyze Mix waits at "Press play in Cubase"**: it only listens while the song plays.
 - **Strange notes on an instrument track**: untick "In 'All MIDI Inputs'" for both Mixology ports (setup step 3).
 - **Send us the log**: Settings > Cubase Bridge > **Copy log**, then paste it into the chat.

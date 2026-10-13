@@ -27,7 +27,7 @@ export function guessRole(name) {
     ["perc", /perc|shaker|tamb|conga|bongo|tom|cowbell|drum/],
     ["bass", /808|bass|sub\b|subs/],
     ["keys", /key|piano|rhodes|organ|\bep\b|wurl/],
-    ["guitar", /guitar|gtr|acoustic|strat/],
+    ["guitar", /guitar|gtr|acoustic|strat|electric/],
     ["synth", /synth|pad|lead|pluck|arp|string|brass|bell|choir|sample|melod|loop/],
     ["fx", /\bfx\b|riser|sweep|impact|reverse|noise|verb|delay|transition/],
   ];
