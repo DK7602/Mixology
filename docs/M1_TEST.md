@@ -12,9 +12,9 @@ Claude, and say which step number failed. A short screen recording helps too.
 ## A. Connect
 
 1. Open the test project. Insert **Mixology** on the Stereo Out and open its window.
-   - Expect: Settings > Cubase Bridge shows a green dot, "Connected to Cubase (script v2)".
-     (v1 means the old script is still installed: copy the new `Mixology` folder again and restart Cubase.)
-   - Press **Refresh** and look at the log: "script v2: N named channel(s)" should match your tracks.
+   - Expect: Settings > Cubase Bridge shows a green dot, "Connected to Cubase (script v3)".
+     (v1 or v2 means an old script is still installed: copy the new `Mixology` folder again and restart Cubase.)
+   - Press **Refresh** and look at the log: "script v3: N named channel(s)" should match your tracks.
    - Expect: the Tracks page shows your first 12 channels with their real names, fader values and pans.
 2. Compare 3 channels with the MixConsole.
    - Expect: the dB under each strip matches the MixConsole fader value; pan matches (C, L20, R35...).
@@ -49,11 +49,9 @@ Claude, and say which step number failed. A short screen recording helps too.
     - Expect: the strips show other channels. **Report** if the bank does NOT move (the bank buttons use
       an undocumented part of the API). Expect a pause if the locked channel left its slot.
 13. Hide a channel in the MixConsole (Visibility), and show it again.
-    - Expect: nothing moves. (Script v2 lists hidden channels too, like Steinberg's own scripts; report
+    - Expect: nothing moves. (The script lists hidden channels too, like Steinberg's own scripts; report
       whether the strips change when you hide one.)
-14. Open the log and look for the lines `slot N "Name" id ...`. Note whether a channel keeps the same id
-    after steps 10-13. (This tells us if Cubase's channel ID is stable enough to follow a channel
-    automatically in Milestone 2.)
+14. (Skipped for now: script v3 doesn't read Cubase's channel IDs, see the note in RESUME-HERE.)
 
 ## E. Automation and playback
 

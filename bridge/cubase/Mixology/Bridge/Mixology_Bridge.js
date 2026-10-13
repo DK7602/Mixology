@@ -12,7 +12,7 @@
 // Messages are SysEx frames  F0 7D 4D 58 <protocol> <command> <payload> F7 .
 // The layout MUST match dsp/include/mixology/BridgeProtocol.h in the Mixology source.
 
-var SCRIPT_VERSION = 2;
+var SCRIPT_VERSION = 3;
 var PROTOCOL_VERSION = 1;
 var BANK_SIZE = 12;                              // matches the 12 strips on Mixology's Tracks page
 var PORT_FROM_MIXOLOGY = 'Mixology to Cubase';   // Cubase receives on this port
@@ -216,19 +216,13 @@ function log(device, text) {
 
 var slots = [];
 
+// Cubase's own channel IDs are NOT read (v3). Scripts v1 and v2 called getUniqueIDString() / getRuntimeID()
+// while a project loaded, and Cubase Artist 14.0.41 crashed opening one project (a null text read on its main
+// thread, with the Mixology plug-in not even loaded). Until those calls are proven safe on every channel type
+// (Cubase 14's Drum Track is newer than the MIDI Remote API), identity is the channel name + its slot, and
+// Mixology pauses on any rename / reorder / bank change. The protocol keeps the ID field, always 0 for now.
 function channelId(channel, mapping) {
-    // Prefer Cubase's unique ID string; fall back to the runtime ID; 0 when the host gives neither.
-    var raw = '';
-    try {
-        if (mapping && typeof channel.getUniqueIDString === 'function') raw = String(channel.getUniqueIDString(mapping) || '');
-        if (!raw && mapping && typeof channel.getRuntimeID === 'function') {
-            var rid = channel.getRuntimeID(mapping);
-            if (rid !== undefined && rid !== null && rid !== -1) raw = 'rid:' + rid;
-        }
-    } catch (e) {
-        raw = '';
-    }
-    return { raw: raw, hash: raw ? (fnv28(utf8Bytes(raw)) || 1) : 0 };
+    return { raw: '', hash: 0 };
 }
 
 function makeSlot(index) {
@@ -374,7 +368,7 @@ function dump(device) {
         var s = slots[i];
         if (!s.title) continue;
         named++;
-        log(device, 'slot ' + (i + 1) + ' "' + s.title + '" id ' + (s.idRaw || 'none'));
+        log(device, 'slot ' + (i + 1) + ' "' + s.title + '"');
     }
     // Counts are "channel route / control route" (see makeSlot).
     log(device, 'script v' + SCRIPT_VERSION + ': ' + named + ' named channel(s) in the bank');

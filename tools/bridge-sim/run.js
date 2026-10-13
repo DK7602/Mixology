@@ -43,6 +43,7 @@ function makeCubase(names) {
     bankChannels: [],
     sent: [],
     setCalls: 0,
+    idCalls: 0,
     device: { name: 'activeDevice' },
     mapping: { name: 'activeMapping' },
   };
@@ -129,8 +130,8 @@ function makeCubase(names) {
           mVolume: hostValue(k, 'volume'), mPan: hostValue(k, 'pan'), mMute: hostValue(k, 'mute'),
           mSolo: hostValue(k, 'solo'), mAutomationRead: hostValue(k, 'read'), mAutomationWrite: hostValue(k, 'write'),
         },
-        getUniqueIDString(mapping) { if (mapping !== sim.mapping) throw new Error('bad mapping'); const c = sim.channelAt(k); return c ? c.uid : ''; },
-        getRuntimeID() { return k; },
+        getUniqueIDString(mapping) { sim.idCalls++; if (mapping !== sim.mapping) throw new Error('bad mapping'); const c = sim.channelAt(k); return c ? c.uid : ''; },
+        getRuntimeID() { sim.idCalls++; return k; },
       };
       sim.bankChannels.push(bc);
       return bc;
@@ -254,8 +255,9 @@ const scenarios = {
     check(r.state.slots[0].title === 'Kick' && r.state.slots[7].title === 'Guitar', 'titles mirrored');
     check(r.state.slots[0].volumeText === volumeText(0.7766), 'volume text ' + r.state.slots[0].volumeText);
     check(r.state.slots[0].panText === 'C', 'pan text');
-    check(r.state.slots[0].id !== 0, 'Cubase channel id reported');
-    check(r.state.log.some((l) => l.includes('id chan-1000')), 'script logs the raw channel id');
+    check(r.state.slots.every((sl) => sl.id === 0), 'script v3 reads no Cubase channel IDs (crash guard)');
+    check(r.state.log.some((l) => l.includes('slot 1 "Kick"')), 'script logs the named slots');
+    check(r.cubase.idCalls === 0, 'getUniqueIDString / getRuntimeID never called');
   },
 
   async 'sets exact dB values on the locked channel only'(r) {
@@ -400,7 +402,7 @@ const scenarios = {
     r.cubase.routes = 'control';
     await r.run(0.3);
     check(r.state.slots[0].title === 'Kick' && r.state.slots[0].volumeText === volumeText(0.7766), 'names and values arrive: ' + r.state.slots[0].title);
-    check(r.state.slots[0].id !== 0, 'channel id from the cached mapping');
+    check(r.cubase.idCalls === 0, 'no channel-ID calls');
     await r.cmd('lock', 0);
     await r.cmd('setDb', -6);
     await r.run(0.4);
@@ -411,7 +413,7 @@ const scenarios = {
     check(r.state.lock === 'paused', 'rename still pauses');
     await r.cmd('refresh');
     await r.run(0.2);
-    check(r.state.log.some((l) => l.includes('script v2: 12 named')), 'diagnostics: named channel count');
+    check(r.state.log.some((l) => l.includes('script v3: 12 named')), 'diagnostics: named channel count');
     check(r.state.log.some((l) => l.includes('calls: titles 0/')), 'diagnostics: which route fired: ' + r.state.log.filter((l) => l.includes('calls:')).pop());
     check(r.state.log.some((l) => l.includes('mapping ok, errors 0')), 'diagnostics: no script errors');
   },

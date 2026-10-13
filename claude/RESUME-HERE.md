@@ -71,6 +71,19 @@ guarded, and each dump logs a diagnostics block ("calls: titles a/b ..." = chann
 idle count, mapping, errors). Log text is split into <= 56-char pieces (protocol text limit 63 bytes).
 Simulator models routes 'channel' / 'control' / 'both' (tools/bridge-sim). Waiting for the v2 log.
 
+## Crash on project open (2026-10-13) -> script v3
+User: Cubase 14.0.41 crashed opening the "Sample Snagger" project (another project opened fine). Two minidumps
+(analysed with rust-minidump's minidump-stackwalk 0.27): both EXCEPTION_ACCESS_VIOLATION_READ at address 0, same
+instruction Cubase14.exe+0x2cade33 (`cmp byte [r12+r8],0`, rdi=-1: a strlen on a NULL char*), main thread, ~17 s
+after start (project load). Mixology.vst3 NOT loaded in the first dump, loaded but not on the stack in the second.
+The JS engine's identifier tables show script v1 (first) and v2 (second) were loaded; both call
+getUniqueIDString(). Hypothesis (not proven): Cubase returns a NULL ID string for some channel type in that project
+(it has a Cubase 14 Drum Track: 'Drum Machine' tab) and crashes converting it. Script v3 makes NO channel-ID calls
+(protocol field kept, always 0; identity = name hash + slot). Simulator asserts idCalls === 0. If v3 still crashes,
+next suspects: the 12-channel bank on that project's channel types, action bindings to mResetBank/mShift*.
+Other MIDI Remote scripts on the user's machine: Arturia KeyLab Essential 61 mk3, Novation Launchkey mk4 49, Akai
+APC40 mkII / MPK249, Korg nanoKONTROL; MIDI ports appear via Windows MIDI Services ("I|Windows MIDI|Mixology to Cubase").
+
 ## CI
 Every push: engine + bridge simulator under ASan/UBSan (Linux), Windows build + tests + package + pluginval 10 +
 Steinberg VST3 validator. First green run: 38407455828 (v0.1.0). Gotcha fixed there: getProgramName must not be
