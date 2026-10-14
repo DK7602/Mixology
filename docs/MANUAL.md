@@ -158,16 +158,19 @@ with the project and the advice updates straight away, without listening again.
 
 ## The smart tools (left of the analyzer)
 
-Every tool works from the last **Analyze Mix**, so analyze first (and again after big changes). Each one opens a
+Every tool works from the last **Analyze Mix**, so analyze first (and again after big changes). Fader moves since
+then are allowed for: apply a plan, open it again, and it finds nothing more to do (unless something was limited
+to 6 dB). Each one opens a
 list: every change it wants to make, **now → new**, and why, in plain words. Untick anything you don't want.
-**Nothing changes until you press Apply.** Afterwards **Undo** puts back exactly what that tool changed.
+**Nothing changes until you press Apply.** Afterwards **Undo** puts back exactly what that tool changed (a fader or pan you moved yourself since then stays as you set it).
 
 - **Balance**: fader levels. Each kind of instrument against the others (kick, 808 / bass, snare, hats, keys,
   synths, guitars; one "Drum Machine" track counts as the whole kit) using your genre's usual balance; only clear
   outliers move. Then the lead vocal against the rest of the mix, at most 4 dB per Apply, and ad-libs under the
   vocal. The overall loudness stays the same, so you can judge before / after fairly (louder always sounds
   "better" at first). Tracks of one kind move together, so their balance among themselves stays yours. Channels
-  without a Link (e.g. a printed beat) move with the rest of the band.
+  without a Link (e.g. a printed beat) move with the rest of the band; when such a channel carries a big part of
+  the band, Mixology doesn't judge the instruments against each other (it can't hear the beat's parts).
   **Your vocal, your ears.** At the top: "Your vocal right now sounds: Too quiet / Right / Too loud". Mixology
   measures where your vocal sits; your answer sets where it should sit, saved with the song. The advice, Balance
   and Auto Mix follow it from then on ("Use the style's level" goes back to the genre's usual level). The same
@@ -178,7 +181,8 @@ list: every change it wants to make, **now → new**, and why, in plain words. U
 - **Stereo Architect**: pans. Kick, bass, snare and the lead vocal in the middle. Pairs and doubles
   ("Gtr L" / "Gtr R", "Electric Rhythm" / "Electric Rhythm (D)", "Keys 1" / "Keys 2") spread left and right:
   if one is already out on a side, it stays and its partner mirrors it. A mix that leans to one side is evened
-  out with the tracks pulling it there. If Cubase reports pans your mix doesn't match (stereo tracks with Cubase's
+  out with the tracks pulling it there. It only pans **mono** tracks: for a stereo track Cubase doesn't tell
+  Mixology where its panner really sits. If Cubase reports pans your mix doesn't match (stereo tracks with Cubase's
   Combined Panner show one side only, e.g. "L100" on a full-width track), it leaves the pans alone and says so.
 - **Clean Up**: Assist EQ. Low cuts on tracks with rumble they don't need (and on vocals: about 90 Hz), and mud
   dips (200 - 500 Hz) on the tracks carrying it when the mix is muddier than your style.

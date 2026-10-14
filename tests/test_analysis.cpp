@@ -544,6 +544,7 @@ namespace
         c.hasPan = true;
         c.pan = pan;
         c.hasLink = link;
+        c.channels = link ? 1 : 0;   // mono tracks (the ones Stereo Architect may pan)
         c.locked = locked;
         return c;
     }
@@ -602,18 +603,16 @@ TEST_CASE ("Plans: Balance lifts a buried vocal and makes room for it", "[plan]"
     REQUIRE (r.vocalTarget - r.vocalRatio > 6.0);
     auto move = [] (const mixology::mix::Change* c) { return c == nullptr ? 0.0 : c->wanted - c->from; };
 
-    SECTION ("4 dB at a time, split between the vocal and the beat, same overall loudness")
+    SECTION ("split between the vocal and the beat, same overall loudness")
     {
         const auto p = makePlan (Tool::balance, r, channelsOf (tracks (0)));
         REQUIRE (p.valid);
         const auto* v = change (p, "Lead Vox", "level");
         REQUIRE (v != nullptr);
-        CHECK (move (v) - move (change (p, "Kick", "level")) == Catch::Approx (4.0).margin (0.3));
+        CHECK (move (v) - move (change (p, "Kick", "level")) == Catch::Approx (r.vocalTarget - r.vocalRatio).margin (0.4));
         CHECK (move (change (p, "Kick", "level")) == Catch::Approx (move (change (p, "808", "level"))).margin (0.01));   // the beat moves together
         CHECK (v->why.find ("sits low") != std::string::npos);
-        CHECK (noted (p, "4 dB at a time"));
-        // Same loudness: the beat (most of the energy) barely moves, the vocal goes up.
-        CHECK (std::abs (move (change (p, "Kick", "level"))) < 1.0);
+        CHECK (noted (p, "press 'Right' above"));
         CHECK (p.headroomDb == 0.0);   // peaks at -6: no room needed
     }
     SECTION ("a vocal fader near the top: the beat makes the rest of the room")
@@ -630,7 +629,7 @@ TEST_CASE ("Plans: Balance lifts a buried vocal and makes room for it", "[plan]"
         for (auto& c : chans) if (c.name == "Lead Vox") c.locked = true;
         const auto p = makePlan (Tool::balance, r, chans);
         CHECK (change (p, "Lead Vox", "level") == nullptr);
-        CHECK (move (change (p, "Kick", "level")) == Catch::Approx (-4.0).margin (0.3));
+        CHECK (move (change (p, "Kick", "level")) == Catch::Approx (-(r.vocalTarget - r.vocalRatio)).margin (0.4));
     }
     SECTION ("you like it where it is: nothing moves")
     {
@@ -926,4 +925,58 @@ TEST_CASE ("Plans: stereo tracks on Cubase's Combined Panner are never panned", 
     REQUIRE (change (p, "Kick", "pan") != nullptr);
     CHECK (noted (p, "Stereo Combined Panner"));
     CHECK_FALSE (noted (p, "probably stereo tracks"));   // the pans agree with the mix once those are centred
+}
+
+TEST_CASE ("Plans: applying a plan and opening it again doesn't repeat its moves", "[plan]")
+{
+    auto tracks = [] (int) { return std::vector<TrackSample> {
+        sample ("Kick", kickFrame()), sample ("808", bassFrame()), sample ("Hats", hatsFrame(), 12.0), sample ("Lead Vox", vocalFrame (-22.0), -6.0) }; };
+    const auto r = listen (tracks).evaluate ({});
+    auto chans = channelsOf (tracks (0));
+    for (auto& c : chans) { c.hasFaderAtAnalysis = true; c.faderAtAnalysis = c.faderDb; }
+    const auto first = makePlan (Tool::balance, r, chans);
+    REQUIRE (first.changes.size() >= 2);
+
+    // Apply it (the faders move as planned), then plan again from the same Analyze Mix.
+    for (auto& c : chans)
+        for (const auto& ch : first.changes)
+            if (ch.name == c.name && ch.kind == "level") c.faderDb = ch.wanted;   // "Allow moves over 6 dB" was on
+    const auto again = makePlan (Tool::balance, r, chans);
+    for (const auto& c : again.changes)
+        CHECK (std::abs (c.wanted - c.from) < 1.0);   // at most a small leftover, never the same moves again
+    CHECK (std::any_of (again.notes.begin(), again.notes.end(), [] (const std::string& n) { return n.find ("moved since Analyze Mix") != std::string::npos; }));
+}
+
+TEST_CASE ("Plans: a big channel without a Link: the instruments aren't judged against each other", "[plan]")
+{
+    Analysis a;
+    a.begin (Style {});
+    for (int i = 0; i < 150; ++i)
+    {
+        Moment m;
+        m.tracks = { sample ("Lead Vox", vocalFrame (-14.0)), sample ("Gtr", padFrame (-14.0)), sample ("Drum Machine", kickFrame()) };
+        auto all = m.tracks;
+        all.push_back (sample ("Beat", bassFrame()));
+        m.mix = mixOf (all);
+        a.add (m);
+    }
+    const auto r = a.evaluate ({}, { "Beat" });
+    const auto p = makePlan (Tool::balance, r, { channel ("Lead Vox"), channel ("Gtr"), channel ("Drum Machine"), channel ("Beat", 0.0, 0.0, false) });
+    for (const auto& c : p.changes) CHECK (c.why.find ("against the rest of the band than") == std::string::npos);
+    CHECK (noted (p, "'Beat' has no Mixology Link"));
+}
+
+TEST_CASE ("Plans: Stereo Architect only pans mono tracks", "[plan]")
+{
+    auto tracks = [] (int) { return std::vector<TrackSample> {
+        sample ("Kick", kickFrame()), sample ("Gtr L", padFrame (-16.0)), sample ("Gtr R", padFrame (-16.0)) }; };
+    const auto r = listen (tracks).evaluate ({});
+    auto chans = channelsOf (tracks (0));
+    for (auto& c : chans) if (c.name.rfind ("Gtr", 0) == 0) c.channels = 2;   // stereo tracks
+    chans[0].pan = 40.0;
+    const auto p = makePlan (Tool::stereo, r, chans);
+    CHECK (change (p, "Gtr L", "pan") == nullptr);
+    CHECK (change (p, "Gtr R", "pan") == nullptr);
+    CHECK (change (p, "Kick", "pan") != nullptr);   // mono: still centred
+    CHECK (noted (p, "only pans mono tracks"));
 }

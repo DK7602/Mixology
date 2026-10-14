@@ -135,6 +135,14 @@ namespace mixology::mix
 
         bool movable (const ChannelNow* c) { return c != nullptr && c->faderKnown && ! c->locked && c->faderDb > -100.0; }
 
+        // How far its fader moved since Analyze Mix listened (dB): the measurements are corrected by this.
+        double movedSince (const ChannelNow* c)
+        {
+            if (c == nullptr || ! c->faderKnown || ! c->hasFaderAtAnalysis) return 0.0;
+            if (c->faderDb <= -100.0 || c->faderAtAnalysis <= -100.0) return 0.0;
+            return c->faderDb - c->faderAtAnalysis;
+        }
+
         // ---------------------------------------------------------------------------------------------
         // Balance: fader levels
 
@@ -153,22 +161,53 @@ namespace mixology::mix
                 double level() const { return toDb (e); }
             };
             std::map<int, Group> groups;   // by role; 100 = channels without a Link
+            std::map<int, double> heardE;  // each group's energy as Analyze Mix heard it (before later fader moves)
+            int movedChannels = 0;
             for (const auto& t : r.tracks)
             {
                 if (! counts (t)) continue;
                 auto& g = groups[static_cast<int> (t.role)];
                 g.role = t.role;
-                g.e += toE (t.loudness);
-                g.members.push_back ({ t.name, look.of (t) });
+                const auto* ch = look.of (t);
+                const double since = movedSince (ch);
+                if (std::abs (since) > 0.05) ++movedChannels;
+                g.e += toE (t.loudness + since);
+                heardE[static_cast<int> (t.role)] += toE (t.loudness);
+                g.members.push_back ({ t.name, ch });
             }
             if (r.unheardLoudness > -100.0 && ! r.unheard.empty())
             {
                 auto& g = groups[100];
                 g.unheard = true;
-                g.e = toE (r.unheardLoudness);
-                for (const auto& n : r.unheard) g.members.push_back ({ n, look.named (n) });
+                double factor = 0.0;
+                for (const auto& n : r.unheard)
+                {
+                    const auto* ch = look.named (n);
+                    const double since = movedSince (ch);
+                    if (std::abs (since) > 0.05) ++movedChannels;
+                    factor += toE (since);
+                    g.members.push_back ({ n, ch });
+                }
+                g.e = toE (r.unheardLoudness) * factor / static_cast<double> (r.unheard.size());
+                heardE[100] = toE (r.unheardLoudness);
             }
             if (groups.empty()) return {};
+            if (movedChannels > 0)
+                plan.notes.push_back (std::to_string (movedChannels) + " fader" + (movedChannels == 1 ? " has" : "s have")
+                                      + " moved since Analyze Mix: this plan allows for that. For fresh measurements (after EQ or bigger changes), Analyze Mix again.");
+
+            // The vocal against the rest, and the mix's peak, as they are now (corrected by the fader moves).
+            double vocalNow = 0.0, vocalHeard = 0.0, restNow = 0.0, restHeard = 0.0, totalNow = 0.0, totalHeard = 0.0;
+            for (auto& [k, g] : groups)
+            {
+                const double heard = heardE[k];
+                totalNow += g.e;
+                totalHeard += heard;
+                if (k == static_cast<int> (Role::vox)) { vocalNow += g.e; vocalHeard += heard; }
+                else if (k != static_cast<int> (Role::adlibs)) { restNow += g.e; restHeard += heard; }
+            }
+            const double vocalRatio = r.vocalRatio + (toDb (vocalNow) - toDb (vocalHeard)) - (toDb (restNow) - toDb (restHeard));
+            const double mixPeak = r.mixPeak + (toDb (totalNow) - toDb (totalHeard));
 
             const auto w = weightsFor (r.style.key);
             auto isInstrument = [&] (const Group& g) { return ! g.unheard && w.instruments.count (g.role) != 0; };
@@ -186,6 +225,16 @@ namespace mixology::mix
             };
 
             // 1. Instruments against each other: only kinds clearly off the style's balance move (to within 1 dB).
+            //    Not when a big part of the band plays on channels without a Link (a printed beat): Mixology can't
+            //    hear those one by one, so it can't tell which instrument is too loud.
+            double linkedInstruments = 0.0;
+            for (auto& [k, g] : groups) if (isInstrument (g)) linkedInstruments += g.e;
+            const bool bigUnheard = groups.count (100) && groups[100].e > 0.25 * linkedInstruments;
+            if (bigUnheard)
+                plan.notes.push_back (joinNames (r.unheard) + (r.unheard.size() == 1 ? " has" : " have")
+                                      + " no Mixology Link and carr" + (r.unheard.size() == 1 ? "ies" : "y") + " a big part of the band, so Mixology doesn't judge "
+                                        "the instruments against each other (only the vocal against everything). Insert Mixology Link there to change that.");
+            if (! bigUnheard)
             {
                 std::vector<double> offsets, locked;
                 for (auto& [k, g] : groups)
@@ -212,7 +261,7 @@ namespace mixology::mix
             }
 
             // 2. The lead vocal against the rest of the mix (as measured while it sings), towards the style's level or
-            //    the one you set. At most 4 dB per Apply: listen, analyze again, repeat if you like where it goes.
+            //    the one you set, in one go (so opening the plan again after Apply finds nothing more to do).
             Group* vocal = groups.count (static_cast<int> (Role::vox)) ? &groups[static_cast<int> (Role::vox)] : nullptr;
             Group* adlibs = groups.count (static_cast<int> (Role::adlibs)) ? &groups[static_cast<int> (Role::adlibs)] : nullptr;
             if (vocal != nullptr && r.hasVocalRatio)
@@ -226,9 +275,9 @@ namespace mixology::mix
                         restNew += g.e * toE (g.move);
                         restMovable = restMovable || g.anyMovable();
                     }
-                const double ratio = r.vocalRatio - (toDb (restNew) - toDb (restOld));
+                const double ratio = vocalRatio - (toDb (restNew) - toDb (restOld));
                 const double fullErr = r.vocalTarget - ratio;
-                const double err = std::clamp (fullErr, -4.0, 4.0);
+                const double err = fullErr;
                 if (std::abs (fullErr) > 1.5)
                 {
                     const bool vocalMovable = vocal->anyMovable();
@@ -254,8 +303,9 @@ namespace mixology::mix
                                                                  : r.style.name + " usually has about " + signedDb (r.vocalTarget);
                     const std::string where = (ratio < r.vocalTarget ? "sits low: " : "sits high: ") + signedDb (ratio)
                                               + " against the rest while it sings, " + aim;
-                    if (std::abs (fullErr) > 4.05)
-                        plan.notes.push_back ("The vocal is " + fmt1 (std::abs (fullErr)) + " dB from the aim: Mixology moves it 4 dB at a time. Listen, then Analyze Mix and apply again if you like where it goes.");
+                    if (std::abs (fullErr) > 6.0 && ! r.style.vocalFromYou)
+                        plan.notes.push_back ("The vocal is " + fmt1 (std::abs (fullErr)) + " dB from " + r.style.name
+                                              + "'s usual level. If it sounds right to you, press 'Right' above instead: Mixology keeps it where it is.");
                     if (vm != 0.0)
                     {
                         vocal->move += vm;
@@ -307,7 +357,7 @@ namespace mixology::mix
             {
                 double before = 0.0, after = 0.0;
                 for (auto& [k, g] : groups) { before += g.e; after += g.e * toE (g.move); }
-                const double peak = r.mixPeak + (toDb (after) - toDb (before));
+                const double peak = mixPeak + (toDb (after) - toDb (before));
                 if (r.mixPeak > -100.0 && peak > -5.0)
                 {
                     plan.headroomDb = std::round (-(peak + 6.0) * 10.0) / 10.0;
@@ -403,7 +453,7 @@ namespace mixology::mix
                 std::string why;
             };
             std::vector<T> ts;
-            std::vector<std::string> stereoPanners;
+            std::vector<std::string> stereoPanners, stereoTracks;
             for (const auto& t : r.tracks)
             {
                 if (! counts (t)) continue;
@@ -416,6 +466,14 @@ namespace mixology::mix
                     stereoPanners.push_back (t.name);
                     continue;
                 }
+                if (ch->channels != 1)
+                {
+                    // Stereo (or unknown) track: Cubase may use the Combined Panner, whose position Mixology can't
+                    // read; it is counted where Cubase says, never moved.
+                    ts.push_back ({ &t, ch, ch->pan, ch->pan, true, {} });
+                    stereoTracks.push_back (t.name);
+                    continue;
+                }
                 ts.push_back ({ &t, ch, ch->pan, ch->pan, false, {} });
             }
             if (ts.empty()) return {};
@@ -423,6 +481,9 @@ namespace mixology::mix
                 plan.notes.push_back (joinNames (stereoPanners) + (stereoPanners.size() == 1 ? " uses" : " use")
                                       + " Cubase's Stereo Combined Panner (Cubase only tells Mixology its left edge): pan "
                                       + (stereoPanners.size() == 1 ? "it" : "them") + " in Cubase if needed.");
+            if (! stereoTracks.empty())
+                plan.notes.push_back (joinNames (stereoTracks) + (stereoTracks.size() == 1 ? " is a stereo track" : " are stereo tracks")
+                                      + ": Mixology only pans mono tracks (Cubase doesn't tell it where a stereo panner really sits).");
 
             // The pans Cubase reports must agree with what the Stereo Out hears. A stereo track with Cubase's Combined
             // Panner reports one side of it (e.g. "L100" for a full-width track): then the numbers can't be trusted.
@@ -452,7 +513,7 @@ namespace mixology::mix
             // 1. Low end and the lead vocal in the middle.
             for (auto& x : ts)
             {
-                if (x.ch->panUnknown) continue;
+                if (x.ch->panUnknown || x.ch->channels != 1) continue;
                 const auto role = x.t->role;
                 const auto pn = pairName (x.t->name);
                 const bool lead = role == Role::vox && ! pn.explicitPair && pn.order == 0;
@@ -569,7 +630,7 @@ namespace mixology::mix
             for (const auto& x : ts)
             {
                 const double to = std::round (x.to);
-                if (x.ch->panUnknown || std::abs (to - x.pan) < 3.0) continue;
+                if (x.ch->panUnknown || x.ch->channels != 1 || std::abs (to - x.pan) < 3.0) continue;
                 if (x.ch->locked)
                 {
                     plan.notes.push_back (quoted (x.t->name) + ": protected (padlock), so its pan stays " + panText (x.pan) + " (it would have gone " + panText (to) + ").");
@@ -726,11 +787,15 @@ namespace mixology::mix
                 plan.notes.push_back ("No lead vocal found: set your vocal's role to Lead Vox (Your tracks), then try again.");
                 return "no lead vocal";
             }
+            double vocalMoved = 0.0;
+            for (const auto& t : r.tracks)
+                if (counts (t) && t.role == Role::vox) { vocalMoved = movedSince (look.of (t)); break; }
             int dips = 0;
             for (const auto& t : r.tracks)
             {
-                if (! counts (t) || t.role == Role::vox || t.role == Role::adlibs || t.maskDb <= -6.0 || t.bands.size() != kBands) continue;
-                const double d = t.maskDb >= 0.0 ? 4.0 : t.maskDb >= -3.0 ? 3.0 : 2.0;
+                const double mask = t.maskDb + movedSince (look.of (t)) - vocalMoved;
+                if (! counts (t) || t.role == Role::vox || t.role == Role::adlibs || t.maskDb <= -100.0 || mask <= -6.0 || t.bands.size() != kBands) continue;
+                const double d = mask >= 0.0 ? 4.0 : mask >= -3.0 ? 3.0 : 2.0;
                 // Where it covers the vocal most: the band (1.25 - 5 kHz) with the biggest overlap.
                 int best = 21;
                 double bestOverlap = -1.0e9;
@@ -750,7 +815,7 @@ namespace mixology::mix
                 c.from = ch->assist.pocketDb;
                 c.to = c.wanted = -d;
                 c.hz = bandHz (best);
-                c.why = "at 1.6 - 4 kHz it is " + (t.maskDb >= 0.0 ? fmt1 (t.maskDb) + " dB louder than" : fmt1 (-t.maskDb) + " dB under")
+                c.why = "at 1.6 - 4 kHz it is " + (mask >= 0.0 ? fmt1 (mask) + " dB louder than" : fmt1 (-mask) + " dB under")
                         + " the vocal while it sings, covering its words";
                 plan.changes.push_back (c);
                 ++dips;

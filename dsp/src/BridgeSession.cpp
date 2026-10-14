@@ -1049,26 +1049,41 @@ namespace mixology
             if (nameIsDuplicated (i)) { skip ("two channels have this name (rename one)."); continue; }
             if (isProtected (s.hash)) { skip ("protected (padlock)."); continue; }
             if (s.automationWrite) { skip ("writing automation (W is on)."); continue; }
-            if (step.setVolume && ! s.hasVolume) { skip ("Cubase didn't report its fader."); continue; }
-            if (step.setVolume && step.checkFrom)
+
+            // Each field only changes if it is where the plan saw it: a fader or pan you moved since stays yours.
+            bool doVolume = step.setVolume, doPan = step.setPan && s.hasPan;
+            std::string kept;
+            if (doVolume && ! s.hasVolume) { doVolume = false; kept = "Cubase didn't report its fader"; }
+            if (doVolume && step.checkFrom)
             {
                 const bool bothInf = isMinusInf (s.volumeDb) && isMinusInf (step.fromDb);
                 if (! bothInf && ! (std::abs (s.volumeDb - step.fromDb) <= kPlanFromTolerance))
                 {
-                    skip ("its fader was moved since Analyze Mix (now " + formatDb (s.volumeDb) + "): left as it is. Analyze again for fresh advice.");
-                    continue;
+                    doVolume = false;
+                    kept = "its fader moved since Mixology saw it (now " + formatDb (s.volumeDb) + "): left as it is";
                 }
             }
+            if (doPan && step.checkPan && std::abs (s.pan - step.fromPan) > 0.01)
+            {
+                doPan = false;
+                kept += (kept.empty() ? "" : "; ") + std::string ("its pan moved since Mixology saw it (now ") + s.panText + "): left as it is";
+            }
+            if (! kept.empty() && ! doVolume && ! doPan && ! step.setMute && ! step.setSolo) { skip (kept + "."); continue; }
+            if (! kept.empty()) plan.notes.push_back (quoted (s.title) + ": " + kept + ".");
 
             // How it was just before (for this plan's undo).
             PlanStep before;
             before.hash = s.hash;
             before.title = s.title;
-            before.setVolume = step.setVolume && s.hasVolume;
+            before.setVolume = doVolume;
             before.exactVolume = true;
             before.position = s.volume;
-            before.setPan = step.setPan && s.hasPan;
+            before.checkFrom = true;   // undo only if it is still where this plan puts it
+            before.fromDb = step.exactVolume ? law.toDb (step.position) : step.db;
+            before.setPan = doPan;
             before.pan = s.pan;
+            before.checkPan = true;
+            before.fromPan = std::clamp (step.pan, 0.0, 1.0);
             before.setMute = step.setMute;
             before.mute = s.mute;
             before.setSolo = step.setSolo;
@@ -1076,7 +1091,7 @@ namespace mixology
             plan.undo.push_back (before);
 
             takeRestorePointIfNeeded (i, now);
-            if (step.setVolume)
+            if (doVolume)
             {
                 if (step.exactVolume)
                 {
@@ -1103,7 +1118,7 @@ namespace mixology
                     }
                 }
             }
-            if (step.setPan && s.hasPan && std::abs (s.pan - step.pan) > 1.0e-6)
+            if (doPan && std::abs (s.pan - step.pan) > 1.0e-6)
             {
                 auto m = writeMessage (Cmd::setPan, i);
                 m.value = std::clamp (step.pan, 0.0, 1.0);

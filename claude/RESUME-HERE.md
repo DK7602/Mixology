@@ -102,6 +102,19 @@ User asked (2026-10-13): "Once fixed move forward with M4?" after the M3 test vi
   slot.stereoPanner (strip shows "Stereo", knob refuses with a toast) and ChannelNow.panUnknown (Stereo Architect
   counts it centred and never moves it). Limitation: a narrowed Combined Panner (e.g. L50 / R50) reads "L50".
 
+### M4 user test 2 (2026-10-14): Auto Mix + Balance applied, then reopened: same moves again
+- Screens: guitars 0 -> -12 -> (proposed) -18, Drum Machine to +6 (fader top), vocals +3.1, Beat -3.1. Mixdown MP3:
+  -6.7 LUFS, +8.9 dBTP; BOTH exports exactly dual mono (L == R): export setting or the Stereo Out (asked).
+- Causes and fixes: plans used the stale report -> ChannelNow.faderAtAnalysis (hub snapshot at finishAnalysis),
+  planner corrects group energies, vocal ratio, mix peak and masking by the fader moves since; vocal correction in
+  one go (no 4 dB steps: reopening found another step); instrument balance skipped when unlinked channels carry
+  > 25 % of the linked instruments' energy (the Beat): the guitars were judged against the Drum Machine alone;
+  Stereo Architect pans mono tracks only (ChannelNow.channels from the Link); plan steps check each field (volume /
+  pan) separately and undo steps only revert a field still where the plan put it (checkFrom / checkPan).
+- User: the guitars "moved to L100", "I moved them to center and it moved them back": the strip showed the Combined
+  Panner's left edge (L100) and Cubase kept reporting it; the knob never writes by itself (Knob.set doesn't notify).
+  The "Stereo" label needs the newest build (asked which one they ran).
+
 ## Milestone 3 status (v0.3.0): BUILT, tested by the user (video): worked; follow-ups done in M4
 - dsp: Fft (radix-2), TrackAnalyzer (4096-pt, mid/side in one complex FFT, 31 ISO 1/3-oct bands re full-scale
   sine, sideShare, K-weighted loudness, rms, peak, corr, width), AudioRing, MixAnalysis (Moment = mix frame +

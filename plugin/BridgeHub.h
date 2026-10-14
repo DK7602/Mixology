@@ -100,6 +100,7 @@ private:
     mixology::BridgeSession::Result listenToReference (bool reference, std::string& info);
     const mixology::link::LinkInfo* uniqueLink (const std::vector<mixology::link::LinkInfo>&, std::uint32_t hash) const;
 
+    std::map<std::uint32_t, double> fadersAtAnalysis;   // every fader when Analyze Mix finished listening
     mixology::mix::Plan currentPlan;
     std::uint64_t currentPlanId = 0;
     struct AssistUndo

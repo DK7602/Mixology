@@ -194,6 +194,8 @@ namespace mixology
             double fromDb = 0.0;
             bool setPan = false;
             double pan = 0.5;
+            bool checkPan = false;         // leave the pan alone if it isn't where the plan saw it
+            double fromPan = 0.5;
             bool setMute = false, mute = false, setSolo = false, solo = false;
         };
 
@@ -204,7 +206,8 @@ namespace mixology
             int total = 0, done = 0, skipped = 0;
             std::vector<std::string> notes;   // why channels were skipped
             std::string message;           // summary once finished
-            std::vector<PlanStep> undo;    // how the channels it changed were just before (exact positions)
+            std::vector<PlanStep> undo;    // how the channels it changed were just before (exact positions); each
+                                           // field only goes back if it is still where this plan put it
             std::uint64_t serial = 0;      // bumps when a plan finishes
         };
 

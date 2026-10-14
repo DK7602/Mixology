@@ -566,15 +566,21 @@ TEST_CASE ("Bridge: a plan sets levels and pans across the whole project, with i
     CHECK (sawGone);
     CHECK (sawProtected);
 
-    // Undo: exactly where the faders and pans were.
+    // Undo: exactly where the faders and pans were, except what you changed yourself since (Lead Vox's fader).
     REQUIRE (pr.undo.size() == 3);
-    REQUIRE (r.session.applyPlan ("Undo Balance", pr.undo, r.now).ok);
+    r.cubase.userMovesFader (8, 0.75);   // in view: Lead Vox
+    r.run (0.5);
+    const auto undo = pr.undo;
+    REQUIRE (r.session.applyPlan ("Undo Balance", undo, r.now).ok);
     r.run (8.0);
     CHECK (r.cubase.channels[0].volume == Catch::Approx (0.5).margin (1.0 / 16384.0));
-    CHECK (r.cubase.channels[8].volume == Catch::Approx (0.66).margin (1.0 / 16384.0));
+    CHECK (r.cubase.channels[8].volume == Catch::Approx (0.75).margin (1.0 / 16384.0));   // yours: kept
     CHECK (r.cubase.channels[10].volume == Catch::Approx (0.7).margin (1.0 / 16384.0));
     CHECK (r.cubase.channels[10].pan == Catch::Approx (0.5).margin (1.0e-6));
     CHECK (r.cubase.bankOffset == 1);
+    bool keptNote = false;
+    for (const auto& n : r.session.planProgress().notes) keptNote = keptNote || (n.find ("'Lead Vox'") != std::string::npos && n.find ("moved since") != std::string::npos);
+    CHECK (keptNote);
 }
 
 TEST_CASE ("Bridge: a plan for channels in view doesn't move the bank", "[bridge]")

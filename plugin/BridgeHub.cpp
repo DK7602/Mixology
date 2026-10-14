@@ -471,6 +471,8 @@ void BridgeHub::finishAnalysis()
     }
 
     report = analysis.evaluate (trackSettings, unheard);
+    fadersAtAnalysis.clear();
+    for (const auto& [hash, f] : bridge.knownFaders()) fadersAtAnalysis[hash] = f.db;
     analyzeState = Analyze::done;
     ++analysisVersion;
 }
@@ -925,10 +927,16 @@ std::vector<mixology::mix::ChannelNow> BridgeHub::channelsNow() const
         c.hasPan = f.hasPan;
         c.pan = (f.pan - 0.5) * 200.0;
         c.locked = bridge.isProtected (hash);
+        if (auto it = fadersAtAnalysis.find (hash); it != fadersAtAnalysis.end())
+        {
+            c.hasFaderAtAnalysis = true;
+            c.faderAtAnalysis = std::max (it->second, -200.0);
+        }
         if (const auto* l = uniqueLink (links, hash))
         {
             c.hasLink = true;
             c.assist = l->assist;
+            c.channels = l->channels;
             c.panUnknown = l->channels == 2 && f.hasPan && f.pan <= 0.0005;   // Stereo Combined Panner (see getState)
         }
         seen.insert (hash);

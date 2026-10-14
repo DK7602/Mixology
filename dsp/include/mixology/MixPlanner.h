@@ -11,8 +11,9 @@
 /** Milestone 4: turns Analyze Mix's report into concrete moves that you look over before anything changes.
 
     - Balance: fader levels. Instruments against each other (role targets per genre; only clear outliers
-      move), the lead vocal against the rest of the mix (the style's target, or the level you set: at most
-      4 dB per Apply), ad-libs under the vocal, all at the same overall loudness. Tracks of one kind move
+      move), the lead vocal against the rest of the mix (the style's target, or the level you set), ad-libs
+      under the vocal, all at the same overall loudness. Fader moves since Analyze Mix are allowed for, so
+      applying a plan and opening it again finds nothing more to do. Tracks of one kind move
       together, so their balance among themselves stays yours. Room for Masterology (mix peaks around
       -6 dBTP) is offered separately: every fader down together.
     - Stereo Architect: pans. Low end and the lead vocal in the middle, doubles and pairs spread left / right,
@@ -35,6 +36,9 @@ namespace mixology::mix
         bool hasPan = false;
         double pan = 0.0;          // -100 = L100, 0 = centre, +100 = R100
         bool panUnknown = false;   // a stereo track on Cubase's Combined Panner: Cubase only reports its left edge
+        int channels = 0;          // its Mixology Link's channels (1 mono, 2 stereo, 0 unknown): only mono tracks get panned
+        bool hasFaderAtAnalysis = false;   // the fader when Analyze Mix listened: moves since then are allowed for
+        double faderAtAnalysis = 0.0;      // (so applying a plan and opening it again doesn't repeat its moves)
         bool locked = false;       // protected (padlock)
         bool hasLink = false;      // a Mixology Link sits on it (its Assist EQ can be set)
         AssistSettings assist;     // that Link's Assist EQ now
