@@ -137,6 +137,11 @@ User asked (2026-10-13): "Once fixed move forward with M4?" after the M3 test vi
   Report.routingFromSound, vocalPathDb, musicPathDb: every track's loudness / bands, the vocal ratio, masking and
   the unheard residual include the path (group faders / group compression / pan law), groups are groupHints, never
   music. The manual music group then only decides WHICH fader carries the music's moves (optional question).
+- User test 3 (2026-10-14): Auto Mix + Balance "did great", "Too loud" made the lyrics much better. Remaining:
+  Electric tracks (MONO Links) read L100 though heard in both ears, Stereo Architect offered L100 -> R100.
+  Both exports were exactly L == R: the mix is mono at the Stereo Out, most likely Beat is a MONO group (asked).
+  Fix: Report.monoMix (mix width < 0.002 and correlation > 0.998 on average) -> "mono-mix" advice (names stereo
+  tracks that arrive in mono) and Stereo Architect leaves pans alone; pan-vs-mix sanity threshold 6 -> 3 dB.
 
 ## Milestone 3 status (v0.3.0): BUILT, tested by the user (video): worked; follow-ups done in M4
 - dsp: Fft (radix-2), TrackAnalyzer (4096-pt, mid/side in one complex FFT, 31 ISO 1/3-oct bands re full-scale

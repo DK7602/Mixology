@@ -832,6 +832,24 @@ namespace mixology::mix
                                                       : "Flip the phase of one side on " + joinNames (outOfPhase) + " (or remove the widener on it), then compare in mono." }, outOfPhase });
         }
 
+        // ---- 7a. a mono mix: left and right the same (a mono group or output on the way) ----------
+        if (mixN >= 5 && r.mixWidth < 0.002 && r.mixCorrelation > 0.998)
+        {
+            r.monoMix = true;
+            std::vector<std::string> stereoTracks;
+            for (const auto& t : r.tracks)
+                if (counts (t) && t.width > 0.03) stereoTracks.push_back (t.name);
+            out.push_back ({ "mono-mix", "info", "mono", "Your mix is mono",
+                             "Left and right of the Stereo Out are the same: every track ends up in the middle, and panning changes nothing."
+                                 + (stereoTracks.empty() ? std::string()
+                                                         : " " + joinNames (stereoTracks) + (stereoTracks.size() == 1 ? " is" : " are") + " stereo on its track but reaches the Stereo Out in mono.")
+                                 + " That usually means a mono group or output on the way (for example a mono group the instruments play through).",
+                             "Only if you want width: most songs are stereo (guitar pairs left and right, a wide drum kit).",
+                             { "In Cubase's MixConsole a mono channel shows one meter instead of two: check your groups (and the Stereo Out).",
+                               "To keep the width, use a stereo group instead (add a stereo group track and route the same tracks to it).",
+                               "Then Stereo Architect can place pairs left and right." }, stereoTracks });
+        }
+
         // ---- 7b. left / right balance ----------------------------------------------------------
         if (mixN >= 5 && std::abs (r.mixBalance) >= 1.5)
         {

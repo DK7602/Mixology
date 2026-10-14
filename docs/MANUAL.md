@@ -145,6 +145,8 @@ What it looks at:
 - **Stereo**: low end that isn't centred; tracks or a mix that could fall apart in mono.
 - **Left / right balance**: a mix that is louder on one side, and the tracks pulling it there (for example
   several guitars all panned hard left).
+- **A mono mix**: left and right of the Stereo Out the same (a mono group or output on the way). Panning then
+  changes nothing, so Stereo Architect leaves the pans alone.
 - **Tracks you can hardly hear**, tracks running very hot, and headroom for Masterology.
 - **Channels without Mixology Link**: listed, so you know what the advice leaves out.
 

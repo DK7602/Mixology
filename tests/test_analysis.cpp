@@ -1155,3 +1155,29 @@ TEST_CASE ("Routing by ear: groups and pan law found from the sound, never count
         CHECK (r.unheardLoudness > -100.0);
     }
 }
+
+TEST_CASE ("A mono mix: said so, and Stereo Architect leaves the pans alone", "[analysis]")
+{
+    // Everything reaches the Stereo Out through a mono group: left and right identical, a stereo drum track included.
+    Analysis a;
+    a.begin (Style {});
+    for (int i = 0; i < 150; ++i)
+    {
+        Moment m;
+        m.tracks = { sample ("Vocals", vocalFrame (-14.0)), sample ("Electric Lead", padFrame (-14.0)), sample ("Electric Lead (D)", padFrame (-14.0)),
+                     sample ("Drum Machine 01", shaped ([] (int b) { return bump (b, 6, 2.0, -12.0); }, 12.0, 0.3)) };
+        auto mono = m.tracks;
+        for (auto& t : mono) for (auto& sh : t.frame.sideShare) sh = 0.0f;
+        m.mix = mixOf (mono);
+        a.add (m);
+    }
+    const auto r = a.evaluate ({});
+    CHECK (r.monoMix);
+    const auto* s = find (r, "mono-mix");
+    REQUIRE (s != nullptr);
+    CHECK (mentions (s, "Drum Machine 01"));
+    std::vector<ChannelNow> chans { channel ("Vocals"), channel ("Electric Lead", 0.0, -100.0), channel ("Electric Lead (D)", 0.0, -100.0), channel ("Drum Machine 01") };
+    const auto p = makePlan (Tool::stereo, r, chans);
+    CHECK (p.changes.empty());
+    CHECK (noted (p, "mono at the Stereo Out"));
+}

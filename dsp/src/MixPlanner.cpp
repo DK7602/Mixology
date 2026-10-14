@@ -524,6 +524,12 @@ namespace mixology::mix
                 ts.push_back ({ &t, ch, ch->pan, ch->pan, false, {} });
             }
             if (ts.empty()) return {};
+            if (r.monoMix)
+            {
+                plan.notes.push_back ("Your mix is mono at the Stereo Out (left and right are the same), so panning changes nothing: "
+                                      "a mono group or output is on the way. Stereo Architect leaves the pans alone (see 'Your mix is mono' in the Mix Assistant).");
+                return "pans have no effect (mono mix)";
+            }
             if (! stereoPanners.empty())
                 plan.notes.push_back (joinNames (stereoPanners) + (stereoPanners.size() == 1 ? " uses" : " use")
                                       + " Cubase's Stereo Combined Panner (Cubase only tells Mixology its left edge): pan "
@@ -545,7 +551,7 @@ namespace mixology::mix
                 }
                 if (r.unheardLoudness > -100.0) { l += toE (r.unheardLoudness); rgt += toE (r.unheardLoudness); }
                 const double expected = toDb (l) - toDb (rgt);
-                if (std::abs (expected - r.mixBalance) > 6.0)
+                if (std::abs (expected - r.mixBalance) > 3.0)
                 {
                     std::vector<std::string> hard;
                     for (const auto& x : ts) if (std::abs (x.pan) >= 60.0) hard.push_back (x.t->name);

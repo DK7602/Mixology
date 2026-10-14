@@ -159,6 +159,7 @@ namespace mixology::mix
         double musicPathDb = 0.0;     // the instruments' change on the way (e.g. a group fader at -6)
         double routingFitDb = 0.0;    // how well that explains the Stereo Out (median error, dB)
         double mixWidth = 0.0;
+        bool monoMix = false;              // left and right of the Stereo Out are the same: panning changes nothing
         ReferenceReport reference;
     };
 
