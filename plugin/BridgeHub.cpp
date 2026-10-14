@@ -850,7 +850,13 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
     }
     else if (name == "setMusicBus")
     {
-        const auto hash = static_cast<std::uint32_t> (static_cast<juce::int64> (arg.getProperty ("hash", 0)));
+        auto hash = static_cast<std::uint32_t> (static_cast<juce::int64> (arg.getProperty ("hash", 0)));
+        if (hash == 0 && arg.hasProperty ("name"))   // from the Mix Assistant: by the channel's name
+        {
+            const auto wanted = arg.getProperty ("name", "").toString().toStdString();
+            for (const auto& [h, f] : bridge.knownFaders())
+                if (f.title == wanted) hash = h;
+        }
         if (hash == 0) r = { false, "That channel has no name Mixology can keep track of." };
         else
         {
@@ -1041,6 +1047,9 @@ juce::var BridgeHub::planToVar (const mixology::mix::Plan& p) const
     o->setProperty ("headroomDb", std::round (p.headroomDb * 10.0) / 10.0);
     o->setProperty ("headroomWhy", juce::String::fromUTF8 (p.headroomWhy.c_str()));
     o->setProperty ("headroomCount", static_cast<int> (p.headroom.size()));
+    juce::Array<juce::var> hints;
+    for (const auto& n : p.groupHints) hints.add (juce::String::fromUTF8 (n.c_str()));
+    o->setProperty ("groupHints", hints);
     return juce::var (o);
 }
 

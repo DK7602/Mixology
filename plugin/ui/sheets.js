@@ -275,6 +275,14 @@ export function openSuggestion(app, sg) {
     }
     el("div", "", taste, { width: "100%", fontSize: "16px", color: "var(--text-dim)" }).textContent = "Mixology remembers it for this song: the advice, Balance and Auto Mix follow your ears.";
   }
+  if (sg.id === "group-hint") {
+    const row = el("div", "", body, { display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center", margin: "0 0 16px" });
+    for (const n of sg.tracks || []) {
+      const b = el("button", "small-btn", row, { height: "44px", fontSize: "19px" });
+      b.textContent = `It's the music group: '${n}'`;
+      b.addEventListener("click", async () => { const r = await app.command("setMusicBus", { name: n, value: true }); if (r && r.ok) $("overlay").classList.remove("shown"); });
+    }
+  }
   if (sg.tracks && sg.tracks.length) {
     const row = el("div", "", body, { display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" });
     el("span", "", row, { fontSize: "18px", color: "var(--text-dim)", marginRight: "4px" }).textContent = "Tracks:";

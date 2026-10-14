@@ -197,7 +197,11 @@ list: every change it wants to make, **now → new**, and why, in plain words. U
   job: don't push your mix up to match a mastered song.
 
 **A music group (e.g. the "Beat" group Voxology listens to).** If your instruments play through one group channel,
-click that group's icon on the Tracks page and choose **Music group**. Mixology then counts its fader in the
+click that group's icon on the Tracks page and choose **Music group** (any name works). Mixology also notices by
+itself when a channel without a Link adds no sound of its own (everything on the Stereo Out is already on your tracks
+with a Link): it doesn't count it as music, and asks once ("Do your instruments play through it?") in the Mix
+Assistant and at the top of Balance / Auto Mix. Cubase doesn't tell scripts which tracks are routed where, so the
+"yes" is yours to give. Mixology then counts its fader in the
 instruments' level, never counts the group as extra music, and moves the music on that one fader (vocal against
 the music, room for Masterology) instead of moving every instrument and the group twice.
 

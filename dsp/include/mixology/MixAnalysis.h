@@ -147,6 +147,9 @@ namespace mixology::mix
         double vocalTarget = 0.0;
         double styleVocalTarget = 0.0;    // the style's own target (without your offset)
         double unheardLoudness = -120.0;  // the channels without a Link together (the mix minus the Links), LUFS-like
+        /** Channels without a Link that add no sound of their own (the Links explain the whole mix): most likely
+            a group the tracks play through. Mixology asks whether it is the music group. */
+        std::vector<std::string> groupHints;
         double mixWidth = 0.0;
         ReferenceReport reference;
     };

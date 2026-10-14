@@ -85,6 +85,8 @@ namespace mixology::mix
         double headroomDb = 0.0;
         std::string headroomWhy;
         std::vector<HeadroomMove> headroom;
+
+        std::vector<std::string> groupHints;   // channels that look like a group the tracks play through (ask: music group?)
     };
 
     constexpr double kMaxMoveDb = 6.0;

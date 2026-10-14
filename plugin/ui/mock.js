@@ -129,7 +129,8 @@
       const notes = ["'Lead Vox': protected (padlock), so it stays where it is (it would have moved +1.5 dB)."];
       if (value === "auto" || value === "clean" || value === "pocket") notes.push("'Synth' has no Mixology Link Mixology can reach: vocal pocket skipped.");
       const hd = value === "auto" || value === "balance" ? { headroomDb: -12.8, headroomCount: 8, headroomWhy: "Your mix peaks at +6.8 dBTP. Masterology works best with peaks around -6: every fader goes down 12.8 dB together. The balance stays the same, the mix just gets quieter (Masterology brings the level back)." } : { headroomDb: 0, headroomCount: 0, headroomWhy: "" };
-      B.plan = { ...hd, id: B.planId, tool: value, title, valid: true, summary: `${changes.length} changes for ${window.__mixStyle || "Hip Hop - Modern Clean"}: levels: the hats -3.4 dB, the kick -1.5 dB; pans: 2 tracks; 1 low cut, 1 mud dip; 2 pocket dips.`, notes, changes };
+      const busSet = Object.values(B.settings).some((x) => x && x.musicBus);
+      B.plan = { ...hd, groupHints: (value === "auto" || value === "balance") && !busSet ? ["Pad"] : [], id: B.planId, tool: value, title, valid: true, summary: `${changes.length} changes for ${window.__mixStyle || "Hip Hop - Modern Clean"}: levels: the hats -3.4 dB, the kick -1.5 dB; pans: 2 tracks; 1 low cut, 1 mud dip; 2 pocket dips.`, notes, changes };
       return { ok: true, plan: B.plan };
     }
     if (name === "vocalTaste") {
@@ -188,7 +189,8 @@
     }
     if (name === "setMusicBus") {
       for (const h of Object.keys(B.settings)) if (B.settings[h]) B.settings[h].musicBus = false;
-      if (value) (B.settings[arg.hash] = B.settings[arg.hash] || {}).musicBus = true;
+      const target = arg.hash || (chans.find((c) => c.name === arg.name) || {}).hash;
+      if (value && target) (B.settings[target] = B.settings[target] || {}).musicBus = true;
       B.version++;
       return { ok: true, info: value ? "Got it: the music plays through this group. Mixology moves the music on its fader, and never counts it as extra music." : "This channel is no longer the music group." };
     }

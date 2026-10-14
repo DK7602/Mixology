@@ -1058,3 +1058,42 @@ TEST_CASE ("Music group: the instruments play through one group fader (Voxology'
         CHECK (std::find (names.begin(), names.end(), "Electric Rhythm") == names.end());
     }
 }
+
+TEST_CASE ("Music group: a channel without a Link that adds no sound of its own is recognised", "[analysis]")
+{
+    // "Instrumental Bus" (any name): the guitars and drums play through it, so the Links explain the whole mix.
+    Analysis a;
+    a.begin (Style {});
+    for (int i = 0; i < 150; ++i)
+    {
+        Moment m;
+        m.tracks = { sample ("Vocals", vocalFrame (-14.0)), sample ("Gtr", padFrame (-14.0)), sample ("Drums", kickFrame()) };
+        m.mix = mixOf (m.tracks);
+        a.add (m);
+    }
+    const auto r = a.evaluate ({}, { "Instrumental Bus" });
+    REQUIRE (r.groupHints.size() == 1);
+    CHECK (r.groupHints.front() == "Instrumental Bus");
+    CHECK (r.unheardLoudness < -100.0);                 // not counted as extra music
+    CHECK (find (r, "group-hint") != nullptr);
+    CHECK (find (r, "unheard") == nullptr);
+    const auto p = makePlan (Tool::balance, r, { channel ("Vocals"), channel ("Gtr"), channel ("Drums"), channel ("Instrumental Bus", 0.0, 0.0, false) });
+    CHECK (p.groupHints.size() == 1);
+    CHECK (change (p, "Instrumental Bus", "level") == nullptr);
+
+    // A printed beat really adds music: no hint, counted as before.
+    Analysis b;
+    b.begin (Style {});
+    for (int i = 0; i < 150; ++i)
+    {
+        Moment m;
+        m.tracks = { sample ("Vocals", vocalFrame (-14.0)) };
+        auto all = m.tracks;
+        all.push_back (sample ("Beat", kickFrame()));
+        m.mix = mixOf (all);
+        b.add (m);
+    }
+    const auto r2 = b.evaluate ({}, { "Beat" });
+    CHECK (r2.groupHints.empty());
+    CHECK (r2.unheardLoudness > -100.0);
+}

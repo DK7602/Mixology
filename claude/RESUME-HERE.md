@@ -125,6 +125,11 @@ User asked (2026-10-13): "Once fixed move forward with M4?" after the M3 test vi
   change) instead of every instrument; instruments only move for their balance against each other; headroom
   moves the group + top-level channels; group fader moves since analysis correct the instruments' levels.
 - The unheard advice now suggests "Music group" for a channel the other tracks play through.
+- Auto-detection (user: "I may not always name it Beat"): MixAnalysis sets Report.groupHints when the Links explain
+  the mix in > 80 % of the playing moments (residual < 10 %): those unheard channels aren't counted as music
+  (no unheardLoudness) and the "group-hint" suggestion + Plan.groupHints (Balance / Auto Mix) ask "Do your
+  instruments play through it?" -> setMusicBus { name } (hub resolves the name via knownFaders). Routing itself
+  isn't available to MIDI Remote scripts, so the user confirms.
 
 ## Milestone 3 status (v0.3.0): BUILT, tested by the user (video): worked; follow-ups done in M4
 - dsp: Fft (radix-2), TrackAnalyzer (4096-pt, mid/side in one complex FFT, 31 ISO 1/3-oct bands re full-scale
@@ -258,7 +263,7 @@ Other MIDI Remote scripts on the user's machine: Arturia KeyLab Essential 61 mk3
 APC40 mkII / MPK249, Korg nanoKONTROL; MIDI ports appear via Windows MIDI Services ("I|Windows MIDI|Mixology to Cubase").
 
 ## CI
-M4 fixes green run: 38483054140. M4 green run: 38476297775 (77 tests on Windows, Link check with Assist EQ, pluginval 10 + validator, both plug-ins).
+Music group green run: 38496765368. M4 fixes green run: 38483054140. M4 green run: 38476297775 (77 tests on Windows, Link check with Assist EQ, pluginval 10 + validator, both plug-ins).
 M3 green run: 38461991599 (57 tests on Windows, Link check with analysis, pluginval 10 + validator, both plug-ins).
 M2 green run: 38444281357 (Windows build, unit tests, Link cross-library check on Windows, pluginval 10 +
 VST3 validator for BOTH plug-ins). Artifact Mixology-Windows has VST3/Mixology.vst3 + VST3/Mixology Link.vst3.

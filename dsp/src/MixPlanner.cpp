@@ -947,6 +947,7 @@ namespace mixology::mix
         }
         plan.valid = true;
         const Lookup look (channels);
+        if (look.musicBus == nullptr && (tool == Tool::autoMix || tool == Tool::balance)) plan.groupHints = r.groupHints;
         std::vector<std::string> parts;
         auto add = [&] (const std::string& s) { if (! s.empty()) parts.push_back (s); };
         if (tool == Tool::autoMix || tool == Tool::balance) add (planBalance (r, look, plan));

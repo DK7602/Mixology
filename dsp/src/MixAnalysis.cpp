@@ -30,6 +30,8 @@ namespace mixology::mix
         }
         std::string signedDb (double v) { return (v >= 0.05 ? "+" : "") + fmt1 (v) + " dB"; }
 
+        std::string quoteName (const std::string& n) { return "'" + n + "'"; }
+
         std::string joinNames (const std::vector<std::string>& names, std::size_t max = 3)
         {
             std::string out;
@@ -351,10 +353,11 @@ namespace mixology::mix
         if (! unheard.empty())
         {
             double resE = 0.0;
-            int resN = 0;
+            int resN = 0, playing = 0;
             for (const auto& m : moments)
             {
                 if (m.mix.silent) continue;
+                ++playing;
                 double linked = 0.0;
                 for (const auto& t : m.tracks)
                 {
@@ -365,7 +368,10 @@ namespace mixology::mix
                 const double rest = toE (m.mix.loudness) - linked;
                 if (rest > 0.1 * toE (m.mix.loudness)) { resE += rest; ++resN; }
             }
-            if (resN > 0) r.unheardLoudness = toDb (resE / resN);
+            // Most of the time the Links explain the whole mix: those channels add nothing of their own (a group the
+            // tracks play through, or silent). They aren't counted as extra music.
+            if (playing >= 5 && resN < 0.2 * playing) r.groupHints = unheard;
+            else if (resN > 0) r.unheardLoudness = toDb (resE / resN);
         }
 
         std::vector<double> mixDb (kBands, -120.0);
@@ -458,7 +464,19 @@ namespace mixology::mix
                              "The more of the song Mixology hears, the surer it is. Short listens can miss the hook or the drop.",
                              "Not urgent: for a reliable picture let it hear at least 20 seconds of the busiest part.",
                              { "Press Analyze Mix again, play the hook or the busiest 30 - 60 seconds, then Finish." }, {} });
-        if (! unheard.empty())
+        if (! r.groupHints.empty())
+        {
+            const bool one = r.groupHints.size() == 1;
+            out.push_back ({ "group-hint", "info", "link",
+                             one ? quoteName (r.groupHints.front()) + " adds no sound of its own" : std::to_string (r.groupHints.size()) + " channels add no sound of their own",
+                             "Everything Mixology hears on the Stereo Out is already on your tracks with a Link, so " + joinNames (r.groupHints, 4)
+                                 + (one ? " is" : " are") + " probably a group your tracks play through (or silent). Mixology doesn't count "
+                                 + (one ? "it" : "them") + " as extra music.",
+                             "Only if your instruments play through " + (one ? std::string ("it") : std::string ("one of them")) + ": tell Mixology, so Balance moves the music on that one fader.",
+                             { "If your instruments (not the vocals) play through it, press 'It's the music group' below, or click its icon on the Tracks page and choose Music group." },
+                             r.groupHints });
+        }
+        else if (! unheard.empty())
             out.push_back ({ "unheard", "info", "link", std::to_string (unheard.size()) + " channel" + (unheard.size() == 1 ? "" : "s") + " without Mixology Link",
                              joinNames (unheard, 4) + (unheard.size() == 1 ? " plays" : " play") + " in your mix, but Mixology can't hear " + (unheard.size() == 1 ? "it" : "them") + " one by one, so the advice below leaves " + (unheard.size() == 1 ? "it" : "them") + " out.",
                              "Only if those tracks matter for the balance (they usually do).",
