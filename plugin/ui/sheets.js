@@ -331,6 +331,11 @@ export function openTracksSheet(app) {
       const u = el("p", "", body, { fontSize: "17px", color: "var(--text-dim)", marginTop: "18px" });
       u.textContent = "Without Mixology Link (not heard one by one): " + report.unheard.join(", ") + ".";
     }
+    if (report.routingFromSound) {
+      const ro = el("p", "", body, { fontSize: "17px", color: "var(--text-dim)", marginTop: "10px", lineHeight: "1.4" });
+      ro.textContent = `How your tracks reach the Stereo Out (worked out from the sound: group faders, group processing, pan law): `
+        + `instruments ${fmt.db(report.musicPathDb)}, vocals ${fmt.db(report.vocalPathDb)} on the way. The levels above include it.`;
+    }
   };
   render();
 }

@@ -80,12 +80,12 @@ export async function openToolSheet(app, tool) {
   // ---- a channel that sounds like a group the instruments play through: ask once
   if (plan.groupHints && plan.groupHints.length) {
     const gh = el("div", "", body, { display: "flex", alignItems: "center", gap: "10px", margin: "0 0 10px", flex: "none", fontSize: "18px", flexWrap: "wrap" });
-    el("span", "", gh, { color: "var(--gold)" }).textContent = plan.groupHints.length === 1
-      ? `'${plan.groupHints[0]}' adds no sound of its own. Do your instruments play through it?`
-      : "These channels add no sound of their own. Do your instruments play through one of them?";
+    el("span", "", gh, { color: "var(--text-dim)" }).textContent = plan.groupHints.length === 1
+      ? `'${plan.groupHints[0]}' is a group (Mixology allows for it). Optional: move the music on it instead of each instrument?`
+      : "These channels are groups (Mixology allows for them). Optional: move the music on one of them instead of each instrument?";
     for (const n of plan.groupHints) {
       const b = el("button", "small-btn", gh);
-      b.textContent = plan.groupHints.length === 1 ? "Yes, it's the music group" : `Yes: '${n}'`;
+      b.textContent = plan.groupHints.length === 1 ? "Yes, the music plays through it" : `Yes: '${n}'`;
       b.addEventListener("click", async () => { const res = await app.command("setMusicBus", { name: n, value: true }); if (res && res.ok) setTimeout(reopen, 150); });
     }
   }

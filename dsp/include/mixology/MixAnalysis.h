@@ -150,6 +150,14 @@ namespace mixology::mix
         /** Channels without a Link that add no sound of their own (the Links explain the whole mix): most likely
             a group the tracks play through. Mixology asks whether it is the music group. */
         std::vector<std::string> groupHints;
+
+        /** How the tracks reach the Stereo Out, worked out from the sound: what the Stereo Out plays against what
+            the Links hear (after their faders), moment by moment, band by band. Group faders, group processing and
+            pan law all show up here, whatever the channels are called, so nothing is counted twice. */
+        bool routingFromSound = false;
+        double vocalPathDb = 0.0;     // the vocals' change on the way (e.g. -3 for a mono vocal panned centre)
+        double musicPathDb = 0.0;     // the instruments' change on the way (e.g. a group fader at -6)
+        double routingFitDb = 0.0;    // how well that explains the Stereo Out (median error, dB)
         double mixWidth = 0.0;
         ReferenceReport reference;
     };

@@ -130,6 +130,13 @@ User asked (2026-10-13): "Once fixed move forward with M4?" after the M3 test vi
   (no unheardLoudness) and the "group-hint" suggestion + Plan.groupHints (Balance / Auto Mix) ask "Do your
   instruments play through it?" -> setMusicBus { name } (hub resolves the name via knownFaders). Routing itself
   isn't available to MIDI Remote scripts, so the user confirms.
+- User: "It should be able to determine groupings and not count them as redundancies." -> routing by ear in
+  MixAnalysis::evaluate: weighted least squares (relative error) of the Stereo Out band energies (bands 3-29,
+  within 40 dB of the moment's top) as Gv * vocals + Gi * instruments (Link bands + track faders). Accepted when
+  the median error < 1.5 dB and < 10 % of points have > 3 dB unexplained (a printed beat fails this). Then
+  Report.routingFromSound, vocalPathDb, musicPathDb: every track's loudness / bands, the vocal ratio, masking and
+  the unheard residual include the path (group faders / group compression / pan law), groups are groupHints, never
+  music. The manual music group then only decides WHICH fader carries the music's moves (optional question).
 
 ## Milestone 3 status (v0.3.0): BUILT, tested by the user (video): worked; follow-ups done in M4
 - dsp: Fft (radix-2), TrackAnalyzer (4096-pt, mid/side in one complex FFT, 31 ISO 1/3-oct bands re full-scale

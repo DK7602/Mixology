@@ -307,18 +307,100 @@ namespace mixology::mix
             indexOf[key] = r.tracks.size();
             r.tracks.push_back (std::move (t));
         }
-        // The music group's fader: the instruments reach the Stereo Out through it.
-        const double bus = hasMusicBus ? musicBusDb : 0.0;
-        std::set<std::uint32_t> busKeys;
-        if (hasMusicBus)
-            for (auto& t : r.tracks)
+        // How the tracks reach the Stereo Out. The Links hear each track before group faders, group processing and
+        // the panner; the Stereo Out hears the result. Fit, over all moments and bands, the Stereo Out's energy as
+        // (vocals x Gv) + (instruments x Gi): weighted least squares on relative error. When that explains the mix
+        // well, Gv and Gi are the paths (groups found by ear, whatever their names, never counted twice).
+        std::map<std::uint32_t, int> part;   // 1 vocals (lead + ad-libs), 2 the rest
+        for (const auto& t : r.tracks)
+            if (! t.excluded) part[t.hash] = (t.role == Role::vox || t.role == Role::adlibs) ? 1 : 2;
+        {
+            struct Pt { double v, i, m; };
+            std::vector<Pt> pts;
+            for (const auto& m : moments)
             {
-                if (! viaMusicBus (t.role) || t.excluded) continue;
-                busKeys.insert (t.hash);
-                if (t.loudness > -100.0) t.loudness += bus;
-                for (auto& b : t.bands) if (b > -100.0) b += bus;
+                if (m.mix.silent) continue;
+                std::array<double, kBands> v {}, in {};
+                for (const auto& t : m.tracks)
+                {
+                    const auto it = part.find (keyOf (t));
+                    if (it == part.end() || t.frame.silent) continue;
+                    auto& dst = it->second == 1 ? v : in;
+                    for (int b = 0; b < kBands; ++b)
+                        dst[static_cast<std::size_t> (b)] += toE (t.frame.bandDb[static_cast<std::size_t> (b)] + t.faderDb);
+                }
+                double top = -200.0;
+                for (int b = 3; b <= 29; ++b) top = std::max (top, static_cast<double> (m.mix.bandDb[static_cast<std::size_t> (b)]));
+                for (int b = 3; b <= 29; ++b)
+                {
+                    const auto i = static_cast<std::size_t> (b);
+                    if (m.mix.bandDb[i] < top - 40.0 || v[i] + in[i] <= 0.0) continue;
+                    pts.push_back ({ v[i], in[i], toE (m.mix.bandDb[i]) });
+                }
             }
-        auto busOf = [&] (std::uint32_t key) { return busKeys.count (key) ? bus : 0.0; };
+            if (pts.size() >= 200)
+            {
+                double a11 = 0.0, a12 = 0.0, a22 = 0.0, b1 = 0.0, b2 = 0.0;
+                for (const auto& p : pts)
+                {
+                    const double w = 1.0 / (p.m * p.m);
+                    a11 += w * p.v * p.v;
+                    a12 += w * p.v * p.i;
+                    a22 += w * p.i * p.i;
+                    b1 += w * p.v * p.m;
+                    b2 += w * p.i * p.m;
+                }
+                double gv = 1.0, gi = 1.0;
+                const double det = a11 * a22 - a12 * a12;
+                if (a11 <= 1.0e-12 && a22 > 1.0e-12) gi = b2 / a22;                  // no vocals
+                else if (a22 <= 1.0e-12 && a11 > 1.0e-12) gv = b1 / a11;             // no instruments
+                else if (det > 1.0e-6 * a11 * a22)
+                {
+                    gv = (b1 * a22 - b2 * a12) / det;
+                    gi = (b2 * a11 - b1 * a12) / det;
+                }
+                if (! (gv > 0.0 && gi > 0.0) || det <= 1.0e-6 * a11 * a22)
+                    gv = gi = (b1 + b2) / std::max (1.0e-30, a11 + 2.0 * a12 + a22);   // one common path
+                gv = std::clamp (gv, 0.01, 100.0);
+                gi = std::clamp (gi, 0.01, 100.0);
+                std::vector<double> err;
+                err.reserve (pts.size());
+                int unexplained = 0;   // clearly more on the Stereo Out than the Links can account for: other music
+                for (const auto& p : pts)
+                {
+                    const double d = toDb (p.m) - toDb (gv * p.v + gi * p.i);
+                    err.push_back (std::abs (d));
+                    if (d > 3.0) ++unexplained;
+                }
+                std::nth_element (err.begin(), err.begin() + static_cast<long> (err.size() / 2), err.end());
+                r.routingFitDb = err[err.size() / 2];
+                if (r.routingFitDb < 1.5 && unexplained < static_cast<int> (pts.size() / 10))
+                {
+                    r.routingFromSound = true;
+                    r.vocalPathDb = toDb (gv);
+                    r.musicPathDb = toDb (gi);
+                }
+            }
+        }
+
+        // The music group you marked (when the sound doesn't settle it): its fader counts for the instruments.
+        const double bus = hasMusicBus && ! r.routingFromSound ? musicBusDb : 0.0;
+        auto gainOf = [&] (std::uint32_t key) {
+            const auto it = part.find (key);
+            if (it == part.end()) return 0.0;
+            if (r.routingFromSound) return it->second == 1 ? r.vocalPathDb : r.musicPathDb;
+            const auto idx = indexOf.find (key);
+            return it->second == 2 && idx != indexOf.end() && viaMusicBus (r.tracks[idx->second].role) ? bus : 0.0;
+        };
+        for (auto& t : r.tracks)
+        {
+            if (t.excluded) continue;
+            const double g = gainOf (t.hash);
+            if (std::abs (g) < 1.0e-9) continue;
+            if (t.loudness > -100.0) t.loudness += g;
+            for (auto& b : t.bands) if (b > -100.0) b += g;
+        }
+        auto busOf = gainOf;
 
         std::sort (r.tracks.begin(), r.tracks.end(), [] (const TrackReport& a, const TrackReport& b) { return a.loudness > b.loudness; });
         indexOf.clear();
@@ -470,10 +552,11 @@ namespace mixology::mix
             out.push_back ({ "group-hint", "info", "link",
                              one ? quoteName (r.groupHints.front()) + " adds no sound of its own" : std::to_string (r.groupHints.size()) + " channels add no sound of their own",
                              "Everything Mixology hears on the Stereo Out is already on your tracks with a Link, so " + joinNames (r.groupHints, 4)
-                                 + (one ? " is" : " are") + " probably a group your tracks play through (or silent). Mixology doesn't count "
-                                 + (one ? "it" : "them") + " as extra music.",
-                             "Only if your instruments play through " + (one ? std::string ("it") : std::string ("one of them")) + ": tell Mixology, so Balance moves the music on that one fader.",
-                             { "If your instruments (not the vocals) play through it, press 'It's the music group' below, or click its icon on the Tracks page and choose Music group." },
+                                 + (one ? " is" : " are") + " a group your tracks play through (or silent). Mixology doesn't count "
+                                 + (one ? "it" : "them") + " as extra music"
+                                 + (r.routingFromSound && std::abs (r.musicPathDb) >= 0.5 ? ", and allows for the " + signedDb (r.musicPathDb) + " the instruments get on their way to the Stereo Out." : "."),
+                             "No: Mixology already takes care of it. Optional: if your instruments play through it, say so, and Balance moves the music on that one fader instead of each instrument.",
+                             { "Optional: press 'It's the music group' below, or click its icon on the Tracks page and choose Music group." },
                              r.groupHints });
         }
         else if (! unheard.empty())
@@ -665,7 +748,7 @@ namespace mixology::mix
                 {
                     const auto key = keyOf (t);
                     if (std::find (vocals.begin(), vocals.end(), key) != vocals.end() && activeIn (t, acc.at (key).maxLoud))
-                        vE += rangeE (t.frame.bandDb, kPresFrom, kPresTo, t.faderDb);
+                        vE += rangeE (t.frame.bandDb, kPresFrom, kPresTo, t.faderDb + busOf (key));
                 }
                 if (vE <= 0.0) continue;
                 for (const auto& t : m.tracks)

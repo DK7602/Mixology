@@ -562,6 +562,9 @@ juce::var BridgeHub::analysisState() const
         }
         r->setProperty ("tracks", tracks);
         r->setProperty ("mixWidth", std::round (report.mixWidth * 100.0) / 100.0);
+        r->setProperty ("routingFromSound", report.routingFromSound);
+        r->setProperty ("vocalPathDb", std::round (report.vocalPathDb * 10.0) / 10.0);
+        r->setProperty ("musicPathDb", std::round (report.musicPathDb * 10.0) / 10.0);
         r->setProperty ("hasVocal", report.hasVocalRatio);
         r->setProperty ("vocalRatio", std::round (report.vocalRatio * 10.0) / 10.0);
         r->setProperty ("vocalTarget", std::round (report.vocalTarget * 10.0) / 10.0);

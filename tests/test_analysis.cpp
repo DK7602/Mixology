@@ -1097,3 +1097,61 @@ TEST_CASE ("Music group: a channel without a Link that adds no sound of its own 
     CHECK (r2.groupHints.empty());
     CHECK (r2.unheardLoudness > -100.0);
 }
+
+TEST_CASE ("Routing by ear: groups and pan law found from the sound, never counted twice", "[analysis]")
+{
+    // What reaches the Stereo Out: the vocals through vocalPath, the instruments through musicPath (a group fader,
+    // group processing...), plus an optional printed beat nobody has a Link on.
+    auto run = [] (double vocalPath, double musicPath, bool printedBeat, std::vector<std::string> unheard) {
+        Analysis a;
+        a.begin (Style {});
+        for (int i = 0; i < 150; ++i)
+        {
+            Moment m;
+            const bool sings = (i / 10) % 2 == 0;   // verses with and without vocal
+            m.tracks = { sample ("Vocals", sings ? vocalFrame (-16.0) : silentFrame()), sample ("Gtr", padFrame (-14.0)), sample ("Drums", kickFrame()) };
+            auto heard = m.tracks;
+            for (auto& t : heard) t.faderDb += t.name == "Vocals" ? vocalPath : musicPath;
+            if (printedBeat) heard.push_back (sample ("Beat", hatsFrame(), 10.0));
+            m.mix = mixOf (heard);
+            a.add (m);
+        }
+        return a.evaluate ({}, unheard);
+    };
+    const auto plain = run (0.0, 0.0, false, {});
+    REQUIRE (plain.routingFromSound);
+    CHECK (plain.vocalPathDb == Catch::Approx (0.0).margin (0.3));
+    CHECK (plain.musicPathDb == Catch::Approx (0.0).margin (0.3));
+
+    SECTION ("a group fader at -6, any name")
+    {
+        const auto r = run (0.0, -6.0, false, { "Bus 1" });
+        REQUIRE (r.routingFromSound);
+        CHECK (r.musicPathDb == Catch::Approx (-6.0).margin (0.3));
+        CHECK (r.vocalPathDb == Catch::Approx (0.0).margin (0.3));
+        CHECK (r.vocalRatio == Catch::Approx (plain.vocalRatio + 6.0).margin (0.5));   // the vocal really is 6 dB further up
+        CHECK (r.groupHints == std::vector<std::string> { "Bus 1" });
+        CHECK (r.unheardLoudness < -100.0);
+        CHECK (track (r, "Gtr")->loudness == Catch::Approx (track (plain, "Gtr")->loudness - 6.0).margin (0.3));
+    }
+    SECTION ("a group whose compressor adds 3 dB")
+    {
+        const auto r = run (0.0, 3.0, false, { "Instruments" });
+        REQUIRE (r.routingFromSound);
+        CHECK (r.musicPathDb == Catch::Approx (3.0).margin (0.3));
+        CHECK (r.groupHints.size() == 1);   // still no extra music
+    }
+    SECTION ("a mono vocal through Cubase's pan law (-3 dB in the middle)")
+    {
+        const auto r = run (-3.0, 0.0, false, {});
+        REQUIRE (r.routingFromSound);
+        CHECK (r.vocalPathDb == Catch::Approx (-3.0).margin (0.3));
+    }
+    SECTION ("a printed beat is real extra music")
+    {
+        const auto r = run (0.0, 0.0, true, { "Beat" });
+        CHECK_FALSE (r.routingFromSound);
+        CHECK (r.groupHints.empty());
+        CHECK (r.unheardLoudness > -100.0);
+    }
+}

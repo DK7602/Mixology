@@ -196,12 +196,14 @@ list: every change it wants to make, **now → new**, and why, in plain words. U
   mutes it again. The reference is always left out of the mix advice. Loudness differences are Masterology's
   job: don't push your mix up to match a mastered song.
 
-**A music group (e.g. the "Beat" group Voxology listens to).** If your instruments play through one group channel,
-click that group's icon on the Tracks page and choose **Music group** (any name works). Mixology also notices by
-itself when a channel without a Link adds no sound of its own (everything on the Stereo Out is already on your tracks
-with a Link): it doesn't count it as music, and asks once ("Do your instruments play through it?") in the Mix
-Assistant and at the top of Balance / Auto Mix. Cubase doesn't tell scripts which tracks are routed where, so the
-"yes" is yours to give. Mixology then counts its fader in the
+**Groups (e.g. the "Beat" group Voxology listens to), found by ear.** Analyze Mix compares what the Stereo Out
+plays with what the Links hear, moment by moment and band by band. From that it works out how your vocals and your
+instruments reach the Stereo Out: a group fader at -6, a compressor on a group, Cubase's pan law. Whatever the
+channels are called, a group is never counted as extra music and never moved as if it were; the levels Mixology
+works with include what happens on the way (Your tracks shows it). Optional: tell Mixology which group the
+instruments play through (its icon on the Tracks page > **Music group**, or the question in the Mix Assistant /
+Balance): then Balance moves the music on that one fader instead of each instrument. A printed beat (real extra
+music without a Link) is told apart: the Links can't explain it. Mixology then counts its fader in the
 instruments' level, never counts the group as extra music, and moves the music on that one fader (vocal against
 the music, room for Masterology) instead of moving every instrument and the group twice.
 
