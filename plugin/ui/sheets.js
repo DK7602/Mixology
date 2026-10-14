@@ -81,7 +81,7 @@ function bridgePanel(app, root) {
   const changesText = el("div", "", changesCard, { marginBottom: "10px" });
   const ctl = el("div", "", changesCard, { display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" });
   const restoreBtn = el("button", "small-btn red", ctl); restoreBtn.textContent = "↺ Restore all";
-  restoreBtn.title = "Every channel Mixology changed goes back the way it was before Mixology's first move";
+  restoreBtn.title = "Every channel Mixology changed (faders, pans, mute / solo, Assist EQ) goes back the way it was before Mixology's first move";
   restoreBtn.addEventListener("click", () => app.command("restoreAll"));
   const forgetBtn = el("button", "small-btn", ctl); forgetBtn.textContent = "Keep the mix as it is now";
   forgetBtn.title = "Forget the restore points: the current mix becomes the new starting point";
@@ -120,7 +120,7 @@ function bridgePanel(app, root) {
 
     const changed = b.changedCount || 0;
     changesText.innerHTML = !b.restorePoints ? "Nothing changed yet. Before Mixology first moves a channel it remembers how it was, so you can always go back."
-      : `${changed ? `<b>${changed}</b> channel${changed === 1 ? "" : "s"} changed by Mixology.` : "Everything Mixology changed is back how it was."} Restore puts them back the way they were before Mixology's first move (channels outside the 12 in view: use the bank arrows, then Restore again).`;
+      : `${changed ? `<b>${changed}</b> channel${changed === 1 ? "" : "s"} changed by Mixology (faders, pans${b.changedEq ? `, Assist EQ on ${b.changedEq}` : ""}).` : "Everything Mixology changed is back how it was."} Restore puts them back the way they were before Mixology's first move, wherever they are in the project. What you changed yourself since stays as you set it.`;
     restoreBtn.disabled = !ok || !changed;
     forgetBtn.disabled = !b.restorePoints;
     result.textContent = b.lastMove || "";

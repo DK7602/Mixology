@@ -457,6 +457,37 @@ void BridgeHub::analysisTick (const mixology::AnalysisFrame& mixFrame, bool play
     if (analysis.secondsHeard() >= 60.0 || analysis.full()) finishAnalysis();
 }
 
+void BridgeHub::restoreAssist (std::uint32_t hash, int& restored, int& kept)
+{
+    auto& registry = mixology::link::processRegistry();
+    const auto links = registry.links (mixology::link::nowMs());
+    std::vector<std::uint32_t> done;
+    for (const auto& [h, point] : eqRestore.all())
+    {
+        if (hash != 0 && h != hash) continue;
+        if (bridge.isProtected (h)) continue;   // protected: never touched
+        const auto* l = uniqueLink (links, h);
+        if (l == nullptr) continue;             // its Link isn't there right now: keep the point
+        const auto d = eqRestore.decide (h, l->assist);
+        if (d.action == mixology::AssistRestore::Action::restore) { registry.requestAssist (l->slot, l->generation, d.to); ++restored; }
+        else if (d.action == mixology::AssistRestore::Action::keptYours) ++kept;
+        done.push_back (h);
+    }
+    for (auto h : done) eqRestore.forget (h);
+}
+
+int BridgeHub::changedTotal (int* faders, int* eq) const
+{
+    std::set<std::uint32_t> all;
+    int f = 0;
+    for (const auto& [h, p] : bridge.restorePoints())
+        if (bridge.isChanged (p)) { all.insert (h); ++f; }
+    for (const auto& [h, p] : eqRestore.all()) all.insert (h);
+    if (faders != nullptr) *faders = f;
+    if (eq != nullptr) *eq = static_cast<int> (eqRestore.size());
+    return static_cast<int> (all.size());
+}
+
 void BridgeHub::applyMusicBus()
 {
     for (const auto& [hash, ts] : trackSettings)
@@ -701,7 +732,7 @@ juce::var BridgeHub::getState (bool includeLog)
                 int at = -1;
                 changed = bridge.isChanged (it->second, &at) && at == i;
             }
-        so->setProperty ("changed", changed);
+        so->setProperty ("changed", changed || (s.present && eqRestore.has (s.hash)));
         if (s.present)
         {
             if (auto role = roleFor (s.hash, s.title)) so->setProperty ("role", mixology::mix::roleKey (*role));
@@ -725,8 +756,11 @@ juce::var BridgeHub::getState (bool includeLog)
         slots.add (juce::var (so));
     }
     o->setProperty ("slots", slots);
-    o->setProperty ("changedCount", bridge.changedCount());
-    o->setProperty ("restorePoints", static_cast<int> (bridge.restorePoints().size()));
+    int changedFaders = 0, changedEq = 0;
+    o->setProperty ("changedCount", changedTotal (&changedFaders, &changedEq));
+    o->setProperty ("changedFaders", changedFaders);
+    o->setProperty ("changedEq", changedEq);
+    o->setProperty ("restorePoints", static_cast<int> (bridge.restorePoints().size() + eqRestore.size()));
     o->setProperty ("linksSeen", linksSeen);
     o->setProperty ("linksPaired", paired);
     o->setProperty ("linksShared", mixology::link::processRegistryShared());
@@ -787,12 +821,36 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
         r = bridge.setProtected (ref, static_cast<bool> (value), t);
         cacheProtected();
     }
-    else if (name == "restore")   r = bridge.restoreChannel (ref, t);
+    else if (name == "restore")
+    {
+        // The channel's fader / pan / mute / solo, and the Assist EQ Mixology set on its Link.
+        int eqBack = 0, eqKept = 0;
+        const bool valid = ref.slot >= 0 && ref.slot < bridge.slotCount() && bridge.slot (ref.slot).present && bridge.slot (ref.slot).hash == ref.hash;
+        if (valid && ! bridge.isProtected (ref.hash)) restoreAssist (ref.hash, eqBack, eqKept);
+        const bool hadFaderPoint = bridge.restorePoints().count (ref.hash) != 0;
+        if (hadFaderPoint || eqBack + eqKept == 0) r = bridge.restoreChannel (ref, t);
+        if (eqBack > 0) info = "Assist EQ back to how it was.";
+        else if (eqKept > 0) info = "Its Assist EQ was changed since Mixology set it: left as you set it.";
+        if (! hadFaderPoint && eqBack + eqKept > 0) r = { true, {} };
+        ++applyVersion;
+    }
     else if (name == "restoreAll")
     {
-        info = bridge.restoreAll (t).message;
+        const auto sum = bridge.restoreAll (t);
+        int eqBack = 0, eqKept = 0;
+        restoreAssist (0, eqBack, eqKept);
+        const bool fadersDidNothing = sum.restored + sum.outsideBank + sum.skipped == 0;
+        info = fadersDidNothing && eqBack + eqKept > 0 ? std::string() : sum.message;
+        if (eqBack > 0) info += std::string (info.empty() ? "" : " ") + "Assist EQ back to how it was on " + std::to_string (eqBack) + " track" + (eqBack == 1 ? "" : "s") + ".";
+        if (eqKept > 0) info += std::string (info.empty() ? "" : " ") + std::to_string (eqKept) + " Assist EQ" + (eqKept == 1 ? " was" : "s were") + " changed since: left as you set " + (eqKept == 1 ? "it." : "them.");
+        ++applyVersion;
     }
-    else if (name == "forget")    bridge.forgetRestorePoints (t);
+    else if (name == "forget")
+    {
+        bridge.forgetRestorePoints (t);
+        eqRestore.clear();
+        ++applyVersion;
+    }
     else if (name == "analyze")
     {
         const auto& st = value;
@@ -1157,7 +1215,8 @@ mixology::BridgeSession::Result BridgeHub::applyCurrentPlan (const juce::var& pi
     for (const auto& [hash, a] : eq)
     {
         const auto* l = uniqueLink (links, hash);
-        next.assist.push_back ({ l->slot, l->generation, l->assist });
+        next.assist.push_back ({ l->slot, l->generation, l->assist, hash });
+        eqRestore.noteSet (hash, l->assist, a);
         registry.requestAssist (l->slot, l->generation, a);
     }
     lastApply = std::move (next);
@@ -1182,7 +1241,11 @@ mixology::BridgeSession::Result BridgeHub::undoLastApply (std::string& info)
         if (! r.ok) return r;
     }
     auto& registry = mixology::link::processRegistry();
-    for (const auto& a : lastApply.assist) registry.requestAssist (a.slot, a.generation, a.before);
+    for (const auto& a : lastApply.assist)
+    {
+        registry.requestAssist (a.slot, a.generation, a.before);
+        eqRestore.noteUndo (a.hash, a.before);
+    }
     info = "Undoing " + lastApply.title + ": everything it changed goes back.";
     lastApply = {};
     ++applyVersion;

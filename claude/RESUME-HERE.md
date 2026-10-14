@@ -142,6 +142,11 @@ User asked (2026-10-13): "Once fixed move forward with M4?" after the M3 test vi
   Both exports were exactly L == R: the mix is mono at the Stereo Out, most likely Beat is a MONO group (asked).
   Fix: Report.monoMix (mix width < 0.002 and correlation > 0.998 on average) -> "mono-mix" advice (names stereo
   tracks that arrive in mono) and Stereo Architect leaves pans alone; pan-vs-mix sanity threshold 6 -> 3 dB.
+- Restore now covers the Assist EQ (user agreed): dsp AssistRestore (first "before" per track, last "set"; decide():
+  restore / keptYours when changed since / none; same() tolerant to parameter steps). Hub: noteSet on planApply,
+  noteUndo on planUndo, restoreAll + strip restore request the old EQ (protected skipped, Link missing keeps the
+  point), forget clears; changedCount = unique channels with fader or EQ changes (+ changedFaders / changedEq for
+  the tooltip); slot.changed includes EQ. Session-only like the fader restore points.
 
 ## Milestone 3 status (v0.3.0): BUILT, tested by the user (video): worked; follow-ups done in M4
 - dsp: Fft (radix-2), TrackAnalyzer (4096-pt, mid/side in one complex FFT, 31 ISO 1/3-oct bands re full-scale

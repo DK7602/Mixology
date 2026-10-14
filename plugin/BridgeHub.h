@@ -1,5 +1,6 @@
 #pragma once
 
+#include "mixology/AssistRestore.h"
 #include "mixology/BridgeSession.h"
 #include "mixology/LinkRegistry.h"
 #include "mixology/MixAnalysis.h"
@@ -110,7 +111,12 @@ private:
         int slot = -1;
         std::uint32_t generation = 0;
         mixology::AssistSettings before;
+        std::uint32_t hash = 0;
     };
+    mixology::AssistRestore eqRestore;   // the Assist EQ before Mixology's first change, per track (Restore)
+    /** Puts the Assist EQ back on one track (or all when hash == 0). Counts restored and kept-yours tracks. */
+    void restoreAssist (std::uint32_t hash, int& restored, int& kept);
+    int changedTotal (int* faders = nullptr, int* eq = nullptr) const;
     struct LastApply
     {
         bool valid = false;

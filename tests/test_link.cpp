@@ -435,3 +435,43 @@ TEST_CASE ("Assist EQ: changes glide (no jump in the output)", "[link]")
         biggestStep = std::max (biggestStep, std::abs (x[i] - x[i - 1]));
     CHECK (biggestStep < 0.5 * 2.0 * 3.14159265358979 * 2500.0 / 48000.0 * 1.05);   // never steeper than the input sine
 }
+
+#include "mixology/AssistRestore.h"
+
+TEST_CASE ("Assist EQ restore points: back to how it was, your own changes kept", "[link]")
+{
+    using mixology::AssistRestore;
+    using mixology::AssistSettings;
+    AssistRestore rp;
+    AssistSettings off, cut, cutAndPocket, yours;
+    cut.lowCutHz = 90.0f;
+    cutAndPocket = cut;
+    cutAndPocket.pocketDb = -3.0f;
+    cutAndPocket.pocketHz = 2500.0f;
+    yours = cutAndPocket;
+    yours.pocketDb = -1.0f;
+
+    rp.noteSet (1, off, cut);              // Clean Up
+    rp.noteSet (1, cut, cutAndPocket);     // then Vocal Pocket: the first "before" stays
+    REQUIRE (rp.has (1));
+    auto d = rp.decide (1, cutAndPocket);
+    CHECK (d.action == AssistRestore::Action::restore);
+    CHECK (AssistRestore::same (d.to, off));
+
+    // The Link's parameters round values a little: still Mixology's.
+    AssistSettings rounded = cutAndPocket;
+    rounded.pocketHz = 2501.0f;
+    rounded.pocketDb = -3.04f;
+    CHECK (rp.decide (1, rounded).action == AssistRestore::Action::restore);
+
+    CHECK (rp.decide (1, yours).action == AssistRestore::Action::keptYours);   // you changed it since
+    CHECK (rp.decide (1, off).action == AssistRestore::Action::none);          // already back
+    CHECK (rp.decide (2, cut).action == AssistRestore::Action::none);          // never touched by Mixology
+
+    // An Undo back to the start: nothing left to restore.
+    rp.noteSet (3, off, cut);
+    rp.noteUndo (3, off);
+    CHECK_FALSE (rp.has (3));
+    rp.clear();
+    CHECK (rp.size() == 0);
+}

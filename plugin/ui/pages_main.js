@@ -360,7 +360,7 @@ export function buildTracks(root, app) {
     const lock = el("button", "", s, { position: "absolute", right: "4px", top: "44px", width: "28px", height: "28px", border: "0", padding: "3px", borderRadius: "7px", background: "transparent", cursor: "pointer", color: "var(--text-faint)" });
     const undo = el("button", "", s, { position: "absolute", right: "4px", top: "76px", width: "28px", height: "24px", border: "0", padding: "0", borderRadius: "7px", background: "transparent", cursor: "pointer", color: "var(--info)", fontSize: "20px", lineHeight: "24px", display: "none" });
     undo.textContent = "↺";
-    undo.title = "Restore this channel (how it was before Mixology's first move)";
+    undo.title = "Restore this channel: its fader, pan and Assist EQ, how they were before Mixology's first change";
     const badge = el("div", "", s, { position: "absolute", left: "5px", top: "46px", width: "20px", height: "20px", borderRadius: "5px", fontSize: "14px", fontWeight: "700", textAlign: "center", lineHeight: "20px", display: "none" });
     const linkDot = el("div", "", s, { position: "absolute", left: "4px", top: "72px", width: "22px", height: "22px", display: "none" });
     const ic = el("div", "", s, { position: "absolute", left: "26px", top: "46px", width: "48px", height: "48px" });
@@ -538,6 +538,10 @@ export function buildTracks(root, app) {
     bankBtns.style.opacity = connected ? "1" : "0.4";
     const changed = (b && b.changedCount) || 0;
     restoreBtn.textContent = changed ? `↺ Restore (${changed})` : "↺ Restore";
+    const cf = (b && b.changedFaders) || 0, ce = (b && b.changedEq) || 0;
+    restoreBtn.title = changed
+      ? `Back to before Mixology's first change: ${cf} channel${cf === 1 ? "" : "s"} (faders, pans), ${ce} Assist EQ${ce === 1 ? "" : "s"}. What you changed yourself since stays.`
+      : "Put every channel Mixology changed back the way it was before Mixology's first move";
     restoreBtn.style.opacity = connected && changed ? "1" : "0.45";
     restoreBtn.style.color = changed ? "var(--info)" : "";
     const named = slots.filter((d) => d && d.present).length;

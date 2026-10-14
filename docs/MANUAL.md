@@ -217,7 +217,10 @@ aren't soloed while something else is.
 are skipped. A fader moves at most 6 dB per Apply unless you press **Allow moves over 6 dB**. If you moved a fader
 since Analyze Mix, the tool leaves it alone (analyze again). When channels are outside the 12 in view, the bank
 steps through your project and comes back by itself (a second or two per page); nothing else can be moved
-meanwhile. **Restore all** (Tracks page) still takes everything back to before Mixology's first change.
+meanwhile. **Restore** (Tracks page) takes everything back to before Mixology's first change: faders, pans, mute /
+solo and the Assist EQ Mixology set (the ↺ on a strip does it for that track). A fader, pan or Assist EQ you changed
+yourself since stays as you set it. **Keep the mix as it is now** (Settings) makes the current state, Assist EQ
+included, the new starting point.
 
 ## Mix styles
 
