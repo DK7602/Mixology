@@ -3,6 +3,7 @@
 
 import { el, box, icon, fmt, clamp, Knob, Meter, select, graph, freqToX, xToFreq, moduleList, previewTag, store, cssVar } from "./ui.js";
 import { knobFor, eqBand, magnitudeDb, EQ_SHAPES, MODULE_NAMES } from "./proc.js";
+import { createScene } from "./space_scene.js";
 
 const SR = 48000;
 function biquadDb(type, f0, gainDb, q, f) {
@@ -530,7 +531,13 @@ export function buildSpace(root, app) {
   const title = el("div", "panel-title", centre, { top: "16px" });
   const tag = previewTag(centre, 0, 30);
   const scene = el("div", "", centre, { position: "absolute", left: "18px", top: "76px", width: "756px", height: "390px", borderRadius: "10px", overflow: "hidden", border: "1.5px solid var(--panel-edge)", boxShadow: "0 0 20px rgba(255,170,60,0.18), inset 0 0 30px rgba(0,0,0,0.5)" });
-  const img = el("img", "", scene, { width: "100%", height: "100%", objectFit: "cover", display: "block" });
+  const picture = createScene(scene, 0, 0, 756, 390);   // the scene, alive with the beat (space_scene.js)
+  // What each knob means to the picture's motion.
+  const SCENE_PARAMS = { reverb: ["pre", "decay", "damping", "width", "mix"], delay: ["time", "feedback", "tone", "pingpong", "mix"],
+    chorus: ["rate", "depth", "delay", "width", "mix"], phaser: ["rate", "depth", "feedback", "centre", "mix"], hall: ["pre", "decay", "size", "damping", "mix"],
+    room: ["pre", "decay", "size", "early", "mix"], special: ["shift", "feedback", "motion", "tone", "mix"] };
+  const sceneParams = {};
+  const pushParams = () => picture.setParams(Object.assign({}, sceneParams));
   const knobPanel = el("div", "card", centre, box(18, 484, 756, 342));
   let presetSel = null;
 
@@ -599,17 +606,25 @@ export function buildSpace(root, app) {
     const d = SPACE.find((s) => s.id === fx);
     title.textContent = d.label;
     tag.style.left = (title.getBoundingClientRect().width ? 40 + d.label.length * 15 : 200) + "px";
-    img.src = `assets/scene_${d.id}.jpg`;
-    img.alt = d.label;
+    picture.setScene(d.id, `assets/scene_${d.id}.webp`);
+    for (const k of Object.keys(sceneParams)) delete sceneParams[k];
     if (presetSel) presetSel.el.remove();
     presetSel = select(centre, 474, 16, 300, d.presets, store.get(`sp_${fx}_preset`, d.presets[0]), (v) => store.set(`sp_${fx}_preset`, v));
     knobPanel.innerHTML = "";
     d.knobs.forEach(([label, min, max, value, curve, format], i) => {
-      new Knob(knobPanel, { x: 4 + i * 150, y: 66, w: 148, size: 130, label, id: `sp_${fx}_${i}`, min, max, def: value, curve, format, step: d.id === "delay" && i === 0 ? 1 : undefined, labelGap: 16, valueGap: 14 });
+      const name = SCENE_PARAMS[d.id][i];
+      const k = new Knob(knobPanel, { x: 4 + i * 150, y: 66, w: 148, size: 130, label, id: `sp_${fx}_${i}`, min, max, def: value, curve, format, step: d.id === "delay" && i === 0 ? 1 : undefined, labelGap: 16, valueGap: 14,
+        onChange: (v) => { sceneParams[name] = v; pushParams(); } });
+      sceneParams[name] = k.value;
     });
+    pushParams();
     eqg.redraw();
   }
   render();
   app.on("theme", () => eqg.redraw());
-  return {};
+  return {
+    onShow() { picture.show(true); },
+    onHide() { picture.show(false); },
+    onFrame(f) { picture.onFrame(f); },
+  };
 }

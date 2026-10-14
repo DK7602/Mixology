@@ -371,6 +371,10 @@
       frame.roleCurves = curves.map((c) => c && c.map((v) => +v.toFixed(1)));
     }
     procFrame(frame, beat);
+    if (page === "space") {   // a song at 92 BPM, playing
+      const bpm = 92, ppq = (performance.now() / 60000) * bpm;
+      frame.beat = { bpm, ppq, bar: Math.floor(ppq / 4) * 4, num: 4, playing: B.an.playing !== false };
+    }
     if (page === "overview" && P.spec) {
       const v = P.values.mix, ix = P.spec.PROC_INDEX;
       frame.mixEq = [1, 2, 3, 4, 5, 6].map((b) => v[ix[`eq${b}_gain`]]).concat([v[ix.eq_on] > 0.5]);

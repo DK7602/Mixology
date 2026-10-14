@@ -5,7 +5,8 @@ Writes: logo.png      beaker + atom + waveforms, transparent (glow kept as alpha
         (wordmark.png, the chrome MIXOLOGY title, is the user's own art now: the cut-out version clipped the Y.
          wordmark() below is kept for reference but no longer writes it.)
         gears.jpg     the gear texture from the header's right side
-        scene_*.jpg   the seven Space pictures (reverb, delay, chorus, phaser, hall, room, special)
+        scene_*.jpg   the seven Space pictures (reverb, delay, chorus, phaser, hall, room, special), small:
+                      the interface uses the HD versions from upscale_scenes.py (scene_*.webp)
 
 Only Pillow + NumPy. Re-run when better (higher resolution) art arrives; coordinates are for the
 1448 x 1086 mockups."""

@@ -112,7 +112,14 @@ void MixologyAudioProcessor::process (juce::AudioBuffer<Sample>& buffer)
     stereoTap.push (data, channels, n);
     if (auto* ph = getPlayHead())
         if (auto pos = ph->getPosition())
+        {
             transportPlaying.store (pos->getIsPlaying(), std::memory_order_relaxed);
+            if (auto bpm = pos->getBpm()) beat.bpm.store (*bpm, std::memory_order_relaxed);
+            if (auto ppq = pos->getPpqPosition()) beat.ppq.store (*ppq, std::memory_order_relaxed);
+            if (auto bar = pos->getPpqPositionOfLastBarStart()) beat.barStartPpq.store (*bar, std::memory_order_relaxed);
+            if (auto sig = pos->getTimeSignature()) beat.numerator.store (sig->numerator, std::memory_order_relaxed);
+            beat.whenMs.store (juce::Time::currentTimeMillis(), std::memory_order_relaxed);
+        }
 
     for (int c = 0; c < juce::jmin (2, channels); ++c)
     {

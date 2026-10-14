@@ -66,6 +66,17 @@ public:
     mixology::AudioRing analysisRing;              // for Analyze Mix (the editor analyses it 5 times a second)
     std::atomic<bool> transportPlaying { false };
 
+    /** The song's tempo and position from the host (the Space pictures move with the beat). */
+    struct Beat
+    {
+        std::atomic<double> bpm { 0.0 };           // 0 = the host didn't say
+        std::atomic<double> ppq { 0.0 };           // quarter notes since the song's start, at the last block
+        std::atomic<double> barStartPpq { 0.0 };
+        std::atomic<int> numerator { 4 };
+        std::atomic<std::int64_t> whenMs { 0 };    // when that block was processed (juce::Time::currentTimeMillis)
+    };
+    Beat beat;
+
     /** UI state saved with the project (last page, etc.). */
     juce::String getUiState() const { const juce::ScopedLock sl (stateLock); return uiState; }
     void setUiState (const juce::String& s) { const juce::ScopedLock sl (stateLock); uiState = s; }

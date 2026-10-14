@@ -281,6 +281,24 @@ void MixWebEditor::timerCallback()
     if (currentPage == "tracks")
         frame->setProperty ("trackMeters", hub.trackMeters());   // from each track's Mixology Link
 
+    if (currentPage == "space")
+    {
+        // Tempo and beat position, brought up to now (the host reports them per audio block).
+        auto& b = processor.beat;
+        const bool playing = processor.transportPlaying.load();
+        const double bpm = b.bpm.load();
+        double ppq = b.ppq.load();
+        const auto age = juce::Time::currentTimeMillis() - b.whenMs.load();
+        if (playing && bpm > 0.0 && age >= 0 && age < 1000) ppq += static_cast<double> (age) / 60000.0 * bpm;
+        auto* bo = new juce::DynamicObject();
+        bo->setProperty ("bpm", bpm);
+        bo->setProperty ("ppq", ppq);
+        bo->setProperty ("bar", b.barStartPpq.load());
+        bo->setProperty ("num", b.numerator.load());
+        bo->setProperty ("playing", playing && age < 1000);
+        frame->setProperty ("beat", juce::var (bo));
+    }
+
     if (currentPage == "overview")
     {
         // The Overview's quick tone knobs are the Full Mix EQ's six band gains.

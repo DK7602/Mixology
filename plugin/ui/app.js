@@ -101,6 +101,7 @@ const pages = {};
 let current = null;
 function showPage(id) {
   if (!pages[id]) return;
+  if (current && current !== id && pages[current].onHide) pages[current].onHide();
   current = id;
   for (const [key, p] of Object.entries(pages)) p.root.classList.toggle("shown", key === id);
   document.querySelectorAll(".tab[data-page]").forEach((t) => t.classList.toggle("active", t.dataset.page === id));

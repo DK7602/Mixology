@@ -53,7 +53,10 @@ Mixology remembers your choice.
   it to change the width (Q); double-click it to make that band flat again.
 - **Dynamics**: Compressor, Multiband, Transient, Gate / Expand, Limiter, with in / out meters and gain reduction.
 - **Space**: Reverb, Delay, Chorus, Phaser, Hall, Room, Special FX, each with its own controls,
-  plus EQ and Ducking (the effect gets quieter while the vocal sings).
+  plus EQ and Ducking (the effect gets quieter while the vocal sings). The picture comes alive while the song
+  plays and moves with its beat (Cubase's tempo): lights bloom and fade with the reverb's Decay, echoes run down
+  the delay's tunnel at its Time, the phaser's rings swirl at its Rate, and so on. It only moves while the Space
+  page is open.
 - **Tone**: Tone Balance, Loudness, Clip Control, Harmonic, Analog Touch, Final Touch; your mix's tonal balance
   against the style's target (red line), and loudness.
 - **Stereo**: Width (and Low / Mid / High Width), Mono Check, and how wide your mix is.
