@@ -553,9 +553,10 @@ TEST_CASE ("Processing: any settings, any audio: always finite, never blows up",
             for (auto& x : r) x = nd (rng);
             double* ch[2] = { l.data(), r.data() };
             chain.process (ch, channels, 777);
-            // Stacked boosts on a burst 17 dB over full scale can get loud, but never anywhere near runaway.
+            // Random settings can stack six EQ boosts of +12 dB on one frequency (+72 dB) on a burst 17 dB over full
+            // scale: loud, but finite and bounded; runaway is what the silence check below catches.
             for (int c = 0; c < channels; ++c)
-                for (double x : (c == 0 ? l : r)) REQUIRE ((std::isfinite (x) && std::abs (x) < 2000.0));
+                for (double x : (c == 0 ? l : r)) REQUIRE ((std::isfinite (x) && std::abs (x) < 1.0e5));
         }
         // And it all goes quiet again once the input stops (nothing keeps ringing or feeding itself).
         last[spOn] = 0.0f;

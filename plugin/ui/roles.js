@@ -16,6 +16,13 @@ export const ROLES = {
   other:  { icon: "other",  colour: "#c0c8d6", label: "Other" },
 };
 
+/** The icon for a track: its role's, except a percussion track that is a whole kit ("Drums", "Drum Machine", "Kit")
+    shows a drum kit. */
+export function roleIcon(role, name) {
+  if (role === "perc" && /drum|\bkit\b|machine|\bdrm/i.test(name || "")) return "drums";
+  return (ROLES[role] || ROLES.other).icon;
+}
+
 export function guessRole(name) {
   const n = (name || "").toLowerCase();
   const rules = [

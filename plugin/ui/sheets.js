@@ -2,7 +2,7 @@
 
 import { $, el, icon, fmt, popupMenu } from "./ui.js";
 import { GENRES } from "./mixstyles.js";
-import { ROLES, ROLE_ORDER } from "./roles.js";
+import { ROLES, ROLE_ORDER, roleIcon } from "./roles.js";
 
 export function sheet(title) {
   const pop = $("style-pop");
@@ -307,7 +307,7 @@ export function openTracksSheet(app) {
     for (const t of report.tracks) {
       const R = ROLES[t.role] || ROLES.other;
       const ic = el("div", "", table, { width: "34px", height: "34px", color: R.colour, filter: t.excluded ? "grayscale(1)" : `drop-shadow(0 0 5px ${R.colour})`, opacity: t.excluded ? "0.4" : "1" });
-      ic.innerHTML = icon(R.icon);
+      ic.innerHTML = icon(roleIcon(t.role, t.name));
       const name = el("div", "", table, { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", opacity: t.excluded ? "0.5" : "1" });
       name.textContent = t.name;
       name.title = t.name + (t.faderKnown ? "" : " (its fader wasn't read: counted at 0 dB)");

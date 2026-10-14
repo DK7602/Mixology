@@ -83,7 +83,8 @@ const P = {
   handoff: '<path d="M4 12h12M12 6l6 6-6 6"/><path d="M20 4v16"/>',
   // track roles
   kick: '<circle cx="12" cy="12.5" r="8.5"/><circle cx="12" cy="12.5" r="4.2"/><circle cx="12" cy="12.5" r="1"/><path d="M5.5 19.5L3.5 22.5M18.5 19.5l2 3"/>',
-  snare: '<path d="M2 12h3l2-6 3 12 3-14 3 16 2-8h4"/>',
+  snare: '<ellipse cx="12" cy="11.5" rx="8.5" ry="3"/><path d="M3.5 11.5v5.5c0 1.7 3.8 3 8.5 3s8.5-1.3 8.5-3v-5.5"/><path d="M7.5 14.3v5.2M12 14.5v5.5M16.5 14.3v5.2"/><path d="M4.5 2.5l6 7M19.5 2.5l-6 7"/>',
+  drums: '<circle cx="12" cy="15.5" r="6"/><circle cx="12" cy="15.5" r="2"/><path d="M1.5 7.2l6-2.2M16.5 5l6 2.2M4.6 6.1v3.3M19.4 6.1v3.3"/><ellipse cx="12" cy="5.3" rx="2.5" ry="1.1"/><path d="M9.5 5.3v1.8c0 .6 1.1 1.1 2.5 1.1s2.5-.5 2.5-1.1V5.3"/>',
   hats: '<path d="M3 9h18M5 9c1-2 4-3 7-3s6 1 7 3M12 9v13M8 22h8M12 4v2"/>',
   perc: '<path d="M4 12h3l1.5-5 2 10 2-7 1.5 3 1.5-1h5"/><circle cx="20" cy="12" r="1"/>',
   bass: '<rect x="5" y="2.5" width="14" height="19" rx="2"/><circle cx="12" cy="15" r="3.5"/><circle cx="12" cy="7" r="1.8"/>',

@@ -1040,6 +1040,39 @@ namespace mixology::mix
             return s;
         }
 
+        /** Where the lead vocal's reverb sits under the vocal (dB, loudness while each plays): drier in the urban
+            styles, wetter in gospel / worship / cinematic. */
+        double reverbUnderVocal (const std::string& styleKey)
+        {
+            const auto genre = styleKey.substr (0, styleKey.find ('.'));
+            if (genre == "hiphop" || genre == "trap" || genre == "rnb" || genre == "afro" || genre == "latin") return -20.0;
+            if (genre == "gospel" || genre == "worship" || genre == "cinematic" || genre == "jazz") return -14.0;
+            return -17.0;
+        }
+
+        /** How loud each effect comes out against what goes in (measured on vocal-like sound, wet EQ at its start). */
+        double wetGainDb (int type)
+        {
+            switch (static_cast<proc::SpaceType> (type))
+            {
+                case proc::SpaceType::reverb: return -5.0;
+                case proc::SpaceType::hall: return -6.0;
+                case proc::SpaceType::room: return -7.0;
+                case proc::SpaceType::chorus: return -6.0;
+                case proc::SpaceType::phaser: return -4.0;
+                case proc::SpaceType::special: return -3.0;
+                case proc::SpaceType::delay: return 0.0;
+            }
+            return -5.0;
+        }
+
+        const TrackReport* reportOf (const Report& r, std::uint32_t hash)
+        {
+            for (const auto& t : r.tracks)
+                if (t.hash == hash) return &t;
+            return nullptr;
+        }
+
         std::string planPolish (const Report& r, const Lookup& look, const std::vector<ChannelNow>& channels, const MixNow& mix, Plan& plan)
         {
             int eqs = 0, comps = 0, widths = 0, spaces = 0, tones = 0;
@@ -1073,6 +1106,9 @@ namespace mixology::mix
                     if (airGap < -7.0)
                         eqs += eqMove (plan, t, *ch, 5, 2, 10000.0, 0.7, std::clamp ((-4.0 - airGap) * 0.5, 1.0, 3.0), 4.0,
                                        "the vocal has little air (8 - 12 kHz is " + fmt1 (-airGap) + " dB under its presence): a gentle shelf opens it up");
+                    if (clarity >= -2.5 && clarity <= 5.0 && airGap >= -7.0)
+                        plan.notes.push_back (quoted (t.name) + " already sounds balanced (presence " + signedDb (clarity) + " against its body, air "
+                                              + signedDb (airGap) + " against its presence): no EQ needed.");
                 }
                 if (t.role == Role::kick)
                 {
@@ -1145,10 +1181,42 @@ namespace mixology::mix
                     if (c.hasLink && c.hasProc && ! c.locked && c.hash != lead->hash && (looksLikeFxChannel (c.name) || pv (c.proc, proc::spRoute) > 0.5f)) fx.push_back (&c);
                 const ChannelNow* busy = nullptr;
                 for (const auto* c : fx) if (spaceOn (*c)) busy = c;
+                const double under = reverbUnderVocal (r.style.key);
+                const bool leadHeard = counts (*lead);
                 if (leadCh != nullptr && spaceOn (*leadCh))
                     plan.notes.push_back (quoted (lead->name) + " has its own Space effect already: Mixology leaves it.");
                 else if (busy != nullptr)
-                    plan.notes.push_back ("The FX channel " + quoted (busy->name) + " has a Space effect already: Mixology leaves your effects alone.");
+                {
+                    // An FX channel effect already: its kind stays yours, but its level is checked against the vocal.
+                    const auto* fxT = reportOf (r, busy->hash);
+                    const auto& at = atAnalysis (*busy);
+                    const bool fxRoute = pv (at, proc::spRoute) > 0.5f && pv (at, proc::spOn) > 0.5f && pv (at, proc::chainOn) > 0.5f;
+                    if (fxRoute && leadHeard && fxT != nullptr && counts (*fxT) && ! busy->locked)
+                    {
+                        const double now = fxT->loudness - lead->loudness;   // how far the effect sits under the vocal
+                        const double levelAt = pv (at, proc::spLevel);
+                        const double want = std::clamp (std::round (levelAt + (under - now)), -30.0, 6.0);
+                        if (std::abs (now - under) > 3.0 && std::abs (want - pv (busy->proc, proc::spLevel)) >= 1.0)
+                        {
+                            Change c;
+                            c.hash = busy->hash;
+                            c.name = busy->name;
+                            c.role = Role::fx;
+                            c.kind = "space";
+                            c.proc = { { proc::spLevel, static_cast<float> (want) } };
+                            c.fromText = "Level " + signedDb (pv (busy->proc, proc::spLevel));
+                            c.toText = "Level " + signedDb (want);
+                            c.why = "the effect comes back " + fmt0 (std::abs (now)) + " dB " + (now > 0.0 ? "over" : "under") + " " + quoted (lead->name)
+                                    + "; for " + r.style.name + " a vocal's reverb usually sits about " + fmt0 (-under) + " dB under it";
+                            plan.changes.push_back (c);
+                            ++spaces;
+                        }
+                        else
+                            plan.notes.push_back ("The FX channel " + quoted (busy->name) + " has a Space effect already, at a good level under the vocal: Mixology leaves it.");
+                    }
+                    else
+                        plan.notes.push_back ("The FX channel " + quoted (busy->name) + " has a Space effect already: Mixology leaves your effects alone.");
+                }
                 else if (! fx.empty())
                 {
                     const ChannelNow* target = fx.front();
@@ -1165,12 +1233,22 @@ namespace mixology::mix
                     c.proc.insert (c.proc.end(), snd.params.begin(), snd.params.end());
                     c.setDuck = true;
                     c.duck = { lead->hash };
+                    // Its level: what the FX channel passed while Mixology listened (the vocal's send, dry, its effect
+                    // still off) tells how much of the vocal goes in; else a send at 0 dB is assumed.
+                    const auto* fxT = reportOf (r, target->hash);
+                    const bool sendHeard = fxT != nullptr && counts (*fxT) && leadHeard && pv (atAnalysis (*target), proc::spOn) < 0.5f;
+                    const double sendDb = sendHeard ? fxT->loudness - lead->loudness : 0.0;
+                    const double level = std::clamp (std::round (under - (sendDb + wetGainDb (snd.type))), -30.0, 6.0);
+                    c.proc.push_back ({ proc::spLevel, static_cast<float> (level) });
                     c.fromText = "Off";
-                    c.toText = snd.type == static_cast<int> (proc::SpaceType::hall) ? "Hall, 100 % wet" : "Vocal Plate, 100 % wet";
-                    c.why = "the lead vocal's reverb: " + snd.words + " on this FX channel, ducking 6 dB under " + quoted (lead->name) + " so the words stay clear";
+                    c.toText = std::string (snd.type == static_cast<int> (proc::SpaceType::hall) ? "Hall" : "Vocal Plate") + ", level " + signedDb (level);
+                    c.why = "the lead vocal's reverb: " + snd.words + " on this FX channel, about " + fmt0 (-under) + " dB under " + quoted (lead->name)
+                            + ", ducking 6 dB while it sings so the words stay clear";
                     plan.changes.push_back (c);
                     ++spaces;
-                    plan.notes.push_back ("Send " + quoted (lead->name) + " to " + quoted (target->name) + " in Cubase (MixConsole, Sends, about -10 dB): Mixology can't add sends.");
+                    if (! sendHeard)
+                        plan.notes.push_back ("Send " + quoted (lead->name) + " to " + quoted (target->name) + " in Cubase (MixConsole, Sends, at 0 dB): Mixology can't add sends. "
+                                              "The effect's LEVEL (Space page) sets how much comes back.");
                 }
                 else if (leadCh != nullptr && leadCh->hasLink && leadCh->hasProc && ! leadCh->locked && pv (leadCh->proc, proc::chainOn) > 0.5f)
                 {

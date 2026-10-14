@@ -1,6 +1,6 @@
 # Mixology manual
 
-Manual for version 0.7.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
+Manual for version 0.7.1 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, and the Master page's finishing knobs).
@@ -219,8 +219,12 @@ list: every change it wants to make, **now → new**, and why, in plain words. U
     switched on is left alone.
   - **Low end in the middle**: a stereo kick or 808 whose lows are spread gets them centred (Stereo, Low Width 0 %).
   - **Space**: a reverb for the lead vocal. If you have an FX channel with Mixology Link (named like "FX 1-...",
-    "Verb", "Delay"...), it goes there, 100 % wet, ducking under the vocal; send the vocal to it in Cubase (the
-    list reminds you). Without one, a little plate on the vocal itself (12 %). Hip hop, trap, R&B: a short plate;
+    "Verb", "Delay"...), it goes there, 100 % wet, ducking under the vocal; send the vocal to it in Cubase at 0 dB
+    (the list reminds you). Its **LEVEL** is set so the reverb sits where your style wants it under the vocal (about
+    20 dB under in hip hop, 17 in pop / rock, 14 in gospel); with a send already in place, Mixology hears how much
+    goes in and allows for it. If a reverb on an FX channel is already there, Polish checks its level and offers to
+    turn it down (or up) when it's more than 3 dB off. When the vocal needs no EQ, the list says why ("already
+    sounds balanced"). Without one, a little plate on the vocal itself (12 %). Hip hop, trap, R&B: a short plate;
     gospel, worship, cinematic: a hall. Ad-libs get a ping-pong delay (in the urban and pop styles). An effect you
     set up yourself is left alone.
   - **The mix's tone**: when the whole mix is clearly short of (or has too much) low end, presence or air against
@@ -314,7 +318,8 @@ Space gives a track (or an FX channel) one effect: **Reverb** (a plate), **Delay
    left shows the effect this track uses. Each effect keeps its own knob settings.
 3. **USED AS**:
    - **On this track**: **MIX** blends the effect into the track. Good for a touch of room or chorus on one sound.
-   - **FX channel (100 % wet)**: only the effect comes out. This is how pros do vocal reverb and delay: in
+   - **FX channel (100 % wet)**: only the effect comes out, and **MIX** becomes **LEVEL**: how loud the effect
+     comes back (how much of each track goes in is its Send in Cubase). This is how pros do vocal reverb and delay: in
      Cubase, add an **FX channel** (Project > Add Track > Effect, or any FX channel you have), put **Mixology Link**
      on it, pick it here, and send your vocals to it with their **Sends** in the MixConsole. One reverb for all
      the vocals sounds like one room. A track whose name looks like an FX channel ("FX 1-...", "Verb", "Delay",

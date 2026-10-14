@@ -54,7 +54,7 @@ export function buildEq(root, app) {
   });
   proc.targetSelect(panel, 1102, 16, 220);
   const gearBtn = el("button", "small-btn", panel, { position: "absolute", left: "1334px", top: "16px", width: "56px", height: "44px", padding: "8px", color: "var(--gold)" });
-  gearBtn.innerHTML = icon("gear");
+  gearBtn.innerHTML = icon("gear", 'width="26" height="26" style="display:block;margin:auto"');   // a fixed size: never larger than its button
   gearBtn.title = "Show the analyzer behind the curve";
   let showSpectrum = store.get("eqSpectrum", true);
   gearBtn.addEventListener("click", () => { showSpectrum = !showSpectrum; store.set("eqSpectrum", showSpectrum); g.redraw(); });
@@ -623,13 +623,16 @@ export function buildSpace(root, app) {
     proc.setMany(changes);
   });
 
-  let knobs = [], modeChips = [];
+  let knobs = [], modeChips = [], renderedFx = null;
   const sceneParams = {};
+  // On an FX channel only the effect comes out, so MIX gives way to LEVEL: how loud the effect comes back.
+  const knobDefs = () => def().knobs.map((k, i) => (i === 4 && fxRoute() ? ["sp_level", "LEVEL", (v) => fmt.db(v)] : k));
   function renderKnobs() {
     knobArea.innerHTML = "";
     modeRow.innerHTML = "";
     const d = def();
-    knobs = d.knobs.map(([id, label, format], i) => new Knob(knobArea, knobFor(proc, id, { x: 4 + i * 150, y: 4, w: 148, size: 120, label, format, labelGap: 14, valueGap: 12,
+    renderedFx = fxRoute();
+    knobs = knobDefs().map(([id, label, format], i) => new Knob(knobArea, knobFor(proc, id, { x: 4 + i * 150, y: 4, w: 148, size: 120, label, format, labelGap: 14, valueGap: 12,
       onChange: (v) => { apply({ [id]: v }); sceneParams[SCENE_PARAMS[d.id][i]] = v; picture.setParams(Object.assign({}, sceneParams)); }, pid: id })));
     modeChips = (d.modes || []).map((m, k) => {
       const c = el("div", "chip", modeRow, { height: "40px", padding: "0 14px", fontSize: "15px" });
@@ -762,7 +765,7 @@ export function buildSpace(root, app) {
   function presetNow() {
     const d = def();
     for (const [name, values] of Object.entries(d.presets)) {
-      const same = d.knobs.every(([id], i) => { const s = proc.spec(id); return Math.abs(proc.get(id) - values[i]) <= (s.max - s.min) * 0.002; })
+      const same = d.knobs.every(([id], i) => { const s = proc.spec(id); return (i === 4 && fxRoute()) || Math.abs(proc.get(id) - values[i]) <= (s.max - s.min) * 0.002; })
         && (!d.modes || Math.round(proc.get("spx_mode")) === values[5]);
       if (same) return name;
     }
@@ -778,15 +781,13 @@ export function buildSpace(root, app) {
     power.style.opacity = onTrack() ? "1" : "0.45";
     power.title = !onTrack() ? "Pick a track or an FX channel first" : here ? `Switch ${d.label.toLowerCase()} off on ${proc.name}`
       : spaceOn() ? `Use ${d.label.toLowerCase()} on ${proc.name} instead of ${usedType()}` : `Switch ${d.label.toLowerCase()} on for ${proc.name}`;
+    if (renderedFx !== fxRoute()) renderKnobs();
     knobs.forEach((k) => { const v = proc.get(k.o.pid); if (!k.dragging && Math.abs(k.value - v) > 1e-3) k.set(v); });
     const mode = Math.round(proc.get("spx_mode"));
     modeChips.forEach((c, k) => c.classList.toggle("on", k === mode));
     if (d.id === "special") knobs[0].root.style.opacity = mode === 0 ? "1" : "0.4";   // Shift: Shimmer only
-    const mixKnob = knobs[4];
-    if (mixKnob) {
-      mixKnob.root.style.opacity = fxRoute() ? "0.4" : "1";
-      mixKnob.root.title = fxRoute() ? "On an FX channel the effect plays 100 % wet: how much of each track goes in is its Send level in Cubase" : "";
-    }
+    if (knobs[4]) knobs[4].root.title = fxRoute() ? "LEVEL: how loud the effect comes back on this FX channel (how much of each track goes in is its Send in Cubase)"
+      : "MIX: how much of the effect is blended into the track";
     presetSel.set(presetNow());
     routeSel.set(fxRoute() ? 1 : 0);
     lamps();
@@ -805,7 +806,7 @@ export function buildSpace(root, app) {
       const ms = DELAY_BEATS[Math.round(proc.get("dly_time"))] * 60000 / bpm;
       text = `${DELAY_NOTES[Math.round(proc.get("dly_time"))]} = ${Math.round(ms)} ms at ${Math.round(bpm)} BPM${bpmNow > 0 ? "" : " (play the song: it follows Cubase's tempo)"}`;
     } else if (!text && d.id === "special") text = MODE_HELP[d.modes[Math.round(proc.get("spx_mode"))]];
-    if (!text) text = fxRoute() ? "FX channel: send tracks to it in Cubase (their Sends). Only the effect comes out." : "MIX: how much of the effect is blended into the track.";
+    if (!text) text = fxRoute() ? "FX channel: LEVEL is how loud the effect comes back. Send the tracks to it in Cubase (their Sends, 0 dB is fine)." : "MIX: how much of the effect is blended into the track.";
     note.textContent = text;
   }
   function syncDuck() {
@@ -828,7 +829,7 @@ export function buildSpace(root, app) {
     picture.setActive(level);
     const where = elsewhere.length ? ` · in use on ${elsewhere.map((t) => t.name).slice(0, 3).join(", ")}${elsewhere.length > 3 ? "…" : ""}` : "";
     badge.textContent = !onTrack() ? "Space works on one track or an FX channel: pick it top right"
-      : here ? `In use on ${proc.name}` + (fxRoute() ? " · FX channel, 100 % wet" : ` · MIX ${Math.round(proc.get(d.knobs[4][0]))} %`)
+      : here ? `In use on ${proc.name}` + (fxRoute() ? ` · FX channel, level ${fmt.db(proc.get("sp_level"))}` : ` · MIX ${Math.round(proc.get(d.knobs[4][0]))} %`)
       : spaceOn() ? `${proc.name} uses ${SPACE[typeIndex(usedType())].label.toLowerCase()} · press ON to use ${d.label.toLowerCase()} instead` + where
       : `Off on ${proc.name} · press ON or turn a knob to use it` + where;
   }

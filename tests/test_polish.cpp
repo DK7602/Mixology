@@ -127,6 +127,7 @@ TEST_CASE ("Polish: a dull lead vocal gets presence and air; a clear one is left
 
     const auto clear = makePlan (Tool::polish, report ({ track ("Lead Vox", Role::vox, vocalBands (-14.0, 5.0, 2.0)) }), chans);
     CHECK (change (clear, "Lead Vox", "eq") == nullptr);
+    CHECK (noted (clear, "already sounds balanced"));
 
     const auto harsh = makePlan (Tool::polish, report ({ track ("Lead Vox", Role::vox, vocalBands (-14.0, -2.0)) }), chans);
     const auto* dip = change (harsh, "Lead Vox", "eq");
@@ -339,4 +340,54 @@ TEST_CASE ("Analysis: a track's level swing and its loud peaks", "[polish]")
     CHECK (vox->levelRange == Catch::Approx (12.0).margin (1.0));
     CHECK (vox->loudPeak == Catch::Approx (-8.0).margin (0.5));
     CHECK (pad->levelRange == Catch::Approx (0.0).margin (0.1));
+}
+
+TEST_CASE ("Polish: the FX channel reverb's level sits under the vocal", "[polish]")
+{
+    auto lead = track ("Lead Vox", Role::vox, vocalBands (-14.0, 5.0, 2.0));
+    lead.loudness = -16.0;
+
+    // Nothing reached the FX channel yet (no send): a send at 0 dB is assumed. Hip hop: 20 dB under the vocal,
+    // a plate comes out ~5 dB under what goes in -> level -15 dB.
+    auto chans = std::vector<ChannelNow> { link ("Lead Vox"), link ("FX 1-Vox Verb", 2) };
+    const auto p = makePlan (Tool::polish, report ({ lead }), chans);
+    const auto* fx = change (p, "FX 1-Vox Verb", "space");
+    REQUIRE (fx != nullptr);
+    CHECK (value (*fx, proc::spLevel) == Catch::Approx (-15.0f));
+    CHECK (fx->toText == "Vocal Plate, level -15.0 dB");
+    CHECK (noted (p, "at 0 dB"));
+
+    // The send was there while Mixology listened (the FX channel passed the vocal 10 dB down): level -5 dB.
+    auto send = track ("FX 1-Vox Verb", Role::fx, vocalBands (-24.0, 5.0, 2.0));
+    send.loudness = -26.0;
+    const auto p2 = makePlan (Tool::polish, report ({ lead, send }), chans);
+    const auto* fx2 = change (p2, "FX 1-Vox Verb", "space");
+    REQUIRE (fx2 != nullptr);
+    CHECK (value (*fx2, proc::spLevel) == Catch::Approx (-5.0f));
+    CHECK_FALSE (noted (p2, "at 0 dB"));
+
+    // A reverb already on the FX channel, coming back only 4 dB under the vocal: turned down to 20 dB under.
+    auto loud = send;
+    loud.loudness = -20.0;
+    auto busy = chans;
+    busy[1].proc[proc::spOn] = 1.0f;
+    busy[1].proc[proc::spRoute] = 1.0f;
+    busy[1].procAtAnalysis = busy[1].proc;
+    busy[1].procAtAnalysisKnown = true;
+    const auto p3 = makePlan (Tool::polish, report ({ lead, loud }), busy);
+    const auto* lv = change (p3, "FX 1-Vox Verb", "space");
+    REQUIRE (lv != nullptr);
+    REQUIRE (lv->proc.size() == 1);   // only its level: the effect itself stays yours
+    CHECK (value (*lv, proc::spLevel) == Catch::Approx (-16.0f));
+    CHECK (lv->why.find ("4 dB under") != std::string::npos);
+    // Applied: opening it again (same analysis) finds nothing more.
+    apply (busy, p3);
+    CHECK (change (makePlan (Tool::polish, report ({ lead, loud }), busy), "FX 1-Vox Verb", "space") == nullptr);
+    // At a good level: a note, no change.
+    auto fine = send;
+    fine.loudness = -35.0;
+    busy[1].proc[proc::spLevel] = 0.0f;
+    const auto p4 = makePlan (Tool::polish, report ({ lead, fine }), busy);
+    CHECK (change (p4, "FX 1-Vox Verb", "space") == nullptr);
+    CHECK (noted (p4, "at a good level"));
 }

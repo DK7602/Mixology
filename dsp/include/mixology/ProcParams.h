@@ -66,6 +66,7 @@ namespace mixology::proc
         hallPre, hallDecay, hallSize, hallDamp, hallMix,
         roomPre, roomDecay, roomSize, roomLate, roomMix,
         spxShift, spxFeedback, spxMotion, spxTone, spxMix, spxMode,
+        spLevel,   // v0.7.1: the effect's level on an FX channel (there MIX doesn't apply: only the effect comes out)
         count
     };
     enum class SpaceType : int { reverb = 0, delay = 1, chorus = 2, phaser = 3, hall = 4, room = 5, special = 6 };

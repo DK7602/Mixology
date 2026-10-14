@@ -909,6 +909,7 @@ namespace mixology::proc
         bank.duckDb = duck1;
 
         const bool fx = v (spRoute) > 0.5;
+        const double level = fx ? dbToGain (v (spLevel)) : 1.0;   // FX channel: how loud the effect comes back
         double peak = 0.0;
         for (int i = 0; i < n; ++i)
         {
@@ -920,9 +921,9 @@ namespace mixology::proc
                 // Safety: a runaway tail (huge feedback) is rounded off instead of exploding.
                 const double aw = std::abs (wet);
                 if (aw > 0.8) wet = std::copysign (0.8 + 0.4 * std::tanh ((aw - 0.8) / 0.4), wet);
-                peak = std::max (peak, std::abs (wet));
                 auto& x = work[ix (c)][ix (i)];
-                x = fx ? wet : x + mixAmt * (wet - x);
+                x = fx ? wet * level : x + mixAmt * (wet - x);
+                peak = std::max (peak, std::abs (fx ? x : wet));
             }
         }
         meters.spaceWet = metric (meters.spaceWet, static_cast<float> (gainToDb (peak)));

@@ -144,6 +144,7 @@ export const PROC = [
   { id: "spx_tone", name: "Special Tone", kind: "number", min: 800, max: 20000, def: 8000, curve: "log", step: 0, unit: "Hz" },
   { id: "spx_mix", name: "Special Mix", kind: "number", min: 0, max: 100, def: 25, curve: "lin", step: 1, unit: "%" },
   { id: "spx_mode", name: "Special Mode", kind: "choice", min: 0, max: 3, def: 0, curve: "lin", step: 1, unit: "", choices: ["Shimmer", "Drift", "Swell", "Freeze"] },
+  { id: "sp_level", name: "Space Level", kind: "number", min: -30, max: 6, def: 0, curve: "lin", step: 0.1, unit: "dB" },
 ];
 
 export const PROC_INDEX = Object.fromEntries(PROC.map((p, i) => [p.id, i]));

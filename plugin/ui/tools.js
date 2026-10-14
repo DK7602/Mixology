@@ -3,7 +3,7 @@
 // mix with a reference song and switches between them, level-matched.
 
 import { $, el, icon, fmt, graph, freqToX, cssVar } from "./ui.js";
-import { ROLES } from "./roles.js";
+import { ROLES, roleIcon } from "./roles.js";
 import { sheet } from "./sheets.js";
 
 const TOOL_ICON = { auto: "wand", balance: "sliders", clean: "wave", pocket: "mic", stereo: "rings", polish: "star" };
@@ -119,7 +119,7 @@ export async function openToolSheet(app, tool) {
     const box = el("button", "", grid, { width: "30px", height: "30px", borderRadius: "7px", border: "1.5px solid var(--btn-edge)", background: "var(--btn)", color: "var(--green)", cursor: "pointer", padding: "4px", display: "grid", placeItems: "center" });
     box.addEventListener("click", () => { picked.has(i) ? picked.delete(i) : picked.add(i); refresh(); });
     const ri = el("div", "", grid, { width: "30px", height: "30px", color: R.colour, filter: `drop-shadow(0 0 4px ${R.colour})`, opacity: c.name === lastName ? "0" : "1" });
-    ri.innerHTML = icon(R.icon);
+    ri.innerHTML = icon(roleIcon(c.role, c.name));
     const nm = el("div", "", grid, { fontSize: "19px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", opacity: c.name === lastName ? "0.45" : "1" });
     nm.textContent = c.name;
     nm.title = c.name;

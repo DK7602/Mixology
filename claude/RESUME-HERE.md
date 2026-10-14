@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-14, v0.7.0)
+# Mixology: resume here (updated 2026-10-14, v0.7.1)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -35,7 +35,23 @@ sends higher-resolution art, re-run it.
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
 
-## Milestone 5 round 3 status (v0.7.0): BUILT, WAITING FOR THE USER'S CUBASE TEST (docs/M5_TEST.md, top part)
+## v0.7.1 (user's round 3 test, 2026-10-14: "L100 bug fixed. it all seemed to work correctly")
+- Polish put the vocal reverb on the FX channel "100 % in the mix: too much": a plate comes out ~5 dB under its
+  input and an FX channel had no return level. New control sp_level (appended, -30..+6 dB, default 0): FX route
+  output = wet * level; the Space page shows LEVEL instead of MIX on FX route (knobDefs, re-render on route change,
+  presets ignore MIX there). Polish: new FX reverb level = reverbUnderVocal(style) (urban -20, gospel/worship/
+  cinematic/jazz -14, else -17) - (send heard on the FX channel at analysis while its effect was off, else 0 dB +
+  wetGainDb(type) (plate -5, hall -6, room -7...)); an existing FX effect (route FX, on at analysis) gets a level-only
+  change when its measured return (fx loudness - lead loudness) is > 3 dB off the target (absolute from the level at
+  analysis). Note "already sounds balanced" when the vocal needs no EQ.
+- EQ page gear icon sized 26 px (WebView2 drew it larger than its button). New icons: snare (drum + sticks) for the
+  snare role; drums (kick + tom + two cymbals) via roles.js roleIcon() for perc-role tracks named drum / kit /
+  machine (Tracks strips, tool sheets, Your tracks).
+- The random stress test bound is 1e5 (six +12 dB EQ boosts on one frequency are legal); the silence check stays.
+- User asked: "will mixology communicate with voxology and masterology?" -> M6 (Suite): needs code in both other
+  repos (Voxology, github.com/DK7602/polisher = Masterology) publishing to a shared suite block.
+
+## Milestone 5 round 3 status (v0.7.0): TESTED ("it all seemed to work correctly", 2026-10-14)
 User (2026-10-14): "will auto edit ever automatically set the eq, space, etc.?" + "lets fix that and move forward".
 - MixAnalysis TrackReport + levelRange (P90 - P10 of ~1 s averaged pre-fader rms over active moments) and loudPeak
   (P90 of pre-fader frame peaks).

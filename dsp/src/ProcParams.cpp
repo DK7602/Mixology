@@ -191,6 +191,7 @@ namespace mixology::proc
             num ("spx_tone", "Special Tone", 800.0f, 20000.0f, 8000.0f, G, 0.0f, "Hz"),
             num ("spx_mix", "Special Mix", 0.0f, 100.0f, 25.0f, L, 1.0f, "%"),
             choice ("spx_mode", "Special Mode", "Shimmer|Drift|Swell|Freeze", 4, 0),
+            num ("sp_level", "Space Level", -30.0f, 6.0f, 0.0f, L, 0.1f, "dB"),
         }};
         // clang-format on
 

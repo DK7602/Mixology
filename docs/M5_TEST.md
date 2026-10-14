@@ -1,5 +1,18 @@
 # Milestone 5 tests
 
+## Version 0.7.1 (5 minutes): your round 3 findings
+
+- **Too much reverb** from Polish on the FX channel: an FX channel had no level control for the effect (MIX doesn't
+  apply there). Now it has **LEVEL** (the Space page shows it instead of MIX on an FX channel), and Polish sets it so
+  the reverb sits about 20 dB under the vocal in hip hop (17 in pop / rock). If the reverb is already there and too
+  loud, Polish offers to turn it down.
+- **The EQ page's gear** was bigger than its button: fixed.
+- **New icons**: a snare drum for snare tracks, a drum kit for drum tracks ("Drums", "Drum Machine", "Kit").
+- **No EQ changes**: Polish only changes what's clearly off. When your vocal needs none, the list now says why.
+
+1. Install both .vst3 as usual (the Cubase script didn't change). Analyze Mix, then **Polish**: the FX channel's
+   reverb line now offers a lower **Level**. Apply. **Report**: does the reverb sit right now?
+
 ## Round 3: Auto Mix sets the EQ, compression and space (version 0.7.0), about 25 minutes
 
 Goal: **Polish** (new, under Auto Mix) and **Auto Mix** now also propose processing for your tracks: EQ, a

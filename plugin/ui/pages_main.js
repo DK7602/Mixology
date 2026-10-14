@@ -1,7 +1,7 @@
 // Overview and Tracks pages.
 
 import { el, box, icon, fmt, clamp, Knob, Meter, select, graph, freqToX, previewTag, store, popupMenu } from "./ui.js";
-import { ROLES, ROLE_ORDER, GROUPS, guessRole } from "./roles.js";
+import { ROLES, ROLE_ORDER, GROUPS, guessRole, roleIcon } from "./roles.js";
 import { openSuggestion, openTracksSheet } from "./sheets.js";
 import { openToolSheet, openReferenceSheet } from "./tools.js";
 
@@ -584,8 +584,8 @@ export function buildTracks(root, app) {
       st.name.style.color = present && d.duplicate ? "var(--amber)" : "";
       st.colourBar.style.background = present && d.colour ? d.colour : "transparent";
       const bus = present && d.musicBus;
-      const iconKey = bus ? "bus" : role;
-      if (st.role !== iconKey) { st.ic.innerHTML = icon(bus ? "glue" : R.icon); st.role = iconKey; }
+      const iconKey = bus ? "glue" : roleIcon(role, present ? d.title : "");
+      if (st.role !== iconKey) { st.ic.innerHTML = icon(iconKey); st.role = iconKey; }
       const icColour = bus ? "#ffb43c" : R.colour;
       st.ic.style.color = icColour;
       st.ic.style.filter = present && d.excluded ? "grayscale(1)" : `drop-shadow(0 0 6px ${icColour})`;
