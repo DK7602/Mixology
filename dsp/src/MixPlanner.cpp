@@ -112,12 +112,15 @@ namespace mixology::mix
             std::map<std::uint32_t, const ChannelNow*> byHash;
             std::map<std::string, const ChannelNow*> byName;
 
+            const ChannelNow* musicBus = nullptr;
+
             explicit Lookup (const std::vector<ChannelNow>& chans)
             {
                 for (const auto& c : chans)
                 {
                     if (c.hash != 0) byHash[c.hash] = &c;
                     byName[c.name] = &c;
+                    if (c.musicBus && musicBus == nullptr) musicBus = &c;
                 }
             }
             const ChannelNow* of (const TrackReport& t) const
@@ -153,6 +156,7 @@ namespace mixology::mix
             {
                 Role role = Role::other;
                 bool unheard = false;
+                bool viaBus = false;     // reaches the Stereo Out through the music group (moves go to its fader)
                 double e = 0.0;          // loudness energy of its tracks together
                 double move = 0.0;
                 std::vector<Member> members;
@@ -163,13 +167,21 @@ namespace mixology::mix
             std::map<int, Group> groups;   // by role; 100 = channels without a Link
             std::map<int, double> heardE;  // each group's energy as Analyze Mix heard it (before later fader moves)
             int movedChannels = 0;
+            // The music group: the instruments reach the Stereo Out through its fader.
+            const ChannelNow* bus = look.musicBus;
+            const bool busActive = movable (bus);
+            const double busSince = movedSince (bus);
+            if (std::abs (busSince) > 0.05) ++movedChannels;
+            double busMove = 0.0;
+            std::vector<std::string> busWhy;
             for (const auto& t : r.tracks)
             {
                 if (! counts (t)) continue;
                 auto& g = groups[static_cast<int> (t.role)];
                 g.role = t.role;
+                g.viaBus = busActive && viaMusicBus (t.role);
                 const auto* ch = look.of (t);
-                const double since = movedSince (ch);
+                const double since = movedSince (ch) + (bus != nullptr && viaMusicBus (t.role) ? busSince : 0.0);
                 if (std::abs (since) > 0.05) ++movedChannels;
                 g.e += toE (t.loudness + since);
                 heardE[static_cast<int> (t.role)] += toE (t.loudness);
@@ -209,6 +221,7 @@ namespace mixology::mix
             const double vocalRatio = r.vocalRatio + (toDb (vocalNow) - toDb (vocalHeard)) - (toDb (restNow) - toDb (restHeard));
             const double mixPeak = r.mixPeak + (toDb (totalNow) - toDb (totalHeard));
 
+            auto eff = [&] (const Group& g) { return g.move + (g.viaBus ? busMove : 0.0); };   // its whole move, bus included
             const auto w = weightsFor (r.style.key);
             auto isInstrument = [&] (const Group& g) { return ! g.unheard && w.instruments.count (g.role) != 0; };
             auto isRest = [&] (const Group& g) { return g.unheard || (g.role != Role::vox && g.role != Role::adlibs); };
@@ -267,12 +280,12 @@ namespace mixology::mix
             if (vocal != nullptr && r.hasVocalRatio)
             {
                 double restOld = 0.0, restNew = 0.0;
-                bool restMovable = false;
+                bool restMovable = busActive;
                 for (auto& [k, g] : groups)
                     if (isRest (g))
                     {
                         restOld += g.e;
-                        restNew += g.e * toE (g.move);
+                        restNew += g.e * toE (eff (g));
                         restMovable = restMovable || g.anyMovable();
                     }
                 const double ratio = vocalRatio - (toDb (restNew) - toDb (restOld));
@@ -313,12 +326,16 @@ namespace mixology::mix
                         if (adlibs != nullptr) { adlibs->move += vm; adlibs->why.push_back ("follows the lead vocal"); }
                     }
                     if (rm != 0.0)
+                    {
+                        const std::string reason = rm < 0.0 ? "makes room for the vocal" : "the vocal sits too far on top";
+                        if (busActive) { busMove += rm; busWhy.push_back (reason); }
                         for (auto& [k, g] : groups)
-                            if (isRest (g))
+                            if (isRest (g) && ! g.viaBus)
                             {
                                 g.move += rm;
-                                g.why.push_back (rm < 0.0 ? "makes room for the vocal" : "the vocal sits too far on top");
+                                g.why.push_back (reason);
                             }
+                    }
                 }
             }
             if (vocal != nullptr && adlibs != nullptr)
@@ -334,29 +351,37 @@ namespace mixology::mix
             // 3. The same overall loudness as before (louder always sounds "better", so a fair before / after needs this).
             //    Only when the difference would be heard (1 dB or more), and not around protected channels (moving
             //    everything else back would undo what was asked of them).
+            //    With a music group, its fader carries the instruments' share.
             {
                 double total = 0.0, after = 0.0;
                 bool anyLocked = false;
                 for (auto& [k, g] : groups)
                 {
                     total += g.e;
-                    after += g.e * toE (g.move);
-                    anyLocked = anyLocked || ! g.anyMovable();
+                    after += g.e * toE (eff (g));
+                    if (! g.viaBus) anyLocked = anyLocked || ! g.anyMovable();
                 }
                 double c = std::clamp (toDb (total) - toDb (after), -6.0, 6.0);
                 if (c > 0.0)   // never past the top of a fader (that would undo the balance)
+                {
                     for (auto& [k, g] : groups)
-                        for (const auto& m : g.members)
-                            if (movable (m.ch)) c = std::min (c, std::max (0.0, kMaxFaderDb - m.ch->faderDb - g.move));
+                        if (! g.viaBus)
+                            for (const auto& m : g.members)
+                                if (movable (m.ch)) c = std::min (c, std::max (0.0, kMaxFaderDb - m.ch->faderDb - g.move));
+                    if (busActive) c = std::min (c, std::max (0.0, kMaxFaderDb - bus->faderDb - busMove));
+                }
                 if (! anyLocked && std::abs (c) >= 1.0)
-                    for (auto& [k, g] : groups) g.move += c;
+                {
+                    for (auto& [k, g] : groups) if (! g.viaBus) g.move += c;
+                    if (busActive) busMove += c;
+                }
             }
 
             // 4. Room for Masterology: offered separately (you tick it). Every fader that plays goes down together, so the
             //    balance stays; the mix gets quieter and Masterology brings the level back at the end.
             {
                 double before = 0.0, after = 0.0;
-                for (auto& [k, g] : groups) { before += g.e; after += g.e * toE (g.move); }
+                for (auto& [k, g] : groups) { before += g.e; after += g.e * toE (eff (g)); }
                 const double peak = mixPeak + (toDb (after) - toDb (before));
                 if (r.mixPeak > -100.0 && peak > -5.0)
                 {
@@ -364,12 +389,16 @@ namespace mixology::mix
                     plan.headroomWhy = "Your mix peaks at " + signedDb (peak) + "TP. Masterology works best with peaks around -6: every fader goes down "
                                        + fmt1 (-plan.headroomDb) + " dB together. The balance stays the same, the mix just gets quieter (Masterology brings the level back).";
                     std::vector<std::string> stuck;
+                    if (busActive) plan.headroom.push_back ({ bus->hash, bus->name, bus->faderDb, std::min (bus->faderDb + busMove, kMaxFaderDb) });
                     for (auto& [k, g] : groups)
+                    {
+                        if (g.viaBus) continue;   // they go down with the music group
                         for (const auto& m : g.members)
                         {
                             if (! movable (m.ch)) { stuck.push_back (m.name); continue; }
                             plan.headroom.push_back ({ m.ch->hash, m.name, m.ch->faderDb, std::min (m.ch->faderDb + g.move, kMaxFaderDb) });
                         }
+                    }
                     if (! stuck.empty())
                         plan.headroomWhy += " " + joinNames (stuck) + " can't move (protected or not read): it would get louder against the rest.";
                 }
@@ -409,6 +438,24 @@ namespace mixology::mix
                     plan.changes.push_back (c);
                 }
             }
+            if (busActive && std::abs (busMove) >= 0.5)
+            {
+                moved.push_back ({ busMove, "the music group" });
+                Change c;
+                c.hash = bus->hash;
+                c.name = bus->name;
+                c.role = Role::other;
+                c.kind = "level";
+                c.from = bus->faderDb;
+                c.wanted = std::min (c.from + busMove, kMaxFaderDb);
+                c.to = std::min (c.from + std::clamp (busMove, -kMaxMoveDb, kMaxMoveDb), kMaxFaderDb);
+                c.big = std::abs (busMove) > kMaxMoveDb + 0.05;
+                c.why = "the music group (everything but the vocals plays through it)" + (busWhy.empty() ? std::string (": keeps the mix as loud as before") : ": " + joinWords (busWhy));
+                if (std::abs (c.to - c.from) >= 0.05) plan.changes.push_back (c);
+                else plan.notes.push_back (quoted (bus->name) + " (the music group) is already at the top of its fader (+6 dB).");
+            }
+            else if (bus != nullptr && ! busActive)
+                plan.notes.push_back (quoted (bus->name) + " (the music group) is protected or its fader wasn't read: the instruments move one by one instead.");
             if (moved.empty()) return "levels already fit " + (r.style.vocalFromYou ? std::string ("your setting") : r.style.name);
             std::sort (moved.begin(), moved.end(), [] (auto& a, auto& b) { return std::abs (a.first) > std::abs (b.first); });
             std::vector<std::string> parts;

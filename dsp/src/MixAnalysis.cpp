@@ -139,6 +139,8 @@ namespace mixology::mix
 
     double vocalTargetFor (const std::string& styleKey) { return vocalTarget (styleKey); }
 
+    bool viaMusicBus (Role r) { return r != Role::vox && r != Role::adlibs && r != Role::fx; }
+
     const char* roleKey (Role r)
     {
         static const char* keys[] = { "kick", "snare", "hats", "perc", "bass", "keys", "synth", "guitar", "vox", "adlibs", "fx", "other" };
@@ -295,7 +297,7 @@ namespace mixology::mix
 
             const auto it = settings.find (key);
             t.reference = it != settings.end() && it->second.reference;
-            t.excluded = (it != settings.end() && it->second.excluded) || t.reference;
+            t.excluded = (it != settings.end() && (it->second.excluded || it->second.musicBus)) || t.reference;
             if (it != settings.end() && it->second.role) { t.role = *it->second.role; t.roleFrom = "you"; }
             else if (auto byName = roleFromName (t.name)) { t.role = *byName; t.roleFrom = "name"; }
             else { t.role = roleFromSound (t); t.roleFrom = "sound"; }
@@ -303,6 +305,19 @@ namespace mixology::mix
             indexOf[key] = r.tracks.size();
             r.tracks.push_back (std::move (t));
         }
+        // The music group's fader: the instruments reach the Stereo Out through it.
+        const double bus = hasMusicBus ? musicBusDb : 0.0;
+        std::set<std::uint32_t> busKeys;
+        if (hasMusicBus)
+            for (auto& t : r.tracks)
+            {
+                if (! viaMusicBus (t.role) || t.excluded) continue;
+                busKeys.insert (t.hash);
+                if (t.loudness > -100.0) t.loudness += bus;
+                for (auto& b : t.bands) if (b > -100.0) b += bus;
+            }
+        auto busOf = [&] (std::uint32_t key) { return busKeys.count (key) ? bus : 0.0; };
+
         std::sort (r.tracks.begin(), r.tracks.end(), [] (const TrackReport& a, const TrackReport& b) { return a.loudness > b.loudness; });
         indexOf.clear();
         for (std::size_t i = 0; i < r.tracks.size(); ++i) indexOf[r.tracks[i].hash] = i;
@@ -345,7 +360,7 @@ namespace mixology::mix
                 {
                     const auto it = indexOf.find (keyOf (t));
                     if (t.frame.silent || it == indexOf.end() || r.tracks[it->second].excluded) continue;
-                    linked += toE (t.frame.loudness + t.faderDb);
+                    linked += toE (t.frame.loudness + t.faderDb + busOf (keyOf (t)));
                 }
                 const double rest = toE (m.mix.loudness) - linked;
                 if (rest > 0.1 * toE (m.mix.loudness)) { resE += rest; ++resN; }
@@ -447,7 +462,9 @@ namespace mixology::mix
             out.push_back ({ "unheard", "info", "link", std::to_string (unheard.size()) + " channel" + (unheard.size() == 1 ? "" : "s") + " without Mixology Link",
                              joinNames (unheard, 4) + (unheard.size() == 1 ? " plays" : " play") + " in your mix, but Mixology can't hear " + (unheard.size() == 1 ? "it" : "them") + " one by one, so the advice below leaves " + (unheard.size() == 1 ? "it" : "them") + " out.",
                              "Only if those tracks matter for the balance (they usually do).",
-                             { "Insert Mixology Link on each of them, after their other plug-ins, then Analyze Mix again." }, unheard });
+                             { "Insert Mixology Link on each of them, after their other plug-ins, then Analyze Mix again.",
+                               "Is one of them a group your other tracks play through (e.g. a \"Beat\" group for Voxology)? Then it isn't extra music: "
+                               "click its icon on the Tracks page and choose 'Music group'." }, unheard });
 
         // ---- 2. vocal level against the beat ---------------------------------------------------
         // The beat = everything but the vocals. Measured two ways and the larger one kept: the tracks with a Link
@@ -472,7 +489,7 @@ namespace mixology::mix
                     const auto key = keyOf (t);
                     const auto& a = acc.at (key);
                     if (! activeIn (t, a.maxLoud)) continue;
-                    const double e = toE (t.frame.loudness + t.faderDb);
+                    const double e = toE (t.frame.loudness + t.faderDb + busOf (key));
                     if (std::find (vocals.begin(), vocals.end(), key) != vocals.end()) vE += e;
                     else if (std::find (adlibs.begin(), adlibs.end(), key) != adlibs.end()) aE += e;
                     else if (std::find (others.begin(), others.end(), key) != others.end()) bE += e;
@@ -639,7 +656,7 @@ namespace mixology::mix
                     const auto& tr = trackOf (key);
                     if (! counts (tr) || tr.role == Role::vox || tr.role == Role::adlibs || ! activeIn (t, acc.at (key).maxLoud)) continue;
                     auto& d = diff[key];
-                    d.first += toDb (rangeE (t.frame.bandDb, kPresFrom, kPresTo, t.faderDb)) - toDb (vE);
+                    d.first += toDb (rangeE (t.frame.bandDb, kPresFrom, kPresTo, t.faderDb + busOf (key))) - toDb (vE);
                     ++d.second;
                 }
             }

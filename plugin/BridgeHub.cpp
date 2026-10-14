@@ -158,6 +158,7 @@ void BridgeHub::timerCallback()
                 ts.role = mixology::mix::roleFromKey (f[1].toStdString());
                 ts.excluded = f[2] == "1";
                 ts.reference = f[3] == "1";
+                ts.musicBus = f[4] == "1";
             }
             cacheTrackSettings();
             ++analysisVersion;
@@ -179,7 +180,7 @@ void BridgeHub::timerCallback()
             vocalOffset = juce::jlimit (-24.0, 24.0, kv["vocalOffset"].getDoubleValue());
             vocalFromYou = kv["vocalFromYou"] == "1";
             analysis.setVocalOffset (vocalOffset, vocalFromYou);
-            if (report.valid && analysis.hasMoments()) report = analysis.evaluate (trackSettings, report.unheard);
+            reevaluate();
             cachePrefs();
             ++analysisVersion;
         }
@@ -400,9 +401,9 @@ void BridgeHub::cacheTrackSettings()
 {
     juce::StringArray lines;
     for (const auto& [hash, ts] : trackSettings)
-        if (ts.role || ts.excluded || ts.reference)
+        if (ts.role || ts.excluded || ts.reference || ts.musicBus)
             lines.add (juce::String (static_cast<juce::int64> (hash)) + "\t" + (ts.role ? mixology::mix::roleKey (*ts.role) : "") + "\t" + (ts.excluded ? "1" : "0")
-                       + "\t" + (ts.reference ? "1" : "0"));
+                       + "\t" + (ts.reference ? "1" : "0") + "\t" + (ts.musicBus ? "1" : "0"));
     const juce::ScopedLock sl (protectedLock);
     trackSettingsCache = lines.joinIntoString ("\n");
 }
@@ -456,6 +457,34 @@ void BridgeHub::analysisTick (const mixology::AnalysisFrame& mixFrame, bool play
     if (analysis.secondsHeard() >= 60.0 || analysis.full()) finishAnalysis();
 }
 
+void BridgeHub::applyMusicBus()
+{
+    for (const auto& [hash, ts] : trackSettings)
+        if (ts.musicBus)
+        {
+            double db = 0.0;
+            if (auto it = fadersAtAnalysis.find (hash); it != fadersAtAnalysis.end()) db = it->second;
+            else if (auto kf = bridge.knownFaders().find (hash); kf != bridge.knownFaders().end()) db = kf->second.db;
+            analysis.setMusicBus (true, std::max (db, -120.0));
+            return;
+        }
+    analysis.setMusicBus (false, 0.0);
+}
+
+void BridgeHub::reevaluate()
+{
+    if (! report.valid || ! analysis.hasMoments()) return;
+    applyMusicBus();
+    // The music group isn't a channel of its own music: never "without a Link".
+    std::vector<std::string> unheard;
+    for (const auto& n : report.unheard)
+    {
+        const auto ts = trackSettings.find (mixology::bridge::nameHash (n));
+        if (ts == trackSettings.end() || (! ts->second.musicBus && ! ts->second.excluded)) unheard.push_back (n);
+    }
+    report = analysis.evaluate (trackSettings, unheard);
+}
+
 void BridgeHub::finishAnalysis()
 {
     // Channels Cubase showed that no Link reported: listed, so the advice is honest about what it heard.
@@ -466,13 +495,15 @@ void BridgeHub::finishAnalysis()
     for (const auto& [hash, f] : bridge.knownFaders())
     {
         const auto ts = trackSettings.find (hash);
-        if (heard.count (hash) == 0 && f.db > mixology::FaderLaw::kMinusInf + 1.0 && (ts == trackSettings.end() || ! ts->second.excluded))
+        if (heard.count (hash) == 0 && f.db > mixology::FaderLaw::kMinusInf + 1.0
+            && (ts == trackSettings.end() || (! ts->second.excluded && ! ts->second.musicBus)))
             unheard.push_back (f.title);
     }
 
-    report = analysis.evaluate (trackSettings, unheard);
     fadersAtAnalysis.clear();
     for (const auto& [hash, f] : bridge.knownFaders()) fadersAtAnalysis[hash] = f.db;
+    applyMusicBus();
+    report = analysis.evaluate (trackSettings, unheard);
     analyzeState = Analyze::done;
     ++analysisVersion;
 }
@@ -589,12 +620,16 @@ juce::var BridgeHub::roleCurves (double sampleRate) const
     {
         if (! l.hasAnalysis || l.analysis.silent || ms - std::min (ms, l.analysisMs) > 500) continue;
         const auto hash = l.identity.hasName ? l.nameHash : 0u;
-        if (auto it = trackSettings.find (hash); it != trackSettings.end() && (it->second.excluded || it->second.reference)) continue;
+        if (auto it = trackSettings.find (hash); it != trackSettings.end() && (it->second.excluded || it->second.reference || it->second.musicBus)) continue;
         if (! audibleNow (hash)) continue;   // muted: not in the mix, though its Link still hears it
         const auto role = roleFor (hash, l.identity.name).value_or (mix::Role::other);
         const auto g = static_cast<std::size_t> (mix::groupOf (role));
         double fader = 0.0;
         if (auto it = bridge.knownFaders().find (hash); hash != 0 && it != bridge.knownFaders().end()) fader = std::max (it->second.db, -200.0);
+        if (mix::viaMusicBus (role))
+            for (const auto& [bh, bts] : trackSettings)
+                if (bts.musicBus)
+                    if (auto it = bridge.knownFaders().find (bh); it != bridge.knownFaders().end()) fader += std::max (it->second.db, -200.0);
         any[g] = true;
         for (int b = 0; b < kBands; ++b)
             energy[g][static_cast<std::size_t> (b)] += std::pow (10.0, (l.analysis.bandDb[static_cast<std::size_t> (b)] + fader) / 10.0);
@@ -670,6 +705,7 @@ juce::var BridgeHub::getState (bool includeLog)
             const auto ts = trackSettings.find (s.hash);
             so->setProperty ("roleSet", ts != trackSettings.end() && ts->second.role.has_value());
             so->setProperty ("excluded", ts != trackSettings.end() && ts->second.excluded);
+            so->setProperty ("musicBus", ts != trackSettings.end() && ts->second.musicBus);
         }
 
         const auto sl = i < static_cast<int> (stripLinks.size()) ? stripLinks[static_cast<std::size_t> (i)] : StripLink {};
@@ -798,7 +834,7 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
             if (name == "setRole") ts.role = mixology::mix::roleFromKey (value.toString().toStdString());
             else ts.excluded = static_cast<bool> (value);
             cacheTrackSettings();
-            if (report.valid && analysis.hasMoments()) report = analysis.evaluate (trackSettings, report.unheard);
+            reevaluate();
             ++analysisVersion;
         }
     }
@@ -809,8 +845,24 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
         if (static_cast<bool> (value) && hash != 0) trackSettings[hash].reference = true;
         hearingReference = false;
         cacheTrackSettings();
-        if (report.valid && analysis.hasMoments()) report = analysis.evaluate (trackSettings, report.unheard);
+        reevaluate();
         ++analysisVersion;
+    }
+    else if (name == "setMusicBus")
+    {
+        const auto hash = static_cast<std::uint32_t> (static_cast<juce::int64> (arg.getProperty ("hash", 0)));
+        if (hash == 0) r = { false, "That channel has no name Mixology can keep track of." };
+        else
+        {
+            const bool on = static_cast<bool> (value);
+            for (auto& [h, ts] : trackSettings) ts.musicBus = false;
+            if (on) trackSettings[hash].musicBus = true;
+            cacheTrackSettings();
+            reevaluate();
+            ++analysisVersion;
+            info = on ? "Got it: the music plays through this group. Mixology moves the music on its fader, and never counts it as extra music."
+                      : "This channel is no longer the music group.";
+        }
     }
     else if (name == "vocalTaste")
     {
@@ -834,7 +886,7 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
         if (r.ok)
         {
             analysis.setVocalOffset (vocalOffset, vocalFromYou);
-            if (report.valid && analysis.hasMoments()) report = analysis.evaluate (trackSettings, report.unheard);
+            reevaluate();
             cachePrefs();
             ++analysisVersion;
         }
@@ -927,6 +979,7 @@ std::vector<mixology::mix::ChannelNow> BridgeHub::channelsNow() const
         c.hasPan = f.hasPan;
         c.pan = (f.pan - 0.5) * 200.0;
         c.locked = bridge.isProtected (hash);
+        if (auto ts = trackSettings.find (hash); ts != trackSettings.end()) c.musicBus = ts->second.musicBus;
         if (auto it = fadersAtAnalysis.find (hash); it != fadersAtAnalysis.end())
         {
             c.hasFaderAtAnalysis = true;

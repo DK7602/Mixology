@@ -73,7 +73,7 @@
       const c = inSlot(i);
       if (!c) return { present: false, title: "", hash: 0 };
       const set = B.settings[c.hash] || {};
-      return { role: roleOf(c), roleSet: !!set.role, excluded: !!set.excluded, present: true, title: c.name, hash: c.hash, hasVolume: true, volume: c.volume, volumeText: text(c.volume), volumeDb: lawDb(c.volume), hasPan: true, pan: c.pan, panText: panText(c.pan),
+      return { role: roleOf(c), roleSet: !!set.role, excluded: !!set.excluded, musicBus: !!set.musicBus, present: true, title: c.name, hash: c.hash, hasVolume: true, volume: c.volume, volumeText: text(c.volume), volumeDb: lawDb(c.volume), hasPan: true, pan: c.pan, panText: panText(c.pan),
         mute: c.mute, solo: c.solo, read: c.read, write: c.write, colour: c.colour, protected: c.protected, duplicate: false, changed: isChanged(c),
         linkStatus: c.link ? "matched" : "none", trim: c.trim, linkAudio: true, stereoPanner: c.name === "Keys" };
     });
@@ -185,6 +185,12 @@
       B.apply.hearingReference = value === "ref";
       B.version++;
       return { ok: true, info: value === "ref" ? `Playing '${B.an.report.reference.name}' alone, matched to your mix's loudness (its Trim: -4.7 dB).` : "Back to your mix." };
+    }
+    if (name === "setMusicBus") {
+      for (const h of Object.keys(B.settings)) if (B.settings[h]) B.settings[h].musicBus = false;
+      if (value) (B.settings[arg.hash] = B.settings[arg.hash] || {}).musicBus = true;
+      B.version++;
+      return { ok: true, info: value ? "Got it: the music plays through this group. Mixology moves the music on its fader, and never counts it as extra music." : "This channel is no longer the music group." };
     }
     if (name === "setRole" || name === "setExcluded") {
       const set = (B.settings[arg.hash] = B.settings[arg.hash] || {});

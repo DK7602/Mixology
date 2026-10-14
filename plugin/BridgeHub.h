@@ -58,7 +58,7 @@ public:
         Global ones: restoreAll, forget, bank(action), refresh, reconnect, copyLog.
         Analyze Mix: analyze, analyzeFinish, analyzeCancel, setRole, setExcluded, setReference.
         Milestone 4: plan(tool) -> { plan }, planApply { id, picked, allowBig, headroom }, planUndo -> { bridge },
-        refListen ("ref" / "mix"), vocalTaste ("right" / "quieter" / "louder" / "style").
+        refListen ("ref" / "mix"), vocalTaste ("right" / "quieter" / "louder" / "style"), setMusicBus { hash, value }.
         Returns { ok, message, warning, info }. */
     juce::var command (const juce::String& name, const juce::var& arg);
 
@@ -101,6 +101,8 @@ private:
     const mixology::link::LinkInfo* uniqueLink (const std::vector<mixology::link::LinkInfo>&, std::uint32_t hash) const;
 
     std::map<std::uint32_t, double> fadersAtAnalysis;   // every fader when Analyze Mix finished listening
+    void reevaluate();         // the report again (after a role / setting change), without listening again
+    void applyMusicBus();      // tells the analysis where the music group's fader was while it listened
     mixology::mix::Plan currentPlan;
     std::uint64_t currentPlanId = 0;
     struct AssistUndo

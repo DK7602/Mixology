@@ -67,7 +67,11 @@ namespace mixology::mix
         std::optional<Role> role;  // your correction
         bool excluded = false;     // left out of Analyze Mix (reference tracks, printed stems...)
         bool reference = false;    // your reference song (Reference Match); always left out of the mix advice
+        bool musicBus = false;     // a group channel the music plays through (not the vocals), e.g. Voxology's "Beat"
     };
+
+    /** Tracks that play through the music group (when you marked one): everything but vocals, ad-libs and effects. */
+    bool viaMusicBus (Role);
 
     // ---------------------------------------------------------------------------------------------
     // Output
@@ -160,6 +164,8 @@ namespace mixology::mix
         static constexpr double kEnoughSeconds = 20.0;
 
         void begin (const Style&);
+        /** The music group's fader (dB) while Mixology listened: the instruments' levels include it. */
+        void setMusicBus (bool present, double faderDb) { hasMusicBus = present; musicBusDb = present ? faderDb : 0.0; }
         /** How you like your vocal (kept with the project): evaluate() aims for the style's target plus this. */
         void setVocalOffset (double offsetDb, bool fromYou) { style.vocalOffset = offsetDb; style.vocalFromYou = fromYou; }
         void clear();
@@ -177,5 +183,7 @@ namespace mixology::mix
     private:
         Style style;
         std::vector<Moment> moments;
+        bool hasMusicBus = false;
+        double musicBusDb = 0.0;
     };
 }

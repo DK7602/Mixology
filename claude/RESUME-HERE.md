@@ -115,6 +115,17 @@ User asked (2026-10-13): "Once fixed move forward with M4?" after the M3 test vi
   Panner's left edge (L100) and Cubase kept reporting it; the knob never writes by itself (Knob.set doesn't notify).
   The "Stereo" label needs the newest build (asked which one they ran).
 
+### Music group (2026-10-14): the user's "Beat" is a GROUP of all non-vocal tracks (for Voxology's beat detect)
+- So Beat was double counted (an "unheard" channel = extra music) and moved on top of its own member tracks.
+- TrackSettings.musicBus (5th field of "tracks" state), hub command setMusicBus {hash, value} (one per project),
+  strip menu item "Music group" (gold "glue" icon). Analysis::setMusicBus(present, faderDb at analysis): adds the
+  group fader to every non-vocal / non-adlib / non-fx track (viaMusicBus) in loudness, bands, vocal ratio, masking,
+  unheard residual; the group never counts as unheard (and is excluded if it has a Link). Planner: Lookup.musicBus;
+  groups viaBus when the group fader can move: the vocal step and the loudness top-up move the group fader (one
+  change) instead of every instrument; instruments only move for their balance against each other; headroom
+  moves the group + top-level channels; group fader moves since analysis correct the instruments' levels.
+- The unheard advice now suggests "Music group" for a channel the other tracks play through.
+
 ## Milestone 3 status (v0.3.0): BUILT, tested by the user (video): worked; follow-ups done in M4
 - dsp: Fft (radix-2), TrackAnalyzer (4096-pt, mid/side in one complex FFT, 31 ISO 1/3-oct bands re full-scale
   sine, sideShare, K-weighted loudness, rms, peak, corr, width), AudioRing, MixAnalysis (Moment = mix frame +

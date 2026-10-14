@@ -980,3 +980,81 @@ TEST_CASE ("Plans: Stereo Architect only pans mono tracks", "[plan]")
     CHECK (change (p, "Kick", "pan") != nullptr);   // mono: still centred
     CHECK (noted (p, "only pans mono tracks"));
 }
+
+TEST_CASE ("Music group: the instruments play through one group fader (Voxology's 'Beat')", "[plan]")
+{
+    // Vocals on their own; guitars and drums play through the "Beat" group (no Link on it).
+    auto tracks = [] (int) { return std::vector<TrackSample> {
+        sample ("Vocals", vocalFrame (-26.0)), sample ("Electric Rhythm", padFrame (-14.0)), sample ("Drum Machine 01", kickFrame()) }; };
+    auto analyse = [&] (double busDb) {
+        Analysis a;
+        a.begin (Style {});
+        a.setMusicBus (true, busDb);
+        for (int i = 0; i < 150; ++i)
+        {
+            Moment m;
+            m.tracks = tracks (i);
+            auto heard = m.tracks;   // what reaches the Stereo Out: the instruments through the group fader
+            for (auto& t : heard) if (t.name != "Vocals") t.faderDb += busDb;
+            m.mix = mixOf (heard);
+            a.add (m);
+        }
+        return a;
+    };
+
+    SECTION ("its fader counts in the instruments' levels")
+    {
+        const auto at0 = analyse (0.0).evaluate ({});
+        const auto down6 = analyse (-6.0).evaluate ({});
+        CHECK (track (down6, "Electric Rhythm")->loudness == Catch::Approx (track (at0, "Electric Rhythm")->loudness - 6.0).margin (0.05));
+        CHECK (track (down6, "Vocals")->loudness == Catch::Approx (track (at0, "Vocals")->loudness).margin (0.05));
+        CHECK (down6.vocalRatio > at0.vocalRatio + 4.0);
+    }
+    SECTION ("Balance moves the group fader, not each instrument; room for Masterology too")
+    {
+        const auto r = analyse (0.0).evaluate ({});
+        std::vector<ChannelNow> chans { channel ("Vocals"), channel ("Electric Rhythm"), channel ("Drum Machine 01"), channel ("Beat", 0.0, 0.0, false) };
+        chans[3].musicBus = true;
+        for (auto& c : chans) { c.hasFaderAtAnalysis = true; c.faderAtAnalysis = c.faderDb; }
+        const auto p = makePlan (Tool::balance, r, chans);
+        const auto* beat = change (p, "Beat", "level");
+        REQUIRE (beat != nullptr);
+        CHECK (beat->to < beat->from);
+        CHECK (beat->why.find ("music group") != std::string::npos);
+        // The instruments only move for their balance against each other, never again for the vocal (group + track).
+        for (const char* n : { "Electric Rhythm", "Drum Machine 01" })
+            if (const auto* c = change (p, n, "level"))
+            {
+                CHECK (c->why.find ("makes room for the vocal") == std::string::npos);
+                CHECK (c->why.find ("against the rest of the band") != std::string::npos);
+            }
+        REQUIRE (change (p, "Vocals", "level") != nullptr);
+
+        // Applied: the group fader moved. Opening Balance again finds nothing more.
+        for (auto& c : chans)
+            for (const auto& ch : p.changes)
+                if (ch.name == c.name) c.faderDb = ch.wanted;
+        const auto again = makePlan (Tool::balance, r, chans);
+        for (const auto& c : again.changes) CHECK (std::abs (c.wanted - c.from) < 1.0);
+    }
+    SECTION ("room for Masterology moves the group and the vocals, not the instruments under the group")
+    {
+        Analysis a = analyse (0.0);
+        Moment hot;
+        const auto r = [&] {
+            auto rr = a.evaluate ({});
+            return rr;
+        }();
+        auto rr = r;
+        rr.mixPeak = 6.0;
+        std::vector<ChannelNow> chans { channel ("Vocals"), channel ("Electric Rhythm"), channel ("Drum Machine 01"), channel ("Beat", 0.0, 0.0, false) };
+        chans[3].musicBus = true;
+        const auto p = makePlan (Tool::balance, rr, chans);
+        REQUIRE (p.headroomDb < 0.0);
+        std::vector<std::string> names;
+        for (const auto& h : p.headroom) names.push_back (h.name);
+        CHECK (std::find (names.begin(), names.end(), "Beat") != names.end());
+        CHECK (std::find (names.begin(), names.end(), "Vocals") != names.end());
+        CHECK (std::find (names.begin(), names.end(), "Electric Rhythm") == names.end());
+    }
+}

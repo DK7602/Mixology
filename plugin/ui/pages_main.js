@@ -411,11 +411,13 @@ export function buildTracks(root, app) {
       items.push({ divider: true });
       items.push({ label: d.roleSet ? "Automatic (from name and sound)" : "Automatic (now: " + ROLES[current].label + ")", value: "auto", icon: "wand", sel: !d.roleSet });
       items.push({ divider: true });
+      items.push({ label: d.musicBus ? "Music group (the instruments play through it)" : "Music group: the instruments play through this channel", value: "bus", icon: "glue", colour: "var(--gold)", sel: !!d.musicBus });
       items.push({ label: d.excluded ? "Include in Analyze Mix" : "Leave out of Analyze Mix", value: "exclude", icon: d.excluded ? "check" : "close" });
       popupMenu(ic, items, (v) => {
         if (v === "exclude") app.command("setExcluded", { hash: d.hash, value: !d.excluded });
+        else if (v === "bus") app.command("setMusicBus", { hash: d.hash, value: !d.musicBus });
         else app.command("setRole", { hash: d.hash, value: v === "auto" ? "" : v });
-      }, 300);
+      }, 380);
     });
     undo.addEventListener("click", () => send("restore"));
     sBtn.addEventListener("click", () => { if (guarded()) send("solo", !strip.data.solo); });
@@ -562,11 +564,15 @@ export function buildTracks(root, app) {
       st.name.title = present ? d.title + (d.duplicate ? "\nAnother channel in view has the same name." : "") : "";
       st.name.style.color = present && d.duplicate ? "var(--amber)" : "";
       st.colourBar.style.background = present && d.colour ? d.colour : "transparent";
-      if (st.role !== role) { st.ic.innerHTML = icon(R.icon); st.role = role; }
-      st.ic.style.color = R.colour;
-      st.ic.style.filter = present && d.excluded ? "grayscale(1)" : `drop-shadow(0 0 6px ${R.colour})`;
+      const bus = present && d.musicBus;
+      const iconKey = bus ? "bus" : role;
+      if (st.role !== iconKey) { st.ic.innerHTML = icon(bus ? "glue" : R.icon); st.role = iconKey; }
+      const icColour = bus ? "#ffb43c" : R.colour;
+      st.ic.style.color = icColour;
+      st.ic.style.filter = present && d.excluded ? "grayscale(1)" : `drop-shadow(0 0 6px ${icColour})`;
       st.ic.style.opacity = present && d.excluded ? "0.4" : "1";
-      st.ic.title = present ? `${R.label}${d.roleSet ? " (set by you)" : ""}${d.excluded ? ". Left out of Analyze Mix" : ""}. Click to change` : "";
+      st.ic.title = !present ? "" : bus ? "Music group: the instruments play through it (Mixology moves the music on this fader). Click to change"
+        : `${R.label}${d.roleSet ? " (set by you)" : ""}${d.excluded ? ". Left out of Analyze Mix" : ""}. Click to change`;
 
       // Padlock: closed = protected (Mixology never moves it).
       const prot = present && d.protected;

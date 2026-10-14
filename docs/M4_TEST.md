@@ -1,5 +1,13 @@
 # Milestone 4 test: Auto Mix and the smart tools
 
+## Round 3 (Beat is a group): do this first
+
+- Q1. Tracks page: press **Restore** (gets your original faders and pans back).
+- Q2. Click **Beat**'s icon (top of its strip) and choose **Music group**. The icon turns into a gold group symbol.
+- Q3. **Analyze Mix** (any style). Open **BALANCE**, press **Too loud** or **Right** for the vocal, Apply once.
+  The music now moves on the Beat fader only. Open Balance again: it should find nothing more to do.
+  **Report**: how does it sound? Did the guitars stay where you put them?
+
 ## Round 2 (after your first test): what changed, what to try
 
 Your first test found: Balance raised the vocal you already find too loud (Mixology aimed for Rock's usual

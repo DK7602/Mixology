@@ -196,6 +196,11 @@ list: every change it wants to make, **now → new**, and why, in plain words. U
   mutes it again. The reference is always left out of the mix advice. Loudness differences are Masterology's
   job: don't push your mix up to match a mastered song.
 
+**A music group (e.g. the "Beat" group Voxology listens to).** If your instruments play through one group channel,
+click that group's icon on the Tracks page and choose **Music group**. Mixology then counts its fader in the
+instruments' level, never counts the group as extra music, and moves the music on that one fader (vocal against
+the music, room for Masterology) instead of moving every instrument and the group twice.
+
 **Muted tracks.** A Mixology Link still hears its track when the track is muted (that's how Reference Match hears
 your muted reference song). Analyze Mix and the analyzer's colours leave muted channels out, and channels that
 aren't soloed while something else is.

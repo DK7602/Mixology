@@ -15,7 +15,8 @@
       under the vocal, all at the same overall loudness. Fader moves since Analyze Mix are allowed for, so
       applying a plan and opening it again finds nothing more to do. Tracks of one kind move
       together, so their balance among themselves stays yours. Room for Masterology (mix peaks around
-      -6 dBTP) is offered separately: every fader down together.
+      -6 dBTP) is offered separately: every fader down together. With a music group (a group channel the
+      instruments play through, e.g. Voxology's "Beat"), the music moves on that one fader.
     - Stereo Architect: pans. Low end and the lead vocal in the middle, doubles and pairs spread left / right,
       a lopsided mix evened out.
     - Clean Up: Assist EQ low cuts on tracks with rumble (and on vocals), mud dips where the mix is muddy.
@@ -39,6 +40,7 @@ namespace mixology::mix
         int channels = 0;          // its Mixology Link's channels (1 mono, 2 stereo, 0 unknown): only mono tracks get panned
         bool hasFaderAtAnalysis = false;   // the fader when Analyze Mix listened: moves since then are allowed for
         double faderAtAnalysis = 0.0;      // (so applying a plan and opening it again doesn't repeat its moves)
+        bool musicBus = false;     // the music group you marked: the instruments play through it
         bool locked = false;       // protected (padlock)
         bool hasLink = false;      // a Mixology Link sits on it (its Assist EQ can be set)
         AssistSettings assist;     // that Link's Assist EQ now
