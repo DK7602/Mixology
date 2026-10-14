@@ -27,6 +27,7 @@ namespace mixology::bridge
     constexpr std::uint8_t kTag1 = 0x4D;   // 'M'
     constexpr std::uint8_t kTag2 = 0x58;   // 'X'
     constexpr std::uint8_t kProtocolVersion = 1;
+    constexpr int kLatestScriptVersion = 4;   // bridge/cubase/.../Mixology_Bridge.js SCRIPT_VERSION (v4: pan from Cubase only)
 
     constexpr std::uint32_t kValueMax = (1u << 21) - 1u;
     constexpr std::size_t kMaxTextBytes = 63;

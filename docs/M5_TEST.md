@@ -1,5 +1,21 @@
 # Milestone 5 tests
 
+## Fix: the Electric guitars at "L100" (version 0.6.1, 5 minutes)
+
+What happened: those four channels have no working pan in Cubase (mono tracks going into a mono group), and
+Cubase reports such a channel as "L100". When Mixology set them to C, the Cubase script answered "done" (it repeated
+what it was sent), so Mixology believed it; the next time Cubase reported them (Auto Mix walking the channels),
+they read "L100" again. Now Mixology catches that, shows **No pan** on those strips, remembers it with the
+project and never touches those pans again. The Cubase script is updated too (v4: it only reports what Cubase
+really has).
+
+1. Close Cubase. Copy both .vst3 folders as usual, **and** copy the `Mixology` folder from the download's
+   `Cubase MIDI Remote` folder into `Documents\Steinberg\Cubase\MIDI Remote\Driver Scripts\Local\` again
+   (replace it). Start Cubase. The Tracks page should say **Bridge v4**.
+2. Tracks page: turn each Electric guitar's pan knob a little. Within a second each one reads **No pan**.
+3. Run Auto Mix: the guitars stay **No pan**. Save, close and reopen the project: still **No pan**.
+   **Report**: does it work?
+
 ## Round 2: Space (reverb, delay, effects, ducking), about 30 minutes
 
 Goal: the Space page now makes real sound. A track (or an FX channel) gets one effect from the list on the left; the

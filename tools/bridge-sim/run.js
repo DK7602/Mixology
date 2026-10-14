@@ -103,6 +103,15 @@ function makeCubase(names) {
       _set(v) {
         const ch = sim.channelAt(slot);
         if (!ch) return;
+        if (prop === 'pan' && ch.noPanner) {
+          // No panner (a mono track into a mono group): Cubase's pan stays at 0 ("L100"); only the bound
+          // control echoes the value it was sent.
+          if (viaControl()) for (const cv of hv._bound) {
+            if (cv.mOnProcessValueChange) cv.mOnProcessValueChange(sim.device, v, 0);
+            if (cv.mOnDisplayValueChange) cv.mOnDisplayValueChange(sim.device, panText(v), '');
+          }
+          return;
+        }
         if (prop === 'volume') sim.setCalls++;
         ch[prop] = prop === 'volume' || prop === 'pan' ? Math.round(v * 16384) / 16384 : v > 0.5 ? 1 : 0;
         hv._fire();
@@ -429,6 +438,23 @@ const scenarios = {
     check(all.ok && all.message.includes('Restored 2'), 'restore all: ' + all.message);
     check(near(r.cubase.channels[9].volume, 0.7766, 1 / 16384) && near(r.cubase.channels[10].pan, 0.5, 1 / 16384), 'FX and Adlibs back');
     check(r.state.changed === 0, 'nothing left to restore');
+  },
+
+  async 'a channel with no panner (mono track into a mono group) is marked No pan'(r) {
+    const g = r.cubase.channels[7];
+    g.pan = 0;
+    g.noPanner = true;
+    r.cubase.fireChannel(g);
+    await r.run(0.3);
+    check(r.state.slots[7].panText === 'L100' && !r.state.slots[7].noPan, 'reads L100 at first');
+    await r.cmd('pan', 7, 0.5);
+    await r.cmd('pan', 6, 0.4);
+    await r.run(2.0);
+    check(r.state.slots[7].noPan === true, 'no panner: marked No pan');
+    check(r.state.slots[7].pan === 0, 'and still reported where Cubase has it: ' + r.state.slots[7].pan);
+    check(!r.state.slots[6].noPan && near(r.cubase.channels[6].pan, 0.4, 1e-4), 'a channel that pans is not');
+    check(!(await r.cmd('pan', 7, 0.7)).ok, 'never moved again');
+    check(r.state.log.some((l) => l.includes('No pan')), 'logged');
   },
 
   async 'non-English names survive the round trip'(r) {

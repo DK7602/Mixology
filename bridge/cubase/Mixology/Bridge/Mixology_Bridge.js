@@ -12,7 +12,7 @@
 // Messages are SysEx frames  F0 7D 4D 58 <protocol> <command> <payload> F7 .
 // The layout MUST match dsp/include/mixology/BridgeProtocol.h in the Mixology source.
 
-var SCRIPT_VERSION = 3;
+var SCRIPT_VERSION = 4;
 var PROTOCOL_VERSION = 1;
 var BANK_SIZE = 12;                              // matches the 12 strips on Mixology's Tracks page
 var PORT_FROM_MIXOLOGY = 'Mixology to Cubase';   // Cubase receives on this port
@@ -278,8 +278,8 @@ function makeSlot(index) {
     channel.mOnColorChange = guard('channel colour', function (device, mapping, r, g, b) { setColour(r, g, b); });
     channel.mValue.mVolume.mOnProcessValueChange = guard('volume', function (device, mapping, value) { diag.hostVol++; setVolume(value); });
     channel.mValue.mVolume.mOnDisplayValueChange = guard('volume text', function (device, mapping, value) { diag.hostText++; setVolumeText(value); });
-    channel.mValue.mPan.mOnProcessValueChange = guard('pan', function (device, mapping, value) { setPan(value); });
-    channel.mValue.mPan.mOnDisplayValueChange = guard('pan text', function (device, mapping, value) { setPanText(value); });
+    channel.mValue.mPan.mOnProcessValueChange = guard('pan', function (device, mapping, value) { hostPanRoute = true; setPan(value); });
+    channel.mValue.mPan.mOnDisplayValueChange = guard('pan text', function (device, mapping, value) { hostPanRoute = true; setPanText(value); });
     channel.mValue.mMute.mOnProcessValueChange = guard('mute', function (device, mapping, value) { setMute(value); });
     channel.mValue.mSolo.mOnProcessValueChange = guard('solo', function (device, mapping, value) { setSolo(value); });
     channel.mValue.mAutomationRead.mOnProcessValueChange = guard('read', function (device, mapping, value) {
@@ -296,13 +296,17 @@ function makeSlot(index) {
     s.volumeVar.mOnColorChange = guard('control colour', function (device, r, g, b) { setColour(r, g, b); });
     s.volumeVar.mOnProcessValueChange = guard('control volume', function (device, value) { diag.svVol++; setVolume(value); });
     s.volumeVar.mOnDisplayValueChange = guard('control volume text', function (device, value) { diag.svText++; setVolumeText(value); });
-    s.panVar.mOnProcessValueChange = guard('control pan', function (device, value) { setPan(value); });
-    s.panVar.mOnDisplayValueChange = guard('control pan text', function (device, value) { setPanText(value); });
+    // Pan: Cubase's own value (route 1) wins (v4). The bound control reports what Mixology sent even on a
+    // channel with no panner (a mono track into a mono group), which made a pan move look done there; it is
+    // only used on a Cubase that never reports pans through route 1.
+    s.panVar.mOnProcessValueChange = guard('control pan', function (device, value) { if (!hostPanRoute) setPan(value); });
+    s.panVar.mOnDisplayValueChange = guard('control pan text', function (device, value) { if (!hostPanRoute) setPanText(value); });
     s.muteVar.mOnProcessValueChange = guard('control mute', function (device, value) { setMute(value); });
     s.soloVar.mOnProcessValueChange = guard('control solo', function (device, value) { setSolo(value); });
     return s;
 }
 
+var hostPanRoute = false;   // Cubase has reported a pan through the channel itself (route 1)
 for (var i = 0; i < BANK_SIZE; i++) slots.push(makeSlot(i));
 
 // Bank navigation: one value variable per action; Mixology "presses" it.

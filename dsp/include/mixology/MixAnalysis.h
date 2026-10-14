@@ -68,6 +68,7 @@ namespace mixology::mix
         bool excluded = false;     // left out of Analyze Mix (reference tracks, printed stems...)
         bool reference = false;    // your reference song (Reference Match); always left out of the mix advice
         bool musicBus = false;     // a group channel the music plays through (not the vocals), e.g. Voxology's "Beat"
+        bool noPan = false;        // Cubase doesn't pan it (mono track into a mono group): learned by the bridge, kept here
     };
 
     /** Tracks that play through the music group (when you marked one): everything but vocals, ad-libs and effects. */

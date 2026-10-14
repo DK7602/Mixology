@@ -174,10 +174,16 @@ namespace mixology
         /** Is the channel heard on the Stereo Out? Not when it is muted, or when another channel is soloed
             and this one isn't (as far as Mixology has seen them). Its Mixology Link still hears it either way. */
         bool isAudible (std::uint32_t hash) const;
-        /** Cubase didn't follow a pan move on this channel (no pan control there: a mono track going to a mono
-            group or output, where the MIDI Remote still reports a pan, usually "L100"). Mixology then leaves
-            that pan alone. Learned this session, the first time a pan move doesn't land. */
+        /** Cubase doesn't pan this channel (no pan control there: a mono track going to a mono group or output,
+            where the MIDI Remote still reports a pan of exactly "L100"). Mixology then leaves that pan alone and
+            counts the channel as centred. Learned when a pan move doesn't land, or lands and later reads back at
+            hard left (the script echoes what it sent even where no panner takes it); forgotten when Cubase
+            reports a real pan for the channel. The host saves the list with the project (noPanList). */
         bool panIgnored (std::uint32_t hash) const { return noPan.count (hash) != 0; }
+        std::vector<std::uint32_t> noPanList() const { return { noPan.begin(), noPan.end() }; }
+        void setNoPanList (const std::vector<std::uint32_t>&);
+        /** Bumps whenever the No pan list changes (the host saves it then). */
+        std::uint64_t noPanVersion() const { return noPanChanges; }
         /** Fader levels of every channel seen so far (in the bank, or during a scan). */
         const std::map<std::uint32_t, KnownFader>& knownFaders() const { return faders; }
         /** Steps the bank through all channels to read their faders, then puts it back where it was.
@@ -292,9 +298,15 @@ namespace mixology
         struct PanWatch { int slot = -1; std::uint32_t hash = 0; double from = 0.5, to = 0.5, sentAt = 0.0; };
         std::vector<PanWatch> panWatches;
         std::set<std::uint32_t> noPan;
+        std::uint64_t noPanChanges = 0;
+        struct PanWrite { double value = 0.5, at = 0.0; };
+        std::map<std::uint32_t, PanWrite> panWrites;   // the last pan Mixology sent to each channel
         static constexpr double kPanLandSeconds = 1.2;
+        static constexpr double kHardLeft = 0.0005;    // the MIDI Remote's pan where no panner is: exactly 0
         void watchPan (int slot, double to, double now);
         void checkPanWatches (double now);
+        void notePanReport (int slot, double now);      // Cubase reported a slot's pan
+        void markNoPan (const BridgeSlot&, const std::string& why, double now);
 
         void scanStep (double now);
         void scanAdvance (double now);

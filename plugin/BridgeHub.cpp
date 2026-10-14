@@ -159,11 +159,18 @@ void BridgeHub::timerCallback()
                 ts.excluded = f[2] == "1";
                 ts.reference = f[3] == "1";
                 ts.musicBus = f[4] == "1";
+                ts.noPan = f[5] == "1";
             }
+            std::vector<std::uint32_t> noPan;   // the channels Cubase doesn't pan, as this project learned them
+            for (const auto& [hash, ts] : trackSettings)
+                if (ts.noPan) noPan.push_back (hash);
+            bridge.setNoPanList (noPan);
+            seenNoPanVersion = bridge.noPanVersion();
             cacheTrackSettings();
             ++analysisVersion;
         }
     }
+    syncNoPan();
 
     {
         juce::String pending;
@@ -397,13 +404,23 @@ bool BridgeHub::audibleNow (std::uint32_t hash) const
     return hash == 0 || bridge.isAudible (hash);
 }
 
+void BridgeHub::syncNoPan()
+{
+    // The bridge learned (or forgot) a channel Cubase doesn't pan: keep it with the project's track settings.
+    if (bridge.noPanVersion() == seenNoPanVersion) return;
+    seenNoPanVersion = bridge.noPanVersion();
+    for (auto& [hash, ts] : trackSettings) ts.noPan = false;
+    for (const auto hash : bridge.noPanList()) trackSettings[hash].noPan = true;
+    cacheTrackSettings();
+}
+
 void BridgeHub::cacheTrackSettings()
 {
     juce::StringArray lines;
     for (const auto& [hash, ts] : trackSettings)
-        if (ts.role || ts.excluded || ts.reference || ts.musicBus)
+        if (ts.role || ts.excluded || ts.reference || ts.musicBus || ts.noPan)
             lines.add (juce::String (static_cast<juce::int64> (hash)) + "\t" + (ts.role ? mixology::mix::roleKey (*ts.role) : "") + "\t" + (ts.excluded ? "1" : "0")
-                       + "\t" + (ts.reference ? "1" : "0") + "\t" + (ts.musicBus ? "1" : "0"));
+                       + "\t" + (ts.reference ? "1" : "0") + "\t" + (ts.musicBus ? "1" : "0") + "\t" + (ts.noPan ? "1" : "0"));
     const juce::ScopedLock sl (protectedLock);
     trackSettingsCache = lines.joinIntoString ("\n");
 }

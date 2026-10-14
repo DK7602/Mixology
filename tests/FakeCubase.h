@@ -28,6 +28,7 @@ struct FakeCubase
     int bankSize = 8;
     int bankOffset = 0;
     int scriptVersion = 1;
+    bool echoPanWrites = false;   // script v1 - v3: reports the pan it sent, even where no panner takes it
     double quantum = 1.0 / 16384.0;   // Cubase may quantise positions; pretend it does
     bool alive = true;
     std::vector<std::vector<std::uint8_t>> toPlugin;
@@ -134,7 +135,8 @@ struct FakeCubase
                 else if (m->cmd == Cmd::setPan)
                 {
                     if (! c->panIgnored) c->pan = m->value;
-                    Message p; p.cmd = Cmd::slotPan; p.slot = m->slot; p.value = c->pan; p.text = panText (c->pan); out (p);
+                    const double shown = echoPanWrites ? m->value : c->pan;
+                    Message p; p.cmd = Cmd::slotPan; p.slot = m->slot; p.value = shown; p.text = panText (shown); out (p);
                 }
                 else if (m->cmd == Cmd::setMute)
                 {
@@ -176,6 +178,15 @@ struct FakeCubase
             out (v);
             previous = c.volume;
         }
+    }
+
+    void userMovesPan (int channel, double p)
+    {
+        channels[static_cast<std::size_t> (channel)].pan = p;
+        const int slot = channel - bankOffset;
+        if (slot < 0 || slot >= bankSize) return;
+        mixology::bridge::Message m; m.cmd = mixology::bridge::Cmd::slotPan; m.slot = slot; m.value = p; m.text = panText (p);
+        out (m);
     }
 
     void rename (int channel, const std::string& name)

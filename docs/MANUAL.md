@@ -1,6 +1,6 @@
 # Mixology manual
 
-Manual for version 0.6.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
+Manual for version 0.6.1 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, and now Space: reverb, delay and effects on a track
 or an FX channel, ducking under the vocal).
@@ -387,9 +387,14 @@ Final limiting is Masterology's job: keep Mixology's Limiter off on the Full Mix
   another target.
 - **A track isn't in the processing dropdown**: it has no Mixology Link, or its Link is from an older download
   (copy both .vst3 folders again).
-- **A strip says "No pan"**: Cubase didn't follow a pan move on that channel: its output is mono (for example a mono
-  group the track plays through), so it sits in the middle whatever its pan says. Mixology leaves it alone. To pan
-  it, make the group / output stereo in Cubase.
+- **A strip says "No pan"**: Cubase doesn't pan that channel: its output is mono (for example a mono group the track
+  plays through), so it sits in the middle whatever its pan says. Cubase still reports such a channel as "L100".
+  Mixology learns this the first time you (or Auto Mix) turn its pan, remembers it with the project, never moves
+  that pan again, and counts the track as centred. To pan it, make the group / output stereo in Cubase; as soon as
+  Cubase reports a real pan for it, Mixology pans it again.
+- **A strip reads "L100" but you hear it in the middle**: turn its pan knob in Mixology once: it changes to "No pan"
+  (see above). This needs the Cubase script v4 or later (Settings > Cubase Bridge shows the version; the log says
+  when a newer one came with the download).
 - **The Stereo page says the mix is mono**: left and right are the same at the Stereo Out (usually a mono group on
   the way), so Width can't change anything there.
 - **A track sounds 5 ms late**: its Limiter is on and Cubase's delay compensation is switched off (Constrain

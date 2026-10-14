@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-14, v0.6.0)
+# Mixology: resume here (updated 2026-10-14, v0.6.1)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -35,7 +35,19 @@ sends higher-resolution art, re-run it.
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
 
-## Milestone 5 round 2 status (v0.6.0): BUILT, WAITING FOR THE USER'S CUBASE TEST (docs/M5_TEST.md, top part)
+## v0.6.1: the Electric guitars' "L100" (user, 2026-10-14, after round 2: "everything else seems to work")
+User set the 4 Electric pans to C in Mixology, ran Auto Mix, they read L100 again (heard centred). Cause: no panner
+(mono tracks into a mono group); the script's bound control (panVar) echoed the value Mixology sent, so the pan watch
+saw it "land"; Cubase's own value (0 = "L100") came back on the next bank report. Fix: BridgeSession.panWrites +
+notePanReport(): a channel reported at exactly 0 (kHardLeft) >= 1.2 s after Mixology wrote it elsewhere -> noPan
+(markNoPan, log "... reported it back at hard left"); a noPan channel reported > 0 -> forgotten (Cubase pans it after
+all). noPanList / setNoPanList / noPanVersion; the hub keeps it in TrackSettings.noPan (6th field of the saved track
+settings) -> saved with the project. Script v4 (bridge::kLatestScriptVersion): pan only from route 1 (channel host
+value) unless route 1 never reported a pan (hostPanRoute fallback); older scripts get a log hint. Tests: bridge test
+with FakeCubase.echoPanWrites, bridge-sim scenario "no panner" (fails on v3, passes on v4), session_cli "noPan".
+User also asked: "will auto edit ever automatically set the eq, space, etc.?" -> yes: M5 round 3 (next).
+
+## Milestone 5 round 2 status (v0.6.0): TESTED ("everything else seems to work", 2026-10-14)
 User (2026-10-14): "ok I think its ready for the next milestone" (after the round-1 fixes; no round-1 retest report).
 - dsp SpaceFx (framework-free): DelayLine (pow2, linear frac read; read(d) = d samples before the latest), FdnReverb
   (8 lines 31.3-73.9 ms x size, Hadamard, per-line gain 10^(-3 len/RT60), one-pole damping in the loop, LFO

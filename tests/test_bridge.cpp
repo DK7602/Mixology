@@ -471,6 +471,56 @@ TEST_CASE ("Bridge: a channel whose pan Cubase ignores (mono group) is learned a
     CHECK (r.cubase.channels[0].pan == Catch::Approx (0.2).margin (1.0e-6));
 }
 
+TEST_CASE ("Bridge: a pan that seems to land, then reads back at hard left, is a channel Cubase doesn't pan", "[bridge]")
+{
+    // The user's Electric guitars: mono tracks into a mono group. The old script echoes the pan it sent (so the
+    // move looks done), but the next time Cubase reports the channel (a bank change, Auto Mix's walk) it is
+    // hard left ("L100") again.
+    Rig r;
+    r.cubase.echoPanWrites = true;
+    r.cubase.channels[1].pan = 0.0;
+    r.cubase.channels[1].panIgnored = true;
+    r.run (0.2);
+    const auto snare = r.ref ("Snare"), kick = r.ref ("Kick");
+    REQUIRE (r.session.setPan (snare, 0.5, r.now).ok);   // set to the middle in Mixology
+    REQUIRE (r.session.setPan (kick, 0.3, r.now).ok);    // a channel that pans
+    r.run (2.0);
+    CHECK_FALSE (r.session.panIgnored (snare.hash));     // the echo said it landed
+    const auto before = r.session.noPanVersion();
+    r.cubase.dump();                                     // Cubase reports the bank again
+    r.run (0.3);
+    CHECK (r.session.panIgnored (snare.hash));
+    CHECK_FALSE (r.session.panIgnored (kick.hash));      // it really is at L40
+    CHECK (r.session.noPanVersion() != before);
+    bool logged = false;
+    for (const auto& line : r.session.logLines()) logged = logged || line.text.find ("reported it back at hard left") != std::string::npos;
+    CHECK (logged);
+    CHECK_FALSE (r.session.setPan (snare, 0.5, r.now).ok);   // never touched again
+    REQUIRE (r.session.noPanList().size() == 1);
+    CHECK (r.session.noPanList()[0] == snare.hash);
+
+    // A pan written AT hard left that stays there is just a hard-left pan.
+    REQUIRE (r.session.setPan (kick, 0.0, r.now).ok);
+    r.run (2.0);
+    r.cubase.dump();
+    r.run (0.3);
+    CHECK_FALSE (r.session.panIgnored (kick.hash));
+
+    // The routing gets fixed in Cubase and the user pans it there: Mixology pans it again.
+    r.cubase.channels[1].panIgnored = false;
+    r.cubase.userMovesPan (1, 0.6);
+    r.run (0.2);
+    CHECK_FALSE (r.session.panIgnored (snare.hash));
+    CHECK (r.session.setPan (snare, 0.5, r.now).ok);
+
+    // The list comes back with the project.
+    Rig again;
+    again.run (0.2);
+    again.session.setNoPanList ({ again.ref ("Guitar").hash, 0u });
+    CHECK (again.session.panIgnored (again.ref ("Guitar").hash));
+    CHECK (again.session.noPanList().size() == 1);
+}
+
 TEST_CASE ("Bridge: Restore all brings back every changed channel in view", "[bridge]")
 {
     Rig r;

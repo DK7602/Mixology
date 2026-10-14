@@ -68,7 +68,8 @@ namespace
               << ",\"read\":" << (sl.automationRead ? "true" : "false")
               << ",\"write\":" << (sl.automationWrite ? "true" : "false") << ",\"id\":" << sl.channelId
               << ",\"protected\":" << (s.isProtected (sl.hash) && sl.present ? "true" : "false")
-              << ",\"duplicate\":" << (s.nameIsDuplicated (i) ? "true" : "false") << "}";
+              << ",\"duplicate\":" << (s.nameIsDuplicated (i) ? "true" : "false")
+              << ",\"noPan\":" << (sl.present && s.panIgnored (sl.hash) ? "true" : "false") << "}";
         }
         j << "],\"log\":[";
         bool first = true;

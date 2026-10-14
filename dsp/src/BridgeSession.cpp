@@ -77,6 +77,7 @@ namespace mixology
     {
         if (slot < 0 || slot >= slotCount()) return;
         const auto& s = slots[static_cast<std::size_t> (slot)];
+        if (s.present) panWrites[s.hash] = { to, now };
         if (! s.present || ! s.hasPan || std::abs (s.pan - to) < 0.01) return;
         panWatches.erase (std::remove_if (panWatches.begin(), panWatches.end(), [slot] (const PanWatch& w) { return w.slot == slot; }), panWatches.end());
         panWatches.push_back ({ slot, s.hash, s.pan, to, now });
@@ -90,14 +91,53 @@ namespace mixology
             const auto& s = slots[static_cast<std::size_t> (w.slot)];
             if (! s.present || s.hash != w.hash || std::abs (s.pan - w.to) < 0.01) { it = panWatches.erase (it); continue; }   // gone, or it landed
             if (now - w.sentAt < kPanLandSeconds) { ++it; continue; }
-            if (std::abs (s.pan - w.from) < 0.003 && noPan.insert (w.hash).second)
-            {
-                addLog (now, quoted (s.title) + ": Cubase didn't follow the pan move (it stays at " + s.panText
-                                 + "). Its output is probably mono (e.g. a mono group), so it plays in the middle. Mixology leaves its pan alone.");
-                changed();
-            }
+            if (std::abs (s.pan - w.from) < 0.003) markNoPan (s, "Cubase didn't follow the pan move (it stays at " + s.panText + ")", now);
             it = panWatches.erase (it);
         }
+    }
+
+    void BridgeSession::markNoPan (const BridgeSlot& s, const std::string& why, double now)
+    {
+        if (! noPan.insert (s.hash).second) return;
+        ++noPanChanges;
+        panWrites.erase (s.hash);
+        addLog (now, quoted (s.title) + ": " + why + ". Its output is probably mono (e.g. a mono group), so it plays in the middle. "
+                         "Mixology shows \"No pan\" and leaves its pan alone.");
+        changed();
+    }
+
+    void BridgeSession::notePanReport (int slotIndex, double now)
+    {
+        const auto& s = slots[static_cast<std::size_t> (slotIndex)];
+        if (! s.present || s.hash == 0) return;
+        if (noPan.count (s.hash) != 0)
+        {
+            // Mixology never moves these, so a pan away from hard left came from Cubase: it pans after all.
+            if (s.pan > kHardLeft)
+            {
+                noPan.erase (s.hash);
+                ++noPanChanges;
+                addLog (now, quoted (s.title) + ": Cubase now reports a real pan (" + s.panText + "), so Mixology pans it again.");
+            }
+            return;
+        }
+        auto it = panWrites.find (s.hash);
+        if (it == panWrites.end()) return;
+        const double since = now - it->second.at;
+        if (s.pan <= kHardLeft && it->second.value > 0.005 && since >= kPanLandSeconds)
+            markNoPan (s, "Cubase took Mixology's pan move, then reported it back at hard left (" + s.panText + ")", now);
+        else if (std::abs (s.pan - it->second.value) > 0.01 && since >= kPanLandSeconds)
+            panWrites.erase (it);   // moved somewhere else in Cubase: a real panner
+    }
+
+    void BridgeSession::setNoPanList (const std::vector<std::uint32_t>& list)
+    {
+        std::set<std::uint32_t> next (list.begin(), list.end());
+        next.erase (0u);
+        if (next == noPan) return;
+        noPan = std::move (next);
+        ++noPanChanges;
+        changed();
     }
 
     void BridgeSession::tick (double now)
@@ -261,6 +301,7 @@ namespace mixology
                         it->second.pan = s.pan;
                         it->second.panText = s.panText;
                     }
+                notePanReport (m.slot, now);
                 changed();
                 return;
             }
@@ -352,6 +393,9 @@ namespace mixology
         addLog (now, std::string (wasConnected ? "Cubase script restarted" : "Connected to Cubase")
                          + " (Mixology Bridge script v" + std::to_string (scriptVer) + ", "
                          + std::to_string (slotCount()) + " channels per bank).");
+        if (scriptVer < bridge::kLatestScriptVersion)
+            addLog (now, "A newer Cubase script (v" + std::to_string (bridge::kLatestScriptVersion) + ") came with this Mixology: copy the "
+                         "'Mixology' folder from the download's 'Cubase MIDI Remote' folder again (manual, Cubase bridge step 2).");
         requestDump (now);
         changed();
     }
@@ -793,6 +837,7 @@ namespace mixology
                 auto m = writeMessage (Cmd::setPan, ref.slot);
                 m.value = p.pan;
                 send (m);
+                watchPan (ref.slot, m.value, now);
             }
         }
         for (auto [cmd, want, have] : { std::tuple { Cmd::setMute, p.mute, s.mute },

@@ -131,6 +131,8 @@ private:
     };
     LastApply lastApply;
     std::uint64_t applyVersion = 0, seenPlanSerial = 0;
+    std::uint64_t seenNoPanVersion = 0;   // the bridge's No pan list, as last saved in trackSettings
+    void syncNoPan();
     bool hearingReference = false;
 
     double vocalOffset = 0.0;          // your vocal setting (dB on top of the style's target)
