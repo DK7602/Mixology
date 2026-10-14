@@ -332,6 +332,18 @@ void MixWebEditor::timerCallback()
         mo->setProperty ("warmth", roundTo (v[tbWarmth], 0.1f));
         mo->setProperty ("air", roundTo (v[tbAir], 0.1f));
         mo->setProperty ("glueGr", roundTo (pm.glue, 0.1f));
+        mo->setProperty ("limOn", isOn (v, Module::limit));
+        if (const auto g = hub.masterology())   // M6: Masterology after Mixology, and what it aims for
+        {
+            auto* go = new juce::DynamicObject();
+            go->setProperty ("goal", juce::String::fromUTF8 (g->goalName.c_str()));
+            go->setProperty ("genre", juce::String::fromUTF8 (g->genreName.c_str()));
+            go->setProperty ("target", roundTo (g->targetLufs, 0.1f));
+            go->setProperty ("ceiling", roundTo (g->ceilingDbtp, 0.1f));
+            go->setProperty ("inLufs", roundTo (g->inputLufs, 0.1f));
+            go->setProperty ("inPeak", roundTo (g->inputPeakDbtp, 0.1f));
+            mo->setProperty ("masterology", juce::var (go));
+        }
         frame->setProperty ("master", juce::var (mo));
     }
 

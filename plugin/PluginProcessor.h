@@ -93,7 +93,12 @@ public:
     std::atomic<bool> monoListen { false };
 
 private:
-    void timerCallback() override;   // the Limiter's latency, Space's engine and tail
+    void timerCallback() override;   // the Limiter's latency, Space's engine and tail, the hand-off to Masterology
+    /** M6: what Masterology should know about this mix (the style, peaks, loudness, tone), a few times a second. */
+    void publishHandoff();
+    int handoffCountdown = 0;
+    juce::String styleFrom;            // the UI state the style below was read from
+    std::string styleKey, styleName;
 
     template <typename Sample>
     void process (juce::AudioBuffer<Sample>&);

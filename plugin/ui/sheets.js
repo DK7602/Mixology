@@ -312,7 +312,7 @@ export function openTracksSheet(app) {
       name.textContent = t.name;
       name.title = t.name + (t.faderKnown ? "" : " (its fader wasn't read: counted at 0 dB)");
       const roleBtn = el("button", "small-btn", table, { textAlign: "left", padding: "0 12px" });
-      roleBtn.textContent = R.label + (t.roleFrom === "you" ? "" : t.roleFrom === "name" ? "  (name)" : "  (sound)");
+      roleBtn.textContent = R.label + (t.roleFrom === "you" ? "" : t.roleFrom === "voxology" ? "  (Voxology)" : t.roleFrom === "name" ? "  (name)" : "  (sound)");
       roleBtn.addEventListener("click", () => {
         const items = ROLE_ORDER.map((k) => ({ label: ROLES[k].label, value: k, icon: ROLES[k].icon, colour: ROLES[k].colour, sel: k === t.role }));
         items.push({ divider: true }, { label: "Automatic", value: "", icon: "wand" });

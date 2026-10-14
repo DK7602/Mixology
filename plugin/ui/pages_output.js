@@ -376,7 +376,7 @@ export function buildMaster(root, app) {
   const right = el("div", "panel", root, box(1070, 0, 342, 842));
   const rt = el("div", "panel-title gold", right);
   rt.textContent = "HAND-OFF";
-  const rsub = el("div", "", right, { position: "absolute", left: "22px", right: "22px", top: "56px", fontSize: "17px", color: "var(--text-dim)" });
+  const rsub = el("div", "", right, { position: "absolute", left: "22px", right: "22px", top: "56px", fontSize: "17px", color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });
   rsub.textContent = "Is the mix ready for Masterology?";
   const readouts = el("div", "", right, { position: "absolute", left: "22px", right: "22px", top: "96px", display: "grid", gridTemplateColumns: "1fr auto", rowGap: "10px", fontSize: "20px" });
   const rows = {};
@@ -413,11 +413,20 @@ export function buildMaster(root, app) {
       rows.tp.textContent = (f.truePeak ?? -100) <= -99 ? "−∞" : fmt.num(f.truePeak, 1) + " dBTP";
       mL.set(f.peakL ?? -100); mR.set(f.peakR ?? -100);
       const tp = f.truePeak ?? -100, silent = (f.shortTerm ?? -100) <= -70;
+      // M6: Masterology after Mixology tells what it aims for (the suite link).
+      const g = f.master && f.master.masterology;
+      if (f.master) {
+        rsub.textContent = g ? `Masterology: ${fmt.num(g.target, 0)} LUFS · ${fmt.num(g.ceiling, 1)} dBTP` : "Is the mix ready for Masterology?";
+        rsub.title = g ? `Masterology aims for ${fmt.num(g.target, 0)} LUFS with peaks up to ${fmt.num(g.ceiling, 1)} dBTP` + (g.goal || g.genre ? ` (${[g.goal, g.genre].filter(Boolean).join(", ")})` : "") : "";
+      }
       const items = [
         [silent ? null : tp <= -3, tp <= -3 ? "Peaks leave 3 dB+ for Masterology" : "Peaks are above −3 dBTP: pull the mix down"],
-        [true, "No limiter on the mix bus (Masterology does that)"],
+        f.master && f.master.limOn ? [false, "Mixology's Limiter is on the mix: switch it off and let Masterology limit"] : [true, "No limiter on the mix bus (Masterology does that)"],
         [silent ? null : (f.shortTerm ?? -100) < -8, (f.shortTerm ?? -100) < -8 ? "Mix isn't squashed (short-term under −8 LUFS)" : "Mix is already very loud: ease off bus processing"],
       ];
+      if (f.master) items.push(g
+        ? [true, `Masterology is on${g.goal ? " (" + g.goal + ")" : ""}: it gets this mix's style and tone`]
+        : [null, "Open Masterology after Mixology on the Stereo Out: it picks up this mix's style and tone"]);
       checks.innerHTML = items.map(([ok, text]) => `<div style="display:flex;gap:10px;align-items:flex-start"><span style="width:22px;height:22px;flex:none;color:${ok === null ? "var(--text-faint)" : ok ? "var(--green)" : "var(--amber)"}">${icon(ok === false ? "headroom" : "check", 'stroke-width="2.4"')}</span><span>${text}</span></div>`).join("");
     },
   };

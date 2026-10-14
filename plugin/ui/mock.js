@@ -22,10 +22,15 @@
     apply: { active: false, what: "", done: 0, total: 0, skipped: 0, message: "", notes: [], serial: 0, canUndo: false, undoWhat: "", hearingReference: false },
     planId: 0, plan: null, undo: null };
   const ROLE_OF = { Kick: "kick", Snare: "snare", Hats: "hats", Perc: "perc", "808": "bass", Keys: "keys", Synth: "synth", Guitar: "guitar", "Lead Vox": "vox", FX: "fx", Adlibs: "adlibs", "Vox Double": "adlibs", Pad: "synth", Riser: "fx" };
+  // Voxology on the vocals (M6, the suite link), as the hub reports it.
+  const VOXOLOGY = {
+    "Lead Vox": { beat: false, on: true, style: "Trap lead", comp: true, compDb: 4.2, deEsser: true, reverb: true, delay: false, eq: true, pitch: true, doubler: false, version: "0.47.0" },
+    Adlibs: { beat: false, on: true, style: "Ad-libs", comp: true, compDb: 3.1, deEsser: true, reverb: false, delay: true, eq: true, pitch: true, doubler: false, version: "0.47.0" },
+  };
   const roleOf = (c) => (B.settings[c.hash] && B.settings[c.hash].role) || ROLE_OF[c.name] || "other";
   function fakeReport() {
     const linked = chans.filter((c) => c.link);
-    const tracks = linked.map((c, i) => ({ hash: c.hash, name: c.name, role: roleOf(c), roleFrom: B.settings[c.hash] && B.settings[c.hash].role ? "you" : i % 4 === 3 ? "sound" : "name",
+    const tracks = linked.map((c, i) => ({ hash: c.hash, name: c.name, role: roleOf(c), roleFrom: B.settings[c.hash] && B.settings[c.hash].role ? "you" : VOXOLOGY[c.name] ? "voxology" : i % 4 === 3 ? "sound" : "name",
       excluded: !!(B.settings[c.hash] && B.settings[c.hash].excluded), faderKnown: true, activity: 0.8, loudness: +(lawDb(c.volume) - 12 + (i % 3)).toFixed(1), peak: +(lawDb(c.volume) - 3 + (i === 0 ? 4 : 0)).toFixed(1), width: c.name === "Keys" ? 0.31 : 0.04 }));
     const sg = (id, kind, icon, title, text, need, steps, tracks) => ({ id, kind, icon, title, text, need, steps, tracks });
     const refHash = Object.keys(B.settings).find((h) => B.settings[h].reference);
@@ -75,7 +80,7 @@
       const set = B.settings[c.hash] || {};
       return { role: roleOf(c), roleSet: !!set.role, excluded: !!set.excluded, musicBus: !!set.musicBus, present: true, title: c.name, hash: c.hash, hasVolume: true, volume: c.volume, volumeText: text(c.volume), volumeDb: lawDb(c.volume), hasPan: true, pan: c.pan, panText: panText(c.pan),
         mute: c.mute, solo: c.solo, read: c.read, write: c.write, colour: c.colour, protected: c.protected, duplicate: false, changed: isChanged(c),
-        linkStatus: c.link ? "matched" : "none", trim: c.trim, linkAudio: true, stereoPanner: c.name === "Keys" };
+        linkStatus: c.link ? "matched" : "none", trim: c.trim, linkAudio: true, stereoPanner: c.name === "Keys", voxology: VOXOLOGY[c.name] };
     });
     return {
       enabled: true, link: "connected", portProblem: "", script: 3, toCubase: "Mixology to Cubase", fromCubase: "Cubase to Mixology", slots,
@@ -400,7 +405,8 @@
     if (page === "master" && P.spec) {
       const v = P.values.mix, ix = P.spec.PROC_INDEX, on = (id) => v[ix.chain_on] > 0.5 && v[ix[id]] > 0.5;
       frame.master = { finOn: on("fin_on"), glue: v[ix.fin_glue], width: v[ix.fin_width], out: v[ix.fin_out], tbOn: on("tb_on"),
-        warmth: v[ix.tb_warmth], air: v[ix.tb_air], glueGr: on("fin_on") ? +(v[ix.fin_glue] / 40 * (0.5 + beat)).toFixed(1) : 0 };
+        warmth: v[ix.tb_warmth], air: v[ix.tb_air], glueGr: on("fin_on") ? +(v[ix.fin_glue] / 40 * (0.5 + beat)).toFixed(1) : 0,
+        limOn: on("lim_on"), masterology: { goal: "Spotify / Apple Music", genre: "Hip-Hop / Trap", target: -14, ceiling: -1, inLufs: -15.2, inPeak: -5.9 } };
     }
     if (page === "overview" && P.spec) {
       const v = P.values.mix, ix = P.spec.PROC_INDEX;

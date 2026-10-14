@@ -134,6 +134,7 @@ function setStyle(key) {
   name.style.fontSize = "";
   for (const size of [20, 18, 16]) if (name.scrollWidth > name.clientWidth) name.style.fontSize = size + "px";
   store.set("preset", app.style.key);
+  store.set("presetName", app.style.fullName);   // the plug-in hands the style to Masterology (M6)
   app.emit("preset", app.style);
 }
 function stepStyle(delta) {

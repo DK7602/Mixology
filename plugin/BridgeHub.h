@@ -7,6 +7,7 @@
 #include "mixology/LinkRegistry.h"
 #include "mixology/MixAnalysis.h"
 #include "mixology/MixPlanner.h"
+#include "suite/SuiteLink.h"
 
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_events/juce_events.h>
@@ -51,10 +52,18 @@ public:
     };
     void setMixProcessing (const void* owner, MixProcessing);
     void clearMixProcessing (const void* owner);
+    bool isMixOwner (const void* owner) const { return owner != nullptr && owner == mixOwner; }
+
+    // ---- M6: the suite link (Voxology on the vocals, Masterology after Mixology) ---------------------------
+    /** What Analyze Mix knows for Masterology (the style it analysed against, its tone against it, a mono mix);
+        the plug-in adds its meters and publishes it. False before Analyze Mix (or after the style changed). */
+    bool handoffTone (const std::string& styleKey, suite::MixInfo&) const;
+    /** The Masterology after Mixology, if one is open in this project (message thread). */
+    std::optional<suite::MasterInfo> masterology() const;
 
     /** Everything the Tracks page and Settings > Cubase Bridge show. */
     juce::var getState (bool includeLog);
-    std::uint64_t stateVersion() const { return bridge.stateVersion() + linkVersion + analysisVersion + applyVersion; }
+    std::uint64_t stateVersion() const { return bridge.stateVersion() + linkVersion + analysisVersion + applyVersion + suiteVersion; }
 
     /** Per strip: [peak L, peak R] dBFS from its paired Mixology Link, or null. */
     juce::var trackMeters() const;
@@ -110,6 +119,7 @@ private:
     // ---- Milestone 4: plans you approve, then apply (faders and pans through the bridge, EQ through the Links)
     std::vector<mixology::mix::ChannelNow> channelsNow() const;
     void fillProc (mixology::mix::ChannelNow&, const mixology::link::LinkInfo&) const;
+    void fillVoxology (mixology::mix::ChannelNow&) const;
     juce::var planToVar (const mixology::mix::Plan&) const;
     juce::var applyState() const;
     mixology::BridgeSession::Result applyCurrentPlan (const juce::var& picked, bool allowBig, bool headroom, std::string& info);
@@ -171,6 +181,22 @@ private:
     void cachePrefs();
     bool audibleNow (std::uint32_t hash) const;   // muted or soloed-out channels: their Link still hears them
     std::optional<mixology::mix::Role> roleFor (std::uint32_t hash, const std::string& name) const;
+
+    // M6: what the suite link says (Voxology on a track: a vocal, or ad-libs; what it does there).
+    struct SuiteVocal
+    {
+        suite::VocalInfo info;   // flags of every Voxology on the channel together
+        double lastSeen = 0.0;
+    };
+    std::map<std::uint32_t, SuiteVocal> suiteVocals;
+    std::vector<suite::MasterInfo> suiteMasters;
+    std::string suiteKey, suiteRoleKey;       // what the interface shows / what the roles are, as last seen
+    std::uint64_t suiteVersion = 0;
+    double lastSuiteUpdate = 0.0;
+    void updateSuite (double t);
+    const suite::VocalInfo* voxologyOn (std::uint32_t hash) const;   // a Voxology in Vocal mode on it
+    std::optional<mixology::mix::Role> voxRole (std::uint32_t hash, const std::string& name) const;
+    std::map<std::uint32_t, mixology::mix::TrackSettings> settingsForAnalysis() const;
 
     enum class Analyze { idle, reading, listening, done };
     Analyze analyzeState = Analyze::idle;

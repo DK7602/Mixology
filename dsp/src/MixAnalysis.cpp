@@ -152,6 +152,23 @@ namespace mixology::mix
 
     double vocalTargetFor (const std::string& styleKey) { return vocalTarget (styleKey); }
 
+    ToneAgainstStyle toneAgainstStyle (const Report& r)
+    {
+        ToneAgainstStyle t;
+        if (! r.valid || r.mixBands.size() < static_cast<std::size_t> (kBands) || r.targetBands.size() != r.mixBands.size()) return t;
+        auto off = [&r] (int from, int to) {
+            double d = 0.0;
+            for (int b = from; b <= to; ++b) d += r.mixBands[static_cast<std::size_t> (b)] - r.targetBands[static_cast<std::size_t> (b)];
+            return d / (to - from + 1);
+        };
+        t.valid = true;
+        t.low = off (3, 8);
+        t.lowMid = off (10, 14);
+        t.presence = off (21, 23);
+        t.air = off (26, 29);
+        return t;
+    }
+
     bool viaMusicBus (Role r) { return r != Role::vox && r != Role::adlibs && r != Role::fx; }
 
     const char* roleKey (Role r)
@@ -329,6 +346,7 @@ namespace mixology::mix
             t.reference = it != settings.end() && it->second.reference;
             t.excluded = (it != settings.end() && (it->second.excluded || it->second.musicBus)) || t.reference;
             if (it != settings.end() && it->second.role) { t.role = *it->second.role; t.roleFrom = "you"; }
+            else if (it != settings.end() && it->second.fromVoxology) { t.role = *it->second.fromVoxology; t.roleFrom = "voxology"; }
             else if (auto byName = roleFromName (t.name)) { t.role = *byName; t.roleFrom = "name"; }
             else { t.role = roleFromSound (t); t.roleFrom = "sound"; }
 

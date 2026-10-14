@@ -221,6 +221,11 @@ void BridgeHub::timerCallback()
         lastLinkUpdate = t;
         updateLinks();
     }
+    if (t - lastSuiteUpdate >= 0.25)
+    {
+        lastSuiteUpdate = t;
+        updateSuite (t);
+    }
 
     for (const auto& m : bridge.takeOutgoing())
         if (toCubase != nullptr)
@@ -431,6 +436,7 @@ void BridgeHub::cacheTrackSettings()
 std::optional<mixology::mix::Role> BridgeHub::roleFor (std::uint32_t hash, const std::string& name) const
 {
     if (auto it = trackSettings.find (hash); it != trackSettings.end() && it->second.role) return it->second.role;
+    if (auto vox = voxRole (hash, name)) return vox;
     for (const auto& t : report.tracks)
         if (t.hash == hash) return t.role;
     return mixology::mix::roleFromName (name);
@@ -530,7 +536,119 @@ void BridgeHub::reevaluate()
         const auto ts = trackSettings.find (mixology::bridge::nameHash (n));
         if (ts == trackSettings.end() || (! ts->second.musicBus && ! ts->second.excluded)) unheard.push_back (n);
     }
-    report = analysis.evaluate (trackSettings, unheard);
+    report = analysis.evaluate (settingsForAnalysis(), unheard);
+}
+
+// ---------------------------------------------------------------------------------------------
+// M6: the suite link. Every Voxology publishes the track it sits on and what it does there; every Masterology
+// its goal. Mixology reads both a few times a second (and publishes its hand-off from the plug-in, see
+// MixologyAudioProcessor::publishHandoff).
+
+namespace
+{
+    const char* voxStyleName (suite::VocalInfo::Style s)
+    {
+        switch (s)
+        {
+            case suite::VocalInfo::Style::trapLead: return "Trap lead";
+            case suite::VocalInfo::Style::rap: return "Rap";
+            case suite::VocalInfo::Style::melodic: return "Melodic";
+            case suite::VocalInfo::Style::adlibs: return "Ad-libs";
+            case suite::VocalInfo::Style::rnb: return "R&B";
+            case suite::VocalInfo::Style::unknown: break;
+        }
+        return "";
+    }
+}
+
+void BridgeHub::updateSuite (double t)
+{
+    auto& link = suite::Link::process();
+    const auto ms = suite::nowMs();
+    std::map<std::uint32_t, suite::VocalInfo> merged;   // two Voxologys on one channel: what both do
+    for (const auto& v : link.vocals (ms))
+    {
+        if (v.nameHash == 0) continue;
+        auto [it, fresh] = merged.try_emplace (v.nameHash, v);
+        if (fresh) continue;
+        auto& m = it->second;
+        m.flags |= v.flags;
+        m.compressionDb = std::max (m.compressionDb, v.compressionDb);
+        m.reverbMix = std::max (m.reverbMix, v.reverbMix);
+        m.delayMix = std::max (m.delayMix, v.delayMix);
+        if (m.style == suite::VocalInfo::Style::unknown) m.style = v.style;
+    }
+    for (const auto& [hash, v] : merged) suiteVocals[hash] = { v, t };
+    // One that stops reporting stays a few seconds: a busy message thread holds up every plug-in's heartbeat.
+    for (auto it = suiteVocals.begin(); it != suiteVocals.end();)
+        it = t - it->second.lastSeen > 5.0 ? suiteVocals.erase (it) : std::next (it);
+    suiteMasters = link.masters (ms);
+
+    std::string roles, key;
+    for (const auto& [hash, sv] : suiteVocals)
+    {
+        const auto role = voxRole (hash, sv.info.trackName);
+        roles += std::to_string (hash) + ":" + (role ? mixology::mix::roleKey (*role) : "-") + ";";
+        key += std::to_string (hash) + ":" + std::to_string (sv.info.flags) + ":" + std::to_string (static_cast<int> (sv.info.style)) + ";";
+    }
+    for (const auto& m : suiteMasters)
+        key += "|" + m.goalName + "|" + m.genreName + "|" + std::to_string (std::lround (m.targetLufs * 10.0f)) + "|" + std::to_string (std::lround (m.ceilingDbtp * 10.0f));
+    if (key + roles != suiteKey)
+    {
+        suiteKey = key + roles;
+        ++suiteVersion;
+    }
+    if (roles != suiteRoleKey)
+    {
+        suiteRoleKey = roles;
+        reevaluate();   // a vocal Voxology sits on is a vocal in the advice too
+        ++analysisVersion;
+    }
+}
+
+const suite::VocalInfo* BridgeHub::voxologyOn (std::uint32_t hash) const
+{
+    const auto it = suiteVocals.find (hash);
+    if (it == suiteVocals.end() || (it->second.info.flags & suite::VocalInfo::beat) != 0) return nullptr;
+    return &it->second.info;
+}
+
+std::optional<mixology::mix::Role> BridgeHub::voxRole (std::uint32_t hash, const std::string& name) const
+{
+    using mixology::mix::Role;
+    const auto* v = voxologyOn (hash);
+    if (v == nullptr) return std::nullopt;
+    // Voxology says it is a vocal; its style (or the channel's name) says whether it is the ad-libs.
+    if (v->style == suite::VocalInfo::Style::adlibs || mixology::mix::roleFromName (name) == Role::adlibs) return Role::adlibs;
+    return Role::vox;
+}
+
+std::map<std::uint32_t, mixology::mix::TrackSettings> BridgeHub::settingsForAnalysis() const
+{
+    auto settings = trackSettings;
+    for (const auto& [hash, sv] : suiteVocals)
+        if (auto role = voxRole (hash, sv.info.trackName)) settings[hash].fromVoxology = role;
+    return settings;
+}
+
+bool BridgeHub::handoffTone (const std::string& styleKey, suite::MixInfo& m) const
+{
+    if (! report.valid || report.style.key != styleKey) return false;
+    const auto tone = mixology::mix::toneAgainstStyle (report);
+    if (! tone.valid) return false;
+    m.flags |= suite::MixInfo::analysed;
+    if (report.monoMix) m.flags |= suite::MixInfo::monoMix;
+    m.lowDb = static_cast<float> (tone.low);
+    m.lowMidDb = static_cast<float> (tone.lowMid);
+    m.presenceDb = static_cast<float> (tone.presence);
+    m.airDb = static_cast<float> (tone.air);
+    return true;
+}
+
+std::optional<suite::MasterInfo> BridgeHub::masterology() const
+{
+    if (suiteMasters.empty()) return std::nullopt;
+    return suiteMasters.front();
 }
 
 void BridgeHub::finishAnalysis()
@@ -565,7 +683,7 @@ void BridgeHub::finishAnalysis()
     mixProcAtAnalysisKnown = static_cast<bool> (mixProc.get);
     if (mixProcAtAnalysisKnown) mixProcAtAnalysis = mixProc.get();
     applyMusicBus();
-    report = analysis.evaluate (trackSettings, unheard);
+    report = analysis.evaluate (settingsForAnalysis(), unheard);
     analyzeState = Analyze::done;
     ++analysisVersion;
 }
@@ -771,6 +889,26 @@ juce::var BridgeHub::getState (bool includeLog)
             so->setProperty ("roleSet", ts != trackSettings.end() && ts->second.role.has_value());
             so->setProperty ("excluded", ts != trackSettings.end() && ts->second.excluded);
             so->setProperty ("musicBus", ts != trackSettings.end() && ts->second.musicBus);
+            if (auto sv = suiteVocals.find (s.hash); sv != suiteVocals.end())
+            {
+                // Voxology on this channel: what it does there (Polish leaves those to it).
+                const auto& v = sv->second.info;
+                auto* vo = new juce::DynamicObject();
+                auto has = [&v] (std::uint32_t f) { return (v.flags & f) != 0; };
+                vo->setProperty ("beat", has (suite::VocalInfo::beat));
+                vo->setProperty ("on", has (suite::VocalInfo::processing));
+                vo->setProperty ("style", voxStyleName (v.style));
+                vo->setProperty ("comp", has (suite::VocalInfo::compressor));
+                vo->setProperty ("compDb", std::round (v.compressionDb * 10.0f) / 10.0f);
+                vo->setProperty ("deEsser", has (suite::VocalInfo::deEsser));
+                vo->setProperty ("reverb", has (suite::VocalInfo::reverb));
+                vo->setProperty ("delay", has (suite::VocalInfo::delay));
+                vo->setProperty ("eq", has (suite::VocalInfo::eq));
+                vo->setProperty ("pitch", has (suite::VocalInfo::pitch));
+                vo->setProperty ("doubler", has (suite::VocalInfo::doubler));
+                vo->setProperty ("version", juce::String (v.version >> 16) + "." + juce::String ((v.version >> 8) & 0xFF) + "." + juce::String (v.version & 0xFF));
+                so->setProperty ("voxology", juce::var (vo));
+            }
         }
 
         const auto sl = i < static_cast<int> (stripLinks.size()) ? stripLinks[static_cast<std::size_t> (i)] : StripLink {};
@@ -1103,6 +1241,18 @@ void BridgeHub::clearMixProcessing (const void* owner)
     mixProc = {};
 }
 
+void BridgeHub::fillVoxology (mixology::mix::ChannelNow& c) const
+{
+    const auto* v = voxologyOn (c.hash);
+    if (v == nullptr || (v->flags & suite::VocalInfo::processing) == 0) return;
+    c.voxology.on = true;
+    c.voxology.compressor = (v->flags & suite::VocalInfo::compressor) != 0;
+    c.voxology.reverb = (v->flags & suite::VocalInfo::reverb) != 0;
+    c.voxology.delay = (v->flags & suite::VocalInfo::delay) != 0;
+    c.voxology.eq = (v->flags & suite::VocalInfo::eq) != 0;
+    c.voxology.compressionDb = v->compressionDb;
+}
+
 std::vector<mixology::mix::ChannelNow> BridgeHub::channelsNow() const
 {
     const auto links = mixology::link::processRegistry().links (mixology::link::nowMs());
@@ -1119,6 +1269,7 @@ std::vector<mixology::mix::ChannelNow> BridgeHub::channelsNow() const
         c.pan = (f.pan - 0.5) * 200.0;
         c.locked = bridge.isProtected (hash);
         if (auto ts = trackSettings.find (hash); ts != trackSettings.end()) c.musicBus = ts->second.musicBus;
+        fillVoxology (c);
         if (auto it = fadersAtAnalysis.find (hash); it != fadersAtAnalysis.end())
         {
             c.hasFaderAtAnalysis = true;
@@ -1147,6 +1298,7 @@ std::vector<mixology::mix::ChannelNow> BridgeHub::channelsNow() const
         c.assist = l.assist;
         c.channels = l.channels;
         if (c.hasLink) fillProc (c, l);
+        fillVoxology (c);
         seen.insert (l.nameHash);
         out.push_back (c);
     }

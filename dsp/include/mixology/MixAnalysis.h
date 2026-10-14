@@ -69,6 +69,7 @@ namespace mixology::mix
         bool reference = false;    // your reference song (Reference Match); always left out of the mix advice
         bool musicBus = false;     // a group channel the music plays through (not the vocals), e.g. Voxology's "Beat"
         bool noPan = false;        // Cubase doesn't pan it (mono track into a mono group): learned by the bridge, kept here
+        std::optional<Role> fromVoxology;   // Voxology sits on it (a vocal, or ad-libs): live, never saved
     };
 
     /** Tracks that play through the music group (when you marked one): everything but vocals, ad-libs and effects. */
@@ -168,6 +169,18 @@ namespace mixology::mix
 
     /** Where the style wants the lead vocal against the rest of the mix (dB). */
     double vocalTargetFor (const std::string& styleKey);
+
+    /** The mix's tone against the style's target, by region (dB, + = more than the style): what Polish's Tone
+        Balance works from, and what Mixology hands to Masterology. */
+    struct ToneAgainstStyle
+    {
+        bool valid = false;
+        double low = 0.0;       // 50 - 160 Hz
+        double lowMid = 0.0;    // 200 - 500 Hz
+        double presence = 0.0;  // 2.5 - 5 kHz
+        double air = 0.0;       // 8 - 16 kHz
+    };
+    ToneAgainstStyle toneAgainstStyle (const Report&);
 
     // ---------------------------------------------------------------------------------------------
 

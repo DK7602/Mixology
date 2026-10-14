@@ -11,6 +11,7 @@
 
 #include "mixology/BridgeProtocol.h"
 #include "mixology/LinkRegistry.h"
+#include "suite/SuiteLink.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -465,6 +466,15 @@ int main (int argc, char** argv)
         mix->setStateInformation (state.getData(), static_cast<int> (state.getSize()));
         auto* tb = findParameter (*mix, "Tone Balance");
         check (tb != nullptr && tb->getValue() > 0.5f, "Full Mix settings come back with the project");
+
+        // M6: the hand-off to Masterology reaches another library (this program) through the suite's shared memory.
+        measure (1000.0, 1.0f);
+        pump (800);   // Mixology publishes a few times a second
+        suite::MixInfo handoff;
+        const bool seen = suite::Link::process().readMix (handoff, suite::nowMs());
+        check (seen && suite::Link::processShared(), "Mixology's hand-off reaches another plug-in (suite link)");
+        check (seen && handoff.integratedLufs > -40.0f && handoff.peakDbtp > -40.0f && handoff.version != 0,
+               "... with the mix's loudness and peaks (" + juce::String (handoff.integratedLufs, 1) + " LUFS, " + juce::String (handoff.peakDbtp, 1) + " dBTP)");
         mix->releaseResources();
     }
 

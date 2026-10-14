@@ -373,6 +373,9 @@ export function buildTracks(root, app) {
     const badge = el("div", "", s, { position: "absolute", left: "5px", top: "46px", width: "20px", height: "20px", borderRadius: "5px", fontSize: "14px", fontWeight: "700", textAlign: "center", lineHeight: "20px", display: "none" });
     const linkDot = el("div", "", s, { position: "absolute", left: "4px", top: "72px", width: "22px", height: "22px", display: "none" });
     const ic = el("div", "", s, { position: "absolute", left: "26px", top: "46px", width: "48px", height: "48px" });
+    // M6: Voxology on this channel (the suite link): a small gold tag under the role icon.
+    const vox = el("div", "", s, { position: "absolute", left: "29px", width: "42px", top: "91px", height: "14px", borderRadius: "4px", fontSize: "11px", fontWeight: "700",
+      letterSpacing: "0.6px", lineHeight: "14px", textAlign: "center", background: "var(--gold)", color: "#1a1300", display: "none", cursor: "default" });
     const sBtn = el("button", "small-btn", s, { position: "absolute", left: "8px", top: "106px", width: "40px", padding: "0", fontSize: "20px" });
     sBtn.textContent = "S";
     const mBtn = el("button", "small-btn", s, { position: "absolute", left: "52px", top: "106px", width: "40px", padding: "0", fontSize: "20px" });
@@ -395,7 +398,7 @@ export function buildTracks(root, app) {
     val.title = "Click to type an exact level";
     const pan = new Knob(s, { x: 0, y: 640, w: 100, size: 66, min: -100, max: 100, def: 0, bipolar: true, step: 1, format: (v) => fmt.pan(v), valueGap: 2 });
 
-    const strip = { s, colourBar, name, lock, undo, badge, linkDot, ic, sBtn, mBtn, zone, cap, val, pan, mL, mR, scale, index: i, data: null };
+    const strip = { s, colourBar, name, lock, undo, badge, linkDot, ic, vox, sBtn, mBtn, zone, cap, val, pan, mL, mR, scale, index: i, data: null };
     strips.push(strip);
 
     // The channel this strip shows right now; commands carry it so a moved bank can't redirect them.
@@ -539,6 +542,24 @@ export function buildTracks(root, app) {
   coverBtn.textContent = "Open the Cubase Bridge setup";
   coverBtn.addEventListener("click", () => app.openSettings("bridge"));
 
+  // What Voxology does on a channel, in words (the tag's tooltip).
+  function voxTip(v) {
+    if (v.beat) return "Voxology in Beat mode: it listens to this track for the song's key. Nothing changes here.";
+    if (!v.on) return "Voxology is on this vocal, bypassed right now.";
+    const does = [];
+    if (v.comp) does.push(v.compDb >= 0.5 ? `compresses (about ${Math.round(v.compDb)} dB)` : "compresses");
+    if (v.deEsser) does.push("de-esses");
+    if (v.eq) does.push("shapes the tone");
+    if (v.pitch) does.push("tunes");
+    if (v.doubler) does.push("doubles");
+    if (v.reverb) does.push("adds its reverb");
+    if (v.delay) does.push("adds its delay");
+    const list = does.length > 1 ? does.slice(0, -1).join(", ") + " and " + does[does.length - 1] : does[0] || "processes it";
+    const left = [v.comp && "compressor", v.reverb && "reverb", v.delay && "delay"].filter(Boolean);
+    return `Voxology is on this vocal${v.style ? " (" + v.style + ")" : ""}: it ${list}.`
+      + (left.length ? ` Auto Mix adds no second ${left.join(" or ")}.` : "");
+  }
+
   const LINK_TIPS = {
     matched: "Mixology Link is on this track: the meters show its level after the fader",
     ambiguous: "Mixology Link found, but another track has the same name: rename one so Mixology can pair it",
@@ -590,8 +611,15 @@ export function buildTracks(root, app) {
       st.ic.style.color = icColour;
       st.ic.style.filter = present && d.excluded ? "grayscale(1)" : `drop-shadow(0 0 6px ${icColour})`;
       st.ic.style.opacity = present && d.excluded ? "0.4" : "1";
+      const vx = present && d.voxology ? d.voxology : null;
       st.ic.title = !present ? "" : bus ? "Music group: the instruments play through it (Mixology moves the music on this fader). Click to change"
-        : `${R.label}${d.roleSet ? " (set by you)" : ""}${d.excluded ? ". Left out of Analyze Mix" : ""}. Click to change`;
+        : `${R.label}${d.roleSet ? " (set by you)" : vx && !vx.beat ? " (Voxology is on it)" : ""}${d.excluded ? ". Left out of Analyze Mix" : ""}. Click to change`;
+      st.vox.style.display = vx ? "block" : "none";
+      if (vx) {
+        st.vox.textContent = vx.beat ? "BEAT" : "VOX";
+        st.vox.style.opacity = vx.beat || vx.on ? "1" : "0.5";
+        st.vox.title = voxTip(vx);
+      }
 
       // Padlock: closed = protected (Mixology never moves it).
       const prot = present && d.protected;

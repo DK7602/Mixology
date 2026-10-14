@@ -56,6 +56,16 @@ namespace mixology::mix
         bool procAtAnalysisKnown = false;
         proc::Values procAtAnalysis {};
         std::vector<std::uint32_t> duck;   // the tracks its Space ducks under now
+
+        /** Voxology on this channel (M6, the suite link): what it already does to the vocal, so Polish doesn't
+            add a second compressor, reverb or delay. */
+        struct Voxology
+        {
+            bool on = false;           // a Voxology (Vocal mode) sits on it, processing
+            bool compressor = false, reverb = false, delay = false, eq = false;
+            double compressionDb = 0.0;
+        };
+        Voxology voxology;
     };
 
     /** Mixology's own Full Mix processing (for the mix's tone against the style). */

@@ -221,7 +221,7 @@ TEST_CASE ("Polish: the lead vocal's reverb on an FX channel (ducking under it),
     REQUIRE (fx->duck.size() == 1);
     CHECK (fx->duck[0] == bridge::nameHash ("Lead Vox"));
     CHECK (noted (p, "Send 'Lead Vox' to 'FX 1-Vox Verb'"));
-    CHECK (noted (p, "If Voxology"));
+    CHECK (noted (p, "If another plug-in"));   // nothing tells Mixology what else is on the vocal
     CHECK (change (p, "Lead Vox", "space") == nullptr);
     const auto* ad = change (p, "Adlibs", "space");
     REQUIRE (ad != nullptr);
@@ -390,4 +390,60 @@ TEST_CASE ("Polish: the FX channel reverb's level sits under the vocal", "[polis
     const auto p4 = makePlan (Tool::polish, report ({ lead, fine }), busy);
     CHECK (change (p4, "FX 1-Vox Verb", "space") == nullptr);
     CHECK (noted (p4, "at a good level"));
+}
+
+TEST_CASE ("Polish: Voxology on a vocal: no second compressor, reverb or delay", "[polish][suite]")
+{
+    auto lead = track ("Lead Vox", Role::vox, vocalBands (-14.0, 5.0, 2.0));
+    lead.levelRange = 11.0;
+    lead.loudPeak = -4.0;
+    auto adlibs = track ("Adlibs", Role::adlibs, vocalBands (-20.0, 5.0, 2.0));
+    adlibs.levelRange = 10.0;
+    adlibs.loudPeak = -8.0;
+    auto chans = std::vector<ChannelNow> { link ("Lead Vox"), link ("Adlibs"), link ("FX 1-Vox Verb", 2) };
+
+    // Voxology compresses the lead and adds its reverb; on the ad-libs it adds its delay.
+    chans[0].voxology.on = chans[0].voxology.compressor = chans[0].voxology.reverb = true;
+    chans[0].voxology.compressionDb = 4.4;
+    chans[1].voxology.on = chans[1].voxology.delay = true;
+    const auto p = makePlan (Tool::polish, report ({ lead, adlibs }), chans);
+    CHECK (change (p, "Lead Vox", "comp") == nullptr);
+    CHECK (noted (p, "'Lead Vox': Voxology compresses it already (about 4 dB lately)"));
+    CHECK (change (p, "FX 1-Vox Verb", "space") == nullptr);
+    CHECK (change (p, "Lead Vox", "space") == nullptr);
+    CHECK (noted (p, "has Voxology's reverb"));
+    CHECK_FALSE (noted (p, "If another plug-in"));
+    CHECK (change (p, "Adlibs", "space") == nullptr);
+    CHECK (noted (p, "'Adlibs' has Voxology's delay"));
+    CHECK (change (p, "Adlibs", "comp") != nullptr);   // Voxology doesn't compress the ad-libs here: Mixology may
+
+    // Voxology's reverb and an FX channel reverb as well: a warning, nothing proposed.
+    chans[2].proc[proc::spOn] = 1.0f;
+    const auto both = makePlan (Tool::polish, report ({ lead, adlibs }), chans);
+    CHECK (noted (both, "gets reverb from Voxology and from the FX channel"));
+
+    // Voxology bypassed (or gone): Mixology proposes as usual.
+    chans[2].proc[proc::spOn] = 0.0f;
+    chans[0].voxology = {};
+    chans[1].voxology = {};
+    const auto off = makePlan (Tool::polish, report ({ lead, adlibs }), chans);
+    CHECK (change (off, "Lead Vox", "comp") != nullptr);
+    CHECK (change (off, "FX 1-Vox Verb", "space") != nullptr);
+    CHECK (change (off, "Adlibs", "space") != nullptr);
+}
+
+TEST_CASE ("Analysis: the mix's tone against the style, for Polish and the hand-off to Masterology", "[polish][suite]")
+{
+    Report tone;
+    CHECK_FALSE (toneAgainstStyle (tone).valid);   // no Analyze Mix yet
+    tone.valid = true;
+    tone.mixBands.assign (static_cast<std::size_t> (kBands), 0.0);
+    tone.targetBands.assign (static_cast<std::size_t> (kBands), 0.0);
+    for (int b = 26; b <= 29; ++b) tone.mixBands[static_cast<std::size_t> (b)] = -3.0;
+    for (int b = 3; b <= 8; ++b) tone.mixBands[static_cast<std::size_t> (b)] = 2.0;
+    const auto t = toneAgainstStyle (tone);
+    REQUIRE (t.valid);
+    CHECK (t.air == Catch::Approx (-3.0));
+    CHECK (t.low == Catch::Approx (2.0));
+    CHECK (t.presence == Catch::Approx (0.0));
 }

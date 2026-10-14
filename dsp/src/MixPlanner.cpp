@@ -1124,7 +1124,12 @@ namespace mixology::mix
 
                 // A compressor where the level swings a lot (none on a track that has one switched on already).
                 const double swing = vocal ? 8.0 : 7.0;
-                if ((vocal || bass) && t.levelRange >= swing && t.loudPeak > -60.0 && pv (ch->proc, proc::compOn) < 0.5f)
+                const auto& vx = ch->voxology;
+                if (vocal && vx.on && vx.compressor)
+                    plan.notes.push_back (quoted (t.name) + ": Voxology compresses it already"
+                                          + (vx.compressionDb >= 0.5 ? " (about " + fmt0 (vx.compressionDb) + " dB lately)" : std::string())
+                                          + ", so Mixology adds no second compressor.");
+                else if ((vocal || bass) && t.levelRange >= swing && t.loudPeak > -60.0 && pv (ch->proc, proc::compOn) < 0.5f)
                 {
                     const double ratio = vocal ? 3.0 : 4.0;
                     const double thr = std::clamp (std::round (t.loudPeak - (vocal ? 6.0 : 5.0)), -50.0, -3.0);
@@ -1183,8 +1188,14 @@ namespace mixology::mix
                 for (const auto* c : fx) if (spaceOn (*c)) busy = c;
                 const double under = reverbUnderVocal (r.style.key);
                 const bool leadHeard = counts (*lead);
+                const bool voxReverb = leadCh != nullptr && leadCh->voxology.on && leadCh->voxology.reverb;
                 if (leadCh != nullptr && spaceOn (*leadCh))
                     plan.notes.push_back (quoted (lead->name) + " has its own Space effect already: Mixology leaves it.");
+                else if (voxReverb && busy != nullptr)
+                    plan.notes.push_back (quoted (lead->name) + " gets reverb from Voxology and from the FX channel " + quoted (busy->name)
+                                          + ": one space is usually enough. Switch one of them off.");
+                else if (voxReverb)
+                    plan.notes.push_back (quoted (lead->name) + " has Voxology's reverb: Mixology adds no second reverb.");
                 else if (busy != nullptr)
                 {
                     // An FX channel effect already: its kind stays yours, but its level is checked against the vocal.
@@ -1269,8 +1280,9 @@ namespace mixology::mix
                     plan.notes.push_back ("For the cleanest vocal reverb, use an FX channel with Mixology Link and a Send (manual: Space); Auto Mix then sets it up there.");
                 }
             }
-            if (spaces > 0)
-                plan.notes.push_back ("If Voxology (or another plug-in) already gives the vocal its reverb, untick Mixology's: one space is enough.");
+            const bool leadVoxology = lead != nullptr && look.of (*lead) != nullptr && look.of (*lead)->voxology.on;
+            if (spaces > 0 && ! leadVoxology)   // Voxology tells Mixology what it does; other plug-ins don't
+                plan.notes.push_back ("If another plug-in already gives the vocal its reverb, untick Mixology's: one space is enough.");
             const bool urban = genre == "hiphop" || genre == "trap" || genre == "rnb" || genre == "afro" || genre == "latin" || genre == "pop" || genre == "electronic";
             int adlibDelays = 0;
             for (const auto& t : r.tracks)
@@ -1278,6 +1290,11 @@ namespace mixology::mix
                 if (! urban || ! counts (t) || t.role != Role::adlibs || adlibDelays >= 3) continue;
                 const auto* ch = procChannel (t, look, plan, "its delay");
                 if (ch == nullptr || spaceOn (*ch)) continue;
+                if (ch->voxology.on && ch->voxology.delay)
+                {
+                    plan.notes.push_back (quoted (t.name) + " has Voxology's delay already: Mixology adds no second one.");
+                    continue;
+                }
                 Change c;
                 c.hash = ch->hash;
                 c.name = t.name;
@@ -1295,14 +1312,9 @@ namespace mixology::mix
             }
 
             // ---- the Full Mix's tone against the style (Tone Balance on Mixology itself)
-            if (mix.known && r.mixBands.size() >= static_cast<std::size_t> (kBands) && r.targetBands.size() == r.mixBands.size())
+            if (const auto tone = toneAgainstStyle (r); mix.known && tone.valid)
             {
-                auto off = [&r] (int from, int to) {
-                    double d = 0.0;
-                    for (int b = from; b <= to; ++b) d += r.mixBands[static_cast<std::size_t> (b)] - r.targetBands[static_cast<std::size_t> (b)];
-                    return d / (to - from + 1);
-                };
-                const double lows = off (3, 8), lowMids = off (10, 14), pres = off (21, 23), air = off (26, 29);
+                const double lows = tone.low, lowMids = tone.lowMid, pres = tone.presence, air = tone.air;
                 const auto& at = mix.atAnalysisKnown ? mix.atAnalysis : mix.now;
                 struct Knob { int id; double diff; const char* word; };
                 std::vector<std::pair<int, float>> set;

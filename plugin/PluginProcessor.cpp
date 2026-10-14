@@ -55,6 +55,36 @@ void MixologyAudioProcessor::timerCallback()
         tailTold.store (tail);
         updateHostDisplay (ChangeDetails().withLatencyChanged (true));   // the host asks for latency and tail again
     }
+    if (--handoffCountdown <= 0)
+    {
+        handoffCountdown = 4;
+        publishHandoff();
+    }
+}
+
+void MixologyAudioProcessor::publishHandoff()
+{
+    // One Mixology publishes: the one on the Stereo Out (the hub's Full Mix).
+    if (! bridgeHub->isMixOwner (this)) return;
+    const auto ui = getUiState();
+    if (ui != styleFrom)
+    {
+        styleFrom = ui;
+        const auto parsed = juce::JSON::parse (ui);
+        const auto key = parsed.getProperty ("preset", juce::var());
+        styleKey = key.isString() ? key.toString().toStdString() : std::string();
+        styleName = styleKey.empty() ? std::string() : parsed.getProperty ("presetName", "").toString().toStdString();
+    }
+    suite::MixInfo m;
+    m.styleKey = styleKey;
+    m.styleName = styleName;
+    m.peakDbtp = meters.truePeak.load();
+    m.integratedLufs = meters.integrated.load();
+    m.shortTermLufs = meters.shortTerm.load();
+    if (mixology::proc::isOn (procRaw.read(), mixology::proc::Module::limit)) m.flags |= suite::MixInfo::limited;
+    bridgeHub->handoffTone (styleKey, m);   // after Analyze Mix: the mix's tone against the style, a mono mix
+    m.version = static_cast<std::uint32_t> (JucePlugin_VersionCode);
+    suite::Link::process().publishMix (m, suite::nowMs());
 }
 
 mixology::proc::Meters MixologyAudioProcessor::takeProcMeters()

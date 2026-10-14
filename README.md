@@ -5,9 +5,9 @@ Intelligent multitrack mixing engineer for Cubase (VST3), the missing link betwe
 HTML / CSS / JS interface in the platform web view, GitHub Actions builds on every push.
 
 The plan and milestones: [docs/PLAN.md](docs/PLAN.md). User manual (also built into the plug-in): [docs/MANUAL.md](docs/MANUAL.md).
-Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_TEST.md) (passed), [docs/M3_TEST.md](docs/M3_TEST.md), [docs/M4_TEST.md](docs/M4_TEST.md), [docs/M5_TEST.md](docs/M5_TEST.md) (current).
+Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_TEST.md) (passed), [docs/M3_TEST.md](docs/M3_TEST.md), [docs/M4_TEST.md](docs/M4_TEST.md), [docs/M5_TEST.md](docs/M5_TEST.md), [docs/M6_TEST.md](docs/M6_TEST.md) (current).
 
-## Status: v0.7.1
+## Status: v0.8.0
 
 | Piece | State |
 | --- | --- |
@@ -20,7 +20,8 @@ Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_T
 | Smart tools (M4): Auto Mix, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match; Link Assist EQ | Tested in Cubase, follow-ups done |
 | Processing (M5 round 1): EQ, Dynamics, Tone, Stereo in each Link and on the full mix; Mono Check | Tested in Cubase, fixes done |
 | Space (M5 round 2): reverbs, delay, chorus, phaser, special FX on a track or FX channel, ducking under the vocal | Tested in Cubase |
-| Polish / Auto Mix processing proposals (EQ, compression, space, mix tone), Master finishing knobs (M5 round 3) | Built, waiting for the Cubase test |
+| Polish / Auto Mix processing proposals (EQ, compression, space, mix tone), Master finishing knobs (M5 round 3) | Tested in Cubase, fixes done (v0.7.1) |
+| Suite link (M6 round 1): Voxology on the vocals (role, no doubled compressor / reverb / delay, VOX tag), Masterology's goal on the Master page, the hand-off to Masterology | Built, waiting for the Cubase test |
 
 ## Layout
 
@@ -40,6 +41,8 @@ dsp/        Framework-free engine (no JUCE): unit-testable
     ProcChain.h        M5: the processing chain (gate, EQ, dynamics, tone, stereo, space, limiter); off = bit for bit
     SpaceFx.h          M5 round 2: reverb (FDN), delay, chorus, phaser, pitch shifter for the Space page
     ProcDsp.h          M5: its building blocks (filters, compressors, oversampling, lookahead limiter)
+  include/suite/
+    SuiteLink.h        M6: Voxology, Mixology and Masterology tell each other what they do (the same file in all three repos)
 plugin/     Mixology: JUCE processor (Full Mix processing + meters), BridgeHub (MIDI ports + Link pairing), web editor;
             ProcHost.h turns the processing table into host parameters (shared with the Link)
   ui/       The interface: index.html, styles.css, app.js, ui.js, pages_*.js, sheets.js, mock.js, assets, fonts (OFL)

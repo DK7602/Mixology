@@ -1181,3 +1181,25 @@ TEST_CASE ("A mono mix: said so, and Stereo Architect leaves the pans alone", "[
     CHECK (p.changes.empty());
     CHECK (noted (p, "mono at the Stereo Out"));
 }
+
+TEST_CASE ("Analysis: Voxology on a track makes it a vocal; your choice still wins", "[analysis][suite]")
+{
+    const auto a = listen ([] (int) { return std::vector<TrackSample> {
+        sample ("Kick", kickFrame()), sample ("Audio 07", padFrame (-16.0)), sample ("Audio 08", padFrame (-18.0)) }; });
+    const auto before = a.evaluate ({});
+    for (const auto& t : before.tracks)
+        if (t.name != "Kick") CHECK (t.role != Role::vox);   // by its sound alone it isn't a vocal
+
+    std::map<std::uint32_t, TrackSettings> settings;
+    settings[mixology::bridge::nameHash ("Audio 07")].fromVoxology = Role::vox;
+    settings[mixology::bridge::nameHash ("Audio 08")].fromVoxology = Role::vox;
+    settings[mixology::bridge::nameHash ("Audio 08")].role = Role::adlibs;   // yours
+    const auto r = a.evaluate (settings);
+    int checked = 0;
+    for (const auto& t : r.tracks)
+    {
+        if (t.name == "Audio 07") { CHECK (t.role == Role::vox); CHECK (t.roleFrom == "voxology"); ++checked; }
+        if (t.name == "Audio 08") { CHECK (t.role == Role::adlibs); CHECK (t.roleFrom == "you"); ++checked; }
+    }
+    CHECK (checked == 2);
+}

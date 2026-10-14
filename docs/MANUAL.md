@@ -1,9 +1,10 @@
 # Mixology manual
 
-Manual for version 0.7.1 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
+Manual for version 0.8.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
-channel, ducking under the vocal, and the Master page's finishing knobs).
+channel, ducking under the vocal, the Master page's finishing knobs, and the suite link: Mixology sees Voxology
+on your vocals and Masterology after it).
 
 **Voxology** makes each vocal sound great. **Mixology** makes all your tracks work together.
 **Masterology** turns the finished mix into the master.
@@ -23,8 +24,9 @@ channel, ducking under the vocal, and the Master page's finishing knobs).
 | EQ, Dynamics, Tone, Stereo pages: processing on the track you pick (in its Mixology Link) or on the full mix | Live |
 | Mono Check (Stereo page) | Live |
 | Space page: reverbs, delay, chorus, phaser, special effects on a track or an FX channel, ducking | Live |
-| Polish (and Auto Mix): EQ, compression, vocal reverb / delay and the mix's tone proposed for you | Live: this is what we're testing now |
-| Master page's finishing knobs (Glue, Tilt, Width, Trim on the Full Mix) | Live: this is what we're testing now |
+| Polish (and Auto Mix): EQ, compression, vocal reverb / delay and the mix's tone proposed for you | Live |
+| Master page's finishing knobs (Glue, Tilt, Width, Trim on the Full Mix) | Live |
+| Suite link: Voxology on your vocals (VOX tag, no second compressor / reverb / delay), Masterology's goal on the Master page, the hand-off to Masterology | Live: this is what we're testing now (needs Voxology 0.47 and Masterology 0.26 or newer) |
 
 Nothing changes your sound until you ask: every processing module starts switched off (the audio passes
 through bit for bit). What can change it: the Cubase faders and pans Mixology moves, the Assist EQ / Trim in
@@ -378,10 +380,33 @@ project.
 
 1. Voxology on each vocal: tuning, cleanup, de-essing, compression, space.
 2. Mixology on the Stereo Out: balance all tracks against each other (levels first, then masking and width).
-3. Masterology after Mixology (or in a mastering project): final EQ, loudness and limiting.
+3. Masterology after Mixology on the Stereo Out (or in a mastering project): final EQ, loudness and limiting.
 
 Leave Masterology 3 to 6 dB of headroom: the Master page tells you when the mix peaks are in the right place.
 Final limiting is Masterology's job: keep Mixology's Limiter off on the Full Mix (or use it only as a safety).
+
+### The three talk to each other (the suite link)
+
+In the same Cubase project, the three plug-ins tell each other what they do. Nothing to set up: just use
+Voxology 0.47, Mixology 0.8 and Masterology 0.26 (or newer).
+
+- **Voxology on a vocal.** The Tracks page shows a small gold **VOX** tag under the track's icon (hover it to
+  see what Voxology does there: compressing, de-essing, its reverb or delay...). Mixology then:
+  - treats the track as a vocal (the lead, or the ad-libs when Voxology's style or the track's name says so),
+    even when its name doesn't say "vocal". Your own choice in the role menu still wins.
+  - never stacks a second compressor where Voxology compresses, a second reverb on the lead vocal where Voxology
+    adds its reverb, or a ping-pong delay on ad-libs where Voxology adds its delay. Auto Mix and Polish say so in
+    their notes ("Voxology compresses it already").
+  - warns when the lead gets reverb from Voxology **and** from an FX channel: one space is usually enough.
+  - A **BEAT** tag: Voxology in Beat mode on that track (it only listens to the beat for the key).
+- **Masterology after Mixology.** The Master page's HAND-OFF panel shows what Masterology aims for (for example
+  "Masterology: −14 LUFS · −1.0 dBTP"; hover it for the goal and genre) and a check that it is there.
+- **Mixology's hand-off to Masterology.** Mixology tells Masterology the mix style you picked, the mix's peaks
+  and loudness, and (after Analyze Mix) how its tone sits against the style and whether the mix is mono.
+  Masterology shows it and can start from the matching genre.
+
+The link only works inside one program: Voxology, Mixology and Masterology must run in the same Cubase (they do,
+unless you mix in one project and master in another; then Masterology simply works on its own as before).
 
 ## Troubleshooting
 
@@ -431,4 +456,8 @@ Final limiting is Masterology's job: keep Mixology's Limiter off on the Full Mix
   be above Off.
 - **Space: the delay doesn't follow the tempo**: it follows Cubase's tempo while the song plays (120 BPM until it
   has heard one).
+- **No VOX tag on a vocal with Voxology**: update Voxology to 0.47 or newer. The tag follows the track's name, so
+  Voxology and the Tracks page must see the same name (rename the track in Cubase if two tracks share one).
+- **The Master page doesn't show Masterology**: update Masterology to 0.26 or newer, and put it in the same project
+  (after Mixology on the Stereo Out). It appears a moment after Masterology is inserted.
 - **Send us the log**: Settings > Cubase Bridge > **Copy log**, then paste it into the chat.
