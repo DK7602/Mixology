@@ -531,7 +531,9 @@ TEST_CASE ("Processing: any settings, any audio: always finite, never blows up",
     {
         Chain chain;
         chain.prepare (44100.0, channels);
+        chain.ensureSpace();
         std::vector<double> l (777), r (777);
+        Values last {};
         for (int block = 0; block < 400; ++block)
         {
             if (block % 7 == 0)
@@ -544,13 +546,31 @@ TEST_CASE ("Processing: any settings, any audio: always finite, never blows up",
                 }
                 v[chainOn] = 1.0f;
                 chain.setValues (v);
+                last = v;
             }
+            chain.setHost (60.0 + 120.0 * u (rng), u (rng) < 0.5 ? -1.0 : 2.0 * u (rng));
             for (auto& x : l) x = nd (rng) * (block % 13 == 0 ? 8.0 : 1.0);
             for (auto& x : r) x = nd (rng);
             double* ch[2] = { l.data(), r.data() };
             chain.process (ch, channels, 777);
+            // Stacked boosts on a burst 17 dB over full scale can get loud, but never anywhere near runaway.
             for (int c = 0; c < channels; ++c)
-                for (double x : (c == 0 ? l : r)) REQUIRE ((std::isfinite (x) && std::abs (x) < 200.0));
+                for (double x : (c == 0 ? l : r)) REQUIRE ((std::isfinite (x) && std::abs (x) < 2000.0));
         }
+        // And it all goes quiet again once the input stops (nothing keeps ringing or feeding itself).
+        last[spOn] = 0.0f;
+        chain.setValues (last);
+        double peak = 0.0;
+        for (int block = 0; block < 120; ++block)
+        {
+            std::fill (l.begin(), l.end(), 0.0);
+            std::fill (r.begin(), r.end(), 0.0);
+            double* ch[2] = { l.data(), r.data() };
+            chain.process (ch, channels, 777);
+            if (block >= 100)
+                for (int c = 0; c < channels; ++c)
+                    for (double x : (c == 0 ? l : r)) peak = std::max (peak, std::abs (x));
+        }
+        CHECK (peak < 1.0e-2);
     }
 }

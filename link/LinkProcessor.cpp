@@ -118,8 +118,11 @@ void MixologyLinkProcessor::prepareToPlay (double sampleRate, int)
     assist.prepare (sampleRate, juce::jmax (1, getTotalNumOutputChannels()));
     const auto values = procRaw.read();
     chain.prepare (sampleRate, juce::jmax (1, getTotalNumOutputChannels()));
+    if (mixology::proc::isOn (values, mixology::proc::Module::space)) chain.ensureSpace();
     chain.setValues (values);
     setLatencySamples (chain.latencyFor (values));
+    tailTold.store (mixology::proc::host::reportedTail (values));
+    keyEnv = 0.0;
 }
 
 mixology::AssistSettings MixologyLinkProcessor::assistSettings() const
@@ -174,18 +177,47 @@ void MixologyLinkProcessor::process (juce::AudioBuffer<Sample>& buffer)
     assist.setTarget (assistSettings());
     assist.process (buffer.getArrayOfWritePointers(), channels, n);
 
+    // This track's level before its processing (a Space effect elsewhere can duck under it): instant up,
+    // about 60 ms down, so a Link that runs its block a little earlier or later still sees it.
+    const auto now = mixology::link::nowMs();
+    {
+        double peak = 0.0;
+        for (int c = 0; c < channels; ++c)
+        {
+            const auto* x = buffer.getReadPointer (c);
+            for (int i = 0; i < n; ++i) peak = std::max (peak, std::abs (static_cast<double> (x[i])));
+        }
+        const double rate = currentRate.load (std::memory_order_relaxed);
+        keyEnv = std::max (peak, keyEnv * std::exp (-static_cast<double> (n) / (0.06 * rate)));
+        if (keyEnv < 1.0e-6) keyEnv = 0.0;
+        registry.publishKey (slot, static_cast<float> (keyEnv), now);
+    }
+
+    // The song's tempo (the Delay's note values) and the level of the tracks this one ducks under.
+    double bpm = 0.0;
+    juce::Optional<juce::AudioPlayHead::PositionInfo> position;
+    if (auto* ph = getPlayHead()) position = ph->getPosition();
+    if (position.hasValue())
+        if (auto b = position->getBpm()) bpm = *b;
+    double key = -1.0;
+    if (const int sources = duckSlotCount.load (std::memory_order_acquire); sources > 0)
+    {
+        key = 0.0;
+        for (int i = 0; i < std::min (sources, mixology::link::kMaxDuckSources); ++i)
+            key = std::max (key, static_cast<double> (registry.keyLevel (duckSlots[static_cast<std::size_t> (i)].load (std::memory_order_relaxed), now)));
+    }
+    chain.setHost (bpm, key);
     chain.setValues (procRaw.read());
     chain.process (buffer.getArrayOfWritePointers(), channels, n);
 
     // Measured after the Trim, the Assist EQ and the processing: what this track sends on to the fader.
     meter.process (buffer.getArrayOfReadPointers(), channels, n);
     ring.push (buffer.getArrayOfReadPointers(), channels, n);
-    if (auto* ph = getPlayHead())
-        if (auto pos = ph->getPosition())
-        {
-            transportPlaying.store (pos->getIsPlaying(), std::memory_order_relaxed);
-            if (auto t = pos->getTimeInSamples()) songPosition.store (*t, std::memory_order_relaxed);
-        }
+    if (position.hasValue())
+    {
+        transportPlaying.store (position->getIsPlaying(), std::memory_order_relaxed);
+        if (auto t = position->getTimeInSamples()) songPosition.store (*t, std::memory_order_relaxed);
+    }
     if (meter.windowCount() != publishedWindows)
     {
         publishedWindows = meter.windowCount();
@@ -194,10 +226,10 @@ void MixologyLinkProcessor::process (juce::AudioBuffer<Sample>& buffer)
         storeMax (editorPeak[1], r);
         momentary.store (meter.momentaryLufs(), std::memory_order_relaxed);
         shortTerm.store (meter.shortTermLufs(), std::memory_order_relaxed);
-        const auto now = mixology::link::nowMs();
         registry.publishMeters (slot, l, r, meter.momentaryLufs(), meter.shortTermLufs(), meter.channels(), now);
         const auto pm = chain.takeMeters();
         running.store (pm.running, std::memory_order_relaxed);
+        spaceWet.store (pm.spaceWet, std::memory_order_relaxed);
         registry.publishProcMeters (slot, pm, now);
         lastAudioMs.store (now, std::memory_order_relaxed);
     }
@@ -275,6 +307,59 @@ void MixologyLinkProcessor::timerCallback()
     const int latency = chain.latencyFor (now);
     if (latency != getLatencySamples()) setLatencySamples (latency);   // the Limiter's lookahead, while it is on
     registry.publishProc (slot, now, static_cast<float> (currentRate.load()), latency);
+
+    // Space: its delay lines are made the first time it is switched on (never on the audio thread); the host
+    // hears about the tail when Space goes on or off, so it never cuts a reverb short.
+    if (mixology::proc::isOn (now, mixology::proc::Module::space)) chain.ensureSpace();
+    if (const double tail = mixology::proc::host::reportedTail (now); mixology::proc::host::tailChanged (tail, tailTold.load()))
+    {
+        tailTold.store (tail);
+        updateHostDisplay (ChangeDetails().withLatencyChanged (true));   // the host asks for latency and tail again
+    }
+
+    mixology::link::DuckSources wantedDuck;
+    if (registry.takeDuckRequest (slot, duckRequestSeen, wantedDuck)) setDuck (wantedDuck);
+    if (--resolveCountdown <= 0)   // about three times a second: tracks come and go, slots change
+    {
+        resolveCountdown = 10;
+        resolveDuck();
+        registry.publishDuck (slot, duck);
+    }
+}
+
+void MixologyLinkProcessor::setDuck (const mixology::link::DuckSources& d)
+{
+    mixology::link::DuckSources clean;
+    for (int i = 0; i < std::min (d.count, mixology::link::kMaxDuckSources); ++i)
+        if (const auto h = d.hashes[static_cast<std::size_t> (i)]; h != 0)
+            clean.hashes[static_cast<std::size_t> (clean.count++)] = h;
+    duck = clean;
+    juce::StringArray saved;
+    for (int i = 0; i < duck.count; ++i) saved.add (juce::String::toHexString (static_cast<int> (duck.hashes[static_cast<std::size_t> (i)])));
+    parameters.state.setProperty ("duck", saved.joinIntoString (","), nullptr);   // saved with the project
+    resolveDuck();
+    registry.publishDuck (slot, duck);
+    resolveCountdown = 10;
+}
+
+void MixologyLinkProcessor::resolveDuck()
+{
+    int found[mixology::link::kMaxDuckSources];
+    const int n = registry.findSlots (duck, slot, mixology::link::nowMs(), found, mixology::link::kMaxDuckSources);
+    for (int i = 0; i < n; ++i) duckSlots[static_cast<std::size_t> (i)].store (found[i], std::memory_order_relaxed);
+    duckSlotCount.store (n, std::memory_order_release);
+}
+
+juce::StringArray MixologyLinkProcessor::duckNames() const
+{
+    juce::StringArray names;
+    const int n = duckSlotCount.load (std::memory_order_acquire);
+    for (int i = 0; i < n; ++i)
+    {
+        const auto id = registry.readIdentity (duckSlots[static_cast<std::size_t> (i)].load (std::memory_order_relaxed));
+        if (id.hasName) names.addIfNotAlreadyThere (juce::String::fromUTF8 (id.name.c_str()));
+    }
+    return names;
 }
 
 void MixologyLinkProcessor::getStateInformation (juce::MemoryBlock& destData)
@@ -289,7 +374,14 @@ void MixologyLinkProcessor::setStateInformation (const void* data, int sizeInByt
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (parameters.state.getType()))
+        {
             parameters.replaceState (juce::ValueTree::fromXml (*xml));
+            mixology::link::DuckSources d;
+            for (const auto& h : juce::StringArray::fromTokens (parameters.state.getProperty ("duck").toString(), ",", ""))
+                if (d.count < mixology::link::kMaxDuckSources && h.isNotEmpty())
+                    d.hashes[static_cast<std::size_t> (d.count++)] = static_cast<std::uint32_t> (h.getHexValue32());
+            setDuck (d);
+        }
 }
 
 juce::AudioProcessorEditor* MixologyLinkProcessor::createEditor()

@@ -266,6 +266,105 @@ int main (int argc, char** argv)
         check (kick->getLatencySamples() == 0, "and no latency");
     }
 
+    // Milestone 5, round 2: Space. A reverb on the Kick (the host hears of its tail, the tail rings on after
+    // the sound stops); the 808's Link as an FX channel ducking under the Kick; Freeze tells the host "endless".
+    {
+        using namespace mixology::proc;
+        links = registry.links (nowMs());
+        const auto* kl = byName (links, "Kick");
+        const auto* bl = byName (links, "808 Bass");
+        if (kl == nullptr || bl == nullptr) return 1;
+        const int kSlot = kl->slot, bSlot = bl->slot;
+        const auto kGen = kl->generation, bGen = bl->generation;
+
+        check (kick->getTailLengthSeconds() <= 0.0, "no tail while Space is off");
+        registry.requestProc (kSlot, kGen, spOn, 1.0f);
+        registry.requestProc (kSlot, kGen, spType, static_cast<float> (SpaceType::reverb));
+        registry.requestProc (kSlot, kGen, revMix, 60.0f);
+        pump (300);
+        check (kick->getTailLengthSeconds() >= 29.0, "Space on: the host is told about a long tail (" + juce::String (kick->getTailLengthSeconds(), 1) + " s)");
+        play (*kick, sr, block, 0.5, 0.5f);
+        juce::AudioBuffer<float> silence (2, block);
+        juce::MidiBuffer midi;
+        float tail = 0.0f;
+        for (int b2 = 0; b2 < static_cast<int> (0.3 * sr / block); ++b2)
+        {
+            silence.clear();
+            kick->processBlock (silence, midi);
+            if (b2 > 10) tail = std::max (tail, silence.getMagnitude (0, 0, block));
+        }
+        check (tail > 1.0e-3f, "the reverb rings on after the sound stops (" + juce::String (juce::Decibels::gainToDecibels (tail), 1) + " dBFS)");
+        play (*kick, sr, block, 0.3, 0.5f);
+        mixology::proc::Meters km;
+        const bool kmOk = registry.readProcMeters (kSlot, kGen, km, nowMs());
+        check (kmOk && km.spaceWet > -60.0f, "the Space meter shows the effect: " + juce::String (km.spaceWet, 1) + " dBFS");
+
+        // The 808's Link becomes an FX channel reverb that ducks 24 dB under the Kick.
+        registry.requestProc (bSlot, bGen, spOn, 1.0f);
+        registry.requestProc (bSlot, bGen, spRoute, 1.0f);
+        registry.requestProc (bSlot, bGen, revMix, 100.0f);
+        registry.requestProc (bSlot, bGen, duckAmount, 24.0f);
+        registry.requestProc (kSlot, kGen, spOn, 0.0f);
+        DuckSources under;
+        under.count = 1;
+        under.hashes[0] = mixology::bridge::nameHash ("Kick");
+        registry.requestDuck (bSlot, bGen, under);
+        pump (500);
+        links = registry.links (nowMs());
+        const auto* bl2 = byName (links, "808 Bass");
+        check (bl2 != nullptr && bl2->duck == under, "the 808's Link ducks under the Kick (and says so)");
+        // Kick (a tone) and the FX channel (noise: a reverb's level then stays steady) play side by side, block by
+        // block, like a host; returns the FX channel's level (dB) over the second half.
+        juce::Random noise (7);
+        auto pair = [&] (float kickGain, double seconds) {
+            juce::AudioBuffer<float> kb (2, block), bb (2, block);
+            double sum = 0.0;
+            int count = 0;
+            const int blocks = static_cast<int> (seconds * sr / block);
+            for (int b2 = 0; b2 < blocks; ++b2)
+            {
+                for (int i = 0; i < block; ++i)
+                {
+                    const auto x = static_cast<float> (std::sin (2.0 * juce::MathConstants<double>::pi * 997.0 * (b2 * block + i) / sr));
+                    const auto n = 0.3f * (noise.nextFloat() * 2.0f - 1.0f);
+                    for (int c = 0; c < 2; ++c) { kb.setSample (c, i, kickGain * x); bb.setSample (c, i, n); }
+                }
+                kick->processBlock (kb, midi);
+                bass->processBlock (bb, midi);
+                if (b2 > blocks / 2)
+                    for (int i = 0; i < block; ++i) { sum += bb.getSample (0, i) * bb.getSample (0, i); ++count; }
+            }
+            return 10.0 * std::log10 (sum / std::max (1, count) + 1.0e-20);
+        };
+        const double alone = pair (0.0f, 1.5);
+        const double ducked = pair (0.5f, 1.5);
+        check (alone > -60.0, "the FX reverb plays (" + juce::String (alone, 1) + " dB)");
+        check (alone - ducked > 12.0, "and ducks while the Kick plays: " + juce::String (alone - ducked, 1) + " dB down");
+        const double back = pair (0.0f, 1.5);
+        check (std::abs (back - alone) < 1.5, "and comes back when the Kick stops (" + juce::String (back - alone, 1) + " dB)");
+
+        // The duck list is saved with the project.
+        juce::MemoryBlock bassState;
+        bass->getStateInformation (bassState);
+        registry.requestDuck (bSlot, bGen, DuckSources {});
+        pump (300);
+        links = registry.links (nowMs());
+        check (byName (links, "808 Bass") != nullptr && byName (links, "808 Bass")->duck.count == 0, "duck list cleared");
+        bass->setStateInformation (bassState.getData(), static_cast<int> (bassState.getSize()));
+        pump (300);
+        links = registry.links (nowMs());
+        check (byName (links, "808 Bass") != nullptr && byName (links, "808 Bass")->duck == under, "and comes back with the project");
+
+        // Freeze: an endless tail. Space off: none.
+        registry.requestProc (bSlot, bGen, spType, static_cast<float> (SpaceType::special));
+        registry.requestProc (bSlot, bGen, spxMode, static_cast<float> (SpecialMode::freeze));
+        pump (300);
+        check (std::isinf (bass->getTailLengthSeconds()), "Freeze: the host is told the tail is endless");
+        registry.requestProc (bSlot, bGen, spOn, 0.0f);
+        pump (300);
+        check (bass->getTailLengthSeconds() <= 0.0 && kick->getTailLengthSeconds() <= 0.0, "Space off: no tail");
+    }
+
     // A renamed track is seen under its new name.
     bp.name = juce::String ("808 Sub");
     bass->updateTrackProperties (bp);
@@ -347,6 +446,16 @@ int main (int argc, char** argv)
         const auto monoBefore = measure (1000.0, 1.0f);
         check (monoBefore.second < -100.0, "a mono sound has nothing to widen (side stays silent)");
         set ("Stereo", 0.0f);
+
+        // Space on the Full Mix: the host hears of the tail; switching off takes it back.
+        check (mix->getTailLengthSeconds() <= 0.0, "Mixology: no tail while Space is off");
+        set ("Space", 1.0f);
+        pump (300);
+        measure (1000.0, 1.0f);
+        check (mix->getTailLengthSeconds() >= 29.0, "Mixology: Space on, long tail (" + juce::String (mix->getTailLengthSeconds(), 1) + " s)");
+        set ("Space", 0.0f);
+        pump (300);
+        check (mix->getTailLengthSeconds() <= 0.0, "Mixology: Space off, no tail");
 
         // The settings are saved with the project.
         set ("Tone Balance", 1.0f);

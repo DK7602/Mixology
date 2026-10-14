@@ -120,7 +120,13 @@ from one table (ProcParams) become host parameters in both plug-ins and plugin/u
 All modules start off: audio untouched, bit for bit. Mixology's pages pick a target (Full Mix or a Link) and talk to
 the Link through the registry (layout 5: per-control requests, values and processing meters back). Mono Check on the
 Stereo page (never saved, off when you leave the page). Link window: PROCESSING strip with On / Off.
-- Round 2: Space on an FX channel's Link (Reverb, Delay, Chorus, Phaser, Hall, Room, Special FX, each with its own
-  controls and scene picture), its EQ, and ducking under the vocal (the vocal's Link shares its level).
+Round 2 built (you test it, docs/M5_TEST.md): Space at the end of the chain on a track or an FX channel's Link
+(100 % wet): Reverb (8-line FDN plate), Hall, Room (same engine, other sizes / early reflections), tempo-synced Delay
+(ping-pong, tone in the loop), Chorus, Phaser, Special FX (Shimmer with a pitch shifter in the loop, Drift, Swell,
+Freeze), crossfade when the effect changes, the effect's low / high cut, ducking under other tracks (registry
+layout 6: every Link publishes its key level each block; Mixology tells a Link which tracks to duck under, the Link
+keeps the list in its project), the host told about a long tail while Space is on (endless for Freeze). Delay lines
+made on the message thread the first time Space is switched on. The Space page is live; its picture moves only while
+the effect is in use. 41 more controls (141 in all).
 - Round 3: Master page finishing (Glue, Tilt, Width, Trim on Mixology; no limiter fight with Masterology), and Auto
   Mix / the Mix Assistant proposing EQ and dynamics moves through the Links (preview, Apply, Undo like M4).

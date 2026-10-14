@@ -1,4 +1,5 @@
 #include "mixology/ProcChain.h"
+#include "mixology/SpaceFx.h"
 
 #include <cmath>
 
@@ -12,7 +13,7 @@ namespace mixology::proc
         constexpr double kFadeSeconds = 0.02;    // a module switching on / off
         constexpr Module kOrder[] = { Module::gate, Module::eq, Module::comp, Module::multi, Module::trans, Module::tone,
                                       Module::loud, Module::harm, Module::analog, Module::clip, Module::stereo, Module::final,
-                                      Module::limit };
+                                      Module::space, Module::limit };
 
         std::size_t ix (int i) { return static_cast<std::size_t> (i); }
         std::size_t ix (Module m) { return static_cast<std::size_t> (m); }
@@ -27,6 +28,94 @@ namespace mixology::proc
         }
 
         float metric (float a, float b) { return std::max (a, b); }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Space: every effect's engine, made on demand (they hold seconds of delay lines).
+
+    struct Chain::SpaceBank
+    {
+        FdnReverb plate, hall, room, special;
+        StereoDelay delay;
+        Chorus chorus;
+        Phaser phaser;
+        PitchShifter shifter;
+        Filter2 lowCut, highCut, toneLp;   // the wet sound's EQ, and Special FX's Tone
+        float lcHz = -1.0f, hcHz = -1.0f, toneHz = -1.0f;
+        int type = -1, prevType = -1;
+        double fade = 1.0;                  // from the previous effect to this one (a switch never clicks)
+        double keyEnv = 0.0, duckDb = 0.0;
+        double swell = 1.0, swellFast = 0.0, swellSlow = 0.0;
+        double rate = 48000.0;
+        std::array<double, Chain::kChunk> shimmer {};   // last chunk's wet sound, pitched and fed back
+        std::array<std::array<double, Chain::kChunk>, 2> a {}, b {};
+
+        void prepare (double sr)
+        {
+            rate = sr;
+            for (auto* r : { &plate, &hall, &room, &special }) r->prepare (sr);
+            delay.prepare (sr);
+            chorus.prepare (sr);
+            phaser.prepare (sr);
+            shifter.prepare (sr);
+            resetAll();
+        }
+        void resetType (int t)
+        {
+            switch (static_cast<SpaceType> (t))
+            {
+                case SpaceType::reverb: plate.reset(); break;
+                case SpaceType::delay: delay.reset(); break;
+                case SpaceType::chorus: chorus.reset(); break;
+                case SpaceType::phaser: phaser.reset(); break;
+                case SpaceType::hall: hall.reset(); break;
+                case SpaceType::room: room.reset(); break;
+                case SpaceType::special: special.reset(); shifter.reset(); shimmer = {}; swell = 1.0; break;
+            }
+        }
+        void resetAll()
+        {
+            for (int t = 0; t < 7; ++t) resetType (t);
+            lowCut.reset(); highCut.reset(); toneLp.reset();
+            lcHz = hcHz = toneHz = -1.0f;
+            type = prevType = -1;
+            fade = 1.0;
+            keyEnv = duckDb = 0.0;
+        }
+    };
+
+    Chain::Chain() = default;
+    Chain::~Chain() = default;
+
+    void Chain::ensureSpace()
+    {
+        if (spaceOwner != nullptr) return;
+        auto bankNew = std::make_unique<SpaceBank>();
+        bankNew->prepare (rate);
+        spaceBank.store (bankNew.get(), std::memory_order_release);
+        spaceOwner = std::move (bankNew);
+    }
+
+    double Chain::tailSecondsFor (const Values& v)
+    {
+        if (! isOn (v, Module::space)) return 0.0;
+        const auto f = [&v] (int id) { return static_cast<double> (v[ix (id)]); };
+        switch (static_cast<SpaceType> (std::clamp (static_cast<int> (f (spType)), 0, 6)))
+        {
+            case SpaceType::reverb: return f (revPre) / 1000.0 + f (revDecay) * 1.3;
+            case SpaceType::hall: return f (hallPre) / 1000.0 + f (hallDecay) * 1.3;
+            case SpaceType::room: return f (roomPre) / 1000.0 + f (roomDecay) * 1.3;
+            case SpaceType::delay:
+            {
+                const double fb = std::max (0.01, f (dlyFeedback) / 100.0);
+                const double repeats = std::log (0.001) / std::log (fb) + 1.0;
+                return std::min (30.0, repeats * kDelayBeats[std::clamp (static_cast<int> (f (dlyTime)), 0, 8)] * 1.0);   // ~60 BPM or faster
+            }
+            case SpaceType::special: return static_cast<SpecialMode> (static_cast<int> (f (spxMode))) == SpecialMode::freeze ? 45.0 : 12.0 + 10.0 * f (spxFeedback) / 100.0;
+            case SpaceType::chorus:
+            case SpaceType::phaser: return 0.1;
+        }
+        return 0.0;
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -49,6 +138,7 @@ namespace mixology::proc
         noiseTone.k = design (Shape::lowPass, 6000.0, 0.0, 0.7071, rate);
         harmOver.setStages (1);
         analogOver.setStages (1);
+        if (spaceOwner != nullptr) spaceOwner->prepare (rate);
         fresh = true;
         w = {};
         reset();
@@ -199,6 +289,7 @@ namespace mixology::proc
             case Module::clip: clip (nch, n); break;
             case Module::stereo: stereo (nch, n); break;
             case Module::final: finalTouch (nch, n); break;
+            case Module::space: space (nch, n); break;
             case Module::limit:
             case Module::count: break;
         }
@@ -235,6 +326,7 @@ namespace mixology::proc
                 lastLowX = lastHighX = -1.0f;
                 break;
             case Module::final: finalAir.reset(); finalGlue.reset(); finalAirDb = 99.0f; break;
+            case Module::space: if (auto* sb = spaceBank.load (std::memory_order_acquire)) sb->resetAll(); break;
             case Module::limit:
             case Module::count: break;
         }
@@ -660,5 +752,180 @@ namespace mixology::proc
                 for (int c = 0; c < nch; ++c) work[ix (c)][ix (i)] *= g;
         }
         meters.glue = metric (meters.glue, static_cast<float> (most));
+    }
+
+    void Chain::space (int nch, int n)
+    {
+        auto* sb = spaceBank.load (std::memory_order_acquire);
+        if (sb == nullptr)   // not made yet (the host makes it within a moment)
+        {
+            if (v (spRoute) >= 0.5)   // an FX channel plays only the effect: silence, never the dry sound twice
+                for (int c = 0; c < nch; ++c) std::fill_n (work[static_cast<std::size_t> (c)].begin(), n, 0.0);
+            return;                   // on a track the sound passes
+        }
+        auto& bank = *sb;
+        const int type = std::clamp (static_cast<int> (v (spType)), 0, 6);
+        if (type != bank.type)
+        {
+            bank.resetType (type);
+            bank.prevType = bank.type;
+            bank.fade = bank.type < 0 ? 1.0 : 0.0;
+            bank.type = type;
+        }
+
+        const double* inL = work[0].data();
+        const double* inR = nch > 1 ? work[1].data() : work[0].data();
+        static constexpr int kMixIds[] = { revMix, dlyMix, choMix, phaMix, hallMix, roomMix, spxMix };
+
+        // One effect's wet sound into out (L, R).
+        auto run = [&] (int t, std::array<std::array<double, kChunk>, 2>& out) {
+            double* oL = out[0].data();
+            double* oR = out[1].data();
+            FdnReverb::Settings rs;
+            switch (static_cast<SpaceType> (t))
+            {
+                case SpaceType::reverb:
+                    rs.preDelayMs = v (revPre); rs.decaySeconds = v (revDecay); rs.dampHz = v (revDamp); rs.size = 0.85;
+                    rs.width = v (revWidth) / 100.0; rs.modMs = 0.2; rs.modHz = 0.6;
+                    bank.plate.set (rs);
+                    bank.plate.process (inL, inR, oL, oR, n);
+                    break;
+                case SpaceType::hall:
+                    rs.preDelayMs = v (hallPre); rs.decaySeconds = v (hallDecay); rs.dampHz = v (hallDamp);
+                    rs.size = 1.0 + 1.2 * v (hallSize) / 100.0; rs.early = 0.25; rs.modMs = 0.35; rs.modHz = 0.4;
+                    bank.hall.set (rs);
+                    bank.hall.process (inL, inR, oL, oR, n);
+                    break;
+                case SpaceType::room:
+                {
+                    const double late = v (roomLate) / 100.0;
+                    rs.preDelayMs = v (roomPre); rs.decaySeconds = v (roomDecay); rs.dampHz = 8000.0;
+                    rs.size = 0.25 + 0.55 * v (roomSize) / 100.0; rs.late = late; rs.early = 0.2 + 1.6 * (1.0 - late); rs.modMs = 0.1;
+                    bank.room.set (rs);
+                    bank.room.process (inL, inR, oL, oR, n);
+                    break;
+                }
+                case SpaceType::special:
+                {
+                    const auto mode = static_cast<SpecialMode> (std::clamp (static_cast<int> (v (spxMode)), 0, 3));
+                    const double fb = v (spxFeedback) / 100.0, motion = v (spxMotion) / 100.0;
+                    rs.size = 1.9;
+                    rs.decaySeconds = mode == SpecialMode::freeze ? 40.0 : mode == SpecialMode::swell ? 3.0 + 5.0 * fb : 2.5 + 7.0 * fb;
+                    rs.modMs = 0.3 + (mode == SpecialMode::drift ? 3.0 : 1.0) * motion;
+                    rs.modHz = 0.15 + 0.6 * motion;
+                    rs.dampHz = std::min (20000.0, v (spxTone) * 1.2);
+                    bank.special.set (rs);
+                    // Shimmer: last chunk's wet sound, pitched by Shift, goes back into the tail.
+                    std::array<double, kChunk> extra {};
+                    if (mode == SpecialMode::shimmer)
+                    {
+                        bank.shifter.setSemitones (v (spxShift));
+                        for (int i = 0; i < n; ++i) extra[ix (i)] = bank.shifter.process (bank.shimmer[ix (i)]) * fb * 0.55;
+                    }
+                    // Freeze: the tail hardly decays, so only a little of the track goes in.
+                    std::array<double, kChunk> fl {}, fr {};
+                    const double inGain = mode == SpecialMode::freeze ? 0.25 : 1.0;
+                    for (int i = 0; i < n; ++i) { fl[ix (i)] = inL[i] * inGain; fr[ix (i)] = inR[i] * inGain; }
+                    bank.special.process (fl.data(), fr.data(), oL, oR, n, extra.data());
+                    if (bank.toneHz != cur[spxTone])
+                    {
+                        bank.toneHz = cur[spxTone];
+                        bank.toneLp.k = design (Shape::lowPass, bank.toneHz, 0.0, 0.7071, rate);
+                    }
+                    const double swellTime = 0.25 + 1.2 * motion;
+                    const double fastC = timeCoeff (5.0, rate), slowC = timeCoeff (400.0, rate), riseC = timeCoeff (swellTime * 1000.0 / 3.0, rate);
+                    for (int i = 0; i < n; ++i)
+                    {
+                        double l = bank.toneLp.process (0, oL[i]), r = bank.toneLp.process (1, oR[i]);
+                        bank.shimmer[ix (i)] = 0.5 * (l + r);
+                        if (mode == SpecialMode::swell)
+                        {
+                            // Swell: after every new note the effect fades in (like a reversed tail).
+                            const double x = std::abs (0.5 * (inL[i] + inR[i]));
+                            bank.swellFast = x + (bank.swellFast - x) * fastC;
+                            bank.swellSlow = x + (bank.swellSlow - x) * slowC;
+                            if (bank.swellFast > 2.0 * bank.swellSlow + 1.0e-4 && bank.swell > 0.6) bank.swell = 0.0;
+                            bank.swell = 1.0 + (bank.swell - 1.0) * riseC;
+                            l *= bank.swell;
+                            r *= bank.swell;
+                        }
+                        oL[i] = l;
+                        oR[i] = r;
+                    }
+                    break;
+                }
+                case SpaceType::delay:
+                {
+                    const double bpm = hostBpm > 20.0 ? hostBpm : 120.0;
+                    bank.delay.set (kDelayBeats[std::clamp (static_cast<int> (v (dlyTime)), 0, 8)] * 60.0 / bpm,
+                                    v (dlyFeedback) / 100.0, v (dlyTone), v (dlyPingPong) / 100.0);
+                    bank.delay.process (inL, inR, oL, oR, n);
+                    break;
+                }
+                case SpaceType::chorus:
+                    bank.chorus.set (v (choRate), v (choDepth) / 100.0, v (choDelay), v (choWidth) / 100.0);
+                    bank.chorus.process (inL, inR, oL, oR, n);
+                    break;
+                case SpaceType::phaser:
+                    bank.phaser.set (v (phaRate), v (phaDepth) / 100.0, v (phaFeedback) / 100.0, v (phaCentre));
+                    bank.phaser.process (inL, inR, oL, oR, n);
+                    break;
+            }
+        };
+
+        run (type, bank.a);
+        double mixAmt = v (kMixIds[type]) / 100.0;
+        if (bank.fade < 1.0 && bank.prevType >= 0)
+        {
+            run (bank.prevType, bank.b);
+            const double f0 = bank.fade, f1 = std::min (1.0, bank.fade + n / (0.06 * rate));
+            for (int c = 0; c < 2; ++c)
+                for (int i = 0; i < n; ++i)
+                {
+                    const double f = f0 + (f1 - f0) * (i + 1) / n;
+                    bank.a[ix (c)][ix (i)] = f * bank.a[ix (c)][ix (i)] + (1.0 - f) * bank.b[ix (c)][ix (i)];
+                }
+            mixAmt = f1 * mixAmt + (1.0 - f1) * v (kMixIds[bank.prevType]) / 100.0;
+            bank.fade = f1;
+        }
+
+        // The wet sound's EQ: low cut and high cut (12 dB / octave).
+        if (bank.lcHz != cur[spLowCut]) { bank.lcHz = cur[spLowCut]; bank.lowCut.k = design (Shape::highPass, bank.lcHz, 0.0, 0.7071, rate); }
+        if (bank.hcHz != cur[spHighCut]) { bank.hcHz = cur[spHighCut]; bank.highCut.k = design (Shape::lowPass, bank.hcHz, 0.0, 0.7071, rate); }
+
+        // Ducking: quieter while the key (the vocal) is there, back up in the gaps.
+        const double chunkSec = static_cast<double> (n) / rate;
+        double duck0 = bank.duckDb, duck1 = 0.0;
+        if (hostKey >= 0.0)
+        {
+            const double key = hostKey;
+            bank.keyEnv = key > bank.keyEnv ? key + (bank.keyEnv - key) * std::exp (-chunkSec / 0.005) : key + (bank.keyEnv - key) * std::exp (-chunkSec / 0.12);
+            const double keyDb = gainToDb (bank.keyEnv);
+            const double want = v (duckAmount) * std::clamp ((keyDb + 50.0) / 18.0, 0.0, 1.0);
+            duck1 = want + (bank.duckDb - want) * std::exp (-chunkSec / (want > bank.duckDb ? 0.015 : 0.3));
+        }
+        else
+            duck1 = bank.duckDb * std::exp (-chunkSec / 0.3);
+        bank.duckDb = duck1;
+
+        const bool fx = v (spRoute) > 0.5;
+        double peak = 0.0;
+        for (int i = 0; i < n; ++i)
+        {
+            const double dg = dbToGain (-(duck0 + (duck1 - duck0) * (i + 1) / n));
+            for (int c = 0; c < nch; ++c)
+            {
+                double wet = bank.a[ix (c)][ix (i)];
+                wet = bank.highCut.process (c, bank.lowCut.process (c, wet)) * dg;
+                // Safety: a runaway tail (huge feedback) is rounded off instead of exploding.
+                const double aw = std::abs (wet);
+                if (aw > 0.8) wet = std::copysign (0.8 + 0.4 * std::tanh ((aw - 0.8) / 0.4), wet);
+                peak = std::max (peak, std::abs (wet));
+                auto& x = work[ix (c)][ix (i)];
+                x = fx ? wet : x + mixAmt * (wet - x);
+            }
+        }
+        meters.spaceWet = metric (meters.spaceWet, static_cast<float> (gainToDb (peak)));
+        meters.duck = metric (meters.duck, static_cast<float> (duck1));
     }
 }

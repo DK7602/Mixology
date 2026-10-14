@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 
 namespace mixology::link
@@ -34,6 +35,34 @@ namespace mixology::link
             a.pocketHz = from[3].load (kRelaxed);
             a.pocketDb = from[4].load (kRelaxed);
             return a;
+        }
+
+        // A duck list behind a sequence counter: odd while it is written.
+        void storeDuck (std::atomic<std::uint32_t>& seq, std::atomic<std::uint32_t>& count,
+                        std::array<std::atomic<std::uint32_t>, kMaxDuckSources>& to, const DuckSources& d) noexcept
+        {
+            seq.fetch_add (1, kAcqRel);
+            std::atomic_thread_fence (std::memory_order_release);
+            const int n = std::clamp (d.count, 0, kMaxDuckSources);
+            for (std::size_t i = 0; i < to.size(); ++i) to[i].store (static_cast<int> (i) < n ? d.hashes[i] : 0u, kRelaxed);
+            count.store (static_cast<std::uint32_t> (n), kRelaxed);
+            seq.fetch_add (1, kRelease);
+        }
+
+        /** False when a writer was in the middle (try again later). */
+        bool loadDuck (const std::atomic<std::uint32_t>& seq, const std::atomic<std::uint32_t>& count,
+                       const std::array<std::atomic<std::uint32_t>, kMaxDuckSources>& from, DuckSources& d, std::uint32_t& seqSeen) noexcept
+        {
+            const auto before = seq.load (kAcquire);
+            if (before & 1u) return false;
+            DuckSources out;
+            out.count = static_cast<int> (std::min<std::uint32_t> (count.load (kRelaxed), kMaxDuckSources));
+            for (std::size_t i = 0; i < from.size(); ++i) out.hashes[i] = static_cast<int> (i) < out.count ? from[i].load (kRelaxed) : 0u;
+            std::atomic_thread_fence (std::memory_order_acquire);
+            if (seq.load (kRelaxed) != before) return false;
+            d = out;
+            seqSeen = before;
+            return true;
         }
     }
 
@@ -78,6 +107,9 @@ namespace mixology::link
             s.procRunning.store (0, kRelaxed);
             s.procMetersMs.store (0, kRelaxed);
             s.latency.store (0, kRelaxed);
+            s.keyLevel.store (0.0f, kRelaxed);
+            s.keyMs.store (0, kRelaxed);
+            storeDuck (s.duckNowSeq, s.duckNowCount, s.duckNow, DuckSources {});
             s.heartbeatMs.store (nowMs, kRelaxed);
             s.generation.fetch_add (1, kRelease);
             return i;
@@ -321,8 +353,77 @@ namespace mixology::link
         return n;
     }
 
+    void Registry::publishKey (int slot, float level, std::uint64_t nowMs) noexcept
+    {
+        auto* s = slotPtr (slot);
+        if (s == nullptr) return;
+        s->keyLevel.store (level, kRelaxed);
+        s->keyMs.store (nowMs, kRelease);
+    }
+
+    float Registry::keyLevel (int slot, std::uint64_t nowMs) const noexcept
+    {
+        auto* s = slotPtr (slot);
+        if (s == nullptr) return 0.0f;
+        const auto when = s->keyMs.load (kAcquire);
+        if (when == 0 || nowMs - std::min (nowMs, when) > kKeyMs) return 0.0f;
+        const float k = s->keyLevel.load (kRelaxed);
+        return std::isfinite (k) ? std::clamp (k, 0.0f, 16.0f) : 0.0f;
+    }
+
+    bool Registry::takeDuckRequest (int slot, std::uint32_t& lastSeq, DuckSources& d) const
+    {
+        auto* s = slotPtr (slot);
+        if (s == nullptr) return false;
+        const auto now = s->duckRequestSeq.load (kAcquire);
+        if (now == lastSeq) return false;
+        DuckSources read;
+        std::uint32_t seen = 0;
+        if (! loadDuck (s->duckRequestSeq, s->duckRequestCount, s->duckRequest, read, seen)) return false;
+        const bool first = lastSeq == kNoRequestSeen;
+        lastSeq = seen;
+        if (first) return false;
+        d = read;
+        return true;
+    }
+
+    void Registry::publishDuck (int slot, const DuckSources& d)
+    {
+        if (auto* s = slotPtr (slot)) storeDuck (s->duckNowSeq, s->duckNowCount, s->duckNow, d);
+    }
+
+    int Registry::findSlots (const DuckSources& d, int self, std::uint64_t nowMs, int* slots, int max) const
+    {
+        int n = 0;
+        if (d.count <= 0) return 0;
+        for (int i = 0; i < kMaxLinks && n < max; ++i)
+        {
+            if (i == self) continue;
+            const auto& s = block.slots[static_cast<std::size_t> (i)];
+            if (s.state.load (kAcquire) != 1u) continue;
+            const auto beat = s.heartbeatMs.load (kRelaxed);
+            if (beat == 0 || nowMs - std::min (nowMs, beat) > kAliveMs) continue;
+            if ((s.flags.load (kRelaxed) & 1u) == 0) continue;   // no name
+            const auto h = s.nameHash.load (kRelaxed);
+            for (int k = 0; k < std::min (d.count, kMaxDuckSources); ++k)
+                if (d.hashes[static_cast<std::size_t> (k)] == h)
+                {
+                    slots[n++] = i;
+                    break;
+                }
+        }
+        return n;
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Mixology side
+
+    void Registry::requestDuck (int slot, std::uint32_t generation, const DuckSources& d)
+    {
+        auto* s = slotPtr (slot);
+        if (s == nullptr || s->generation.load (kRelaxed) != generation) return;
+        storeDuck (s->duckRequestSeq, s->duckRequestCount, s->duckRequest, d);
+    }
 
     void Registry::requestProc (int slot, std::uint32_t generation, int index, float value)
     {
@@ -391,6 +492,11 @@ namespace mixology::link
             info.procRunning = procWhen != 0 && nowMs - std::min (nowMs, procWhen) <= kAudioMs ? s.procRunning.load (kRelaxed) : 0u;
             info.sampleRate = s.sampleRate.load (kRelaxed);
             info.latency = static_cast<int> (s.latency.load (kRelaxed));
+            for (int attempt = 0; attempt < 8; ++attempt)
+            {
+                std::uint32_t seen = 0;
+                if (loadDuck (s.duckNowSeq, s.duckNowCount, s.duckNow, info.duck, seen)) break;
+            }
             std::uint64_t when = 0;
             if (readAnalysis (i, info.analysis, info.playing, info.songSample, when))
             {

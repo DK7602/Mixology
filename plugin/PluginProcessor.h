@@ -38,7 +38,7 @@ public:
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 0.0; }
+    double getTailLengthSeconds() const override { return mixology::proc::host::reportedTail (procRaw.read()); }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -93,7 +93,7 @@ public:
     std::atomic<bool> monoListen { false };
 
 private:
-    void timerCallback() override;   // the Limiter's latency
+    void timerCallback() override;   // the Limiter's latency, Space's engine and tail
 
     template <typename Sample>
     void process (juce::AudioBuffer<Sample>&);
@@ -103,6 +103,7 @@ private:
     mixology::proc::Chain chain;
     std::array<std::atomic<float>, mixology::proc::kMeterValues> procMeters {};
     std::atomic<std::uint32_t> procRunning { 0 };
+    std::atomic<double> tailTold { 0.0 };
     juce::CriticalSection stateLock;
     juce::String uiState;
 

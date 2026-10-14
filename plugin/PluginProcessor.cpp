@@ -23,7 +23,7 @@ namespace
         return layout;
     }
 
-    float meterDefault (int i) { return i < 4 ? -100.0f : 0.0f; }   // peaks first, then dB taken off
+    float meterDefault (int i) { return i < 4 || i == 13 ? -100.0f : 0.0f; }   // peaks (and the Space level), then dB taken off
 }
 
 MixologyAudioProcessor::MixologyAudioProcessor()
@@ -39,8 +39,15 @@ MixologyAudioProcessor::MixologyAudioProcessor()
 
 void MixologyAudioProcessor::timerCallback()
 {
-    const int latency = chain.latencyFor (procRaw.read());
+    const auto values = procRaw.read();
+    const int latency = chain.latencyFor (values);
     if (latency != getLatencySamples()) setLatencySamples (latency);   // the Limiter's lookahead, while it is on
+    if (mixology::proc::isOn (values, mixology::proc::Module::space)) chain.ensureSpace();   // never on the audio thread
+    if (const double tail = mixology::proc::host::reportedTail (values); mixology::proc::host::tailChanged (tail, tailTold.load()))
+    {
+        tailTold.store (tail);
+        updateHostDisplay (ChangeDetails().withLatencyChanged (true));   // the host asks for latency and tail again
+    }
 }
 
 mixology::proc::Meters MixologyAudioProcessor::takeProcMeters()
@@ -64,8 +71,10 @@ void MixologyAudioProcessor::prepareToPlay (double sampleRate, int)
     loudness.prepare (sampleRate, juce::jmax (1, getTotalNumOutputChannels()));
     const auto values = procRaw.read();
     chain.prepare (sampleRate, juce::jmax (1, getTotalNumOutputChannels()));
+    if (mixology::proc::isOn (values, mixology::proc::Module::space)) chain.ensureSpace();
     chain.setValues (values);
     setLatencySamples (chain.latencyFor (values));
+    tailTold.store (mixology::proc::host::reportedTail (values));
 }
 
 template <typename Sample>
@@ -79,6 +88,7 @@ void MixologyAudioProcessor::process (juce::AudioBuffer<Sample>& buffer)
     // Analyze Mix hears what the tracks add up to (before the Full Mix processing) ...
     analysisRing.push (buffer.getArrayOfReadPointers(), channels, n);
 
+    chain.setHost (beat.bpm.load (std::memory_order_relaxed), -1.0);   // the tempo as of the last block
     chain.setValues (procRaw.read());
     chain.process (buffer.getArrayOfWritePointers(), channels, n);
     {
@@ -94,18 +104,7 @@ void MixologyAudioProcessor::process (juce::AudioBuffer<Sample>& buffer)
         procRunning.store (m.running, std::memory_order_relaxed);
     }
 
-    if (monoListen.load (std::memory_order_relaxed) && channels >= 2)
-    {
-        auto* l = buffer.getWritePointer (0);
-        auto* r = buffer.getWritePointer (1);
-        for (int i = 0; i < n; ++i)
-        {
-            const auto m = static_cast<Sample> (0.5) * (l[i] + r[i]);
-            l[i] = r[i] = m;
-        }
-    }
-
-    // ... the meters and scopes show the mix as it leaves.
+    // ... the meters and scopes show the mix as it leaves (Mono Check, below, only changes what you hear).
     const auto* const* data = buffer.getArrayOfReadPointers();
     loudness.process (data, channels, n);
     spectrumTap.push (data, channels, n);
@@ -136,6 +135,18 @@ void MixologyAudioProcessor::process (juce::AudioBuffer<Sample>& buffer)
     meters.shortTerm.store (lufs (loudness.shortTermLufs()), std::memory_order_relaxed);
     meters.integrated.store (lufs (loudness.integratedLufs()), std::memory_order_relaxed);
     meters.truePeak.store (lufs (loudness.truePeakDbtp()), std::memory_order_relaxed);
+
+    // Mono Check: you hear the mix folded to mono; the scope and meters above still show it as it really is.
+    if (monoListen.load (std::memory_order_relaxed) && channels >= 2)
+    {
+        auto* l = buffer.getWritePointer (0);
+        auto* r = buffer.getWritePointer (1);
+        for (int i = 0; i < n; ++i)
+        {
+            const auto m = static_cast<Sample> (0.5) * (l[i] + r[i]);
+            l[i] = r[i] = m;
+        }
+    }
 }
 
 void MixologyAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)

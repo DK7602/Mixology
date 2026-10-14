@@ -8,7 +8,7 @@
 //   Hall     a wave of light rolls from the stage through the hall, the chandeliers sparkle
 //   Room     short, punchy lamp flashes; the drum kit lights up on the kick and the snare
 //   Special  the crystal pulses in changing colours, orbits spin, particles rise (faster with Shift)
-// While the song is stopped it only breathes slowly.
+// It moves only while the effect is in use on a track (setActive) and the song plays; otherwise it stands still.
 
 import { graph, clamp } from "./ui.js";
 
@@ -33,7 +33,7 @@ export function createScene(parent, x, y, w, h) {
   g.wrap.style.borderRadius = "inherit";
   Object.assign(g.canvas.style, { position: "absolute", left: "0", top: "0", width: "100%", height: "100%", display: "block" });
   const S = {
-    key: null, img: null, glow: null, glowKey: "", params: {}, on: false,
+    key: null, img: null, glow: null, glowKey: "", params: {}, on: false, active: 0,
     beat: { bpm: 0, ppq: 0, bar: 0, num: 4, playing: false, at: 0 },
     level: -100, avg: -60, hit: 0, lastHitAt: -1e9,
     particles: [], raf: 0, shown: false, t0: performance.now(),
@@ -95,23 +95,38 @@ export function createScene(parent, x, y, w, h) {
     const index = Math.floor(q);
     return { age: (q - index) * beatSeconds(), index, q, inBar: Math.floor(q - S.beat.bar + 1e-6) % Math.max(1, S.beat.num) };
   }
-  const live = () => S.beat.playing || S.level > -60;
+  const live = () => S.active > 0 && (S.beat.playing || S.level > -60);
 
   // ---- drawing ----------------------------------------------------------------------------------
   function frame(now) {
     S.raf = 0;
     if (!S.shown) return;
     schedule();
-    if (now - (S.lastDraw || 0) < 1000 / 40) return;   // 40 pictures a second is plenty, and light inside Cubase
+    const still = S.active <= 0;
+    if (now - (S.lastDraw || 0) < 1000 / (still ? 4 : 40)) return;   // 40 pictures a second is plenty, and light inside Cubase
     S.lastDraw = now;
     if (!S.img || !S.img.complete || !S.img.naturalWidth) return;
     if (S.glowKey !== S.key + ":" + g.canvas.width) buildGlow();
     const ctx = g.ctx;
-    const t = (now - S.t0) / 1000;
     const f = fit();
+    if (still) {   // not in use: the picture, standing still
+      ctx.save();
+      ctx.clearRect(0, 0, w, h);
+      ctx.translate(w / 2, h / 2);
+      ctx.scale(1.012, 1.012);
+      ctx.translate(-w / 2, -h / 2);
+      ctx.drawImage(S.img, f.ox, f.oy, f.dw, f.dh);
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = 0.1;
+      ctx.drawImage(S.glow, 0, 0, w, h);
+      ctx.restore();
+      vignette(ctx);
+      return;
+    }
+    const t = (now - S.t0) / 1000;
     const p = S.params;
     const alive = live();
-    const amount = alive ? clamp(0.45 + (p.mix ?? 25) / 45, 0.45, 1.5) : 0.25;
+    const amount = alive ? clamp(0.35 + 0.8 * S.active, 0.45, 1.5) : 0.25;   // stronger as the effect gets louder
     const b = sinceBeat(now);
     const accent = b.inBar === 0 ? 1.25 : 1;
 
@@ -146,7 +161,11 @@ export function createScene(parent, x, y, w, h) {
     ctx.globalCompositeOperation = "source-over";
     ctx.restore();
 
-    // Vignette, so the motion stays inside the frame.
+    vignette(ctx);
+  }
+
+  // Vignette, so the motion stays inside the frame.
+  function vignette(ctx) {
     const v = ctx.createRadialGradient(w / 2, h / 2, h * 0.35, w / 2, h / 2, w * 0.62);
     v.addColorStop(0, "rgba(0,0,0,0)");
     v.addColorStop(1, "rgba(0,0,0,0.35)");
@@ -439,6 +458,8 @@ export function createScene(parent, x, y, w, h) {
     },
     /** The effect's knobs: { mix, decay, pre, time, feedback, pingpong, rate, depth, shift }. */
     setParams(params) { S.params = params; },
+    /** 0: the effect isn't used (the picture stands still); up to 1.2: in use, livelier as it gets louder. */
+    setActive(level) { S.active = Math.max(0, +level || 0); },
     /** From each frame: the song's tempo / position and the mix level (for songs without a tempo). */
     onFrame(f) {
       const now = performance.now();

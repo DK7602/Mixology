@@ -1,8 +1,9 @@
 # Mixology manual
 
-Manual for version 0.5.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
-tools: Auto Mix, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, and now the processing:
-EQ, Dynamics, Tone and Stereo on any track or on the full mix).
+Manual for version 0.6.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
+tools: Auto Mix, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
+Dynamics, Tone and Stereo on any track or on the full mix, and now Space: reverb, delay and effects on a track
+or an FX channel, ducking under the vocal).
 
 **Voxology** makes each vocal sound great. **Mixology** makes all your tracks work together.
 **Masterology** turns the finished mix into the master.
@@ -19,9 +20,10 @@ EQ, Dynamics, Tone and Stereo on any track or on the full mix).
 | Mixology Link on a track: its level on the Tracks page, a Trim, the Assist EQ | Live |
 | Analyze Mix and the Mix Assistant's advice; track roles; the analyzer's track colours | Live |
 | Auto Mix, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match | Live |
-| EQ, Dynamics, Tone, Stereo pages: processing on the track you pick (in its Mixology Link) or on the full mix | Live: this is what we're testing now |
+| EQ, Dynamics, Tone, Stereo pages: processing on the track you pick (in its Mixology Link) or on the full mix | Live |
 | Mono Check (Stereo page) | Live |
-| Space page, Master page's finishing knobs | Preview: they move but don't process audio yet (next rounds) |
+| Space page: reverbs, delay, chorus, phaser, special effects on a track or an FX channel, ducking | Live: this is what we're testing now |
+| Master page's finishing knobs | Preview: they move but don't process audio yet (next round) |
 
 Nothing changes your sound until you ask: every processing module starts switched off (the audio passes
 through bit for bit). What can change it: the Cubase faders and pans Mixology moves, the Assist EQ / Trim in
@@ -52,11 +54,12 @@ Mixology remembers your choice.
 - **EQ**: six bands on the track you pick (or the full mix). Drag a point to change frequency and gain; scroll on
   it to change the width (Q); double-click it to make that band flat again.
 - **Dynamics**: Compressor, Multiband, Transient, Gate / Expand, Limiter, with in / out meters and gain reduction.
-- **Space**: Reverb, Delay, Chorus, Phaser, Hall, Room, Special FX, each with its own controls,
-  plus EQ and Ducking (the effect gets quieter while the vocal sings). The picture comes alive while the song
-  plays and moves with its beat (Cubase's tempo): lights bloom and fade with the reverb's Decay, echoes run down
-  the delay's tunnel at its Time, the phaser's rings swirl at its Rate, a wave of light rolls through the hall, the
-  Special FX crystal turns on every beat with shock waves and sparks. It only moves while the Space page is open.
+- **Space**: Reverb, Delay, Chorus, Phaser, Hall, Room, Special FX on a track or an FX channel, each with its
+  own controls, plus the effect's EQ and Ducking (the effect gets quieter while the vocal sings). See "Space"
+  below. While an effect is in use and the song plays, its picture comes alive with the beat (Cubase's tempo):
+  lights bloom and fade with the reverb's Decay, echoes run down the delay's tunnel at its Time, the phaser's
+  rings swirl at its Rate, a wave of light rolls through the hall, the Special FX crystal turns on every beat with
+  shock waves and sparks. An effect nobody uses stands still.
 - **Tone**: Tone Balance, Loudness, Clip Control, Harmonic, Analog Touch, Final Touch; your mix's tonal balance
   against the style's target (red line), and loudness.
 - **Stereo**: Width (and Low / Mid / High Width), Mono Check, and how wide your mix is.
@@ -274,10 +277,51 @@ The modules (the sound runs through them in this order):
 | Tone | Final Touch | Width, Air, Glue, Output. |
 | Dynamics | Limiter | Nothing passes the Ceiling (sample or true peaks). Adds 5 ms of delay while it's on; Cubase lines the track up. On the full mix, leave the final limiting to Masterology. |
 
-**Mono Check** (Stereo page): the whole mix plays in mono while the red badge shows. It switches itself off when
+**Mono Check** (Stereo page): the whole mix plays in mono while the red badge shows (the scope and meters keep
+showing the mix as it really is, so you can still see its stereo picture). It switches itself off when
 you leave the Stereo page or close Mixology, so a mixdown can never come out mono by mistake.
 
 CPU: a module that's off costs nothing. An EQ and a compressor on a track cost about 1.5 % of one CPU core.
+
+## Space (reverb, delay and effects)
+
+Space gives a track (or an FX channel) one effect: **Reverb** (a plate), **Delay**, **Chorus**, **Phaser**,
+**Hall**, **Room** or **Special FX**. It runs inside that track's Mixology Link, at the end of its processing.
+
+1. Top of the Space page: pick the **track** (Space never works on the Full Mix: a reverb on everything washes
+   the mix out).
+2. Pick the effect on the left and press **ON** (or turn one of its knobs, or pick a preset). One effect per
+   track: press ON on another effect and it takes over (the old one fades out, no click). The green lamp on the
+   left shows the effect this track uses. Each effect keeps its own knob settings.
+3. **USED AS**:
+   - **On this track**: **MIX** blends the effect into the track. Good for a touch of room or chorus on one sound.
+   - **FX channel (100 % wet)**: only the effect comes out. This is how pros do vocal reverb and delay: in
+     Cubase, add an **FX channel** (Project > Add Track > Effect, or any FX channel you have), put **Mixology Link**
+     on it, pick it here, and send your vocals to it with their **Sends** in the MixConsole. One reverb for all
+     the vocals sounds like one room. A track whose name looks like an FX channel ("FX 1-...", "Verb", "Delay",
+     "Return") is set to FX channel by itself the first time you switch Space on.
+4. **EFFECT EQ** (right): the effect's low cut and high cut (200 Hz and 9 kHz to start: a reverb without boomy
+   lows or hissy highs sits better). Double-click: back to the start.
+5. **DUCKING**: pick the track(s) to duck under (usually your lead vocal, or All vocals) and the **AMOUNT**. The
+   effect dips while they play and blooms in the gaps, so the vocal stays clear. The bar shows how much it is
+   ducked right now. The tracks it ducks under need Mixology Link (each Link tells the others how loud its track is).
+
+| Effect | Knobs |
+| --- | --- |
+| Reverb (plate) | Pre-delay (a gap before the reverb: keeps words clear), Decay (how long it rings), Damping (highs fade faster above this), Width, Mix |
+| Delay | Time (note values, locked to Cubase's tempo: 1/8, dotted 1/8, 1/4...), Feedback (how many repeats), Tone (darker repeats), Ping-Pong (repeats bounce left / right), Mix |
+| Chorus | Rate, Depth, Delay, Width, Mix |
+| Phaser | Rate, Depth, Feedback, Center, Mix |
+| Hall | Pre-delay, Decay (1 - 12 s), Size, Damping, Mix |
+| Room | Pre-delay, Decay (short), Size, Early / Late (more walls or more tail), Mix |
+| Special FX | **Shimmer** (pitched echoes, Shift, climb inside a big reverb), **Drift** (a huge drifting wash), **Swell** (each new note's effect fades in, like a reversed reverb), **Freeze** (holds the sound like an endless pad). Feedback, Motion, Tone, Mix |
+
+Good starting points: lead vocal on an FX channel with **Vocal Plate** + a second FX channel with **Dotted 1/8**
+delay, both ducking under the lead vocal. Adlibs: **Ping-Pong 1/8**. Drums: **Drum Room** on the track, Mix 15 %.
+
+Cubase is told how long each effect rings (its "tail"), so a reverb is never cut off when the track goes quiet.
+Switching Space on or off makes Cubase restart that plug-in for a moment (a tiny gap in its sound): do it while
+stopped if you can. A Space effect uses 0.3 - 2.3 % of one CPU core (Delay the least, Hall the most).
 
 ## Mix styles
 
@@ -350,4 +394,12 @@ Final limiting is Masterology's job: keep Mixology's Limiter off on the Full Mix
   the way), so Width can't change anything there.
 - **A track sounds 5 ms late**: its Limiter is on and Cubase's delay compensation is switched off (Constrain
   Delay Compensation). Switch that off again, or the Limiter.
+- **Space: I hear nothing from the FX channel**: the tracks need a **Send** to that FX channel in Cubase (MixConsole,
+  Sends), turned up. Mixology can't make sends for you.
+- **Space: the dry vocal is twice as loud / phasey**: the FX channel's Link is set to **On this track** (it passes
+  the sent vocal through). Set **USED AS** to FX channel (100 % wet).
+- **Space: ducking does nothing**: the track it ducks under needs Mixology Link (and must be playing); AMOUNT must
+  be above Off.
+- **Space: the delay doesn't follow the tempo**: it follows Cubase's tempo while the song plays (120 BPM until it
+  has heard one).
 - **Send us the log**: Settings > Cubase Bridge > **Copy log**, then paste it into the chat.

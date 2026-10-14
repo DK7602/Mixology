@@ -79,6 +79,9 @@ public:
     /** Global settings file shared by all instances (theme, learned fader curve). */
     juce::PropertiesFile& settings() { return *settingsFile; }
 
+    /** A track's role (yours, or guessed from its name), for the Space page ("duck under the vocal"). */
+    std::optional<mixology::mix::Role> trackRole (std::uint32_t hash, const std::string& name) const { return roleFor (hash, name); }
+
 private:
     void timerCallback() override;
     void handleIncomingMidiMessage (juce::MidiInput*, const juce::MidiMessage&) override;

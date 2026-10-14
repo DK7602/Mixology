@@ -28,6 +28,10 @@
     - Processing (Milestone 5): Gate, EQ, Dynamics, Tone and Stereo after the Assist EQ (mixology::proc::Chain),
       controlled from Mixology's pages through the registry, every control a host parameter. All modules
       start off (audio untouched, bit for bit).
+    - Space (Milestone 5, round 2): reverbs, delay, chorus, phaser and special effects at the end of the chain,
+      on the track itself or (on an FX channel) 100 % wet. The effect can duck under other tracks (the vocal):
+      every Link publishes its track's level each block, and a Link told to duck reads those tracks' levels.
+      While Space is on the host is told about a long tail, so it never cuts a reverb off.
     No latency, except while the Limiter is on (its lookahead; the host is told). */
 class MixologyLinkProcessor final : public juce::AudioProcessor,
                                     private juce::Timer,
@@ -51,7 +55,7 @@ public:
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 0.0; }
+    double getTailLengthSeconds() const override { return mixology::proc::host::reportedTail (procRaw.read()); }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -91,6 +95,11 @@ public:
     mixology::proc::Values procValues() const { return procRaw.read(); }
     std::uint32_t procRunning() const { return running.load (std::memory_order_relaxed); }
     void setProc (int index, float value) { mixology::proc::host::set (parameters, index, value); }
+    /** The tracks this Link's Space ducks under (message thread). */
+    mixology::link::DuckSources duckSources() const { return duck; }
+    /** Their names as the registry has them, and how many of them are running now. */
+    juce::StringArray duckNames() const;
+    float spaceWetDb() const { return spaceWet.load (std::memory_order_relaxed); }
 
 private:
     template <typename Sample>
@@ -98,6 +107,8 @@ private:
     void timerCallback() override;
     int useTimeSlice() override;   // analysis thread
     void publishIdentity();
+    void setDuck (const mixology::link::DuckSources&);   // message thread: use, save with the project, publish
+    void resolveDuck();                                  // message thread: which slots those tracks have now
 
     struct AnalysisThread : juce::TimeSliceThread
     {
@@ -133,6 +144,17 @@ private:
     int slot = -1;
     std::uint32_t trimRequestSeen = mixology::link::kNoRequestSeen;
     std::uint32_t assistRequestSeen = mixology::link::kNoRequestSeen;
+    std::uint32_t duckRequestSeen = mixology::link::kNoRequestSeen;
+
+    // Space: the ducking sources (message thread), the slots they have now (read by the audio thread), this
+    // track's own key level (audio thread), the tail last told to the host.
+    mixology::link::DuckSources duck;
+    std::array<std::atomic<int>, mixology::link::kMaxDuckSources> duckSlots {};
+    std::atomic<int> duckSlotCount { 0 };
+    double keyEnv = 0.0;
+    std::atomic<double> tailTold { 0.0 };
+    std::atomic<float> spaceWet { -100.0f };
+    int resolveCountdown = 0;
 
     Identity trackIdentity;
     juce::String trimNote;

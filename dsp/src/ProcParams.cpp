@@ -141,11 +141,61 @@ namespace mixology::proc
             num ("st_high", "High Width", 0.0f, 200.0f, 100.0f, L, 1.0f, "%"),
             num ("st_lowx", "Low Width Below", 60.0f, 500.0f, 150.0f, G, 0.0f, "Hz"),
             num ("st_highx", "High Width Above", 1500.0f, 10000.0f, 4000.0f, G, 0.0f, "Hz"),
+
+            toggle ("sp_on", "Space"),
+            choice ("sp_type", "Space Effect", "Reverb|Delay|Chorus|Phaser|Hall|Room|Special FX", 7, 0),
+            choice ("sp_route", "Space Used As", "On this track|FX channel (100 % wet)", 2, 0),
+            num ("sp_lowcut", "Space Low Cut", 20.0f, 2000.0f, 200.0f, G, 0.0f, "Hz"),
+            num ("sp_highcut", "Space High Cut", 1000.0f, 20000.0f, 9000.0f, G, 0.0f, "Hz"),
+            num ("duck_amount", "Ducking", 0.0f, 24.0f, 9.0f, L, 0.1f, "dB"),
+
+            num ("rev_pre", "Reverb Pre-delay", 0.0f, 200.0f, 20.0f, L, 1.0f, "ms"),
+            num ("rev_decay", "Reverb Decay", 0.2f, 10.0f, 1.8f, G, 0.0f, "s"),
+            num ("rev_damp", "Reverb Damping", 1000.0f, 20000.0f, 6500.0f, G, 0.0f, "Hz"),
+            num ("rev_width", "Reverb Width", 0.0f, 100.0f, 100.0f, L, 1.0f, "%"),
+            num ("rev_mix", "Reverb Mix", 0.0f, 100.0f, 22.0f, L, 1.0f, "%"),
+
+            choice ("dly_time", "Delay Time", "1/32|1/16|1/8T|1/8|1/8D|1/4T|1/4|1/4D|1/2", 9, 3),
+            num ("dly_feedback", "Delay Feedback", 0.0f, 95.0f, 35.0f, L, 1.0f, "%"),
+            num ("dly_tone", "Delay Tone", 800.0f, 20000.0f, 6000.0f, G, 0.0f, "Hz"),
+            num ("dly_pingpong", "Delay Ping-Pong", 0.0f, 100.0f, 60.0f, L, 1.0f, "%"),
+            num ("dly_mix", "Delay Mix", 0.0f, 100.0f, 18.0f, L, 1.0f, "%"),
+
+            num ("cho_rate", "Chorus Rate", 0.05f, 5.0f, 0.8f, G, 0.0f, "Hz"),
+            num ("cho_depth", "Chorus Depth", 0.0f, 100.0f, 40.0f, L, 1.0f, "%"),
+            num ("cho_delay", "Chorus Delay", 2.0f, 30.0f, 12.0f, L, 0.1f, "ms"),
+            num ("cho_width", "Chorus Width", 0.0f, 100.0f, 100.0f, L, 1.0f, "%"),
+            num ("cho_mix", "Chorus Mix", 0.0f, 100.0f, 30.0f, L, 1.0f, "%"),
+
+            num ("pha_rate", "Phaser Rate", 0.05f, 10.0f, 0.4f, G, 0.0f, "Hz"),
+            num ("pha_depth", "Phaser Depth", 0.0f, 100.0f, 60.0f, L, 1.0f, "%"),
+            num ("pha_feedback", "Phaser Feedback", 0.0f, 90.0f, 40.0f, L, 1.0f, "%"),
+            num ("pha_centre", "Phaser Centre", 200.0f, 5000.0f, 1000.0f, G, 0.0f, "Hz"),
+            num ("pha_mix", "Phaser Mix", 0.0f, 100.0f, 40.0f, L, 1.0f, "%"),
+
+            num ("hall_pre", "Hall Pre-delay", 0.0f, 200.0f, 35.0f, L, 1.0f, "ms"),
+            num ("hall_decay", "Hall Decay", 1.0f, 12.0f, 3.2f, G, 0.0f, "s"),
+            num ("hall_size", "Hall Size", 0.0f, 100.0f, 80.0f, L, 1.0f, "%"),
+            num ("hall_damp", "Hall Damping", 1000.0f, 20000.0f, 5000.0f, G, 0.0f, "Hz"),
+            num ("hall_mix", "Hall Mix", 0.0f, 100.0f, 18.0f, L, 1.0f, "%"),
+
+            num ("room_pre", "Room Pre-delay", 0.0f, 100.0f, 8.0f, L, 1.0f, "ms"),
+            num ("room_decay", "Room Decay", 0.1f, 3.0f, 0.7f, G, 0.0f, "s"),
+            num ("room_size", "Room Size", 0.0f, 100.0f, 45.0f, L, 1.0f, "%"),
+            num ("room_late", "Room Early/Late", 0.0f, 100.0f, 60.0f, L, 1.0f, "%"),
+            num ("room_mix", "Room Mix", 0.0f, 100.0f, 20.0f, L, 1.0f, "%"),
+
+            num ("spx_shift", "Special Shift", -12.0f, 12.0f, 12.0f, L, 1.0f, "st"),
+            num ("spx_feedback", "Special Feedback", 0.0f, 95.0f, 55.0f, L, 1.0f, "%"),
+            num ("spx_motion", "Special Motion", 0.0f, 100.0f, 35.0f, L, 1.0f, "%"),
+            num ("spx_tone", "Special Tone", 800.0f, 20000.0f, 8000.0f, G, 0.0f, "Hz"),
+            num ("spx_mix", "Special Mix", 0.0f, 100.0f, 25.0f, L, 1.0f, "%"),
+            choice ("spx_mode", "Special Mode", "Shimmer|Drift|Swell|Freeze", 4, 0),
         }};
         // clang-format on
 
-        constexpr int kOnParams[] = { gateOn, eqOn, compOn, multiOn, transOn, tbOn, ldOn, harmOn, anOn, clipOn, stOn, finOn, limOn };
-        constexpr const char* kModuleKeys[] = { "gate", "eq", "comp", "multi", "trans", "balance", "loud", "harm", "analog", "clip", "width", "final", "limit" };
+        constexpr int kOnParams[] = { gateOn, eqOn, compOn, multiOn, transOn, tbOn, ldOn, harmOn, anOn, clipOn, stOn, finOn, limOn, spOn };
+        constexpr const char* kModuleKeys[] = { "gate", "eq", "comp", "multi", "trans", "balance", "loud", "harm", "analog", "clip", "width", "final", "limit", "space" };
         static_assert (std::size (kOnParams) == kModules);
         static_assert (std::size (kModuleKeys) == kModules);
     }
@@ -187,7 +237,7 @@ namespace mixology::proc
 
     void meterValues (const Meters& m, float* out)
     {
-        const float v[kMeterValues] = { m.inL, m.inR, m.outL, m.outR, m.comp, m.multiLow, m.multiMid, m.multiHigh, m.trans, m.gate, m.limit, m.clip, m.glue };
+        const float v[kMeterValues] = { m.inL, m.inR, m.outL, m.outR, m.comp, m.multiLow, m.multiMid, m.multiHigh, m.trans, m.gate, m.limit, m.clip, m.glue, m.spaceWet, m.duck };
         std::copy (v, v + kMeterValues, out);
     }
 
@@ -197,6 +247,7 @@ namespace mixology::proc
         m.inL = v[0]; m.inR = v[1]; m.outL = v[2]; m.outR = v[3];
         m.comp = v[4]; m.multiLow = v[5]; m.multiMid = v[6]; m.multiHigh = v[7];
         m.trans = v[8]; m.gate = v[9]; m.limit = v[10]; m.clip = v[11]; m.glue = v[12];
+        m.spaceWet = v[13]; m.duck = v[14];
         m.running = running;
         return m;
     }

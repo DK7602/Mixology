@@ -41,6 +41,7 @@ export const native = {
   procTarget: fn("procTarget"),
   procSet: fn("procSet"),
   setMonoListen: fn("setMonoListen"),
+  spaceDuck: fn("spaceDuck"),
 };
 
 // ---------------------------------------------------------------------------------------------

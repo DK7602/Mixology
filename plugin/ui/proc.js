@@ -1,4 +1,4 @@
-// Milestone 5: the processing on the EQ, Dynamics, Tone and Stereo pages. One target for all four pages:
+// Milestone 5: the processing on the EQ, Dynamics, Tone, Stereo and Space pages. One target for all the pages:
 // "Full Mix" (Mixology's own processing on the Stereo Out) or a track (its Mixology Link). Every control comes
 // from procspec.js (generated from the engine's table), so ranges and defaults always match the plug-ins.
 
@@ -9,9 +9,11 @@ export { PROC, PROC_INDEX, MODULE_ON };
 
 // Which controls belong to which module (the interface's module ids).
 const PREFIX = { gate: "gate_", eq: "eq", comp: "comp_", multi: "multi_", trans: "trans_", limit: "lim_", balance: "tb_", loud: "ld_",
-  clip: "clip_", harm: "harm_", analog: "an_", final: "fin_", width: "st_" };
+  clip: "clip_", harm: "harm_", analog: "an_", final: "fin_", width: "st_",
+  space: ["sp_", "duck_", "rev_", "dly_", "cho_", "pha_", "hall_", "room_", "spx_"] };
 export const MODULE_NAMES = { gate: "Gate", eq: "EQ", comp: "Compressor", multi: "Multiband", trans: "Transient", limit: "Limiter",
-  balance: "Tone Balance", loud: "Loudness", clip: "Clip Control", harm: "Harmonics", analog: "Analog Touch", final: "Final Touch", width: "Stereo" };
+  balance: "Tone Balance", loud: "Loudness", clip: "Clip Control", harm: "Harmonics", analog: "Analog Touch", final: "Final Touch", width: "Stereo",
+  space: "Space" };
 
 const HOLD_MS = 800;   // after you move a control, the plug-in's echo of older values is ignored this long
 
@@ -27,6 +29,7 @@ export function createProc(app) {
     name: store.get("procTarget", "Full Mix"),
     targets: [{ key: "mix", name: "Full Mix", on: [], running: [] }],
     ok: true,
+    loadedKey: null,   // the target whose values have arrived (until then they are only defaults)
     meters: null,
     spectrum: null,
     corr: null,
@@ -80,6 +83,7 @@ export function createProc(app) {
       touched.clear();
       api.meters = null;
       api.spectrum = null;
+      api.loadedKey = null;
       app.native.procTarget(key);
       api.emit("target");
     },
@@ -89,12 +93,14 @@ export function createProc(app) {
       api.emit("mono");
     },
 
-    /** A target dropdown (all four pages share the selection). */
+    /** A target dropdown (the pages share the selection). opts.tracksOnly: no Full Mix (the Space page). */
     targetSelect(parent, x, y, w, opts = {}) {
-      const options = () => api.targets.map((t) => ({ value: t.key, label: t.name + (t.key === "mix" ? "" : "") }));
-      const s = select(parent, x, y, w, options(), api.key, (k) => api.select(k), opts);
-      s.el.title = "What these controls work on: the full mix (Mixology on the Stereo Out) or one track (its Mixology Link)";
-      const refresh = () => { s.setOptions(options()); s.set(api.key); };
+      const options = () => api.targets.filter((t) => !(opts.tracksOnly && t.key === "mix")).map((t) => ({ value: t.key, label: t.name }));
+      const shown = () => (options().some((o) => o.value === api.key) ? api.key : opts.placeholder || api.key);
+      const s = select(parent, x, y, w, options(), shown(), (k) => api.select(k), opts);
+      s.el.title = opts.tracksOnly ? "The track (its Mixology Link) or FX channel these controls work on"
+        : "What these controls work on: the full mix (Mixology on the Stereo Out) or one track (its Mixology Link)";
+      const refresh = () => { s.setOptions(options()); s.set(shown()); };
       api.on((why) => { if (why === "targets" || why === "target") refresh(); });
       return s;
     },
@@ -131,6 +137,7 @@ export function createProc(app) {
         if (cur && cur.key !== api.key) {
           api.key = cur.key;
           api.name = cur.name;
+          api.loadedKey = null;
           touched.clear();
           app.native.procTarget(cur.key);
           api.emit("target");
@@ -150,6 +157,7 @@ export function createProc(app) {
           if (Math.abs(values[i] - v) > 1e-4) { values[i] = v; changed = true; }
         });
         if (changed) api.emit("values");
+        api.loadedKey = p.key;
       }
       api.meters = p.meters || null;
       api.spectrum = p.spectrum || null;
@@ -173,7 +181,8 @@ export function createProc(app) {
 
 export function moduleOf(id) {
   if (id === "chain_on") return null;
-  for (const [mod, prefix] of Object.entries(PREFIX)) if (id.startsWith(prefix)) return mod;
+  for (const [mod, prefix] of Object.entries(PREFIX))
+    if ([].concat(prefix).some((p) => id.startsWith(p))) return mod;
   return null;
 }
 

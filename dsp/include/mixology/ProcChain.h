@@ -7,6 +7,7 @@
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <memory>
 
 /** Milestone 5: a track's processing (or the full mix's): Gate, EQ, Compressor, Multiband, Transient,
     Tone Balance, Loudness, Harmonics, Analog Touch, Clip Control, Stereo, Final Touch and Limiter, in that
@@ -24,7 +25,19 @@ namespace mixology::proc
     public:
         static constexpr int kMaxChannels = 2, kChunk = 32;
 
+        Chain();
+        ~Chain();
         void prepare (double sampleRate, int numChannels);
+        /** Space needs a few MB of delay lines, so they are only made when Space is first switched on: the
+            host calls this from its message thread (never the audio thread) when it sees Space on. Until then
+            the Space module passes the sound through. */
+        void ensureSpace();
+        bool spaceReady() const { return spaceBank.load (std::memory_order_acquire) != nullptr; }
+        /** Audio thread, before process(): the song's tempo (for the Delay's note values; 0 = unknown) and the
+            ducking key's level (linear peak of the tracks the effect ducks under; negative = no key). */
+        void setHost (double bpm, double keyLevel) { hostBpm = bpm; hostKey = keyLevel; }
+        /** How long the sound goes on after the input stops (the Space effect's tail), in seconds. */
+        static double tailSecondsFor (const Values&);
         void reset();
         /** Where the controls should be (they glide there). */
         void setValues (const Values&);
@@ -93,6 +106,7 @@ namespace mixology::proc
         void clip (int nch, int n);
         void stereo (int nch, int n);
         void finalTouch (int nch, int n);
+        void space (int nch, int n);
 
         double v (int id) const { return static_cast<double> (cur[static_cast<std::size_t> (id)]); }
         static void setShelf (dsp::Filter2&, dsp::Shape, double hz, double db, double q, double sampleRate, float& lastDb);
@@ -160,5 +174,10 @@ namespace mixology::proc
         dsp::AutoComp finalGlue;
 
         dsp::LookaheadLimiter limiter;
+
+        struct SpaceBank;
+        std::unique_ptr<SpaceBank> spaceOwner;           // message thread
+        std::atomic<SpaceBank*> spaceBank { nullptr };   // what the audio thread uses (set once, never freed while running)
+        double hostBpm = 0.0, hostKey = -1.0;
     };
 }

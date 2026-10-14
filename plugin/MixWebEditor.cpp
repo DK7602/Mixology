@@ -155,6 +155,23 @@ juce::WebBrowserComponent::Options MixWebEditor::makeEditorOptions()
                                      }
                                  complete (applied);
                              })
+        .withNativeFunction ("spaceDuck", [this] (const juce::Array<juce::var>& args, auto complete)
+                             {
+                                 // spaceDuck (key, [hash, ...]): the tracks a Link's Space effect ducks under.
+                                 const auto key = args.size() > 0 ? args[0].toString() : juce::String();
+                                 int slot = -1;
+                                 std::uint32_t generation = 0;
+                                 if (! parseLinkKey (key, slot, generation)) { complete (false); return; }
+                                 mixology::link::DuckSources d;
+                                 if (auto* list = args.size() > 1 ? args[1].getArray() : nullptr)
+                                     for (const auto& h : *list)
+                                         if (d.count < mixology::link::kMaxDuckSources)
+                                             if (const auto hash = static_cast<std::uint32_t> (static_cast<juce::int64> (h)); hash != 0)
+                                                 d.hashes[static_cast<std::size_t> (d.count++)] = hash;
+                                 mixology::link::processRegistry().requestDuck (slot, generation, d);
+                                 procListCountdown = 0;   // the list shows it with the next frames
+                                 complete (true);
+                             })
         .withResourceProvider ([] (const auto& url) { return getResource (url); });
 }
 
@@ -309,7 +326,7 @@ void MixWebEditor::timerCallback()
         frame->setProperty ("mixEq", eq);
     }
 
-    if (currentPage == "eq" || currentPage == "dynamics" || currentPage == "tone" || currentPage == "stereo")
+    if (currentPage == "eq" || currentPage == "dynamics" || currentPage == "tone" || currentPage == "stereo" || currentPage == "space")
     {
         if (--procListCountdown <= 0)
         {
@@ -359,8 +376,11 @@ juce::var MixWebEditor::makeProcTargets()
         o->setProperty ("channels", info.channels);
         o->setProperty ("on", moduleKeys (v, false, 0));
         o->setProperty ("running", moduleKeys (v, true, running));
+        o->setProperty ("spaceType", juce::roundToInt (v[static_cast<std::size_t> (proc::spType)]));
+        o->setProperty ("spaceRoute", juce::roundToInt (v[static_cast<std::size_t> (proc::spRoute)]));
         list.add (juce::var (o));
         targetInfo[key] = info;
+        return o;
     };
 
     TargetInfo mix { juce::jmax (8000.0, processor.getSampleRate()), processor.getLatencySamples(), processor.getTotalNumOutputChannels(), "Full Mix" };
@@ -375,8 +395,15 @@ juce::var MixWebEditor::makeProcTargets()
         if (! registry.readProc (l.slot, l.generation, v)) continue;
         const auto name = l.identity.hasName ? juce::String::fromUTF8 (l.identity.name.c_str()) : juce::String ("Track without a name");
         const auto colour = l.identity.hasColour ? "#" + juce::String::toHexString (static_cast<int> (l.identity.rgb)).paddedLeft ('0', 6) : juce::String();
-        add (linkKey (l), name, colour, v, l.procRunning,
-             { l.sampleRate > 0.0f ? static_cast<double> (l.sampleRate) : 48000.0, l.latency, l.channels > 0 ? l.channels : 2, name });
+        auto* o = add (linkKey (l), name, colour, v, l.procRunning,
+                       { l.sampleRate > 0.0f ? static_cast<double> (l.sampleRate) : 48000.0, l.latency, l.channels > 0 ? l.channels : 2, name });
+        // For the Space page: who this track is (ducking picks tracks by name), its role, what it ducks under.
+        o->setProperty ("hash", static_cast<juce::int64> (l.nameHash));
+        if (l.identity.hasName)
+            if (auto role = hub.trackRole (l.nameHash, l.identity.name)) o->setProperty ("role", mix::roleKey (*role));
+        juce::Array<juce::var> duck;
+        for (int i = 0; i < l.duck.count; ++i) duck.add (static_cast<juce::int64> (l.duck.hashes[static_cast<std::size_t> (i)]));
+        o->setProperty ("duck", duck);
     }
     return list;
 }
@@ -465,6 +492,8 @@ juce::var MixWebEditor::makeProc()
         mo->setProperty ("limit", roundTo (m.limit, 0.1f));
         mo->setProperty ("clip", roundTo (m.clip, 0.1f));
         mo->setProperty ("glue", roundTo (m.glue, 0.1f));
+        mo->setProperty ("space", roundTo (m.spaceWet, 0.1f));   // the effect's level (dBFS peak)
+        mo->setProperty ("duck", roundTo (m.duck, 0.1f));        // dB it is ducked under the vocal now
         mo->setProperty ("running", moduleKeys (v, true, m.running));
         o->setProperty ("meters", juce::var (mo));
     }

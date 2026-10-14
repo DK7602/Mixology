@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-14, v0.5.0)
+# Mixology: resume here (updated 2026-10-14, v0.6.0)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -35,7 +35,47 @@ sends higher-resolution art, re-run it.
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
 
-## Milestone 5 round 1 status (v0.5.0): BUILT, WAITING FOR THE USER'S CUBASE TEST (docs/M5_TEST.md)
+## Milestone 5 round 2 status (v0.6.0): BUILT, WAITING FOR THE USER'S CUBASE TEST (docs/M5_TEST.md, top part)
+User (2026-10-14): "ok I think its ready for the next milestone" (after the round-1 fixes; no round-1 retest report).
+- dsp SpaceFx (framework-free): DelayLine (pow2, linear frac read; read(d) = d samples before the latest), FdnReverb
+  (8 lines 31.3-73.9 ms x size, Hadamard, per-line gain 10^(-3 len/RT60), one-pole damping in the loop, LFO
+  modulation, 4 input all-pass diffusers, early-reflection taps, freeze = no input + ~no decay), StereoDelay
+  (LP/HP in the loop, ping-pong cross-feed, glided time), Chorus (3 voices), Phaser (6 all-pass stages, feedback),
+  PitchShifter (two Hann taps, 50 ms window).
+- ProcParams: Space appended after stHighX (41 ids: sp_on/type/route, sp_lowcut/highcut, duck_amount, rev_*, dly_*,
+  cho_*, pha_*, hall_*, room_*, spx_* + spx_mode); Module::space (key "space"); Meters + spaceWet (dBFS) + duck (dB)
+  = 15 floats. Units "s" / "st" in ProcHost valueText.
+- ProcChain: order ... final, SPACE, limit. SpaceBank (all engines, ~MBs) made by ensureSpace() on the MESSAGE
+  thread (Link / Mixology timers when sp_on; prepareToPlay too), published by an atomic pointer; until then a track
+  passes, an FX route outputs silence. Plate size .85, Hall 1+1.2 size + early, Room .25+.55 size with early/late,
+  Special size 1.9 (shimmer: last chunk's wet pitched into the tail; drift: more modulation; swell: envelope restarts
+  on new notes; freeze: 40 s RT, input x.25), Delay from setHost bpm (120 fallback). 60 ms crossfade on type change.
+  Wet: low/high cut (12 dB/oct), ducking (key dB -> want = amount * clamp((keyDb+50)/18), attack 15 / release 300 ms),
+  soft clip > 0.8. Route FX = wet only, else dry + mix*(wet - dry). tailSecondsFor(). 8 [space] tests (RT60 slope,
+  delay timing / ping-pong / tempo, chorus/phaser mix, ducking, shimmer octave, swell, freeze bounded, type switch,
+  not-ready). The random stress test now runs with Space made and checks "goes quiet after", bound 2000.
+- Registry layout 6: keyLevel/keyMs (each Link's audio thread, every block: pre-chain peak env, 60 ms release; stale
+  after kKeyMs 250 = 0), duckRequest (seqlock, Mixology -> Link), duckNow (Link -> Mixology), findSlots(hashes, self).
+  LinkInfo.duck. Link: setDuck() saves "duck" (hex hashes) as a property of its APVTS state, resolves slots ~3x/s,
+  audio thread takes max keyLevel of those slots -> chain.setHost(bpm, key). getTailLengthSeconds = ProcHost
+  reportedTail(): 0 off, 30 s on, infinity for Freeze; timer calls updateHostDisplay(latencyChanged) when that
+  changes (Cubase may suspend a plug-in after its tail; restarts it, so only on on/off/freeze). Mixology main: same
+  ensureSpace / tail / setHost(bpm, -1), meterDefault(13) = -100.
+- Editor: frame.proc on the space page too; procTargets entries + spaceType, spaceRoute, hash, role (hub.trackRole),
+  duck; meters.space / meters.duck; native spaceDuck(key, [hashes]). Link window strip: "Reverb (FX, 100 % wet)" chip
+  + "ducks under X".
+- UI pages_process.js buildSpace: tracks-only target select (placeholder "Pick a track"), one effect per track: list =
+  view; ON switches this effect on (or replaces the other type); knob / preset / mode moves switch Space on with the
+  viewed type only when Space is off; a new track jumps to the effect it uses (proc.loadedKey). USED AS select;
+  FX-like names (/^fx\s*\d|verb|delay|echo|return|aux|send|space/) get route FX on first switch-on. Presets per
+  effect (values arrays), "Custom" when none matches. EFFECT EQ (sp_lowcut / sp_highcut). DUCKING: Nothing / All vocals
+  / each track (hashes), AMOUNT, live bar. Scene: setActive(level) — still picture (4 fps redraw, no motion) unless
+  this effect is used on the target (level from the wet meter) or on another track (0.7). Lamps = this target only.
+- Checks: 113 ctest (ASan clean); linkcheck: tail 30 s, reverb rings on after the input (-17 dBFS), Space meter, FX
+  reverb ducks 21 dB under the Kick and comes back (0.0 dB), duck list saved with the project, Freeze = infinite
+  tail, Space off = 0, Mixology's tail too.
+
+## Milestone 5 round 1 status (v0.5.0): TESTED (test 1 fixes below)
 User (2026-10-14): "Ok, lets move on to the next milestone" (after M4 worked: Auto Mix + Balance "did great").
 M5 split in rounds: 1 = EQ / Dynamics / Tone / Stereo processing (this), 2 = Space on FX-channel Links + ducking,
 3 = Master finishing + Auto Mix proposing EQ / dynamics.

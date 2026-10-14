@@ -109,16 +109,19 @@ const procBtn = el("button", "small-btn", procCard);
 let procOn = true, procKey = "";
 procBtn.addEventListener("click", () => native.setProcessing(!procOn));
 const MODULE_NAMES = { gate: "Gate", eq: "EQ", comp: "Compressor", multi: "Multiband", trans: "Transient", balance: "Tone Balance",
-  loud: "Loudness", harm: "Harmonics", analog: "Analog", clip: "Clip", width: "Stereo", final: "Final Touch", limit: "Limiter" };
+  loud: "Loudness", harm: "Harmonics", analog: "Analog", clip: "Clip", width: "Stereo", final: "Final Touch", limit: "Limiter", space: "Space" };
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 function drawProc(p) {
   procOn = !!p.on;
   procBtn.textContent = procOn ? "On" : "Off";
   procBtn.title = procOn ? "Switch all processing off (compare with the plain track)" : "Switch the processing back on";
   procBtn.style.color = procOn ? "var(--green)" : "var(--text-dim)";
-  if (!p.modules.length) { procText.textContent = "Nothing on. Mixology's EQ, Dynamics, Tone and Stereo pages work here."; procText.style.color = "var(--text-dim)"; return; }
+  if (!p.modules.length) { procText.textContent = "Nothing on. Mixology's EQ, Dynamics, Tone, Stereo and Space pages work here."; procText.style.color = "var(--text-dim)"; return; }
   procText.style.color = procOn ? "var(--text)" : "var(--text-dim)";
-  procText.innerHTML = p.modules.map((m) => `<span class="lchip${p.running.includes(m) ? " live" : ""}">${MODULE_NAMES[m] || m}</span>`).join("")
-    + (p.latencyMs > 0 ? `<span style="color:var(--text-dim)">${fmt.num(p.latencyMs, 1)} ms lookahead</span>` : "");
+  const name = (m) => m === "space" && p.space ? `${esc(p.space.type)}${p.space.fx ? " (FX, 100 % wet)" : ""}` : MODULE_NAMES[m] || m;
+  procText.innerHTML = p.modules.map((m) => `<span class="lchip${p.running.includes(m) ? " live" : ""}">${name(m)}</span>`).join("")
+    + (p.latencyMs > 0 ? `<span style="color:var(--text-dim)">${fmt.num(p.latencyMs, 1)} ms lookahead</span>` : "")
+    + (p.space && p.space.duck && p.space.duck.length ? `<span style="color:var(--text-dim)">ducks under ${p.space.duck.map(esc).join(", ")}</span>` : "");
 }
 
 let peakHold = -100, peakTime = 0;

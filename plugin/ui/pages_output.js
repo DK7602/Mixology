@@ -221,7 +221,7 @@ export function buildStereo(root, app) {
   scopeNote.textContent = "Scope: the full mix";
   const monoBadge = el("div", "mono-badge", centre, { left: "50%", top: "24px", transform: "translateX(-50%)", display: "none" });
   monoBadge.textContent = "LISTENING IN MONO";
-  monoBadge.title = "Mono Check is on: the full mix plays in mono. It switches off when you leave this page.";
+  monoBadge.title = "Mono Check is on: you hear the full mix in mono (the scope still shows it as it really is). It switches off when you leave this page.";
   const corrBar = el("div", "", centre, { position: "absolute", left: "30px", right: "30px", top: "690px", height: "24px", borderRadius: "6px", background: "linear-gradient(90deg,#ff1d1d,#ff7a12,#ffe11f,#3dff5a,#19d3ff,#1f6bff,#ff2bf0)", boxShadow: "0 0 14px rgba(120,180,255,0.35)" });
   const corrMark = el("div", "", corrBar, { position: "absolute", top: "-8px", width: "6px", height: "40px", borderRadius: "3px", background: "#fff", boxShadow: "0 0 10px #fff, 0 0 0 1.5px #000", left: "50%" });
   const corrLab = el("div", "", centre, { position: "absolute", left: "30px", right: "30px", top: "726px", display: "flex", justifyContent: "space-between", fontSize: "26px", fontWeight: "500" });
@@ -243,6 +243,7 @@ export function buildStereo(root, app) {
     knobs.forEach((k) => { const v = proc.get(k.o.pid); if (!k.dragging && Math.abs(k.value - v) > 1e-3) k.set(v); });
     list.lamps((m) => (m === "width" || m === "freq") && proc.switchedOn("width"), (m) => (m === "width" || m === "freq") && proc.running("width"));
     monoBadge.style.display = proc.mono ? "block" : "none";
+    scopeNote.textContent = proc.mono ? "Scope: the full mix as it really is (you hear it in mono)" : "Scope: the full mix";
     list.buttons.find((b) => b.dataset.id === "mono").classList.toggle("active", proc.mono);
     const mono = proc.key !== "mix" && proc.channels === 1;
     if (mono) { note.textContent = `'${proc.name}' is a mono track: width does nothing here (pan it instead).`; note.style.color = "var(--amber)"; shownMono = "track"; }

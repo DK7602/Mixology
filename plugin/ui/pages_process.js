@@ -1,7 +1,7 @@
 // EQ, Dynamics and Space pages. EQ and Dynamics work on the target you pick (Full Mix or a track's Mixology
-// Link, Milestone 5); Space goes live with the FX channels (next round), so it still shows "Preview".
+// Link, Milestone 5); Space on a track or an FX channel (Milestone 5, round 2).
 
-import { el, box, icon, fmt, clamp, Knob, Meter, select, graph, freqToX, xToFreq, moduleList, previewTag, store, cssVar } from "./ui.js";
+import { el, box, icon, fmt, clamp, Knob, Meter, select, graph, freqToX, xToFreq, moduleList, store, cssVar } from "./ui.js";
 import { knobFor, eqBand, magnitudeDb, EQ_SHAPES, MODULE_NAMES } from "./proc.js";
 import { createScene } from "./space_scene.js";
 
@@ -504,79 +504,165 @@ export function buildDynamics(root, app) {
 }
 
 // =============================================================================================
-// SPACE: each effect has its own picture and its own, correct controls.
+// SPACE (Milestone 5, round 2): one effect per track. Pick it on the left (its picture moves with the beat
+// while the effect is in use), set it with the knobs below, how it's used (on the track, or 100 % wet on an
+// FX channel), its EQ, and what it ducks under (the vocal) on the right. Space works on tracks (their
+// Mixology Link) and FX channels, never on the Full Mix.
 
+const DELAY_NOTES = ["1/32", "1/16", "1/8T", "1/8", "1/8D", "1/4T", "1/4", "1/4D", "1/2"];
+const DELAY_BEATS = [0.125, 0.25, 1 / 3, 0.5, 0.75, 2 / 3, 1, 1.5, 2];   // the engine's kDelayBeats
+const hzRate = (v) => v.toFixed(2) + " Hz";
 const SPACE = [
-  { id: "reverb", label: "REVERB", icon: "cube", presets: ["Vocal Plate", "Bright Plate", "Dark Plate", "Chamber"],
-    knobs: [["PRE-DELAY", 0, 200, 20, "lin", fmt.ms], ["DECAY", 0.2, 10, 1.8, "log", fmt.sec], ["DAMPING", 1000, 20000, 6500, "log", fmt.hz], ["WIDTH", 0, 100, 100, "lin", fmt.pct], ["MIX", 0, 100, 22, "lin", fmt.pct]] },
-  { id: "delay", label: "DELAY", icon: "clock", presets: ["Analog Echo", "Tape Slap", "Ping-Pong 1/8", "Dotted 1/8", "Quarter Throw"],
-    knobs: [["TIME", 0, 8, 3, "lin", (v) => ["1/32", "1/16", "1/8T", "1/8", "1/8D", "1/4T", "1/4", "1/4D", "1/2"][Math.round(v)]], ["FEEDBACK", 0, 95, 35, "lin", fmt.pct], ["TONE", 800, 20000, 6000, "log", fmt.hz], ["PING-PONG", 0, 100, 60, "lin", fmt.pct], ["MIX", 0, 100, 18, "lin", fmt.pct]] },
-  { id: "chorus", label: "CHORUS", icon: "chorus", presets: ["Wide Vocal Chorus", "Subtle Doubler", "80s Chorus"],
-    knobs: [["RATE", 0.05, 5, 0.8, "log", (v) => v.toFixed(2) + " Hz"], ["DEPTH", 0, 100, 40, "lin", fmt.pct], ["DELAY", 2, 30, 12, "lin", fmt.ms], ["WIDTH", 0, 100, 100, "lin", fmt.pct], ["MIX", 0, 100, 30, "lin", fmt.pct]] },
-  { id: "phaser", label: "PHASER", icon: "phaser", presets: ["Slow Swirl", "Fast Phase", "Stereo Sweep"],
-    knobs: [["RATE", 0.05, 10, 0.4, "log", (v) => v.toFixed(2) + " Hz"], ["DEPTH", 0, 100, 60, "lin", fmt.pct], ["FEEDBACK", 0, 90, 40, "lin", fmt.pct], ["CENTER", 200, 5000, 1000, "log", fmt.hz], ["MIX", 0, 100, 40, "lin", fmt.pct]] },
-  { id: "hall", label: "HALL", icon: "hall", presets: ["Concert Hall", "Large Hall", "Cathedral"],
-    knobs: [["PRE-DELAY", 0, 200, 35, "lin", fmt.ms], ["DECAY", 1, 12, 3.2, "log", fmt.sec], ["SIZE", 0, 100, 80, "lin", fmt.pct], ["DAMPING", 1000, 20000, 5000, "log", fmt.hz], ["MIX", 0, 100, 18, "lin", fmt.pct]] },
-  { id: "room", label: "ROOM", icon: "room", presets: ["Studio Room", "Drum Room", "Small Booth"],
-    knobs: [["PRE-DELAY", 0, 100, 8, "lin", fmt.ms], ["DECAY", 0.1, 3, 0.7, "log", fmt.sec], ["SIZE", 0, 100, 45, "lin", fmt.pct], ["EARLY / LATE", 0, 100, 60, "lin", (v) => Math.round(100 - v) + " / " + Math.round(v)], ["MIX", 0, 100, 20, "lin", fmt.pct]] },
-  { id: "special", label: "SPECIAL FX", icon: "star", presets: ["Cosmic Drift", "Shimmer +12", "Reverse Swell", "Freeze Pad"],
-    knobs: [["SHIFT", -12, 12, 12, "lin", (v) => fmt.signed(v, 0) + " st"], ["FEEDBACK", 0, 95, 55, "lin", fmt.pct], ["MOTION", 0, 100, 35, "lin", fmt.pct], ["TONE", 800, 20000, 8000, "log", fmt.hz], ["MIX", 0, 100, 25, "lin", fmt.pct]] },
+  { id: "reverb", label: "REVERB", icon: "cube",
+    knobs: [["rev_pre", "PRE-DELAY", fmt.ms], ["rev_decay", "DECAY", fmt.sec], ["rev_damp", "DAMPING", fmt.hz], ["rev_width", "WIDTH", fmt.pct], ["rev_mix", "MIX", fmt.pct]],
+    presets: { "Vocal Plate": [20, 1.8, 6500, 100, 22], "Bright Plate": [10, 1.4, 14000, 100, 18], "Dark Plate": [30, 2.4, 3000, 90, 20], "Chamber": [15, 1.2, 8000, 70, 16] } },
+  { id: "delay", label: "DELAY", icon: "clock",
+    knobs: [["dly_time", "TIME", (v) => DELAY_NOTES[Math.round(v)]], ["dly_feedback", "FEEDBACK", fmt.pct], ["dly_tone", "TONE", fmt.hz], ["dly_pingpong", "PING-PONG", fmt.pct], ["dly_mix", "MIX", fmt.pct]],
+    presets: { "Vocal Echo 1/8": [3, 35, 6000, 60, 18], "Analog Echo": [3, 35, 3500, 0, 18], "Tape Slap": [1, 10, 5000, 0, 20], "Ping-Pong 1/8": [3, 40, 7000, 100, 20],
+      "Dotted 1/8": [4, 35, 6000, 60, 18], "Quarter Throw": [6, 45, 5000, 30, 25] } },
+  { id: "chorus", label: "CHORUS", icon: "chorus",
+    knobs: [["cho_rate", "RATE", hzRate], ["cho_depth", "DEPTH", fmt.pct], ["cho_delay", "DELAY", fmt.ms], ["cho_width", "WIDTH", fmt.pct], ["cho_mix", "MIX", fmt.pct]],
+    presets: { "Wide Vocal Chorus": [0.8, 40, 12, 100, 30], "Subtle Doubler": [0.3, 20, 18, 100, 25], "80s Chorus": [1.2, 70, 8, 80, 45] } },
+  { id: "phaser", label: "PHASER", icon: "phaser",
+    knobs: [["pha_rate", "RATE", hzRate], ["pha_depth", "DEPTH", fmt.pct], ["pha_feedback", "FEEDBACK", fmt.pct], ["pha_centre", "CENTER", fmt.hz], ["pha_mix", "MIX", fmt.pct]],
+    presets: { "Classic Phase": [0.4, 60, 40, 1000, 40], "Slow Swirl": [0.2, 70, 40, 900, 45], "Fast Phase": [2.5, 50, 55, 1500, 40], "Stereo Sweep": [0.5, 85, 30, 1200, 50] } },
+  { id: "hall", label: "HALL", icon: "hall",
+    knobs: [["hall_pre", "PRE-DELAY", fmt.ms], ["hall_decay", "DECAY", fmt.sec], ["hall_size", "SIZE", fmt.pct], ["hall_damp", "DAMPING", fmt.hz], ["hall_mix", "MIX", fmt.pct]],
+    presets: { "Concert Hall": [35, 3.2, 80, 5000, 18], "Large Hall": [50, 4.5, 95, 4500, 20], "Cathedral": [70, 8, 100, 3500, 22] } },
+  { id: "room", label: "ROOM", icon: "room",
+    knobs: [["room_pre", "PRE-DELAY", fmt.ms], ["room_decay", "DECAY", fmt.sec], ["room_size", "SIZE", fmt.pct], ["room_late", "EARLY / LATE", (v) => Math.round(100 - v) + " / " + Math.round(v)], ["room_mix", "MIX", fmt.pct]],
+    presets: { "Studio Room": [8, 0.7, 45, 60, 20], "Drum Room": [4, 0.5, 60, 40, 25], "Small Booth": [2, 0.3, 20, 30, 15] } },
+  { id: "special", label: "SPECIAL FX", icon: "star",
+    knobs: [["spx_shift", "SHIFT", (v) => fmt.signed(v, 0) + " st"], ["spx_feedback", "FEEDBACK", fmt.pct], ["spx_motion", "MOTION", fmt.pct], ["spx_tone", "TONE", fmt.hz], ["spx_mix", "MIX", fmt.pct]],
+    modes: ["Shimmer", "Drift", "Swell", "Freeze"],
+    presets: { "Shimmer +12": [12, 55, 35, 8000, 25, 0], "Cosmic Drift": [12, 60, 70, 6000, 30, 1], "Reverse Swell": [12, 50, 40, 7000, 30, 2], "Freeze Pad": [12, 55, 30, 6000, 35, 3] } },
 ];
+const MODE_HELP = {
+  Shimmer: "Pitched echoes (SHIFT) climb inside a big reverb: an angelic shine",
+  Drift: "A huge, slowly drifting wash (MOTION: how much it drifts)",
+  Swell: "Every new note's effect fades in, like a reversed reverb (MOTION: how slowly)",
+  Freeze: "The effect holds the sound like an endless pad (FEEDBACK: how long it builds)",
+};
+// What each knob means to the picture's motion.
+const SCENE_PARAMS = { reverb: ["pre", "decay", "damping", "width", "mix"], delay: ["time", "feedback", "tone", "pingpong", "mix"],
+  chorus: ["rate", "depth", "delay", "width", "mix"], phaser: ["rate", "depth", "feedback", "centre", "mix"], hall: ["pre", "decay", "size", "damping", "mix"],
+  room: ["pre", "decay", "size", "early", "mix"], special: ["shift", "feedback", "motion", "tone", "mix"] };
+// Cubase names FX channels "FX 1-<plug-in>"; names like these are FX channels (returns) too.
+const looksLikeFxChannel = (name) => /^fx\s*\d|\b(verb|reverb|delay|echo|return|aux|send|space)\b/i.test(name || "");
 
 export function buildSpace(root, app) {
-  let fx = store.get("spaceFx", "reverb");
-  moduleList(root, SPACE, 0, 0, 252, 98, 14, fx, (id) => { fx = id; store.set("spaceFx", id); render(); });
+  const proc = app.proc;
+  const typeIndex = (id) => SPACE.findIndex((s) => s.id === id);
+  let view = store.get("spaceFx", "reverb");
+  if (typeIndex(view) < 0) view = "reverb";
+  const def = () => SPACE[typeIndex(view)];
+  const list = moduleList(root, SPACE.map((s) => Object.assign({ lamp: true }, s)), 0, 0, 252, 98, 14, view, (id) => show(id));
 
+  // ---- what the target does now ----------------------------------------------------------------
+  const onTrack = () => proc.key !== "mix" && proc.ok;
+  const spaceOn = () => proc.switchedOn("space");
+  const usedType = () => SPACE[clamp(Math.round(proc.get("sp_type")), 0, SPACE.length - 1)].id;
+  const inUseHere = (id) => onTrack() && spaceOn() && usedType() === id;
+  const fxRoute = () => proc.get("sp_route") > 0.5;
+  const target = () => proc.targets.find((t) => t.key === proc.key);
+  const usedElsewhere = (id) => proc.targets.filter((t) => t.key !== "mix" && t.key !== proc.key && (t.on || []).includes("space") && SPACE[t.spaceType] && SPACE[t.spaceType].id === id);
+
+  /** Your move on this effect. Space off: it switches on with this effect (an FX channel's name sets it to 100 % wet). */
+  let routeNote = "";
+  function apply(changes) {
+    if (!onTrack()) return;
+    if (!spaceOn()) {
+      changes.sp_on = 1;
+      changes.sp_type = typeIndex(view);
+      if (proc.get("sp_route") < 0.5 && looksLikeFxChannel(proc.name)) {
+        changes.sp_route = 1;
+        routeNote = `Set to FX channel (100 % wet): '${proc.name}' looks like an FX channel. Change it above if it isn't.`;
+      }
+    }
+    proc.setMany(changes);
+  }
+
+  // ---- middle: title, ON, target, presets; the picture; the knobs ----------------------------
   const centre = el("div", "panel", root, box(266, 0, 792, 842));
   const title = el("div", "panel-title", centre, { top: "16px" });
-  const tag = previewTag(centre, 0, 30);
-  const scene = el("div", "", centre, { position: "absolute", left: "18px", top: "76px", width: "756px", height: "390px", borderRadius: "10px", overflow: "hidden", border: "1.5px solid var(--panel-edge)", boxShadow: "0 0 20px rgba(255,170,60,0.18), inset 0 0 30px rgba(0,0,0,0.5)" });
-  const picture = createScene(scene, 0, 0, 756, 390);   // the scene, alive with the beat (space_scene.js)
-  // What each knob means to the picture's motion.
-  const SCENE_PARAMS = { reverb: ["pre", "decay", "damping", "width", "mix"], delay: ["time", "feedback", "tone", "pingpong", "mix"],
-    chorus: ["rate", "depth", "delay", "width", "mix"], phaser: ["rate", "depth", "feedback", "centre", "mix"], hall: ["pre", "decay", "size", "damping", "mix"],
-    room: ["pre", "decay", "size", "early", "mix"], special: ["shift", "feedback", "motion", "tone", "mix"] };
-  const sceneParams = {};
-  const pushParams = () => picture.setParams(Object.assign({}, sceneParams));
-  const knobPanel = el("div", "card", centre, box(18, 484, 756, 342));
-  let presetSel = null;
+  const power = el("button", "power-btn", centre, { left: "200px", top: "20px" });
+  power.innerHTML = icon("power", 'stroke-width="2.6"');
+  const powerLabel = el("span", "", power);
+  power.addEventListener("click", () => {
+    if (!onTrack()) { app.toast("Pick a track or an FX channel first (top right)"); return; }
+    if (inUseHere(view)) proc.setMany({ sp_on: 0 });
+    else if (spaceOn()) proc.setMany({ sp_type: typeIndex(view) });   // this effect instead of the other one
+    else apply({});
+    sync();
+  });
+  proc.targetSelect(centre, 318, 16, 210, { tracksOnly: true, placeholder: "Pick a track" });
+  const presetSel = select(centre, 540, 16, 234, [], "", (name) => pickPreset(name));
+  presetSel.el.title = "Starting points for this effect";
 
+  const scene = el("div", "", centre, { position: "absolute", left: "18px", top: "76px", width: "756px", height: "390px", borderRadius: "10px", overflow: "hidden", border: "1.5px solid var(--panel-edge)", boxShadow: "0 0 20px rgba(255,170,60,0.18), inset 0 0 30px rgba(0,0,0,0.5)" });
+  const picture = createScene(scene, 0, 0, 756, 390);   // the scene, alive with the beat while the effect is used (space_scene.js)
+  const badge = el("div", "", scene, { position: "absolute", left: "12px", bottom: "12px", maxWidth: "700px", padding: "6px 12px", borderRadius: "8px",
+    background: "rgba(5,8,15,0.72)", color: "#e8eefc", fontSize: "15.5px", lineHeight: "1.3", pointerEvents: "none" });
+
+  const knobPanel = el("div", "card", centre, box(18, 484, 756, 342));
+  const usedLabel = el("div", "label", knobPanel, { position: "absolute", left: "16px", top: "22px", fontSize: "15px", color: "var(--text-dim)" });
+  usedLabel.textContent = "USED AS";
+  const routeSel = select(knobPanel, 96, 12, 300, [{ value: 0, label: "On this track" }, { value: 1, label: "FX channel (100 % wet)" }], 0,
+    (v) => { routeNote = ""; proc.set("sp_route", v, { autoOn: false }); sync(); }, { h: 40 });
+  routeSel.el.title = "On this track: MIX blends the effect in. FX channel: put this on an FX channel and send tracks to it in Cubase; only the effect comes out.";
+  const modeRow = el("div", "", knobPanel, { position: "absolute", left: "418px", top: "12px", display: "flex", gap: "8px" });
+  const knobArea = el("div", "", knobPanel, box(0, 64, 756, 230));
+  const note = el("div", "proc-note", knobPanel, { left: "16px", top: "296px", width: "600px", fontSize: "15px" });
+  const resetBtn = el("button", "small-btn", knobPanel, { position: "absolute", right: "14px", top: "292px", width: "110px", height: "36px", fontSize: "14px" });
+  resetBtn.textContent = "Reset";
+  resetBtn.title = "This effect's knobs back to where they started";
+  resetBtn.addEventListener("click", () => {
+    const changes = {};
+    def().knobs.forEach(([id]) => { changes[id] = proc.spec(id).def; });
+    if (def().modes) changes.spx_mode = proc.spec("spx_mode").def;
+    proc.setMany(changes);
+  });
+
+  let knobs = [], modeChips = [];
+  const sceneParams = {};
+  function renderKnobs() {
+    knobArea.innerHTML = "";
+    modeRow.innerHTML = "";
+    const d = def();
+    knobs = d.knobs.map(([id, label, format], i) => new Knob(knobArea, knobFor(proc, id, { x: 4 + i * 150, y: 4, w: 148, size: 120, label, format, labelGap: 14, valueGap: 12,
+      onChange: (v) => { apply({ [id]: v }); sceneParams[SCENE_PARAMS[d.id][i]] = v; picture.setParams(Object.assign({}, sceneParams)); }, pid: id })));
+    modeChips = (d.modes || []).map((m, k) => {
+      const c = el("div", "chip", modeRow, { height: "40px", padding: "0 14px", fontSize: "15px" });
+      c.textContent = m;
+      c.title = MODE_HELP[m];
+      c.addEventListener("click", () => apply({ spx_mode: k }));
+      return c;
+    });
+  }
+
+  // ---- right: the effect's EQ, and ducking --------------------------------------------------------
   const right = el("div", "panel", root, box(1072, 0, 340, 420));
   const eqTitle = el("div", "panel-title", right);
-  eqTitle.textContent = "EQ";
+  eqTitle.textContent = "EFFECT EQ";
   const eqg = graph(right, 18, 70, 304, 300);
-  const eqNote = el("div", "", right, { position: "absolute", left: "18px", top: "378px", right: "18px", fontSize: "16px", color: "var(--text-dim)" });
-  eqNote.textContent = "Drag the points: low cut and high cut on the effect";
-
-  const duck = el("div", "panel", root, box(1072, 434, 340, 408));
-  const dTitle = el("div", "panel-title", duck);
-  dTitle.textContent = "DUCKING";
-  const dLabel = el("div", "label", duck, { position: "absolute", left: "22px", top: "82px", fontSize: "17px", color: "var(--text-dim)" });
-  dLabel.textContent = "DUCK UNDER";
-  const duckSel = select(duck, 22, 110, 296, ["Lead Vox", "All vocals", "Off"], store.get("duckSrc", "Lead Vox"), (v) => store.set("duckSrc", v));
-  app.on("bridge", () => duckSel.setOptions(["Off", "All vocals", ...((app.bridge && app.bridge.slots) || []).filter((s) => s.present).map((s) => s.title)]));
-  const duckKnob = new Knob(duck, { x: 80, y: 172, w: 180, size: 112, label: "AMOUNT", id: "duckAmt", min: 0, max: 24, def: 12, step: 0.1, format: (v) => fmt.db(-v), labelGap: 10, valueGap: 10 });
-  const dNote = el("div", "", duck, { position: "absolute", left: "22px", right: "22px", bottom: "14px", fontSize: "15px", lineHeight: "1.3", color: "var(--text-dim)" });
-  dNote.textContent = "The effect gets quieter while the vocal sings, and blooms in the gaps.";
-  void duckKnob;
-
-  // Mini EQ (low cut + high cut) per effect
-  const eqState = () => ({ lc: store.value(`sp_${fx}_lc`, 200), hc: store.value(`sp_${fx}_hc`, 9000) });
-  const ePL = 8, ePW = 288, ePH = 284;
+  const eqNote = el("div", "", right, { position: "absolute", left: "18px", top: "378px", right: "18px", fontSize: "15.5px", color: "var(--text-dim)" });
+  eqNote.textContent = "Drag the points: the effect's low cut and high cut";
+  const ePL = 8, ePW = 288;
   eqg.draw = (ctx, w, h) => {
     const grid = cssVar("--grid");
     for (let i = 1; i < 6; i++) { ctx.strokeStyle = grid; ctx.beginPath(); ctx.moveTo((i / 6) * w, 0); ctx.lineTo((i / 6) * w, h); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, (i / 6) * h); ctx.lineTo(w, (i / 6) * h); ctx.stroke(); }
-    const { lc, hc } = eqState();
+    const lc = proc.get("sp_lowcut"), hc = proc.get("sp_highcut");
     const yOf = (db) => 50 + (-db / 30) * (h - 64);
-    const resp = (f) => biquadDb("lowcut", lc, 0, 0.707, f) / 2 + biquadDb("highcut", hc, 0, 0.707, f) / 2;
+    const resp = (f) => (biquadDb("lowcut", lc, 0, 0.707, f) + biquadDb("highcut", hc, 0, 0.707, f)) / 2;   // one 12 dB / octave filter each, like the engine
     ctx.save();
+    ctx.globalAlpha = onTrack() ? 1 : 0.4;
     ctx.strokeStyle = document.documentElement.dataset.theme === "light" ? "#1a2233" : "#ffffff";
     ctx.lineWidth = 3; ctx.shadowColor = "rgba(25,211,255,0.8)"; ctx.shadowBlur = 10;
     ctx.beginPath();
     for (let i = 0; i <= 200; i++) { const x = ePL + (i / 200) * ePW; const y = clamp(yOf(resp(xToFreq(i / 200 * ePW, ePW))), 0, h); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
     ctx.stroke(); ctx.restore();
     for (const f of [lc, hc]) {
-      const x = ePL + freqToX(f, ePW), y = yOf(resp(f));
+      const x = ePL + freqToX(f, ePW), y = clamp(yOf(resp(f)), 0, h);
       ctx.fillStyle = "#fff"; ctx.strokeStyle = "rgba(25,211,255,0.9)"; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     }
@@ -584,47 +670,190 @@ export function buildSpace(root, app) {
     ctx.fillText("Low cut " + fmt.hz(lc), 10, 20); ctx.textAlign = "right"; ctx.fillText("High cut " + fmt.hz(hc), w - 10, 20);
   };
   let eqDrag = null;
+  const eqX = (e) => { const r = eqg.canvas.getBoundingClientRect(); return ((e.clientX - r.left) / r.width) * 304; };
   eqg.canvas.addEventListener("pointerdown", (e) => {
-    const r = eqg.canvas.getBoundingClientRect();
-    const x = ((e.clientX - r.left) / r.width) * 304;
-    const { lc, hc } = eqState();
-    eqDrag = Math.abs(x - (ePL + freqToX(lc, ePW))) < Math.abs(x - (ePL + freqToX(hc, ePW))) ? "lc" : "hc";
+    if (!onTrack()) return;
+    const x = eqX(e);
+    eqDrag = Math.abs(x - (ePL + freqToX(proc.get("sp_lowcut"), ePW))) < Math.abs(x - (ePL + freqToX(proc.get("sp_highcut"), ePW))) ? "sp_lowcut" : "sp_highcut";
     eqg.canvas.setPointerCapture(e.pointerId);
   });
   eqg.canvas.addEventListener("pointermove", (e) => {
     if (!eqDrag) return;
-    const r = eqg.canvas.getBoundingClientRect();
-    const f = Math.round(clamp(xToFreq(((e.clientX - r.left) / r.width) * 304 - ePL, ePW), 20, 20000));
-    const s = eqState();
-    if (eqDrag === "lc") store.setValue(`sp_${fx}_lc`, Math.min(f, s.hc / 1.5));
-    else store.setValue(`sp_${fx}_hc`, Math.max(f, s.lc * 1.5));
+    const f = Math.round(clamp(xToFreq(eqX(e) - ePL, ePW), 20, 20000));
+    if (eqDrag === "sp_lowcut") proc.set("sp_lowcut", clamp(Math.min(f, proc.get("sp_highcut") / 1.5), 20, 2000), { autoOn: false });
+    else proc.set("sp_highcut", clamp(Math.max(f, proc.get("sp_lowcut") * 1.5), 1000, 20000), { autoOn: false });
     eqg.redraw();
   });
   eqg.canvas.addEventListener("pointerup", () => { eqDrag = null; });
+  eqg.canvas.addEventListener("dblclick", () => { if (onTrack()) proc.setMany({ sp_lowcut: proc.spec("sp_lowcut").def, sp_highcut: proc.spec("sp_highcut").def }); });
+  eqg.canvas.title = "Double-click: back to 200 Hz / 9 kHz";
 
-  function render() {
-    const d = SPACE.find((s) => s.id === fx);
+  const duck = el("div", "panel", root, box(1072, 434, 340, 408));
+  const dTitle = el("div", "panel-title", duck);
+  dTitle.textContent = "DUCKING";
+  const dLabel = el("div", "label", duck, { position: "absolute", left: "22px", top: "72px", fontSize: "16px", color: "var(--text-dim)" });
+  dLabel.textContent = "DUCK UNDER";
+  const others = () => proc.targets.filter((t) => t.key !== "mix" && t.key !== proc.key && t.hash);
+  const vocals = () => others().filter((t) => t.role === "vox" || t.role === "adlibs");
+  const duckOptions = () => {
+    const opts = [{ value: "none", label: "Nothing" }];
+    if (vocals().length > 1) opts.push({ value: "vocals", label: `All vocals (${vocals().length})` });
+    for (const t of others()) opts.push({ value: t.key, label: t.name + (t.role === "vox" ? " (vocal)" : "") });
+    return opts;
+  };
+  let duckLocal = null, duckLocalAt = 0;   // your pick, until the plug-in reports it back
+  const duckHashes = () => (duckLocal && performance.now() - duckLocalAt < 1500 ? duckLocal : ((target() || {}).duck || []).map(Number));
+  const duckValue = () => {
+    const h = duckHashes();
+    if (!h.length) return "none";
+    const v = vocals().map((t) => Number(t.hash));
+    if (v.length > 1 && h.length === v.length && v.every((x) => h.includes(x))) return "vocals";
+    if (h.length === 1) { const t = others().find((o) => Number(o.hash) === h[0]); if (t) return t.key; }
+    return h.length + " tracks";
+  };
+  const duckSel = select(duck, 22, 100, 296, duckOptions(), "none", (v) => {
+    if (!onTrack()) return;
+    const hashes = v === "none" ? [] : v === "vocals" ? vocals().map((t) => Number(t.hash)) : [Number((others().find((o) => o.key === v) || {}).hash)].filter(Boolean);
+    duckLocal = hashes; duckLocalAt = performance.now();
+    app.native.spaceDuck(proc.key, hashes);
+    if (hashes.length && proc.get("duck_amount") < 0.5) proc.set("duck_amount", proc.spec("duck_amount").def, { autoOn: false });
+    syncDuck();
+  });
+  duckSel.el.title = "The effect gets quieter while these tracks play (each needs a Mixology Link)";
+  const duckKnob = new Knob(duck, knobFor(proc, "duck_amount", { x: 80, y: 150, w: 180, size: 92, label: "AMOUNT", format: (v) => (v < 0.05 ? "Off" : fmt.db(-v)), labelGap: 8, valueGap: 6,
+    onChange: (v) => proc.set("duck_amount", v, { autoOn: false }), pid: "duck_amount" }));
+  const duckBar = el("div", "", duck, { position: "absolute", left: "22px", right: "22px", top: "312px", height: "10px", borderRadius: "5px", background: "var(--knob-track)", overflow: "hidden" });
+  duckBar.title = "How far the effect is ducked right now";
+  const duckFill = el("div", "", duckBar, { position: "absolute", left: "0", top: "0", bottom: "0", width: "0%", background: "var(--gold)", transition: "width 80ms linear" });
+  const duckNow = el("div", "", duck, { position: "absolute", left: "22px", right: "22px", top: "328px", fontSize: "15px", color: "var(--text-dim)" });
+  const dNote = el("div", "", duck, { position: "absolute", left: "22px", right: "22px", bottom: "12px", fontSize: "14.5px", lineHeight: "1.3", color: "var(--text-dim)" });
+  dNote.textContent = "The effect dips while the vocal sings and blooms in the gaps.";
+
+  // ---- keeping it all in step ---------------------------------------------------------------------
+  function show(id) {
+    view = id;
+    store.set("spaceFx", id);
+    list.set(id);
+    const d = def();
     title.textContent = d.label;
-    tag.style.left = (title.getBoundingClientRect().width ? 40 + d.label.length * 15 : 200) + "px";
     picture.setScene(d.id, `assets/scene_${d.id}.webp`);
+    renderKnobs();
     for (const k of Object.keys(sceneParams)) delete sceneParams[k];
-    if (presetSel) presetSel.el.remove();
-    presetSel = select(centre, 474, 16, 300, d.presets, store.get(`sp_${fx}_preset`, d.presets[0]), (v) => store.set(`sp_${fx}_preset`, v));
-    knobPanel.innerHTML = "";
-    d.knobs.forEach(([label, min, max, value, curve, format], i) => {
-      const name = SCENE_PARAMS[d.id][i];
-      const k = new Knob(knobPanel, { x: 4 + i * 150, y: 66, w: 148, size: 130, label, id: `sp_${fx}_${i}`, min, max, def: value, curve, format, step: d.id === "delay" && i === 0 ? 1 : undefined, labelGap: 16, valueGap: 14,
-        onChange: (v) => { sceneParams[name] = v; pushParams(); } });
-      sceneParams[name] = k.value;
-    });
-    pushParams();
-    eqg.redraw();
+    d.knobs.forEach(([pid], i) => { sceneParams[SCENE_PARAMS[d.id][i]] = proc.get(pid); });
+    picture.setParams(Object.assign({}, sceneParams));
+    presetSel.setOptions(Object.keys(d.presets));
+    sync();
   }
-  render();
+  function placePower() {
+    // Right after the title, whatever its length.
+    const ctx = placePower.ctx || (placePower.ctx = document.createElement("canvas").getContext("2d"));
+    ctx.font = getComputedStyle(title).font || "600 30px sans-serif";
+    power.style.left = Math.round(22 + ctx.measureText(title.textContent).width + 18) + "px";
+  }
+  function pickPreset(name) {
+    const d = def(), values = d.presets[name];
+    if (!values) return;
+    const changes = {};
+    d.knobs.forEach(([id], i) => { changes[id] = values[i]; });
+    if (d.modes) changes.spx_mode = values[5];
+    apply(changes);
+    sync();
+  }
+  function presetNow() {
+    const d = def();
+    for (const [name, values] of Object.entries(d.presets)) {
+      const same = d.knobs.every(([id], i) => { const s = proc.spec(id); return Math.abs(proc.get(id) - values[i]) <= (s.max - s.min) * 0.002; })
+        && (!d.modes || Math.round(proc.get("spx_mode")) === values[5]);
+      if (same) return name;
+    }
+    return "Custom";
+  }
+  let followTarget = true;   // a new track: show the effect it uses
+  function sync() {
+    const d = def();
+    placePower();
+    const here = inUseHere(view);
+    powerLabel.textContent = here ? "ON" : "OFF";
+    power.classList.toggle("on", here);
+    power.style.opacity = onTrack() ? "1" : "0.45";
+    power.title = !onTrack() ? "Pick a track or an FX channel first" : here ? `Switch ${d.label.toLowerCase()} off on ${proc.name}`
+      : spaceOn() ? `Use ${d.label.toLowerCase()} on ${proc.name} instead of ${usedType()}` : `Switch ${d.label.toLowerCase()} on for ${proc.name}`;
+    knobs.forEach((k) => { const v = proc.get(k.o.pid); if (!k.dragging && Math.abs(k.value - v) > 1e-3) k.set(v); });
+    const mode = Math.round(proc.get("spx_mode"));
+    modeChips.forEach((c, k) => c.classList.toggle("on", k === mode));
+    if (d.id === "special") knobs[0].root.style.opacity = mode === 0 ? "1" : "0.4";   // Shift: Shimmer only
+    const mixKnob = knobs[4];
+    if (mixKnob) {
+      mixKnob.root.style.opacity = fxRoute() ? "0.4" : "1";
+      mixKnob.root.title = fxRoute() ? "On an FX channel the effect plays 100 % wet: how much of each track goes in is its Send level in Cubase" : "";
+    }
+    presetSel.set(presetNow());
+    routeSel.set(fxRoute() ? 1 : 0);
+    lamps();
+    eqg.redraw();
+    syncNote();
+    syncDuck();
+  }
+  // The lamps: the effect this track uses (green), pulsing while it plays.
+  const lamps = () => list.lamps((id) => inUseHere(id), (id) => inUseHere(id) && proc.running("space"));
+  let bpmNow = 0;
+  function syncNote() {
+    const d = def();
+    let text = routeNote;
+    if (!text && d.id === "delay") {
+      const bpm = bpmNow > 0 ? bpmNow : 120;
+      const ms = DELAY_BEATS[Math.round(proc.get("dly_time"))] * 60000 / bpm;
+      text = `${DELAY_NOTES[Math.round(proc.get("dly_time"))]} = ${Math.round(ms)} ms at ${Math.round(bpm)} BPM${bpmNow > 0 ? "" : " (play the song: it follows Cubase's tempo)"}`;
+    } else if (!text && d.id === "special") text = MODE_HELP[d.modes[Math.round(proc.get("spx_mode"))]];
+    if (!text) text = fxRoute() ? "FX channel: send tracks to it in Cubase (their Sends). Only the effect comes out." : "MIX: how much of the effect is blended into the track.";
+    note.textContent = text;
+  }
+  function syncDuck() {
+    duckSel.setOptions(duckOptions());
+    duckSel.set(duckValue());
+    const amount = proc.get("duck_amount");
+    if (!duckKnob.dragging && Math.abs(duckKnob.value - amount) > 1e-3) duckKnob.set(amount);
+    const active = onTrack() && duckHashes().length > 0 && amount >= 0.05;
+    duckKnob.root.style.opacity = active ? "1" : "0.45";
+    const now = active && proc.meters ? proc.meters.duck || 0 : 0;
+    duckFill.style.width = clamp(now / 24, 0, 1) * 100 + "%";
+    duckNow.textContent = !onTrack() ? "" : !duckHashes().length ? "Not ducking (pick a track above)" : amount < 0.05 ? "AMOUNT is off" : now >= 0.1 ? `Ducked ${fmt.db(-now)} right now` : "Not ducked right now";
+  }
+  function syncScene() {
+    const d = def();
+    const here = inUseHere(d.id), elsewhere = usedElsewhere(d.id);
+    let level = 0;
+    if (here && proc.running("space")) level = clamp(((proc.meters && proc.meters.space) ?? -100) + 54, 0, 36) / 36 * 0.9 + 0.3;
+    else if (elsewhere.some((t) => (t.running || []).includes("space"))) level = 0.7;
+    picture.setActive(level);
+    const where = elsewhere.length ? ` · in use on ${elsewhere.map((t) => t.name).slice(0, 3).join(", ")}${elsewhere.length > 3 ? "…" : ""}` : "";
+    badge.textContent = !onTrack() ? "Space works on one track or an FX channel: pick it top right"
+      : here ? `In use on ${proc.name}` + (fxRoute() ? " · FX channel, 100 % wet" : ` · MIX ${Math.round(proc.get(d.knobs[4][0]))} %`)
+      : spaceOn() ? `${proc.name} uses ${SPACE[typeIndex(usedType())].label.toLowerCase()} · press ON to use ${d.label.toLowerCase()} instead` + where
+      : `Off on ${proc.name} · press ON or turn a knob to use it` + where;
+  }
+
+  proc.on((why) => {
+    if (why === "target") { followTarget = true; routeNote = ""; duckLocal = null; }
+    if (why === "values" || why === "target" || why === "targets") sync();
+  });
   app.on("theme", () => eqg.redraw());
+  show(view);
+
   return {
-    onShow() { picture.show(true); },
+    onShow() { picture.show(true); followTarget = true; sync(); },
     onHide() { picture.show(false); },
-    onFrame(f) { picture.onFrame(f); },
+    onFrame(f) {
+      if (followTarget && proc.loadedKey === proc.key) {   // a track just picked: show the effect it uses
+        followTarget = false;
+        if (onTrack() && spaceOn() && usedType() !== view) show(usedType());
+      }
+      if (f.beat) bpmNow = f.beat.playing ? f.beat.bpm || 0 : bpmNow;
+      picture.onFrame(f);
+      syncScene();
+      syncDuck();
+      lamps();
+      if (def().id === "delay") syncNote();
+    },
   };
 }

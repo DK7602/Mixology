@@ -26,7 +26,7 @@
       it, undo works). */
 namespace mixology::link
 {
-    constexpr std::uint32_t kLayoutVersion = 5;   // 2: analysis frames (M3), 3: + left / right balance, 4: + Assist EQ (M4), 5: + processing (M5)
+    constexpr std::uint32_t kLayoutVersion = 6;   // 2: analysis frames (M3), 3: + left / right balance, 4: + Assist EQ (M4), 5: + processing (M5), 6: + Space keys / ducking (M5.2)
     constexpr std::uint32_t kNoRequestSeen = 0xFFFFFFFFu;   // a Link's first look at a request counter: take none
     constexpr int kMaxLinks = 256;
     constexpr std::size_t kNameBytes = 128;
@@ -35,6 +35,23 @@ namespace mixology::link
     constexpr float kSilentDb = -100.0f;
     constexpr int kProcSlots = 192;            // room for every processing control (proc::count today, more later)
     static_assert (proc::count <= kProcSlots);
+    constexpr int kMaxDuckSources = 8;         // a Space effect ducks under at most this many tracks
+    constexpr std::uint64_t kKeyMs = 250;      // a track's key level older than this counts as silence
+
+    /** The tracks a Link's Space effect ducks under (their name hashes, as in the Cubase bridge). */
+    struct DuckSources
+    {
+        int count = 0;
+        std::array<std::uint32_t, kMaxDuckSources> hashes {};
+        bool operator== (const DuckSources& o) const
+        {
+            if (count != o.count) return false;
+            for (int i = 0; i < count; ++i)
+                if (hashes[static_cast<std::size_t> (i)] != o.hashes[static_cast<std::size_t> (i)]) return false;
+            return true;
+        }
+        bool operator!= (const DuckSources& o) const { return ! (*this == o); }
+    };
 
     /** "MixologyLink.v<layout>" (SharedBlock adds the process ID). */
     std::string blockName();
@@ -91,6 +108,19 @@ namespace mixology::link
         std::atomic<std::uint64_t> procMetersMs;
         std::atomic<float> sampleRate;
         std::atomic<std::uint32_t> latency;        // samples (the Limiter's lookahead while it is on)
+
+        // Space (M5.2). keyLevel: this track's level right now (Link's audio thread, every block: a linear peak
+        // envelope), which a Space effect on another track can duck under. duckRequest: Mixology asks which
+        // tracks this Link's Space ducks under (odd seq while written); duckNow: what the Link uses (its own
+        // message thread, odd seq while written; the Link keeps the list in its project).
+        std::atomic<float> keyLevel;
+        std::atomic<std::uint64_t> keyMs;
+        std::atomic<std::uint32_t> duckRequestSeq;
+        std::atomic<std::uint32_t> duckRequestCount;
+        std::array<std::atomic<std::uint32_t>, kMaxDuckSources> duckRequest;
+        std::atomic<std::uint32_t> duckNowSeq;
+        std::atomic<std::uint32_t> duckNowCount;
+        std::array<std::atomic<std::uint32_t>, kMaxDuckSources> duckNow;
     };
 
     struct alignas (64) Header
@@ -144,6 +174,8 @@ namespace mixology::link
         std::uint32_t procRunning = 0;   // modules processing right now (bit per proc::Module)
         float sampleRate = 0.0f;
         int latency = 0;
+
+        DuckSources duck;           // the tracks its Space ducks under
     };
 
     class Registry
@@ -181,6 +213,16 @@ namespace mixology::link
         void learnProcRequests (int slot, std::array<std::uint32_t, kProcSlots>& seen) const;
         /** Requests made since the last call: control indices and values (at most `max`), newest value each. */
         int takeProcRequests (int slot, std::array<std::uint32_t, kProcSlots>& seen, int* indices, float* values, int max) const;
+        /** Audio thread, every block: this track's level (linear peak envelope). Lock-free. */
+        void publishKey (int slot, float level, std::uint64_t nowMs) noexcept;
+        /** Audio thread: another track's key level (0 when it has gone quiet for kKeyMs or stopped). */
+        float keyLevel (int slot, std::uint64_t nowMs) const noexcept;
+        /** Like takeTrimRequest, for the tracks to duck under. */
+        bool takeDuckRequest (int slot, std::uint32_t& lastSeq, DuckSources&) const;
+        /** The tracks this Link's Space ducks under now (message thread). */
+        void publishDuck (int slot, const DuckSources&);
+        /** The live Links (other than `self`) with one of these names: their slots, at most `max`. */
+        int findSlots (const DuckSources&, int self, std::uint64_t nowMs, int* slots, int max) const;
 
         // ---- Mixology side ---------------------------------------------------------------------
         void mainHeartbeat (std::uint64_t nowMs);
@@ -190,6 +232,7 @@ namespace mixology::link
         void requestTrim (int slot, std::uint32_t generation, float db);
         void requestAssist (int slot, std::uint32_t generation, const AssistSettings&);
         void requestProc (int slot, std::uint32_t generation, int index, float value);
+        void requestDuck (int slot, std::uint32_t generation, const DuckSources&);
         /** A Link's processing controls as it published them last (false: no such Link, or no processing). */
         bool readProc (int slot, std::uint32_t generation, proc::Values&) const;
         /** Its processing meters (false when it hasn't processed audio within kAudioMs). */

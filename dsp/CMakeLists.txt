@@ -4,6 +4,7 @@ add_library(mixology_dsp STATIC
     src/ProcChain.cpp
     src/ProcDsp.cpp
     src/ProcParams.cpp
+    src/SpaceFx.cpp
     src/BridgeProtocol.cpp
     src/BridgeSession.cpp
     src/FaderLaw.cpp

@@ -57,8 +57,21 @@ namespace mixology::proc
         finOn, finWidth, finAir, finGlue, finOut,
         // Stereo
         stOn, stWidth, stLow, stMid, stHigh, stLowX, stHighX,
+        // Space (round 2): one effect at a time, its wet sound filtered and ducked
+        spOn, spType, spRoute, spLowCut, spHighCut, duckAmount,
+        revPre, revDecay, revDamp, revWidth, revMix,
+        dlyTime, dlyFeedback, dlyTone, dlyPingPong, dlyMix,
+        choRate, choDepth, choDelay, choWidth, choMix,
+        phaRate, phaDepth, phaFeedback, phaCentre, phaMix,
+        hallPre, hallDecay, hallSize, hallDamp, hallMix,
+        roomPre, roomDecay, roomSize, roomLate, roomMix,
+        spxShift, spxFeedback, spxMotion, spxTone, spxMix, spxMode,
         count
     };
+    enum class SpaceType : int { reverb = 0, delay = 1, chorus = 2, phaser = 3, hall = 4, room = 5, special = 6 };
+    enum class SpecialMode : int { shimmer = 0, drift = 1, swell = 2, freeze = 3 };
+    /** The Delay's Time choices, in beats (quarter notes). */
+    constexpr double kDelayBeats[] = { 0.125, 0.25, 1.0 / 3.0, 0.5, 0.75, 2.0 / 3.0, 1.0, 1.5, 2.0 };
     // clang-format on
 
     constexpr int kEqBands = 6;
@@ -71,7 +84,8 @@ namespace mixology::proc
     constexpr int eqQ (int b) { return eq1Q + 4 * b; }
 
     /** The processing modules, in the order the audio runs through them. */
-    enum class Module : int { gate, eq, comp, multi, trans, tone, loud, harm, analog, clip, stereo, final, limit, count };
+    /** (Space is last in this list but runs before the Limiter: see ProcChain.) */
+    enum class Module : int { gate, eq, comp, multi, trans, tone, loud, harm, analog, clip, stereo, final, limit, space, count };
     constexpr int kModules = static_cast<int> (Module::count);
     int onParam (Module);                 // its on / off switch
     const char* moduleKey (Module);       // "gate", "eq", ... (the interface's module ids)
@@ -91,9 +105,10 @@ namespace mixology::proc
         float comp = 0.0f, multiLow = 0.0f, multiMid = 0.0f, multiHigh = 0.0f;  // dB taken off
         float trans = 0.0f;                                                     // dB, + louder / - quieter (largest move)
         float gate = 0.0f, limit = 0.0f, clip = 0.0f, glue = 0.0f;              // dB taken off (clip: dB over the threshold)
+        float spaceWet = -100.0f, duck = 0.0f;                                  // the Space effect's level (dBFS peak), dB ducked
         std::uint32_t running = 0;                                              // bit per Module: it is processing
     };
-    constexpr int kMeterValues = 13;   // the floats in Meters, in order (how the registry carries them)
+    constexpr int kMeterValues = 15;   // the floats in Meters, in order (how the registry carries them)
     void meterValues (const Meters&, float* out);
     Meters metersFrom (const float* values, std::uint32_t running);
 }

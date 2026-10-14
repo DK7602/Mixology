@@ -16,7 +16,7 @@
     ["Kick", -3, 0.5, "#d23b3b", 1], ["Snare", -6, 0.5, "#3bbf6b", 1], ["Hats", -9.5, 0.62, "#d24fa0", 1], ["Perc", -12, 0.38, "#3ab3d6", 0],
     ["808", -4.5, 0.5, "#d6b23a", 1], ["Keys", -11, 0.42, "#3a8ed6", 1], ["Synth", -8, 0.58, "#3a6fd6", 0], ["Guitar", -10.5, 0.35, "#8f4fd6", 0],
     ["Lead Vox", -2, 0.5, "#4fd66b", 1], ["FX", -14, 0.7, "#d6d23a", 0], ["Adlibs", -7.5, 0.6, "#d68a3a", 1], ["Vox Double", -13, 0.3, "#6bd64f", 0],
-    ["Pad", -16, 0.5, "#5a7bd6", 0], ["Riser", -18, 0.5, "#c7c7c7", 0],
+    ["Pad", -16, 0.5, "#5a7bd6", 0], ["Riser", -18, 0.5, "#c7c7c7", 0], ["FX 1-Vox Verb", -12, 0.5, "#9a6bd6", 1],
   ].map(([name, db, pan, colour, link]) => ({ name, hash: hashOf(name), volume: toNorm(db), pan, mute: false, solo: false, read: name === "FX", write: false, colour, link: !!link, trim: 0, protected: name === "Lead Vox" }));
   const B = { offset: 0, lastMove: "", log: [], version: 1, restore: {}, an: { state: "idle", seconds: 0, playing: true, report: null }, settings: {},
     apply: { active: false, what: "", done: 0, total: 0, skipped: 0, message: "", notes: [], serial: 0, canUndo: false, undoWhat: "", hearingReference: false },
@@ -236,7 +236,7 @@
   window.__JUCE__ = {
     initialisationData: {
       __juce__platform: [], __juce__registeredGlobalEventIds: [], __juce__sliders: [], __juce__toggles: [], __juce__comboBoxes: [],
-      __juce__functions: ["bridgeCommand", "getBridgeState", "getSettings", "setSetting", "setUiState", "setPage", "procTarget", "procSet", "setMonoListen"],
+      __juce__functions: ["bridgeCommand", "getBridgeState", "getSettings", "setSetting", "setUiState", "setPage", "procTarget", "procSet", "setMonoListen", "spaceDuck"],
     },
     postMessage(message) {
       const { eventId, payload } = JSON.parse(message);
@@ -254,13 +254,14 @@
       else if (payload.name === "procTarget") { P.key = a; P.listIn = 0; }
       else if (payload.name === "procSet") result = procSet(a, b);
       else if (payload.name === "setMonoListen") result = P.mono = !!a;
+      else if (payload.name === "spaceDuck") { P.duck[a] = (b || []).map(Number); P.listIn = 0; }
       send("__juce__complete", { promiseId: payload.resultId, result });
     },
   };
   let page = "overview";
 
   // --- fake processing (Milestone 5): Full Mix + the linked tracks, each with every control ----------
-  const P = { spec: null, key: "mix", values: {}, listIn: 0, mono: false };
+  const P = { spec: null, key: "mix", values: {}, listIn: 0, mono: false, duck: {} };
   import("./procspec.js").then((m) => {
     P.spec = m;
     const fresh = () => m.PROC.map((p) => p.def);
@@ -270,6 +271,12 @@
     const vox = "link:" + chans.findIndex((c) => c.name === "Lead Vox") + ":1";
     set(vox, "eq_on", 1); set(vox, "eq1_type", 3); set(vox, "eq1_freq", 90); set(vox, "eq4_gain", 2.5); set(vox, "eq4_freq", 3200);
     set(vox, "comp_on", 1); set(vox, "comp_thr", -24); set(vox, "tb_on", 1); set(vox, "tb_air", 1.5);
+    // An FX channel with a plate reverb that ducks under the vocal; a delay on the Adlibs.
+    const verb = "link:" + chans.findIndex((c) => c.name === "FX 1-Vox Verb") + ":1";
+    set(verb, "sp_on", 1); set(verb, "sp_type", 0); set(verb, "sp_route", 1); set(verb, "rev_decay", 2.2);
+    P.duck[verb] = [chans.find((c) => c.name === "Lead Vox").hash];
+    const ad = "link:" + chans.findIndex((c) => c.name === "Adlibs") + ":1";
+    set(ad, "sp_on", 1); set(ad, "sp_type", 1); set(ad, "dly_time", 4);
   });
   function procSet(key, changes) {
     const v = P.values[key];
@@ -285,14 +292,16 @@
     return n;
   }
   function procFrame(frame, beat) {
-    if (!P.spec || !["eq", "dynamics", "tone", "stereo"].includes(page)) return;
+    if (!P.spec || !["eq", "dynamics", "tone", "stereo", "space"].includes(page)) return;
     const { PROC, PROC_INDEX, MODULES, MODULE_ON } = P.spec;
     const keyOf = (i) => "link:" + i + ":1";
     const onList = (v) => MODULES.filter((m) => v[PROC_INDEX[MODULE_ON[m]]] > 0.5);
     if (P.listIn-- <= 0) {
       P.listIn = 15;
-      frame.procTargets = [{ key: "mix", name: "Full Mix", colour: "", channels: 2, on: onList(P.values.mix), running: onList(P.values.mix) }]
-        .concat(chans.map((c, i) => c.link ? { key: keyOf(i), name: c.name, colour: c.colour, channels: c.name === "Lead Vox" || c.name === "808" ? 1 : 2, on: onList(P.values[keyOf(i)]), running: onList(P.values[keyOf(i)]) } : null).filter(Boolean));
+      const sp = (v) => ({ spaceType: Math.round(v[PROC_INDEX.sp_type]), spaceRoute: Math.round(v[PROC_INDEX.sp_route]) });
+      frame.procTargets = [Object.assign({ key: "mix", name: "Full Mix", colour: "", channels: 2, on: onList(P.values.mix), running: onList(P.values.mix) }, sp(P.values.mix))]
+        .concat(chans.map((c, i) => c.link ? Object.assign({ key: keyOf(i), name: c.name, colour: c.colour, channels: c.name === "Lead Vox" || c.name === "808" ? 1 : 2,
+          on: onList(P.values[keyOf(i)]), running: onList(P.values[keyOf(i)]), hash: c.hash, role: roleOf(c), duck: P.duck[keyOf(i)] || [] }, sp(P.values[keyOf(i)])) : null).filter(Boolean));
     }
     const v = P.values[P.key];
     if (!v) { frame.proc = { key: P.key, ok: false }; return; }
@@ -310,6 +319,8 @@
       corr: P.key === "mix" ? undefined : 0.8,
       meters: { inL: +inL.toFixed(1), inR: +inR.toFixed(1), outL: +(out - limit).toFixed(1), outR: +(out - limit - 0.8).toFixed(1), comp: +comp.toFixed(1), multi,
         trans: on("trans") ? +(g("trans_attack") / 100 * 6 * beat).toFixed(1) : 0, gate, limit: +limit.toFixed(1), clip: 0, glue: 0,
+        space: on("space") ? +(-24 + 8 * beat + (Math.random() - 0.5) * 2).toFixed(1) : -100,
+        duck: on("space") && (P.duck[P.key] || []).length ? +(g("duck_amount") * (0.5 + 0.5 * Math.sin(t * 1.3)) * 0.7).toFixed(1) : 0,
         running: MODULES.filter((m) => on(m)) },
     };
     frame.mono = P.mono;

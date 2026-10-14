@@ -9,6 +9,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstring>
+#include <limits>
 #include <thread>
 
 using namespace mixology;
@@ -214,6 +215,67 @@ TEST_CASE ("Registry: processing controls travel both ways, requests once each",
     CHECK (got.running == m.running);
     CHECK (r.links (150)[0].procRunning == m.running);
     CHECK_FALSE (r.readProcMeters (s, gen, got, 100 + kAudioMs + 1));   // stale: the track stopped
+}
+
+TEST_CASE ("Registry: Space keys and duck lists (a reverb ducks under the vocal)", "[link]")
+{
+    SharedBlock mem (testName ("duck"), Registry::bytes());
+    Registry r (mem.data());
+    const int fx = r.claim (1, 10), vox = r.claim (2, 10), gtr = r.claim (3, 10);
+    auto named = [&r] (int slot, const char* name) {
+        Identity id;
+        id.name = name;
+        id.hasName = true;
+        r.setIdentity (slot, id);
+    };
+    named (fx, "Vox Verb");
+    named (vox, "Lead Vox");
+    named (gtr, "Gtr");
+    for (int s : { fx, vox, gtr }) r.heartbeat (s, 100);
+
+    // The vocal's level, fresh or stale.
+    CHECK (r.keyLevel (vox, 100) == 0.0f);   // never published
+    r.publishKey (vox, 0.4f, 100);
+    CHECK (r.keyLevel (vox, 150) == 0.4f);
+    CHECK (r.keyLevel (vox, 100 + kKeyMs + 1) == 0.0f);   // the track stopped
+    r.publishKey (gtr, std::numeric_limits<float>::quiet_NaN(), 100);
+    CHECK (r.keyLevel (gtr, 100) == 0.0f);
+
+    // Mixology asks the FX channel's Link to duck under the vocal; once, and only its current owner.
+    std::uint32_t seen = kNoRequestSeen;
+    DuckSources got;
+    CHECK_FALSE (r.takeDuckRequest (fx, seen, got));   // learns the counter
+    const auto gen = r.links (100)[0].generation;
+    DuckSources want;
+    want.count = 1;
+    want.hashes[0] = bridge::nameHash ("Lead Vox");
+    r.requestDuck (fx, gen + 1, want);   // an older owner
+    CHECK_FALSE (r.takeDuckRequest (fx, seen, got));
+    r.requestDuck (fx, gen, want);
+    REQUIRE (r.takeDuckRequest (fx, seen, got));
+    CHECK (got == want);
+    CHECK_FALSE (r.takeDuckRequest (fx, seen, got));
+
+    // The Link finds the vocal's slot by name (never itself), and says what it uses.
+    int slots[kMaxDuckSources];
+    REQUIRE (r.findSlots (want, fx, 100, slots, kMaxDuckSources) == 1);
+    CHECK (slots[0] == vox);
+    want.hashes[1] = bridge::nameHash ("Vox Verb");
+    want.count = 2;
+    CHECK (r.findSlots (want, fx, 100, slots, kMaxDuckSources) == 1);
+    CHECK (r.findSlots (want, fx, 100 + kAliveMs + 1, slots, kMaxDuckSources) == 0);   // gone quiet for good
+    r.publishDuck (fx, want);
+    const auto links = r.links (100);
+    CHECK (links[0].duck == want);
+    CHECK (links[1].duck.count == 0);
+
+    // A new Link in a used slot starts with nothing to duck under.
+    r.release (fx, 1);
+    const int again = r.claim (4, 200);
+    CHECK (again == fx);
+    r.heartbeat (again, 200);
+    CHECK (r.links (200)[0].duck.count == 0);
+    CHECK (r.keyLevel (again, 200) == 0.0f);
 }
 
 TEST_CASE ("Registry: Mixology tells each Link whether it is paired", "[link]")
