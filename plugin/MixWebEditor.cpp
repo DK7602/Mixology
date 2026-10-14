@@ -281,6 +281,16 @@ void MixWebEditor::timerCallback()
     if (currentPage == "tracks")
         frame->setProperty ("trackMeters", hub.trackMeters());   // from each track's Mixology Link
 
+    if (currentPage == "overview")
+    {
+        // The Overview's quick tone knobs are the Full Mix EQ's six band gains.
+        const auto v = processor.procValues();
+        juce::Array<juce::var> eq;
+        for (int b = 0; b < mixology::proc::kEqBands; ++b) eq.add (roundTo (v[static_cast<std::size_t> (mixology::proc::eqGain (b))], 0.01f));
+        eq.add (v[mixology::proc::eqOn] > 0.5f && v[mixology::proc::chainOn] > 0.5f);
+        frame->setProperty ("mixEq", eq);
+    }
+
     if (currentPage == "eq" || currentPage == "dynamics" || currentPage == "tone" || currentPage == "stereo")
     {
         if (--procListCountdown <= 0)

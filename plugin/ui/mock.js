@@ -371,6 +371,10 @@
       frame.roleCurves = curves.map((c) => c && c.map((v) => +v.toFixed(1)));
     }
     procFrame(frame, beat);
+    if (page === "overview" && P.spec) {
+      const v = P.values.mix, ix = P.spec.PROC_INDEX;
+      frame.mixEq = [1, 2, 3, 4, 5, 6].map((b) => v[ix[`eq${b}_gain`]]).concat([v[ix.eq_on] > 0.5]);
+    }
     if (B.version !== sentVersion) {
       sentVersion = B.version;
       frame.bridge = state(B.log.length !== sentLog);

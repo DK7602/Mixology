@@ -44,8 +44,8 @@ Mixology remembers your choice.
 ## Pages
 
 - **Overview**: the mix analyzer (your whole mix as a rainbow, and each kind of track as a coloured line:
-  Kick, Bass, Drums, Vocals, Instruments, Other), L / R peak meters and loudness, quick tone knobs, **Analyze
-  Mix**, and the Mix Assistant.
+  Kick, Bass, Drums, Vocals, Instruments, Other), L / R peak meters and loudness, six quick tone knobs (the full
+  mix's EQ bands: the EQ page with Full Mix picked shows the same), **Analyze Mix**, and the Mix Assistant.
 - **Tracks**: the MixConsole as Mixology sees it, 12 channels at a time. Arrows move the bank.
   The colour bar on top of each strip is the Cubase track colour. Every strip moves its real Cubase channel
   (see "Moving faders" below). Meters show on strips whose track has Mixology Link.

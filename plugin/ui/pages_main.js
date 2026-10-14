@@ -208,16 +208,17 @@ export function buildOverview(root, app) {
   }
   app.on("bridge", renderListening);
 
-  // ---- centre bottom: quick tone knobs (preview)
+  // ---- centre bottom: quick tone knobs = the Full Mix EQ's six bands (Milestone 5; they start flat)
   const qt = el("div", "", root, box(266, 570, 830, 272));
-  // Preview values from the approved mockup (double-click resets to 0). They become a real tone stage in
-  // Milestone 5 and then start flat.
-  const quick = [["LOW END", "qtLow", -0.5], ["LOW MID", "qtLowMid", -1.2], ["MID", "qtMid", 0.8], ["UPPER MID", "qtUpMid", 1.4], ["HIGH END", "qtHigh", 0.6], ["AIR", "qtAir", 1.2]];
-  quick.forEach(([label, id, value], i) => {
+  const quick = ["LOW END", "LOW MID", "MID", "UPPER MID", "HIGH END", "AIR"];
+  let quickTouched = 0;
+  const quickKnobs = quick.map((label, i) => {
     const card = el("div", "card", qt, box(i * 140, 0, 130, 272));
-    new Knob(card, { x: -5, y: 24, w: 140, size: 106, label, id, min: -6, max: 6, value, def: 0, bipolar: true, step: 0.1, format: (v) => fmt.db(v), labelGap: 18, valueGap: 14 });
+    const k = new Knob(card, { x: -5, y: 24, w: 140, size: 106, label, min: -12, max: 12, value: 0, def: 0, bipolar: true, step: 0.1, format: (v) => fmt.db(v), labelGap: 18, valueGap: 14,
+      onChange: (v) => { quickTouched = performance.now(); app.native.procSet("mix", { [`eq${i + 1}_gain`]: v, eq_on: 1 }); } });
+    card.title = "The full mix's EQ, band " + (i + 1) + " (the EQ page with Full Mix picked shows the same bands)";
+    return k;
   });
-
   // ---- right: Mix Assistant
   const ma = el("div", "panel", root, box(1110, 0, 302, 842));
   ma.insertAdjacentHTML("beforeend", `<div style="position:absolute;left:18px;top:18px;width:44px;height:44px;color:var(--amber)">${icon("bulb")}</div>`);
@@ -294,6 +295,12 @@ export function buildOverview(root, app) {
       meters.l.set(f.peakL ?? -100);
       meters.r.set(f.peakR ?? -100);
       meters.lufs.set((f.momentary ?? -100) + 0);
+      if (f.mixEq && performance.now() - quickTouched > 800)
+        quickKnobs.forEach((k, i) => {
+          if (!k.dragging && Math.abs(k.value - f.mixEq[i]) > 0.01) k.set(f.mixEq[i]);
+          const colour = f.mixEq[6] ? undefined : "#7d8796";   // grey while the full mix's EQ is off
+          if (k.o.colour !== colour) k.setColour(colour);
+        });
       if (f.roleCurves) {
         // Calm the lines down: blend over time, then a light smoothing across neighbouring bands.
         const prev = curves;
