@@ -34,7 +34,14 @@ MixologyAudioProcessor::MixologyAudioProcessor()
 {
     procRaw.bind (parameters);
     for (int i = 0; i < mixology::proc::kMeterValues; ++i) procMeters[static_cast<std::size_t> (i)].store (meterDefault (i));
+    // Polish / Auto Mix can propose the Full Mix's tone: they read and set it through the hub.
+    bridgeHub->setMixProcessing (this, { [this] { return procRaw.read(); }, [this] (int index, float value) { setProc (index, value); } });
     startTimerHz (10);
+}
+
+MixologyAudioProcessor::~MixologyAudioProcessor()
+{
+    bridgeHub->clearMixProcessing (this);
 }
 
 void MixologyAudioProcessor::timerCallback()

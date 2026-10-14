@@ -6,22 +6,27 @@ import { $, el, icon, fmt, graph, freqToX, cssVar } from "./ui.js";
 import { ROLES } from "./roles.js";
 import { sheet } from "./sheets.js";
 
-const TOOL_ICON = { auto: "wand", balance: "sliders", clean: "wave", pocket: "mic", stereo: "rings" };
+const TOOL_ICON = { auto: "wand", balance: "sliders", clean: "wave", pocket: "mic", stereo: "rings", polish: "star" };
 const TOOL_ABOUT = {
-  auto: "Everything below together: levels, pans, low cuts, mud and vocal pocket dips.",
+  auto: "Everything together: levels, pans, low cuts, mud and vocal pocket dips, EQ, compression, space and the mix's tone.",
+  polish: "Processing in each track's Mixology Link: EQ, compression, the vocal's reverb / delay, and the Full Mix's tone. Worked out from what Analyze Mix heard.",
   balance: "Fader levels: the beat against itself, the vocal against the beat, and room for Masterology.",
   clean: "Assist EQ in each track's Mixology Link: low cuts where there's rumble, dips where the mix is muddy.",
   pocket: "Assist EQ dips in the instruments that cover the vocal's words (1.6 - 4 kHz).",
   stereo: "Pans: low end and lead vocal in the middle, pairs and doubles spread, a lopsided mix evened out.",
 };
-const KIND_LABEL = { level: "Fader", pan: "Pan", lowcut: "Low cut", mud: "Mud dip", pocket: "Pocket dip" };
+const KIND_LABEL = { level: "Fader", pan: "Pan", lowcut: "Low cut", mud: "Mud dip", pocket: "Pocket dip",
+  eq: "EQ", comp: "Compressor", width: "Stereo", space: "Space", tone: "Tone" };
 
-function valueText(c, v) {
+function valueText(c, v, which) {
+  if (c.toText !== undefined) return which === "to" ? c.toText : c.fromText;   // processing: words from the planner
   if (c.kind === "level") return fmt.db(v, 1);
   if (c.kind === "pan") return fmt.pan(v);
   if (c.kind === "lowcut") return v < 20 ? "Off" : fmt.hz(v);
   return Math.abs(v) < 0.05 ? "None" : fmt.db(v, 1) + " at " + fmt.hz(c.hz);
 }
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
 
 let openTool = null;   // re-renders the open tool sheet when the bridge reports progress
 
@@ -120,7 +125,7 @@ export async function openToolSheet(app, tool) {
     nm.title = c.name;
     lastName = c.name;
     el("div", "", grid, { fontSize: "17px", color: "var(--text-dim)" }).textContent = KIND_LABEL[c.kind] || c.kind;
-    const val = el("div", "", grid, { fontSize: "19px", whiteSpace: "nowrap" });
+    const val = el("div", "", grid, c.toText !== undefined ? { fontSize: "17px", lineHeight: "1.3" } : { fontSize: "19px", whiteSpace: "nowrap" });
     const why = el("div", "", grid, { fontSize: "15.5px", lineHeight: "1.3", color: "var(--text-dim)" });
     why.textContent = c.why.charAt(0).toUpperCase() + c.why.slice(1) + ".";
     rows.push({ c, i, box, val });
@@ -184,7 +189,7 @@ export async function openToolSheet(app, tool) {
       const on = picked.has(i);
       box.innerHTML = on ? icon("check", 'stroke-width="3"') : "";
       const to = c.kind === "level" && allowBig ? c.wanted : c.to;
-      val.innerHTML = `<span style="color:var(--text-dim)">${valueText(c, c.from)}</span> → <b style="color:${on ? "var(--text)" : "var(--text-dim)"}">${valueText(c, to)}</b>`
+      val.innerHTML = `<span style="color:var(--text-dim)">${esc(valueText(c, c.from, "from"))}</span> → <b style="color:${on ? "var(--text)" : "var(--text-dim)"}">${esc(valueText(c, to, "to"))}</b>`
         + (c.big ? ` <span style="color:var(--amber);font-size:15px" title="The whole move is ${fmt.db(c.wanted - c.from)}">${allowBig ? "" : "(limited)"}</span>` : "");
       val.style.opacity = on ? "1" : "0.5";
     }

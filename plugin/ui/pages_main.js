@@ -14,7 +14,8 @@ export { ROLES, guessRole };
 export function buildOverview(root, app) {
   // ---- left: operations
   const ops = [
-    { id: "auto", label: "AUTO MIX", icon: "wand", tip: "Levels, pans, low cuts and vocal pocket together: see every change first, then Apply" },
+    { id: "auto", label: "AUTO MIX", icon: "wand", tip: "Everything together: levels, pans, low cuts, vocal pocket, EQ, compression, space and the mix's tone. See every change first, then Apply" },
+    { id: "polish", label: "POLISH", icon: "star", tip: "EQ, compression, vocal reverb / delay and the mix's tone, in each Mixology Link: see every change first, then Apply" },
     { id: "balance", label: "BALANCE", icon: "sliders", tip: "Fader levels for your style, and room for Masterology" },
     { id: "clean", label: "CLEAN UP", icon: "wave", tip: "Low cuts and mud dips (Assist EQ in each Mixology Link)" },
     { id: "pocket", label: "VOCAL POCKET", icon: "mic", tip: "Dips in the instruments that cover the vocal's words" },
@@ -30,7 +31,7 @@ export function buildOverview(root, app) {
     app.command("analyze", { value: { key: st.key, name: st.fullName, bass: st.bass, scoop: st.scoop, air: st.air } });
   });
   ops.forEach((o, i) => {
-    const b = el("button", "btn", root, box(0, 130 + i * 120, 252, 104));
+    const b = el("button", "btn", root, box(0, 128 + i * 102, 252, 90));
     b.innerHTML = icon(o.icon) + `<span>${o.label}</span>`;
     b.title = o.tip;
     b.addEventListener("click", () => (o.id === "ref" ? openReferenceSheet(app) : openToolSheet(app, o.id)));

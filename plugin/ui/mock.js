@@ -107,7 +107,7 @@
     if (name === "analyzeFinish") { if (B.an.seconds < 1) return fail("Nothing heard yet: press play in Cubase."); B.an.state = "done"; B.an.report = fakeReport(); B.version++; return { ok: true }; }
     if (name === "analyzeCancel") { B.an.state = B.an.report ? "done" : "idle"; B.version++; return { ok: true }; }
     if (name === "plan") {
-      const titles = { auto: "Auto Mix", balance: "Balance", clean: "Clean Up", pocket: "Vocal Pocket", stereo: "Stereo Architect" };
+      const titles = { auto: "Auto Mix", balance: "Balance", clean: "Clean Up", pocket: "Vocal Pocket", stereo: "Stereo Architect", polish: "Polish" };
       const title = titles[value] || "Auto Mix";
       B.planId++;
       if (!B.an.report) return { ok: true, plan: { id: B.planId, tool: value, title, valid: false, summary: `Press Analyze Mix first and play the song for 20 - 60 seconds: ${title} works from what it hears.`, notes: [], changes: [] } };
@@ -115,6 +115,7 @@
       const lvl = (n, d, why, big) => { const f = lawDb(ch(n).volume); return { hash: ch(n).hash, name: n, role: roleOf(ch(n)), kind: "level", from: +f.toFixed(1), to: +(f + Math.max(-6, Math.min(6, d))).toFixed(1), wanted: +(f + d).toFixed(1), big: !!big, hz: 0, why }; };
       const pan = (n, to, why) => ({ hash: ch(n).hash, name: n, role: roleOf(ch(n)), kind: "pan", from: Math.round((ch(n).pan - 0.5) * 200), to, wanted: to, big: false, hz: 0, why });
       const eq = (n, kind, from, to, hz, why) => ({ hash: ch(n).hash, name: n, role: roleOf(ch(n)), kind, from, to, wanted: to, big: false, hz, why });
+      const proc = (n, kind, fromText, toText, why) => ({ hash: ch(n).hash, name: n, role: roleOf(ch(n)), kind, from: 0, to: 0, wanted: 0, big: false, hz: 0, why, fromText, toText, fullMix: false });
       const parts = {
         balance: [lvl("Hats", -3.4, "the hats sit 4.4 dB louder against the rest of the beat than Hip Hop - Modern Clean usually has"),
           lvl("Kick", -1.5, "makes room for the vocal"), lvl("808", -1.5, "makes room for the vocal"), lvl("Snare", -1.5, "makes room for the vocal"),
@@ -124,10 +125,20 @@
           eq("Keys", "mud", 0, -2.5, 315, "the mix has 3.6 dB more 200 - 500 Hz than Hip Hop - Modern Clean usually does; this is one of the tracks carrying it")],
         pocket: [eq("Keys", "pocket", 0, -3, 2500, "at 1.6 - 4 kHz it is 2.1 dB under the vocal while it sings, covering its words"),
           eq("Snare", "pocket", 0, -2, 3150, "at 1.6 - 4 kHz it is 4.8 dB under the vocal while it sings, covering its words")],
+        polish: [
+          proc("Lead Vox", "eq", "Flat", "+2.0 dB at 3.5 kHz", "the vocal is dull: its presence (2 - 5 kHz) is 4.2 dB under its body; a little lift makes every word clear"),
+          proc("Lead Vox", "eq", "Flat", "+1.5 dB at 10 kHz (shelf)", "the vocal has little air (8 - 12 kHz is 8.1 dB under its presence): a gentle shelf opens it up"),
+          proc("Lead Vox", "comp", "Off", "3:1 from −12.0 dB", "its level swings 10 dB between quiet and loud lines: a compressor (about 4 dB on the loud parts) keeps every word in front"),
+          proc("808", "width", "Lows 34 % on the sides", "Lows in the middle", "its low end is spread in stereo: in the middle it hits harder and stays solid in mono and on club systems"),
+          proc("FX 1-Vox Verb", "space", "Off", "Vocal Plate, 100 % wet", "the lead vocal's reverb: a vocal plate (1.4 s) on this FX channel, ducking 6 dB under 'Lead Vox' so the words stay clear"),
+          proc("Adlibs", "space", "Dry", "Ping-pong 1/8, mix 15 %", "ad-libs that echo left and right on the beat fill the gaps around the lead without covering it"),
+          Object.assign(proc("Lead Vox", "tone", "Air +0.0 dB", "Air +1.5 dB", "against Hip Hop - Modern Clean's tone your mix is short of air (3.1 dB): a gentle Tone Balance on the whole mix (before Masterology)"), { name: "Full Mix", role: "other", hash: 0, fullMix: true }),
+        ],
       };
-      const changes = value === "auto" ? [...parts.balance, ...parts.stereo, ...parts.clean, ...parts.pocket] : parts[value] || [];
+      const changes = value === "auto" ? [...parts.balance, ...parts.stereo, ...parts.clean, ...parts.pocket, ...parts.polish] : parts[value] || [];
       const notes = ["'Lead Vox': protected (padlock), so it stays where it is (it would have moved +1.5 dB)."];
       if (value === "auto" || value === "clean" || value === "pocket") notes.push("'Synth' has no Mixology Link Mixology can reach: vocal pocket skipped.");
+      if (value === "auto" || value === "polish") notes.push("Send 'Lead Vox' to 'FX 1-Vox Verb' in Cubase (MixConsole, Sends, about -10 dB): Mixology can't add sends.");
       const hd = value === "auto" || value === "balance" ? { headroomDb: -12.8, headroomCount: 8, headroomWhy: "Your mix peaks at +6.8 dBTP. Masterology works best with peaks around -6: every fader goes down 12.8 dB together. The balance stays the same, the mix just gets quieter (Masterology brings the level back)." } : { headroomDb: 0, headroomCount: 0, headroomWhy: "" };
       const busSet = Object.values(B.settings).some((x) => x && x.musicBus);
       B.plan = { ...hd, groupHints: (value === "auto" || value === "balance") && !busSet ? ["Pad"] : [], id: B.planId, tool: value, title, valid: true, summary: `${changes.length} changes for ${window.__mixStyle || "Hip Hop - Modern Clean"}: levels: the hats -3.4 dB, the kick -1.5 dB; pans: 2 tracks; 1 low cut, 1 mud dip; 2 pocket dips.`, notes, changes };
@@ -385,6 +396,11 @@
     if (page === "space") {   // a song at 92 BPM, playing
       const bpm = 92, ppq = (performance.now() / 60000) * bpm;
       frame.beat = { bpm, ppq, bar: Math.floor(ppq / 4) * 4, num: 4, playing: B.an.playing !== false };
+    }
+    if (page === "master" && P.spec) {
+      const v = P.values.mix, ix = P.spec.PROC_INDEX, on = (id) => v[ix.chain_on] > 0.5 && v[ix[id]] > 0.5;
+      frame.master = { finOn: on("fin_on"), glue: v[ix.fin_glue], width: v[ix.fin_width], out: v[ix.fin_out], tbOn: on("tb_on"),
+        warmth: v[ix.tb_warmth], air: v[ix.tb_air], glueGr: on("fin_on") ? +(v[ix.fin_glue] / 40 * (0.5 + beat)).toFixed(1) : 0 };
     }
     if (page === "overview" && P.spec) {
       const v = P.values.mix, ix = P.spec.PROC_INDEX;

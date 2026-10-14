@@ -101,7 +101,18 @@ namespace mixology::mix
             double loudE = 0.0, crestSum = 0.0, widthSum = 0.0, corrSum = 0.0, peak = -120.0, leftE = 0.0, rightE = 0.0;
             std::array<double, kBands> bandE {}, sideE {};
             std::vector<int> momentIndex;   // moments where it was active
+            std::vector<double> rmsE, peaks;   // per active moment, before the fader (energy, dBFS)
         };
+
+        double percentile (std::vector<double> v, double q)
+        {
+            if (v.empty()) return -120.0;
+            std::sort (v.begin(), v.end());
+            const double pos = std::clamp (q, 0.0, 1.0) * static_cast<double> (v.size() - 1);
+            const auto lo = static_cast<std::size_t> (pos);
+            const auto hi = std::min (lo + 1, v.size() - 1);
+            return v[lo] + (v[hi] - v[lo]) * (pos - static_cast<double> (lo));
+        }
 
         std::uint32_t keyOf (const TrackSample& t) { return t.hash != 0 ? t.hash : bridge::nameHash ("#" + t.name); }
 
@@ -255,6 +266,8 @@ namespace mixology::mix
                 a.momentIndex.push_back (mi);
                 a.loudE += toE (t.frame.loudness + t.faderDb);
                 a.crestSum += t.frame.peakDb - t.frame.rmsDb;
+                a.rmsE.push_back (toE (t.frame.rmsDb));
+                a.peaks.push_back (t.frame.peakDb);
                 a.widthSum += t.frame.width;
                 a.corrSum += t.frame.correlation;
                 const auto [l, rgt] = leftRight (t.frame, t.faderDb);
@@ -294,6 +307,21 @@ namespace mixology::mix
                     if (b <= kLowTo) { lowE += a.bandE[i]; lowSide += a.sideE[i]; }
                 }
                 t.lowWidth = lowE > 0.0 ? lowSide / lowE : 0.0;
+                // Level swings: each snapshot averaged with its neighbours (about a second), loud minus quiet.
+                if (a.rmsE.size() >= 10)
+                {
+                    std::vector<double> smooth;
+                    const auto m = a.rmsE.size();
+                    for (std::size_t k = 0; k < m; ++k)
+                    {
+                        double e = 0.0;
+                        int cnt = 0;
+                        for (std::size_t j = k >= 2 ? k - 2 : 0; j <= std::min (m - 1, k + 2); ++j) { e += a.rmsE[j]; ++cnt; }
+                        smooth.push_back (toDb (e / cnt));
+                    }
+                    t.levelRange = percentile (smooth, 0.9) - percentile (smooth, 0.1);
+                }
+                t.loudPeak = percentile (a.peaks, 0.9);
                 t.balance = a.rightE > 0.0 && a.leftE > 0.0 ? std::clamp (toDb (a.leftE) - toDb (a.rightE), -40.0, 40.0) : 0.0;
             }
 

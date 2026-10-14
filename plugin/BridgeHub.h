@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 #include "mixology/AssistRestore.h"
 #include "mixology/BridgeSession.h"
 #include "mixology/LinkRegistry.h"
@@ -39,6 +41,16 @@ public:
     bool isEnabled() const { return enabled; }
 
     mixology::BridgeSession& session() { return bridge; }
+
+    /** Mixology's own Full Mix processing, for Polish / Auto Mix (the plug-in on the Stereo Out registers itself;
+        message thread). */
+    struct MixProcessing
+    {
+        std::function<mixology::proc::Values()> get;
+        std::function<void (int, float)> set;
+    };
+    void setMixProcessing (const void* owner, MixProcessing);
+    void clearMixProcessing (const void* owner);
 
     /** Everything the Tracks page and Settings > Cubase Bridge show. */
     juce::var getState (bool includeLog);
@@ -97,6 +109,7 @@ private:
 
     // ---- Milestone 4: plans you approve, then apply (faders and pans through the bridge, EQ through the Links)
     std::vector<mixology::mix::ChannelNow> channelsNow() const;
+    void fillProc (mixology::mix::ChannelNow&, const mixology::link::LinkInfo&) const;
     juce::var planToVar (const mixology::mix::Plan&) const;
     juce::var applyState() const;
     mixology::BridgeSession::Result applyCurrentPlan (const juce::var& picked, bool allowBig, bool headroom, std::string& info);
@@ -105,6 +118,12 @@ private:
     const mixology::link::LinkInfo* uniqueLink (const std::vector<mixology::link::LinkInfo>&, std::uint32_t hash) const;
 
     std::map<std::uint32_t, double> fadersAtAnalysis;   // every fader when Analyze Mix finished listening
+    std::map<std::uint32_t, mixology::proc::Values> procAtAnalysis;   // every Link's processing then (Polish)
+    bool mixProcAtAnalysisKnown = false;
+    mixology::proc::Values mixProcAtAnalysis {};
+    const void* mixOwner = nullptr;
+    MixProcessing mixProc;
+    mixology::mix::MixNow mixNow() const;
     void reevaluate();         // the report again (after a role / setting change), without listening again
     void applyMusicBus();      // tells the analysis where the music group's fader was while it listened
     mixology::mix::Plan currentPlan;
@@ -120,6 +139,15 @@ private:
     /** Puts the Assist EQ back on one track (or all when hash == 0). Counts restored and kept-yours tracks. */
     void restoreAssist (std::uint32_t hash, int& restored, int& kept);
     int changedTotal (int* faders = nullptr, int* eq = nullptr) const;
+    struct ProcUndo   // processing a plan changed: the values before, per Link (or the Full Mix)
+    {
+        bool fullMix = false;
+        int slot = -1;
+        std::uint32_t generation = 0;
+        std::vector<std::pair<int, float>> before;
+        bool duckSet = false;
+        mixology::link::DuckSources duckBefore;
+    };
     struct LastApply
     {
         bool valid = false;
@@ -128,6 +156,7 @@ private:
         std::uint64_t bridgeSerial = 0;     // the bridge plan's serial once it has finished
         std::vector<mixology::BridgeSession::PlanStep> bridgeUndo;
         std::vector<AssistUndo> assist;
+        std::vector<ProcUndo> procs;
     };
     LastApply lastApply;
     std::uint64_t applyVersion = 0, seenPlanSerial = 0;

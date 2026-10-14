@@ -21,7 +21,7 @@ class MixologyAudioProcessor final : public juce::AudioProcessor,
 {
 public:
     MixologyAudioProcessor();
-    ~MixologyAudioProcessor() override = default;
+    ~MixologyAudioProcessor() override;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}

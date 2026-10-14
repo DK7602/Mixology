@@ -1,20 +1,51 @@
 # Milestone 5 tests
 
-## Fix: the Electric guitars at "L100" (version 0.6.1, 5 minutes)
+## Round 3: Auto Mix sets the EQ, compression and space (version 0.7.0), about 25 minutes
 
-What happened: those four channels have no working pan in Cubase (mono tracks going into a mono group), and
-Cubase reports such a channel as "L100". When Mixology set them to C, the Cubase script answered "done" (it repeated
-what it was sent), so Mixology believed it; the next time Cubase reported them (Auto Mix walking the channels),
-they read "L100" again. Now Mixology catches that, shows **No pan** on those strips, remembers it with the
-project and never touches those pans again. The Cubase script is updated too (v4: it only reports what Cubase
-really has).
+Goal: **Polish** (new, under Auto Mix) and **Auto Mix** now also propose processing for your tracks: EQ, a
+compressor, the vocal's reverb / delay and the mix's tone. The Master page's four knobs work. And the Electric
+guitars' "L100" is fixed. **Use a copy of a project** (File > Save As... first).
+
+### A. Install
 
 1. Close Cubase. Copy both .vst3 folders as usual, **and** copy the `Mixology` folder from the download's
    `Cubase MIDI Remote` folder into `Documents\Steinberg\Cubase\MIDI Remote\Driver Scripts\Local\` again
-   (replace it). Start Cubase. The Tracks page should say **Bridge v4**.
+   (replace it: the script is v4 now). Start Cubase. The Tracks page should say **Bridge v4**.
+
+### B. The Electric guitars' "L100"
+
+What happened: those four channels have no working pan in Cubase (mono tracks going into a mono group), and
+Cubase reports such a channel as "L100". When Mixology set them to C, the old Cubase script answered "done", so
+Mixology believed it; the next time Cubase reported them they read "L100" again. Now Mixology catches that.
+
 2. Tracks page: turn each Electric guitar's pan knob a little. Within a second each one reads **No pan**.
-3. Run Auto Mix: the guitars stay **No pan**. Save, close and reopen the project: still **No pan**.
-   **Report**: does it work?
+   Save, close and reopen the project: still **No pan**. **Report**: does it work?
+
+### C. Polish
+
+3. Play the song and press **Analyze Mix** (let it listen 30 - 60 seconds), then **POLISH** (left, under Auto Mix).
+4. Read the list: for example "Lead Vox · EQ · Flat → +2.0 dB at 3.5 kHz · the vocal is dull...", a
+   compressor, a reverb for the lead vocal. If you have an FX channel with Mixology Link (from round 2), the
+   reverb goes there, and "LEFT AS IT IS" reminds you to send the vocal to it. Untick anything you don't want.
+5. Press **Apply**. Listen. Press **Undo**: everything goes back. Apply again. Then open the EQ / Dynamics /
+   Space pages on the vocal: the settings Polish made are there (and you can change them).
+   **Report**: how many changes, and does the vocal sound better or worse? Anything that sounds wrong?
+6. Open Polish again right away: it should find nothing more (or only small things). **Report**: does it?
+
+### D. Auto Mix
+
+7. Analyze Mix again, then **AUTO MIX**: levels, pans, Clean Up, Vocal Pocket **and** Polish in one list.
+   **Report**: how does the mix sound after Apply?
+
+### E. Master page
+
+8. **MASTER** page, bottom: **GLUE** 30 %, **TILT** +1 dB (brighter) then −1 dB (warmer), **WIDTH**, **TRIM**.
+   They work on the whole mix (before Masterology). Turn them back (double-click resets a knob).
+   **Report**: do you hear them?
+
+### What to send back
+
+Steps 2, 5, 6, 7 and 8, and a screenshot of the Polish list.
 
 ## Round 2: Space (reverb, delay, effects, ducking), about 30 minutes
 

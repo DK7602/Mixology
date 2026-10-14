@@ -1,9 +1,9 @@
 # Mixology manual
 
-Manual for version 0.6.1 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
-tools: Auto Mix, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
-Dynamics, Tone and Stereo on any track or on the full mix, and now Space: reverb, delay and effects on a track
-or an FX channel, ducking under the vocal).
+Manual for version 0.7.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
+tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
+Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
+channel, ducking under the vocal, and the Master page's finishing knobs).
 
 **Voxology** makes each vocal sound great. **Mixology** makes all your tracks work together.
 **Masterology** turns the finished mix into the master.
@@ -22,8 +22,9 @@ or an FX channel, ducking under the vocal).
 | Auto Mix, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match | Live |
 | EQ, Dynamics, Tone, Stereo pages: processing on the track you pick (in its Mixology Link) or on the full mix | Live |
 | Mono Check (Stereo page) | Live |
-| Space page: reverbs, delay, chorus, phaser, special effects on a track or an FX channel, ducking | Live: this is what we're testing now |
-| Master page's finishing knobs | Preview: they move but don't process audio yet (next round) |
+| Space page: reverbs, delay, chorus, phaser, special effects on a track or an FX channel, ducking | Live |
+| Polish (and Auto Mix): EQ, compression, vocal reverb / delay and the mix's tone proposed for you | Live: this is what we're testing now |
+| Master page's finishing knobs (Glue, Tilt, Width, Trim on the Full Mix) | Live: this is what we're testing now |
 
 Nothing changes your sound until you ask: every processing module starts switched off (the audio passes
 through bit for bit). What can change it: the Cubase faders and pans Mixology moves, the Assist EQ / Trim in
@@ -63,7 +64,9 @@ Mixology remembers your choice.
 - **Tone**: Tone Balance, Loudness, Clip Control, Harmonic, Analog Touch, Final Touch; your mix's tonal balance
   against the style's target (red line), and loudness.
 - **Stereo**: Width (and Low / Mid / High Width), Mono Check, and how wide your mix is.
-- **Master**: loudness over the last minute and a checklist for handing the mix to Masterology.
+- **Master**: loudness over the last minute, a checklist for handing the mix to Masterology, and four finishing
+  knobs on the Full Mix (before Masterology): **Glue** (gentle bus compression), **Tilt** (+ brighter, − warmer),
+  **Width** and **Trim** (the level going into Masterology). Leave the loudness to Masterology.
 
 Knobs: drag up / down (hold Shift for fine steps), scroll, or use the arrow keys. Double-click resets.
 
@@ -207,7 +210,23 @@ list: every change it wants to make, **now → new**, and why, in plain words. U
   dips (200 - 500 Hz) on the tracks carrying it when the mix is muddier than your style.
 - **Vocal Pocket**: Assist EQ. Gentle dips (2 - 4 dB) at 1.6 - 4 kHz in the instruments that cover the vocal's
   words, each where it overlaps the vocal most.
-- **Auto Mix**: all four together.
+- **Polish**: processing in each track's Mixology Link, worked out from what Analyze Mix heard:
+  - **EQ**: a dull lead vocal gets a little presence (around 3.5 kHz) and, if it has little air, a gentle high
+    shelf; a harsh one a narrow dip; a boxy kick a dip around 300 - 500 Hz. Gentle moves (at most 3 dB), in an EQ
+    band that's free (or the one already doing that job: it's adjusted, never doubled).
+  - **Compressor**: where a vocal or the bass swings a lot in level between loud and quiet parts (about 4 dB off
+    the loud parts). A track that is even already (Voxology on the vocal, for example) or that has a compressor
+    switched on is left alone.
+  - **Low end in the middle**: a stereo kick or 808 whose lows are spread gets them centred (Stereo, Low Width 0 %).
+  - **Space**: a reverb for the lead vocal. If you have an FX channel with Mixology Link (named like "FX 1-...",
+    "Verb", "Delay"...), it goes there, 100 % wet, ducking under the vocal; send the vocal to it in Cubase (the
+    list reminds you). Without one, a little plate on the vocal itself (12 %). Hip hop, trap, R&B: a short plate;
+    gospel, worship, cinematic: a hall. Ad-libs get a ping-pong delay (in the urban and pop styles). An effect you
+    set up yourself is left alone.
+  - **The mix's tone**: when the whole mix is clearly short of (or has too much) low end, presence or air against
+    your style, a gentle Tone Balance on the Full Mix.
+  Apply and open it again: it finds nothing more to do. Undo puts every setting back.
+- **Auto Mix**: all of the above together (levels, pans, Clean Up, Vocal Pocket and Polish).
 - **Reference Match**: put a finished song you like on its own track under yours (same bars), insert Mixology
   Link on it and mute the track (its Link still hears it). Analyze Mix, then pick it in Reference Match. You see
   both tonal curves, five regions in words ("2.4 dB less low end"), loudness and width. **Hear the reference**

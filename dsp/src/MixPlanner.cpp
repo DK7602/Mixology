@@ -876,6 +876,404 @@ namespace mixology::mix
             if (dips == 0) return "nothing covers the vocal";
             return std::to_string (dips) + " pocket dip" + (dips == 1 ? "" : "s");
         }
+        // ---------------------------------------------------------------------------------------------
+        // Polish (Milestone 5, round 3): processing in each track's Mixology Link, and the Full Mix's tone
+
+        float pv (const proc::Values& v, int id) { return v[static_cast<std::size_t> (id)]; }
+
+        /** A band range's level, tilted +4.5 dB per octave (a balanced sound reads about flat). */
+        double tilted (const std::vector<double>& bands, int from, int to)
+        {
+            double e = 0.0;
+            int n = 0;
+            for (int b = from; b <= to && b < static_cast<int> (bands.size()); ++b)
+            {
+                e += toE (bands[static_cast<std::size_t> (b)] + 4.5 * std::log2 (bandHz (b) / 1000.0));
+                ++n;
+            }
+            return n > 0 ? toDb (e / n) : -120.0;
+        }
+
+        double plainLevel (const std::vector<double>& bands, int from, int to)
+        {
+            const int n = std::max (1, to - from + 1);
+            return toDb (rangeE (bands, from, to) / n);
+        }
+
+        int loudestBand (const std::vector<double>& bands, int from, int to)
+        {
+            int best = from;
+            for (int b = from; b <= to && b < static_cast<int> (bands.size()); ++b)
+                if (bands[static_cast<std::size_t> (b)] > bands[static_cast<std::size_t> (best)]) best = b;
+            return best;
+        }
+
+        std::string hzText (double hz)
+        {
+            if (hz < 1000.0) return fmt0 (hz) + " Hz";
+            std::string k = fmt1 (hz / 1000.0);
+            if (k.size() > 2 && k.compare (k.size() - 2, 2, ".0") == 0) k.resize (k.size() - 2);
+            return k + " kHz";
+        }
+
+        double roundHalf (double v) { return std::round (v * 2.0) / 2.0; }
+
+        bool looksLikeFxChannel (const std::string& name)
+        {
+            static const std::regex fx (R"(^fx\s*\d|\b(verb|reverb|delay|echo|return|aux|send|space|plate|hall)\b)", std::regex::icase);
+            return std::regex_search (name, fx);
+        }
+
+        /** The Link that carries a track's processing, or nullptr (with a note why). */
+        const ChannelNow* procChannel (const TrackReport& t, const Lookup& look, Plan& plan, const char* what)
+        {
+            const auto* ch = look.of (t);
+            if (ch == nullptr || ! ch->hasLink || ! ch->hasProc) return nullptr;   // Clean Up already says so
+            if (ch->locked)
+            {
+                plan.notes.push_back (quoted (t.name) + " is protected (padlock): " + what + " skipped.");
+                return nullptr;
+            }
+            if (pv (ch->proc, proc::chainOn) < 0.5f)
+            {
+                plan.notes.push_back (quoted (t.name) + ": its Link's processing is switched off (On / Off in its window): " + what + " skipped.");
+                return nullptr;
+            }
+            return ch;
+        }
+
+        const proc::Values& atAnalysis (const ChannelNow& ch) { return ch.procAtAnalysisKnown ? ch.procAtAnalysis : ch.proc; }
+
+        std::string bandText (const proc::Values& v, int band)
+        {
+            const float g = pv (v, proc::eqGain (band));
+            if (pv (v, proc::eqOn) < 0.5f || std::abs (g) < 0.05f) return "Flat";
+            const int type = static_cast<int> (std::lround (pv (v, proc::eqType (band))));
+            return signedDb (g) + " at " + hzText (pv (v, proc::eqFreq (band))) + (type == 2 ? " (shelf)" : "");
+        }
+
+        /** The EQ band for a move: one already doing this job (same shape, near the frequency), else the
+            preferred band if it is flat, else another flat one. -1: all in use. */
+        int pickBand (const proc::Values& v, int preferred, int type, double hz)
+        {
+            auto shapeOf = [&v] (int b) { return static_cast<int> (std::lround (pv (v, proc::eqType (b)))); };
+            auto flat = [&] (int b) { return std::abs (pv (v, proc::eqGain (b))) < 0.05f && shapeOf (b) != 3 && shapeOf (b) != 4; };
+            for (int b = 0; b < proc::kEqBands; ++b)
+                if (! flat (b) && shapeOf (b) == type && std::abs (std::log2 (pv (v, proc::eqFreq (b)) / hz)) < 0.4) return b;
+            if (flat (preferred)) return preferred;
+            for (int b = 1; b <= 4; ++b)
+                if (flat (b)) return b;
+            return -1;
+        }
+
+        /** One EQ move: sets the band to `correction` on top of what it had when Analyze Mix listened. */
+        bool eqMove (Plan& plan, const TrackReport& t, const ChannelNow& ch, int preferred, int type, double hz, double q,
+                     double correction, double limit, const std::string& why)
+        {
+            const auto& at = atAnalysis (ch);
+            // EQ switched off with settings of yours in it: switching it on would bring those back too.
+            if (pv (ch.proc, proc::eqOn) < 0.5f)
+                for (int b = 0; b < proc::kEqBands; ++b)
+                    if (std::abs (pv (ch.proc, proc::eqGain (b))) >= 0.05f)
+                    {
+                        plan.notes.push_back (quoted (t.name) + ": its EQ is switched off with settings in it: EQ left alone.");
+                        return false;
+                    }
+            const int band = pickBand (at, preferred, type, hz);
+            if (band < 0)
+            {
+                plan.notes.push_back (quoted (t.name) + ": all its EQ bands are in use: " + why + " (do it on the EQ page).");
+                return false;
+            }
+            const bool sameJob = std::abs (pv (at, proc::eqGain (band))) >= 0.05f;
+            const double base = sameJob ? pv (at, proc::eqGain (band)) : 0.0;
+            const double useHz = sameJob ? pv (at, proc::eqFreq (band)) : hz;
+            const double gain = std::clamp (roundHalf (base + correction), -limit, limit);
+            const auto& now = ch.proc;
+            const bool already = pv (now, proc::eqOn) > 0.5f && static_cast<int> (std::lround (pv (now, proc::eqType (band)))) == type
+                                 && std::abs (std::log2 (pv (now, proc::eqFreq (band)) / useHz)) < 0.05 && std::abs (pv (now, proc::eqGain (band)) - gain) < 0.5;
+            if (already || std::abs (gain - (pv (now, proc::eqOn) > 0.5f ? pv (now, proc::eqGain (band)) : 0.0)) < 0.5) return false;
+            Change c;
+            c.hash = ch.hash;
+            c.name = t.name;
+            c.role = t.role;
+            c.kind = "eq";
+            c.from = pv (now, proc::eqGain (band));
+            c.to = gain;
+            c.hz = useHz;
+            c.proc = { { proc::eqOn, 1.0f }, { proc::eqType (band), static_cast<float> (type) }, { proc::eqFreq (band), static_cast<float> (useHz) },
+                       { proc::eqQ (band), static_cast<float> (sameJob ? pv (at, proc::eqQ (band)) : q) }, { proc::eqGain (band), static_cast<float> (gain) } };
+            c.fromText = bandText (now, band);
+            c.toText = signedDb (gain) + " at " + hzText (useHz) + (type == 2 ? " (shelf)" : "");
+            c.why = why;
+            plan.changes.push_back (c);
+            return true;
+        }
+
+        struct SpaceSound
+        {
+            int type = 0;
+            std::vector<std::pair<int, float>> params;
+            std::string words;
+        };
+
+        SpaceSound vocalReverb (const std::string& styleKey, bool onFxChannel)
+        {
+            const auto genre = styleKey.substr (0, styleKey.find ('.'));
+            SpaceSound s;
+            if (genre == "gospel" || genre == "worship" || genre == "cinematic")
+            {
+                s.type = static_cast<int> (proc::SpaceType::hall);
+                s.params = { { proc::hallPre, 40.0f }, { proc::hallDecay, 2.6f }, { proc::hallSize, 80.0f }, { proc::hallDamp, 5000.0f },
+                             { proc::hallMix, onFxChannel ? 100.0f : 10.0f } };
+                s.words = "a hall (2.6 s)";
+            }
+            else
+            {
+                const bool urban = genre == "hiphop" || genre == "trap" || genre == "rnb" || genre == "afro" || genre == "latin";
+                const float decay = urban ? 1.4f : 1.8f;
+                s.type = static_cast<int> (proc::SpaceType::reverb);
+                s.params = { { proc::revPre, 30.0f }, { proc::revDecay, decay }, { proc::revDamp, 6500.0f }, { proc::revWidth, 100.0f },
+                             { proc::revMix, onFxChannel ? 100.0f : 12.0f } };
+                s.words = std::string ("a vocal plate (") + fmt1 (decay) + " s)";
+            }
+            return s;
+        }
+
+        std::string planPolish (const Report& r, const Lookup& look, const std::vector<ChannelNow>& channels, const MixNow& mix, Plan& plan)
+        {
+            int eqs = 0, comps = 0, widths = 0, spaces = 0, tones = 0;
+            const auto genre = r.style.key.substr (0, r.style.key.find ('.'));
+
+            // ---- EQ, compression and low-end width, track by track
+            for (const auto& t : r.tracks)
+            {
+                if (! counts (t) || t.bands.size() < static_cast<std::size_t> (kBands)) continue;
+                const bool vocal = t.role == Role::vox || t.role == Role::adlibs;
+                const bool bass = t.role == Role::bass;
+                if (! vocal && ! bass && t.role != Role::kick) continue;
+                const auto* ch = procChannel (t, look, plan, "its processing");
+                if (ch == nullptr) continue;
+
+                if (t.role == Role::vox)
+                {
+                    // Body 200 - 800 Hz, presence 2 - 5 kHz, air 8 - 12.5 kHz, tilted (a clear vocal reads about level).
+                    const double body = tilted (t.bands, 10, 16), pres = tilted (t.bands, 20, 24), air = tilted (t.bands, 26, 28);
+                    const double clarity = pres - body;
+                    if (clarity < -2.5)
+                        eqs += eqMove (plan, t, *ch, 3, 0, 3500.0, 1.0, std::clamp ((-1.0 - clarity) * 0.6, 1.0, 3.0), 4.0,
+                                       "the vocal is dull: its presence (2 - 5 kHz) is " + fmt1 (-clarity) + " dB under its body; a little lift makes every word clear");
+                    else if (clarity > 5.0)
+                    {
+                        const int b = loudestBand (t.bands, 21, 24);
+                        eqs += eqMove (plan, t, *ch, 3, 0, bandHz (b), 2.0, -std::clamp ((clarity - 3.0) * 0.5, 1.0, 3.0), 4.0,
+                                       "the vocal is harsh around " + hzText (bandHz (b)) + " (presence " + fmt1 (clarity) + " dB over its body): a narrow dip smooths it");
+                    }
+                    const double airGap = air - pres;
+                    if (airGap < -7.0)
+                        eqs += eqMove (plan, t, *ch, 5, 2, 10000.0, 0.7, std::clamp ((-4.0 - airGap) * 0.5, 1.0, 3.0), 4.0,
+                                       "the vocal has little air (8 - 12 kHz is " + fmt1 (-airGap) + " dB under its presence): a gentle shelf opens it up");
+                }
+                if (t.role == Role::kick)
+                {
+                    // Boxy: 315 - 500 Hz close to the kick's weight (50 - 100 Hz); a typical kick sits ~15 dB lower there.
+                    const double box = plainLevel (t.bands, 12, 14) - plainLevel (t.bands, 4, 7);
+                    if (box > -8.0)
+                    {
+                        const int b = loudestBand (t.bands, 11, 14);
+                        eqs += eqMove (plan, t, *ch, 2, 0, bandHz (b), 1.4, -std::clamp ((box + 12.0) * 0.4, 1.5, 3.0), 4.0,
+                                       "the kick sounds boxy (a lot of " + hzText (bandHz (b)) + "): a dip there lets its thump and click through");
+                    }
+                }
+
+                // A compressor where the level swings a lot (none on a track that has one switched on already).
+                const double swing = vocal ? 8.0 : 7.0;
+                if ((vocal || bass) && t.levelRange >= swing && t.loudPeak > -60.0 && pv (ch->proc, proc::compOn) < 0.5f)
+                {
+                    const double ratio = vocal ? 3.0 : 4.0;
+                    const double thr = std::clamp (std::round (t.loudPeak - (vocal ? 6.0 : 5.0)), -50.0, -3.0);
+                    Change c;
+                    c.hash = ch->hash;
+                    c.name = t.name;
+                    c.role = t.role;
+                    c.kind = "comp";
+                    c.proc = { { proc::compOn, 1.0f }, { proc::compThr, static_cast<float> (thr) }, { proc::compRatio, static_cast<float> (ratio) },
+                               { proc::compAtt, vocal ? 8.0f : 25.0f }, { proc::compRel, vocal ? 90.0f : 150.0f }, { proc::compMakeup, 2.0f },
+                               { proc::compKnee, 0.0f } };
+                    c.fromText = "Off";
+                    c.toText = fmt0 (ratio) + ":1 from " + signedDb (thr);
+                    c.why = (vocal ? std::string ("its level swings ") + fmt0 (t.levelRange) + " dB between quiet and loud lines: a compressor (about 4 dB on the loud parts) keeps every word in front"
+                                   : std::string ("its level swings ") + fmt0 (t.levelRange) + " dB from note to note: a compressor keeps the low end steady under the song");
+                    plan.changes.push_back (c);
+                    ++comps;
+                }
+                else if (vocal && t.levelRange >= swing && pv (ch->proc, proc::compOn) > 0.5f)
+                    plan.notes.push_back (quoted (t.name) + " swings " + fmt0 (t.levelRange) + " dB but has a compressor on already: yours stays as it is.");
+
+                // The low end of a stereo kick / bass in the middle.
+                if ((t.role == Role::kick || bass) && ch->channels == 2 && t.lowWidth > 0.12 && pv (ch->proc, proc::stOn) < 0.5f)
+                {
+                    Change c;
+                    c.hash = ch->hash;
+                    c.name = t.name;
+                    c.role = t.role;
+                    c.kind = "width";
+                    c.proc = { { proc::stOn, 1.0f }, { proc::stLow, 0.0f }, { proc::stLowX, 150.0f } };
+                    c.fromText = "Lows " + fmt0 (t.lowWidth * 100.0) + " % on the sides";
+                    c.toText = "Lows in the middle";
+                    c.why = "its low end is spread in stereo: in the middle it hits harder and stays solid in mono and on club systems";
+                    plan.changes.push_back (c);
+                    ++widths;
+                }
+            }
+
+            // ---- Space: a reverb for the lead vocal, a delay on the ad-libs
+            const TrackReport* lead = nullptr;
+            for (const auto& t : r.tracks)
+            {
+                if (! counts (t) || t.role != Role::vox) continue;
+                const auto pn = pairName (t.name);
+                if (pn.explicitPair || pn.order != 0) continue;
+                if (lead == nullptr || t.loudness + 10.0 * std::log10 (std::max (0.01, t.activity)) > lead->loudness + 10.0 * std::log10 (std::max (0.01, lead->activity))) lead = &t;
+            }
+            auto spaceOn = [] (const ChannelNow& c) { return c.hasProc && pv (c.proc, proc::chainOn) > 0.5f && pv (c.proc, proc::spOn) > 0.5f; };
+            if (lead != nullptr)
+            {
+                const auto* leadCh = look.of (*lead);
+                std::vector<const ChannelNow*> fx;
+                for (const auto& c : channels)
+                    if (c.hasLink && c.hasProc && ! c.locked && c.hash != lead->hash && (looksLikeFxChannel (c.name) || pv (c.proc, proc::spRoute) > 0.5f)) fx.push_back (&c);
+                const ChannelNow* busy = nullptr;
+                for (const auto* c : fx) if (spaceOn (*c)) busy = c;
+                if (leadCh != nullptr && spaceOn (*leadCh))
+                    plan.notes.push_back (quoted (lead->name) + " has its own Space effect already: Mixology leaves it.");
+                else if (busy != nullptr)
+                    plan.notes.push_back ("The FX channel " + quoted (busy->name) + " has a Space effect already: Mixology leaves your effects alone.");
+                else if (! fx.empty())
+                {
+                    const ChannelNow* target = fx.front();
+                    for (const auto* c : fx)
+                        if (std::regex_search (c->name, std::regex (R"(verb|plate|hall)", std::regex::icase))) { target = c; break; }
+                    const auto snd = vocalReverb (r.style.key, true);
+                    Change c;
+                    c.hash = target->hash;
+                    c.name = target->name;
+                    c.role = Role::fx;
+                    c.kind = "space";
+                    c.proc = { { proc::spOn, 1.0f }, { proc::spType, static_cast<float> (snd.type) }, { proc::spRoute, 1.0f },
+                               { proc::spLowCut, 200.0f }, { proc::spHighCut, 9000.0f }, { proc::duckAmount, 6.0f } };
+                    c.proc.insert (c.proc.end(), snd.params.begin(), snd.params.end());
+                    c.setDuck = true;
+                    c.duck = { lead->hash };
+                    c.fromText = "Off";
+                    c.toText = snd.type == static_cast<int> (proc::SpaceType::hall) ? "Hall, 100 % wet" : "Vocal Plate, 100 % wet";
+                    c.why = "the lead vocal's reverb: " + snd.words + " on this FX channel, ducking 6 dB under " + quoted (lead->name) + " so the words stay clear";
+                    plan.changes.push_back (c);
+                    ++spaces;
+                    plan.notes.push_back ("Send " + quoted (lead->name) + " to " + quoted (target->name) + " in Cubase (MixConsole, Sends, about -10 dB): Mixology can't add sends.");
+                }
+                else if (leadCh != nullptr && leadCh->hasLink && leadCh->hasProc && ! leadCh->locked && pv (leadCh->proc, proc::chainOn) > 0.5f)
+                {
+                    const auto snd = vocalReverb (r.style.key, false);
+                    Change c;
+                    c.hash = leadCh->hash;
+                    c.name = lead->name;
+                    c.role = lead->role;
+                    c.kind = "space";
+                    c.proc = { { proc::spOn, 1.0f }, { proc::spType, static_cast<float> (snd.type) }, { proc::spRoute, 0.0f },
+                               { proc::spLowCut, 200.0f }, { proc::spHighCut, 9000.0f } };
+                    c.proc.insert (c.proc.end(), snd.params.begin(), snd.params.end());
+                    c.fromText = "Dry";
+                    c.toText = snd.type == static_cast<int> (proc::SpaceType::hall) ? "Hall, mix 10 %" : "Vocal Plate, mix 12 %";
+                    c.why = snd.words + " at a low mix puts the vocal in the same room as the beat";
+                    plan.changes.push_back (c);
+                    ++spaces;
+                    plan.notes.push_back ("For the cleanest vocal reverb, use an FX channel with Mixology Link and a Send (manual: Space); Auto Mix then sets it up there.");
+                }
+            }
+            if (spaces > 0)
+                plan.notes.push_back ("If Voxology (or another plug-in) already gives the vocal its reverb, untick Mixology's: one space is enough.");
+            const bool urban = genre == "hiphop" || genre == "trap" || genre == "rnb" || genre == "afro" || genre == "latin" || genre == "pop" || genre == "electronic";
+            int adlibDelays = 0;
+            for (const auto& t : r.tracks)
+            {
+                if (! urban || ! counts (t) || t.role != Role::adlibs || adlibDelays >= 3) continue;
+                const auto* ch = procChannel (t, look, plan, "its delay");
+                if (ch == nullptr || spaceOn (*ch)) continue;
+                Change c;
+                c.hash = ch->hash;
+                c.name = t.name;
+                c.role = t.role;
+                c.kind = "space";
+                c.proc = { { proc::spOn, 1.0f }, { proc::spType, static_cast<float> (proc::SpaceType::delay) }, { proc::spRoute, 0.0f },
+                           { proc::spLowCut, 300.0f }, { proc::spHighCut, 8000.0f }, { proc::dlyTime, 3.0f }, { proc::dlyFeedback, 30.0f },
+                           { proc::dlyTone, 5000.0f }, { proc::dlyPingPong, 100.0f }, { proc::dlyMix, 15.0f } };
+                c.fromText = "Dry";
+                c.toText = "Ping-pong 1/8, mix 15 %";
+                c.why = "ad-libs that echo left and right on the beat fill the gaps around the lead without covering it";
+                plan.changes.push_back (c);
+                ++spaces;
+                ++adlibDelays;
+            }
+
+            // ---- the Full Mix's tone against the style (Tone Balance on Mixology itself)
+            if (mix.known && r.mixBands.size() >= static_cast<std::size_t> (kBands) && r.targetBands.size() == r.mixBands.size())
+            {
+                auto off = [&r] (int from, int to) {
+                    double d = 0.0;
+                    for (int b = from; b <= to; ++b) d += r.mixBands[static_cast<std::size_t> (b)] - r.targetBands[static_cast<std::size_t> (b)];
+                    return d / (to - from + 1);
+                };
+                const double lows = off (3, 8), lowMids = off (10, 14), pres = off (21, 23), air = off (26, 29);
+                const auto& at = mix.atAnalysisKnown ? mix.atAnalysis : mix.now;
+                struct Knob { int id; double diff; const char* word; };
+                std::vector<std::pair<int, float>> set;
+                std::vector<std::string> what, from, to;
+                const bool tbOnAt = pv (at, proc::tbOn) > 0.5f, tbOnNow = pv (mix.now, proc::tbOn) > 0.5f;
+                for (const auto& k : { Knob { proc::tbWarmth, (std::abs (lowMids) < 1.0 || (lows > 0) == (lowMids > 0)) ? lows : 0.0, "low end" },
+                                       Knob { proc::tbPresence, pres, "presence" }, Knob { proc::tbAir, air, "air" } })
+                {
+                    if (std::abs (k.diff) <= 2.5) continue;
+                    const double base = tbOnAt ? pv (at, k.id) : 0.0;
+                    const double want = std::clamp (roundHalf (base - std::clamp (k.diff * 0.5, -2.0, 2.0)), -6.0, 6.0);
+                    const double nowV = tbOnNow ? pv (mix.now, k.id) : 0.0;
+                    if (std::abs (want - nowV) < 0.5) continue;
+                    set.push_back ({ k.id, static_cast<float> (want) });
+                    what.push_back (std::string (k.diff < 0 ? "short of " : "too much ") + k.word + " (" + fmt1 (std::abs (k.diff)) + " dB)");
+                    const char* label = k.id == proc::tbWarmth ? "Warmth " : k.id == proc::tbPresence ? "Presence " : "Air ";
+                    from.push_back (label + signedDb (nowV));
+                    to.push_back (label + signedDb (want));
+                }
+                if (! set.empty())
+                {
+                    Change c;
+                    c.hash = 0;
+                    c.name = "Full Mix";
+                    c.role = Role::other;
+                    c.kind = "tone";
+                    c.fullMix = true;
+                    c.proc = { { proc::tbOn, 1.0f } };
+                    if (! tbOnNow)   // the knobs it doesn't move start from flat
+                        for (int id : { proc::tbWarmth, proc::tbPresence, proc::tbAir })
+                            if (std::none_of (set.begin(), set.end(), [id] (const auto& p) { return p.first == id; })) c.proc.push_back ({ id, 0.0f });
+                    c.proc.insert (c.proc.end(), set.begin(), set.end());
+                    c.fromText = joinWords (from, ", ");
+                    c.toText = joinWords (to, ", ");
+                    c.why = "against " + r.style.name + "'s tone your mix is " + joinWords (what, ", ") + ": a gentle Tone Balance on the whole mix (before Masterology)";
+                    plan.changes.push_back (c);
+                    ++tones;
+                }
+            }
+
+            std::vector<std::string> parts;
+            if (eqs) parts.push_back ("EQ: " + std::to_string (eqs));
+            if (comps) parts.push_back (std::to_string (comps) + " compressor" + (comps == 1 ? "" : "s"));
+            if (widths) parts.push_back ("low end centred: " + std::to_string (widths));
+            if (spaces) parts.push_back ("space: " + std::to_string (spaces));
+            if (tones) parts.push_back ("the mix's tone");
+            if (parts.empty()) return "processing already fits";
+            return joinWords (parts, ", ");
+        }
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -889,6 +1287,7 @@ namespace mixology::mix
             case Tool::stereo: return "stereo";
             case Tool::cleanUp: return "clean";
             case Tool::pocket: return "pocket";
+            case Tool::polish: return "polish";
         }
         return "auto";
     }
@@ -902,13 +1301,14 @@ namespace mixology::mix
             case Tool::stereo: return "Stereo Architect";
             case Tool::cleanUp: return "Clean Up";
             case Tool::pocket: return "Vocal Pocket";
+            case Tool::polish: return "Polish";
         }
         return "Auto Mix";
     }
 
     std::optional<Tool> toolFromKey (const std::string& k)
     {
-        for (auto t : { Tool::autoMix, Tool::balance, Tool::stereo, Tool::cleanUp, Tool::pocket })
+        for (auto t : { Tool::autoMix, Tool::balance, Tool::stereo, Tool::cleanUp, Tool::pocket, Tool::polish })
             if (k == toolKey (t)) return t;
         return std::nullopt;
     }
@@ -941,7 +1341,7 @@ namespace mixology::mix
         return p;
     }
 
-    Plan makePlan (Tool tool, const Report& r, const std::vector<ChannelNow>& channels)
+    Plan makePlan (Tool tool, const Report& r, const std::vector<ChannelNow>& channels, const MixNow& mix)
     {
         Plan plan;
         plan.tool = tool;
@@ -960,6 +1360,7 @@ namespace mixology::mix
         if (tool == Tool::autoMix || tool == Tool::stereo) add (planStereo (r, look, plan));
         if (tool == Tool::autoMix || tool == Tool::cleanUp) add (planCleanUp (r, look, plan));
         if (tool == Tool::autoMix || tool == Tool::pocket) add (planPocket (r, look, plan));
+        if (tool == Tool::autoMix || tool == Tool::polish) add (planPolish (r, look, channels, mix, plan));
 
         // Notes once each, in order.
         std::vector<std::string> unique;

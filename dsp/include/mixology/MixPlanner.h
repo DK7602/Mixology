@@ -2,6 +2,7 @@
 
 #include "mixology/AssistEq.h"
 #include "mixology/MixAnalysis.h"
+#include "mixology/ProcParams.h"
 
 #include <cstdint>
 #include <optional>
@@ -21,7 +22,13 @@
       a lopsided mix evened out.
     - Clean Up: Assist EQ low cuts on tracks with rumble (and on vocals), mud dips where the mix is muddy.
     - Vocal Pocket: Assist EQ dips where instruments cover the vocal's words.
-    - Auto Mix: all four together.
+    - Polish (Milestone 5, round 3): processing in each track's Mixology Link: EQ (a dull or harsh vocal, its air,
+      a boxy kick), a compressor where a vocal or the bass swings a lot in level, the low end of stereo kicks /
+      basses in the middle, a reverb for the lead vocal (on an FX channel with a Link, ducking under the vocal,
+      else a little on the vocal itself), a delay on the ad-libs, and the Full Mix's tone against the style.
+      Settings are worked out from what the processing was when Analyze Mix listened, so applying and opening it
+      again finds nothing more to do.
+    - Auto Mix: all of them together.
 
     Nothing here touches Cubase: the plug-in applies the plan you approve (faders and pans through the bridge,
     the Assist EQ through each track's Mixology Link). Framework-free and unit-tested. */
@@ -44,9 +51,22 @@ namespace mixology::mix
         bool locked = false;       // protected (padlock)
         bool hasLink = false;      // a Mixology Link sits on it (its Assist EQ can be set)
         AssistSettings assist;     // that Link's Assist EQ now
+        bool hasProc = false;      // ... and its processing (M5): now, and when Analyze Mix listened
+        proc::Values proc {};
+        bool procAtAnalysisKnown = false;
+        proc::Values procAtAnalysis {};
+        std::vector<std::uint32_t> duck;   // the tracks its Space ducks under now
     };
 
-    enum class Tool { autoMix, balance, stereo, cleanUp, pocket };
+    /** Mixology's own Full Mix processing (for the mix's tone against the style). */
+    struct MixNow
+    {
+        bool known = false;
+        proc::Values now {}, atAnalysis {};
+        bool atAnalysisKnown = false;
+    };
+
+    enum class Tool { autoMix, balance, stereo, cleanUp, pocket, polish };
     const char* toolKey (Tool);
     const char* toolName (Tool);
     std::optional<Tool> toolFromKey (const std::string&);
@@ -56,12 +76,20 @@ namespace mixology::mix
         std::uint32_t hash = 0;
         std::string name;
         Role role = Role::other;
-        std::string kind;          // "level" (dB), "pan" (-100..+100), "lowcut" (Hz, 0 = off), "mud" / "pocket" (dB)
+        std::string kind;          // "level" (dB), "pan" (-100..+100), "lowcut" (Hz, 0 = off), "mud" / "pocket" (dB),
+                                   // processing: "eq", "comp", "width", "space", "tone"
         double from = 0.0, to = 0.0;
         double wanted = 0.0;       // levels: the whole move's target, before the 6 dB limit
         bool big = false;          // levels: the whole move is more than 6 dB (Apply stops at 6 unless you allow more)
         double hz = 0.0;           // mud / pocket: where the dip sits
         std::string why;
+
+        // Processing (Milestone 5): controls of the track's Mixology Link (or of Mixology's Full Mix) set together.
+        std::vector<std::pair<int, float>> proc;   // proc::Id, value
+        bool fullMix = false;
+        bool setDuck = false;                      // space: also set the tracks the effect ducks under
+        std::vector<std::uint32_t> duck;
+        std::string fromText, toText;              // e.g. "Flat" -> "+2.0 dB at 3.5 kHz"
     };
 
     struct Plan
@@ -92,7 +120,7 @@ namespace mixology::mix
     constexpr double kMaxMoveDb = 6.0;
     constexpr double kMaxFaderDb = 6.0;   // top of a Cubase channel fader
 
-    Plan makePlan (Tool, const Report&, const std::vector<ChannelNow>&);
+    Plan makePlan (Tool, const Report&, const std::vector<ChannelNow>&, const MixNow& mix = {});
 
     /** "Gtr L" / "Gtr R", "Vocals" / "Vocals (D)", "Keys 1" / "Keys 2": the shared name, and which side the
         name asks for (-1 left, +1 right, 0 none) and its order among the takes (0 = the original). */

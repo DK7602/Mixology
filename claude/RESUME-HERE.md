@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-14, v0.6.1)
+# Mixology: resume here (updated 2026-10-14, v0.7.0)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,27 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## Milestone 5 round 3 status (v0.7.0): BUILT, WAITING FOR THE USER'S CUBASE TEST (docs/M5_TEST.md, top part)
+User (2026-10-14): "will auto edit ever automatically set the eq, space, etc.?" + "lets fix that and move forward".
+- MixAnalysis TrackReport + levelRange (P90 - P10 of ~1 s averaged pre-fader rms over active moments) and loudPeak
+  (P90 of pre-fader frame peaks).
+- MixPlanner Tool::polish ("polish", "Polish"; Auto Mix includes it). ChannelNow + hasProc / proc / procAtAnalysis
+  (known?) / duck; MixNow {now, atAnalysis} for the Full Mix. Change + proc (id, value list), fullMix, setDuck/duck,
+  fromText/toText; kinds eq / comp / width / space / tone. planPolish: vox clarity = tilted(2-5 k) - tilted(200-800)
+  (< -2.5 -> +presence 3.5 kHz bell, > 5 -> narrow dip at the loudest 2.5-5 k band), air gap tilted(8-12.5 k) -
+  presence < -7 -> 10 kHz shelf; kick box (315-500 vs 50-100 untilted > -8) -> dip; comp when levelRange >= 8 (vocal,
+  3:1, thr loudPeak-6, 8/90 ms, +2) / >= 7 (bass, 4:1, thr loudPeak-5, 25/150), skipped if comp on; kick/bass stereo
+  lowWidth > .12 -> st_low 0; lead vocal reverb: FX-like Link (name regex or sp_route) -> Space there (route FX, duck
+  6 dB under the lead) + note to add a Send, else on-track plate 12 % (gospel/worship/cinematic: hall); ad-libs
+  ping-pong 1/8 15 % (urban/pop styles); Full Mix Tone Balance when mix vs style target > 2.5 dB (half the gap, max
+  2). EQ band choice: a band already doing that job (same shape, < 0.4 oct) gets adjusted (absolute = value at
+  analysis + correction), else the preferred band if flat, else another flat one. tests/test_polish.cpp (8 cases).
+- Hub: procAtAnalysis snapshot (every unique Link + Full Mix via MixProcessing get/set the processor registers),
+  channelsNow fillProc, planToVar fromText/toText/fullMix, applyCurrentPlan: requestProc / mixProc.set + requestDuck,
+  LastApply.procs (before values, duck before), undo newest-first.
+- UI: Overview tool list 7 buttons (90 px), POLISH (star); tools.js kinds + texts; Master page Glue (fin_glue),
+  Tilt (tb_warmth / tb_air around their centre), Width (fin_width), Trim (fin_out) via procSet("mix"), frame.master.
 
 ## v0.6.1: the Electric guitars' "L100" (user, 2026-10-14, after round 2: "everything else seems to work")
 User set the 4 Electric pans to C in Mixology, ran Auto Mix, they read L100 again (heard centred). Cause: no panner

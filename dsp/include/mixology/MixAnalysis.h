@@ -91,6 +91,8 @@ namespace mixology::mix
         double width = 0.0;        // 0 mono .. 1 all sides
         double lowWidth = 0.0;     // the same below 160 Hz
         double crest = 0.0;        // peak minus RMS (dB): punchy / transient sounds score high
+        double levelRange = 0.0;   // how far its level swings while it plays (dB, loud minus quiet parts, ~1 s averages)
+        double loudPeak = -120.0;  // its peaks in the loud parts (dBFS before the fader, 90th percentile)
         double balance = 0.0;      // left minus right (dB) after the fader: + leans left
         std::vector<double> bands; // average spectrum after the fader (dB per 1/3 octave)
         double maskDb = -120.0;    // its 1.6 - 4 kHz level against the lead vocal's while it sings (> -6: covers it)

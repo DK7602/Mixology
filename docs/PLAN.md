@@ -128,5 +128,11 @@ layout 6: every Link publishes its key level each block; Mixology tells a Link w
 keeps the list in its project), the host told about a long tail while Space is on (endless for Freeze). Delay lines
 made on the message thread the first time Space is switched on. The Space page is live; its picture moves only while
 the effect is in use. 41 more controls (141 in all).
-- Round 3: Master page finishing (Glue, Tilt, Width, Trim on Mixology; no limiter fight with Masterology), and Auto
-  Mix / the Mix Assistant proposing EQ and dynamics moves through the Links (preview, Apply, Undo like M4).
+Round 3 built (you test it, docs/M5_TEST.md): Polish (new tool, also inside Auto Mix) proposes processing through the
+Links from Analyze Mix: vocal presence / air / harshness EQ (tilted band levels), a boxy kick dip, a compressor where a
+vocal or the bass swings (new TrackReport.levelRange / loudPeak), stereo kick / 808 lows centred, the lead vocal's
+reverb (on an FX channel with ducking, else a little on the vocal), ping-pong delay on ad-libs, the Full Mix's Tone
+Balance against the style. Settings are absolute from the processing at analysis time (procAtAnalysis), so re-opening
+proposes nothing more; Undo restores every control (and the duck list). Master page: Glue / Tilt / Width / Trim live on
+the Full Mix (Final Touch + Tone Balance). Also: pans Cubase doesn't take (snap back to "L100") become "No pan",
+saved with the project; Cubase script v4.

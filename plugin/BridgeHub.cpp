@@ -550,6 +550,20 @@ void BridgeHub::finishAnalysis()
 
     fadersAtAnalysis.clear();
     for (const auto& [hash, f] : bridge.knownFaders()) fadersAtAnalysis[hash] = f.db;
+    // The processing each Link (and the Full Mix) had while Mixology listened: Polish works from there.
+    procAtAnalysis.clear();
+    {
+        auto& registry = mixology::link::processRegistry();
+        const auto links = registry.links (mixology::link::nowMs());
+        for (const auto& l : links)
+        {
+            mixology::proc::Values v {};
+            if (l.identity.hasName && uniqueLink (links, l.nameHash) != nullptr && registry.readProc (l.slot, l.generation, v))
+                procAtAnalysis[l.nameHash] = v;
+        }
+    }
+    mixProcAtAnalysisKnown = static_cast<bool> (mixProc.get);
+    if (mixProcAtAnalysisKnown) mixProcAtAnalysis = mixProc.get();
     applyMusicBus();
     report = analysis.evaluate (trackSettings, unheard);
     analyzeState = Analyze::done;
@@ -986,7 +1000,7 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
             r = { false, "Mixology is still moving faders (" + bridge.planProgress().what + "): open it again in a moment." };
         else
         {
-            currentPlan = mixology::mix::makePlan (*tool, report, channelsNow());
+            currentPlan = mixology::mix::makePlan (*tool, report, channelsNow(), mixNow());
             ++currentPlanId;
             planResult = planToVar (currentPlan);
         }
@@ -1053,6 +1067,42 @@ const mixology::link::LinkInfo* BridgeHub::uniqueLink (const std::vector<mixolog
     return found;
 }
 
+void BridgeHub::fillProc (mixology::mix::ChannelNow& c, const mixology::link::LinkInfo& l) const
+{
+    if (! l.hasProcessing) return;
+    c.hasProc = mixology::link::processRegistry().readProc (l.slot, l.generation, c.proc);
+    if (auto it = procAtAnalysis.find (l.nameHash); it != procAtAnalysis.end())
+    {
+        c.procAtAnalysis = it->second;
+        c.procAtAnalysisKnown = true;
+    }
+    for (int i = 0; i < l.duck.count; ++i) c.duck.push_back (l.duck.hashes[static_cast<std::size_t> (i)]);
+}
+
+mixology::mix::MixNow BridgeHub::mixNow() const
+{
+    mixology::mix::MixNow m;
+    if (! mixProc.get) return m;
+    m.known = true;
+    m.now = mixProc.get();
+    m.atAnalysisKnown = mixProcAtAnalysisKnown;
+    m.atAnalysis = mixProcAtAnalysis;
+    return m;
+}
+
+void BridgeHub::setMixProcessing (const void* owner, MixProcessing p)
+{
+    mixOwner = owner;
+    mixProc = std::move (p);
+}
+
+void BridgeHub::clearMixProcessing (const void* owner)
+{
+    if (owner != mixOwner) return;   // another Mixology registered since
+    mixOwner = nullptr;
+    mixProc = {};
+}
+
 std::vector<mixology::mix::ChannelNow> BridgeHub::channelsNow() const
 {
     const auto links = mixology::link::processRegistry().links (mixology::link::nowMs());
@@ -1080,6 +1130,7 @@ std::vector<mixology::mix::ChannelNow> BridgeHub::channelsNow() const
             c.assist = l->assist;
             c.channels = l->channels;
             c.panUnknown = l->channels == 2 && f.hasPan && f.pan <= 0.0005;   // Stereo Combined Panner (see getState)
+            fillProc (c, *l);
         }
         if (bridge.panIgnored (hash)) c.panUnknown = true;   // Cubase doesn't pan it (mono group / output)
         seen.insert (hash);
@@ -1094,6 +1145,8 @@ std::vector<mixology::mix::ChannelNow> BridgeHub::channelsNow() const
         c.locked = bridge.isProtected (l.nameHash);
         c.hasLink = uniqueLink (links, l.nameHash) != nullptr;
         c.assist = l.assist;
+        c.channels = l.channels;
+        if (c.hasLink) fillProc (c, l);
         seen.insert (l.nameHash);
         out.push_back (c);
     }
@@ -1125,6 +1178,12 @@ juce::var BridgeHub::planToVar (const mixology::mix::Plan& p) const
         co->setProperty ("big", c.big);
         co->setProperty ("hz", std::round (c.hz));
         co->setProperty ("why", juce::String::fromUTF8 (c.why.c_str()));
+        if (! c.proc.empty())
+        {
+            co->setProperty ("fromText", juce::String::fromUTF8 (c.fromText.c_str()));
+            co->setProperty ("toText", juce::String::fromUTF8 (c.toText.c_str()));
+            co->setProperty ("fullMix", c.fullMix);
+        }
         changes.add (juce::var (co));
     }
     o->setProperty ("changes", changes);
@@ -1170,6 +1229,7 @@ mixology::BridgeSession::Result BridgeHub::applyCurrentPlan (const juce::var& pi
     const auto links = registry.links (mixology::link::nowMs());
     std::map<std::uint32_t, PlanStep> steps;
     std::map<std::uint32_t, mixology::AssistSettings> eq;
+    std::vector<const mixology::mix::Change*> procs;
     std::vector<std::string> noLink;
     static const juce::Array<juce::var> none;
     for (const auto& v : list != nullptr ? *list : none)
@@ -1196,6 +1256,12 @@ mixology::BridgeSession::Result BridgeHub::applyCurrentPlan (const juce::var& pi
             }
             continue;
         }
+        if (! c.proc.empty())
+        {
+            if (c.fullMix ? static_cast<bool> (mixProc.set) : uniqueLink (links, c.hash) != nullptr) procs.push_back (&c);
+            else noLink.push_back (c.name);
+            continue;
+        }
         const auto* l = uniqueLink (links, c.hash);
         if (l == nullptr) { noLink.push_back (c.name); continue; }
         auto it = eq.find (c.hash);
@@ -1218,7 +1284,7 @@ mixology::BridgeSession::Result BridgeHub::applyCurrentPlan (const juce::var& pi
             st.checkFrom = true;
             st.fromDb = h.from;
         }
-    if (steps.empty() && eq.empty())
+    if (steps.empty() && eq.empty() && procs.empty())
         return { false, noLink.empty() ? std::string ("Tick at least one change.") : "Mixology Link isn't reachable on those tracks any more." };
     if (! steps.empty() && bridge.link() != mixology::BridgeSession::Link::connected)
         return { false, "Not connected to Cubase, so faders and pans can't move (Settings > Cubase Bridge)." };
@@ -1242,13 +1308,49 @@ mixology::BridgeSession::Result BridgeHub::applyCurrentPlan (const juce::var& pi
         eqRestore.noteSet (hash, l->assist, a);
         registry.requestAssist (l->slot, l->generation, a);
     }
+    // Processing (Polish): each control like a move on its page; what it was goes into the undo.
+    std::set<std::uint32_t> procTracks;
+    for (const auto* c : procs)
+    {
+        ProcUndo u;
+        u.fullMix = c->fullMix;
+        mixology::proc::Values before {};
+        if (c->fullMix) before = mixProc.get();
+        else
+        {
+            const auto* l = uniqueLink (links, c->hash);
+            u.slot = l->slot;
+            u.generation = l->generation;
+            if (! registry.readProc (l->slot, l->generation, before)) before = mixology::proc::defaults();
+            if (c->setDuck)
+            {
+                u.duckSet = true;
+                u.duckBefore = l->duck;
+                mixology::link::DuckSources d;
+                for (auto h : c->duck)
+                    if (d.count < mixology::link::kMaxDuckSources) d.hashes[static_cast<std::size_t> (d.count++)] = h;
+                registry.requestDuck (l->slot, l->generation, d);
+            }
+        }
+        for (const auto& [id, v] : c->proc)
+        {
+            u.before.push_back ({ id, before[static_cast<std::size_t> (id)] });
+            if (c->fullMix) mixProc.set (id, v);
+            else registry.requestProc (u.slot, u.generation, id, v);
+        }
+        procTracks.insert (c->hash);
+        next.procs.push_back (std::move (u));
+    }
     lastApply = std::move (next);
     ++applyVersion;
 
     std::vector<std::string> parts;
     if (! steps.empty()) parts.push_back ("moving " + std::to_string (steps.size()) + " channel" + (steps.size() == 1 ? "" : "s") + " in Cubase");
     if (! eq.empty()) parts.push_back ("Assist EQ on " + std::to_string (eq.size()) + " track" + (eq.size() == 1 ? "" : "s"));
-    info = currentPlan.title + ": " + (parts.size() == 2 ? parts[0] + ", " + parts[1] : parts[0]) + ".";
+    if (! procTracks.empty()) parts.push_back ("processing on " + std::to_string (procTracks.size()) + (procTracks.size() == 1 ? " track" : " tracks"));
+    std::string joined;
+    for (const auto& p : parts) joined += (joined.empty() ? "" : ", ") + p;
+    info = currentPlan.title + ": " + joined + ".";
     if (! noLink.empty()) info += " (" + std::to_string (noLink.size()) + " skipped: no Mixology Link.)";
     return { true, {} };
 }
@@ -1268,6 +1370,15 @@ mixology::BridgeSession::Result BridgeHub::undoLastApply (std::string& info)
     {
         registry.requestAssist (a.slot, a.generation, a.before);
         eqRestore.noteUndo (a.hash, a.before);
+    }
+    for (auto it = lastApply.procs.rbegin(); it != lastApply.procs.rend(); ++it)   // newest first: the oldest value wins
+    {
+        for (const auto& [id, v] : it->before)
+        {
+            if (it->fullMix) { if (mixProc.set) mixProc.set (id, v); }
+            else registry.requestProc (it->slot, it->generation, id, v);
+        }
+        if (it->duckSet) registry.requestDuck (it->slot, it->generation, it->duckBefore);
     }
     info = "Undoing " + lastApply.title + ": everything it changed goes back.";
     lastApply = {};

@@ -316,6 +316,25 @@ void MixWebEditor::timerCallback()
         frame->setProperty ("beat", juce::var (bo));
     }
 
+    if (currentPage == "master")
+    {
+        // The Master page's finishing knobs: the Full Mix's Final Touch (glue, width, output) and its tilt
+        // (Tone Balance warmth / air in opposite directions).
+        using namespace mixology::proc;
+        const auto v = processor.procValues();
+        const auto pm = processor.takeProcMeters();
+        auto* mo = new juce::DynamicObject();
+        mo->setProperty ("finOn", v[finOn] > 0.5f && v[chainOn] > 0.5f);
+        mo->setProperty ("glue", roundTo (v[finGlue], 1.0f));
+        mo->setProperty ("width", roundTo (v[finWidth], 1.0f));
+        mo->setProperty ("out", roundTo (v[finOut], 0.1f));
+        mo->setProperty ("tbOn", v[tbOn] > 0.5f && v[chainOn] > 0.5f);
+        mo->setProperty ("warmth", roundTo (v[tbWarmth], 0.1f));
+        mo->setProperty ("air", roundTo (v[tbAir], 0.1f));
+        mo->setProperty ("glueGr", roundTo (pm.glue, 0.1f));
+        frame->setProperty ("master", juce::var (mo));
+    }
+
     if (currentPage == "overview")
     {
         // The Overview's quick tone knobs are the Full Mix EQ's six band gains.

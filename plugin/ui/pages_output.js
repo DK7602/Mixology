@@ -1,7 +1,7 @@
 // Tone, Stereo and Master pages. Tone and Stereo work on the target you pick (Full Mix or a track's Mixology
 // Link, Milestone 5); their meters and scopes are live. Master's finishing controls are still a preview.
 
-import { el, box, icon, fmt, clamp, Knob, Meter, select, graph, freqToX, moduleList, previewTag, store, cssVar } from "./ui.js";
+import { el, box, icon, fmt, clamp, Knob, Meter, select, graph, freqToX, moduleList, store, cssVar } from "./ui.js";
 import { knobFor, biquad, magnitudeDb, MODULE_NAMES } from "./proc.js";
 
 function knobRow(host, defs, prefix, onChange) {
@@ -356,14 +356,22 @@ export function buildMaster(root, app) {
     ctx.restore();
   };
 
-  const bottom = el("div", "", root, box(266, 570, 790, 240));
-  knobRow(bottom, [
-    { id: "glue", label: "GLUE", min: 0, max: 6, value: 1, step: 0.1, format: (v) => v.toFixed(1) + " dB GR" },
-    { id: "tilt", label: "TILT", min: -3, max: 3, value: 0, bipolar: true, step: 0.1, format: (v) => fmt.db(v) },
-    { id: "width", label: "WIDTH", min: 50, max: 150, value: 100, format: (v) => fmt.pct(v) },
-    { id: "trim", label: "TRIM", min: -12, max: 12, value: 0, bipolar: true, step: 0.1, format: (v) => fmt.db(v) },
-  ], "master");
-  previewTag(root, 270, 816);
+  // Finishing on the Full Mix (Mixology on the Stereo Out, before Masterology): Glue, Tilt, Width, Trim.
+  const bottom = el("div", "", root, box(266, 570, 790, 232));
+  let master = null, movedAt = -1e9;
+  const send = (changes) => { movedAt = performance.now(); app.native.procSet("mix", changes); };
+  const finishing = knobRow(bottom, [
+    { id: "glue", label: "GLUE", min: 0, max: 100, value: 0, step: 1, format: (v) => fmt.pct(v), onChange: (v) => send({ fin_on: 1, fin_glue: v }) },
+    { id: "tilt", label: "TILT", min: -3, max: 3, value: 0, bipolar: true, step: 0.1, format: (v) => fmt.db(v),
+      onChange: (v) => { const c = master && master.tbOn ? (master.air + master.warmth) / 2 : 0; send({ tb_on: 1, tb_warmth: c - v, tb_air: c + v }); } },
+    { id: "width", label: "WIDTH", min: 50, max: 150, value: 100, step: 1, format: (v) => fmt.pct(v), onChange: (v) => send({ fin_on: 1, fin_width: v }) },
+    { id: "trim", label: "TRIM", min: -12, max: 12, value: 0, bipolar: true, step: 0.1, format: (v) => fmt.db(v), onChange: (v) => send({ fin_on: 1, fin_out: v }) },
+  ]);
+  finishing[0].root.title = "Bus glue: gentle compression that makes the mix hang together (Final Touch on the Full Mix)";
+  finishing[1].root.title = "Tilt: + brighter and lighter, − warmer and darker (Tone Balance on the Full Mix: Air and Warmth in opposite directions)";
+  finishing[2].root.title = "Stereo width of the whole mix (100 % = as it is)";
+  finishing[3].root.title = "The mix's level into Masterology";
+  const finNote = el("div", "", root, { position: "absolute", left: "270px", top: "806px", width: "780px", fontSize: "15px", color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });
 
   const right = el("div", "panel", root, box(1070, 0, 342, 842));
   const rt = el("div", "panel-title gold", right);
@@ -390,6 +398,15 @@ export function buildMaster(root, app) {
       const now = performance.now();
       if (now - lastPush > 33) { lastPush = now; history.push(f.shortTerm ?? -100); if (history.length > 1800) history.shift(); }
       if (!root.classList.contains("shown")) return;
+      if (f.master) {
+        master = f.master;
+        const m = master;
+        const want = [m.finOn ? m.glue : 0, m.tbOn ? (m.air - m.warmth) / 2 : 0, m.finOn ? m.width : 100, m.finOn ? m.out : 0];
+        if (now - movedAt > 800)
+          finishing.forEach((k, i) => { if (!k.dragging && Math.abs(k.value - want[i]) > 0.05) k.set(want[i]); });
+        finNote.textContent = "These work on the Full Mix (Mixology on the Stereo Out), before Masterology."
+          + (m.finOn && m.glue > 0 ? ` Glue now ${m.glueGr >= 0.1 ? fmt.db(-m.glueGr) : "0.0 dB"}.` : "");
+      }
       hist.redraw();
       rows.st.textContent = fmt.lufs(f.shortTerm ?? -100) + " LUFS";
       rows.int.textContent = fmt.lufs(f.integrated ?? -100) + " LUFS";
