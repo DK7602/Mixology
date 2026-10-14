@@ -8,7 +8,8 @@ FetchContent_MakeAvailable(Catch2)
 add_executable(mixology_tests
     test_bridge.cpp
     test_link.cpp
-    test_analysis.cpp)
+    test_analysis.cpp
+    test_proc.cpp)
 
 target_link_libraries(mixology_tests PRIVATE mixology_dsp Catch2::Catch2WithMain)
 set_target_properties(mixology_tests PROPERTIES FOLDER "Mixology")
@@ -27,3 +28,9 @@ if(NODE_EXECUTABLE)
     add_test(NAME bridge_end_to_end
              COMMAND ${NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../tools/bridge-sim/run.js $<TARGET_FILE:bridge_session_cli>)
 endif()
+
+# The interface's copy of the processing control table must match the engine's.
+add_executable(procspec ../tools/procspec/procspec.cpp)
+target_link_libraries(procspec PRIVATE mixology_dsp)
+set_target_properties(procspec PROPERTIES FOLDER "Mixology")
+add_test(NAME procspec_in_sync COMMAND procspec ${CMAKE_CURRENT_SOURCE_DIR}/../plugin/ui/procspec.js)

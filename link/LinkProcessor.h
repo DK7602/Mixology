@@ -3,10 +3,13 @@
 #include "mixology/AssistEq.h"
 #include "mixology/AudioRing.h"
 #include "mixology/LinkRegistry.h"
+#include "mixology/ProcChain.h"
 #include "mixology/TrackAnalyzer.h"
 #include "mixology/TrackMeter.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
+
+#include "../plugin/ProcHost.h"
 
 #include <atomic>
 
@@ -22,7 +25,10 @@
       message thread like a user move, so the host sees it (automation, undo) and the project saves it.
     - Assist EQ (Milestone 4): low cut, mud dip and vocal-pocket dip, set by Mixology's Clean Up and Vocal
       Pocket the same way. At its neutral settings audio passes through bit for bit.
-    No latency. */
+    - Processing (Milestone 5): Gate, EQ, Dynamics, Tone and Stereo after the Assist EQ (mixology::proc::Chain),
+      controlled from Mixology's pages through the registry, every control a host parameter. All modules
+      start off (audio untouched, bit for bit).
+    No latency, except while the Limiter is on (its lookahead; the host is told). */
 class MixologyLinkProcessor final : public juce::AudioProcessor,
                                     private juce::Timer,
                                     private juce::TimeSliceClient
@@ -82,6 +88,9 @@ public:
     mixology::AssistSettings assistSettings() const;
     /** Sets all five Assist EQ parameters like a user move (one gesture each). */
     void setAssist (const mixology::AssistSettings&);
+    mixology::proc::Values procValues() const { return procRaw.read(); }
+    std::uint32_t procRunning() const { return running.load (std::memory_order_relaxed); }
+    void setProc (int index, float value) { mixology::proc::host::set (parameters, index, value); }
 
 private:
     template <typename Sample>
@@ -111,6 +120,10 @@ private:
     std::atomic<float>* pocketHzParam = nullptr;
     std::atomic<float>* pocketDbParam = nullptr;
     mixology::AssistEq assist;
+    mixology::proc::host::Raw procRaw;
+    mixology::proc::Chain chain;
+    std::atomic<std::uint32_t> running { 0 };
+    std::array<std::uint32_t, mixology::link::kProcSlots> procRequestSeen {};
     juce::SmoothedValue<double, juce::ValueSmoothingTypes::Multiplicative> trimGain;
     mixology::TrackMeter meter;
     std::uint32_t publishedWindows = 0;

@@ -85,6 +85,11 @@ juce::WebBrowserComponent::Options LinkEditor::makeEditorOptions()
                                  processor.setAssist (mixology::AssistSettings {});
                                  complete (true);
                              })
+        .withNativeFunction ("setProcessing", [this] (const juce::Array<juce::var>& args, auto complete)
+                             {
+                                 processor.setProc (mixology::proc::chainOn, args.size() > 0 && static_cast<bool> (args[0]) ? 1.0f : 0.0f);
+                                 complete (true);
+                             })
         .withResourceProvider ([] (const auto& url) { return getResource (url); });
 }
 
@@ -170,5 +175,22 @@ void LinkEditor::timerCallback()
     ao->setProperty ("pocketHz", roundTo (a.pocketHz, 1.0f));
     ao->setProperty ("pocketDb", roundTo (a.pocketDb, 0.1f));
     f->setProperty ("assist", juce::var (ao));
+
+    // Processing: on / off, and which modules are switched on (and which are running right now).
+    const auto v = processor.procValues();
+    auto* po = new juce::DynamicObject();
+    po->setProperty ("on", v[mixology::proc::chainOn] > 0.5f);
+    juce::Array<juce::var> on, live;
+    const auto runningNow = processor.procRunning();
+    for (int m = 0; m < mixology::proc::kModules; ++m)
+    {
+        const auto mod = static_cast<mixology::proc::Module> (m);
+        if (v[static_cast<std::size_t> (mixology::proc::onParam (mod))] > 0.5f) on.add (mixology::proc::moduleKey (mod));
+        if ((runningNow >> m) & 1u) live.add (mixology::proc::moduleKey (mod));
+    }
+    po->setProperty ("modules", on);
+    po->setProperty ("running", live);
+    po->setProperty ("latencyMs", roundTo (static_cast<float> (processor.getLatencySamples() * 1000.0 / juce::jmax (8000.0, processor.getSampleRate())), 0.1f));
+    f->setProperty ("proc", juce::var (po));
     webView.emitEventIfBrowserIsVisible ("linkFrame", juce::var (f));
 }

@@ -8,6 +8,7 @@
 #include <juce_dsp/juce_dsp.h>
 
 #include <array>
+#include <map>
 #include <optional>
 
 /** The Mixology interface: HTML / CSS / JS (plugin/ui) embedded in the binary and shown in the
@@ -15,7 +16,12 @@
 
     C++ -> JS: the "mixFrame" event at 30 Hz (meters, spectrum, and the bridge state when it changed).
     JS -> C++: native functions bridgeCommand(name, arg), getBridgeState(), getSettings(),
-               setSetting(key, value), setUiState(json). */
+               setSetting(key, value), setUiState(json), setPage(id),
+               procTarget(key), procSet(key, { id: value, ... }), setMonoListen(on) (Milestone 5 pages).
+
+    Processing targets: "mix" (Mixology's own Full Mix processing) or "link:<slot>:<generation>" (a track's
+    Mixology Link, reached through the registry). On the EQ / Dynamics / Tone / Stereo pages each frame
+    carries the selected target's controls and meters ("proc"), twice a second the list of targets. */
 class MixWebEditor final : public juce::AudioProcessorEditor,
                            private juce::Timer
 {
@@ -39,6 +45,9 @@ private:
     void timerCallback() override;
     juce::var makeSpectrum();
     void addStereo (juce::DynamicObject&);
+    juce::var makeProc();
+    juce::var makeProcTargets();
+    juce::var trackSpectrum (const mixology::AnalysisFrame&) const;
     static juce::WebBrowserComponent::Options makeBaseOptions();
     juce::WebBrowserComponent::Options makeEditorOptions();
     static std::optional<juce::WebBrowserComponent::Resource> getResource (const juce::String& url);
@@ -60,6 +69,11 @@ private:
     mixology::TrackAnalyzer mixAnalyzer;
     std::vector<float> mixL, mixR;
     int frameCount = 0;
+
+    juce::String procKey { "mix" };
+    int procListCountdown = 0;
+    struct TargetInfo { double sampleRate = 48000.0; int latency = 0; int channels = 2; juce::String name; };
+    std::map<juce::String, TargetInfo> targetInfo;
 
     std::uint64_t sentBridgeVersion = ~0ull;
     juce::int64 sentLogVersion = -1;

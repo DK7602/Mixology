@@ -227,6 +227,25 @@ button { font-family: inherit; }
 }
 :root[data-theme="light"] .preview-tag { color: #9a5d00; border-color: rgba(154, 93, 0, 0.4); background: rgba(255, 192, 74, 0.15); }
 
+/* Milestone 5: a module's on / off switch, and the lamp on its module button */
+.power-btn {
+  position: absolute; display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px 0 10px; z-index: 2;
+  border-radius: 999px; border: 1.5px solid var(--btn-edge); background: var(--btn); color: var(--text-dim);
+  font: inherit; font-size: 16px; font-weight: 600; letter-spacing: 0.12em; cursor: pointer;
+}
+.power-btn svg { width: 20px; height: 20px; }
+.power-btn.on { color: var(--green); border-color: var(--green); box-shadow: 0 0 10px rgba(61, 255, 90, 0.35), inset 0 0 8px rgba(61, 255, 90, 0.12); }
+:root[data-theme="light"] .power-btn.on { color: #109a2a; border-color: #109a2a; box-shadow: none; }
+.btn .lamp { position: absolute; right: 14px; top: 50%; width: 11px; height: 11px; margin-top: -5.5px; border-radius: 50%; background: var(--text-faint); opacity: 0.6; }
+.btn .lamp.on { background: var(--green); opacity: 1; box-shadow: 0 0 8px var(--green); }
+.btn .lamp.live { animation: lamp-live 1.2s ease-in-out infinite; }
+@keyframes lamp-live { 50% { box-shadow: 0 0 2px var(--green); } }
+.proc-note { position: absolute; font-size: 16px; line-height: 1.35; color: var(--text-dim); }
+.mono-badge {
+  position: absolute; z-index: 3; padding: 6px 16px; border-radius: 999px; font-size: 18px; font-weight: 600; letter-spacing: 0.08em;
+  color: #fff; background: var(--red); box-shadow: 0 0 16px rgba(255, 40, 40, 0.6);
+}
+
 /* Big left-column buttons (module lists) */
 .btn {
   position: absolute; display: flex; align-items: center; gap: 18px; padding: 0 20px;

@@ -1,7 +1,8 @@
 # Mixology manual
 
-Manual for version 0.4.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, and the
-smart tools: Auto Mix, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match).
+Manual for version 0.5.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
+tools: Auto Mix, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, and now the processing:
+EQ, Dynamics, Tone and Stereo on any track or on the full mix).
 
 **Voxology** makes each vocal sound great. **Mixology** makes all your tracks work together.
 **Masterology** turns the finished mix into the master.
@@ -17,11 +18,14 @@ smart tools: Auto Mix, Balance, Clean Up, Vocal Pocket, Stereo Architect, Refere
 | Tracks page: your real Cubase channels (names, faders, pan, mute, solo), 12 at a time | Live, both ways, through the Cubase bridge |
 | Mixology Link on a track: its level on the Tracks page, a Trim, the Assist EQ | Live |
 | Analyze Mix and the Mix Assistant's advice; track roles; the analyzer's track colours | Live |
-| Auto Mix, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match | Live: this is what we're testing now |
-| EQ, Dynamics, Space, Tone controls | Preview: they move but don't process audio yet (Milestone 5) |
+| Auto Mix, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match | Live |
+| EQ, Dynamics, Tone, Stereo pages: processing on the track you pick (in its Mixology Link) or on the full mix | Live: this is what we're testing now |
+| Mono Check (Stereo page) | Live |
+| Space page, Master page's finishing knobs | Preview: they move but don't process audio yet (next rounds) |
 
-Mixology itself passes your audio through untouched. What changes your sound: the Cubase faders and pans it
-moves, and the Assist EQ / Trim in each Mixology Link.
+Nothing changes your sound until you ask: every processing module starts switched off (the audio passes
+through bit for bit). What can change it: the Cubase faders and pans Mixology moves, the Assist EQ / Trim in
+each Mixology Link, and the modules you switch on (see "Processing" below).
 
 ## Where to put it
 
@@ -29,7 +33,8 @@ Insert **Mixology** on the **Stereo Out** (after your mix, before Masterology). 
 there. The Tracks page shows your channels through the Cubase bridge.
 
 Insert **Mixology Link** on the tracks you want Mixology to hear one by one, after the track's other plug-ins.
-It is light (no latency, very little CPU) and passes the sound through, apart from its Trim.
+It is light (no latency, very little CPU) and passes the sound through, apart from its Trim and the processing
+you switch on for that track.
 
 ## Light or dark
 
@@ -44,12 +49,14 @@ Mixology remembers your choice.
 - **Tracks**: the MixConsole as Mixology sees it, 12 channels at a time. Arrows move the bank.
   The colour bar on top of each strip is the Cubase track colour. Every strip moves its real Cubase channel
   (see "Moving faders" below). Meters show on strips whose track has Mixology Link.
-- **EQ**: six bands. Drag a point to change frequency and gain; scroll on it to change the width (Q).
-- **Dynamics**: Compressor, Multiband, Transient, Gate / Expand, Limiter.
+- **EQ**: six bands on the track you pick (or the full mix). Drag a point to change frequency and gain; scroll on
+  it to change the width (Q); double-click it to make that band flat again.
+- **Dynamics**: Compressor, Multiband, Transient, Gate / Expand, Limiter, with in / out meters and gain reduction.
 - **Space**: Reverb, Delay, Chorus, Phaser, Hall, Room, Special FX, each with its own controls,
   plus EQ and Ducking (the effect gets quieter while the vocal sings).
-- **Tone**: your mix's tonal balance against the style's target (red line), and loudness.
-- **Stereo**: how wide your mix is, and whether it holds up in mono.
+- **Tone**: Tone Balance, Loudness, Clip Control, Harmonic, Analog Touch, Final Touch; your mix's tonal balance
+  against the style's target (red line), and loudness.
+- **Stereo**: Width (and Low / Mid / High Width), Mono Check, and how wide your mix is.
 - **Master**: loudness over the last minute and a checklist for handing the mix to Masterology.
 
 Knobs: drag up / down (hold Shift for fine steps), scroll, or use the arrow keys. Double-click resets.
@@ -115,6 +122,10 @@ Mixology Link is a small plug-in for each track. Version 1:
   **Pocket** dip (1 - 6 kHz). Clean Up and Vocal Pocket set them; you can also change them like any plug-in
   parameter in Cubase (automation works). **Clear** takes them out. When they're off, the Link passes the audio
   through bit for bit.
+
+- **Processing** (Milestone 5, bottom of its window): the EQ, Dynamics, Tone and Stereo modules Mixology's pages
+  switched on for this track (see "Processing" below). **On / Off** switches all of them off for a before / after.
+  Only the Limiter adds latency (5 ms, while it's on); Cubase compensates.
 
 Each Link also listens to its track about five times a second (tone in 31 bands, loudness, punch, stereo width,
 left / right balance) for Analyze Mix and the analyzer's track colours. It runs on a background thread and
@@ -222,6 +233,49 @@ solo and the Assist EQ Mixology set (the ↺ on a strip does it for that track).
 yourself since stays as you set it. **Keep the mix as it is now** (Settings) makes the current state, Assist EQ
 included, the new starting point.
 
+## Processing (EQ, Dynamics, Tone, Stereo)
+
+These four pages work on **one target at a time**, picked in the dropdown at the top right of each page (all four
+share the pick):
+
+- **A track**: every track with Mixology Link is in the list. The processing runs inside that track's Link
+  (after its Trim and Assist EQ), so it's part of the track, like an insert plug-in.
+- **Full Mix**: the processing runs inside Mixology on the Stereo Out, before Masterology.
+
+Switching on:
+
+- Every module starts **off**. Turn any of its knobs (or drag an EQ point) and it switches itself on; the green
+  **ON** button switches it off and on again (a quick before / after).
+- The lamps in the left column show which modules are on for this target (they pulse while they work on the sound).
+- **Reset this module** puts its knobs back where they started.
+- In a Link window, the **PROCESSING** strip lists what's on for that track; its **On / Off** button switches all
+  of that track's processing off at once (a before / after for the whole track).
+- Everything is a normal Cubase parameter of that Link (or of Mixology for the full mix): saved with the project,
+  and it can be automated.
+
+The modules (the sound runs through them in this order):
+
+| Page | Module | What it does |
+| --- | --- | --- |
+| Dynamics | Gate / Expand | Turns the track down between notes. Gate closes by the full Range; Expander turns quiet parts down gently (2:1). |
+| EQ | 6 bands | Bells, shelves, low / high cut. **Precision**: exact curves, 24 dB / octave cuts. **Smooth**: wider bells, 12 dB / octave cuts. **Natural**: small moves broad, big moves narrower (console style). |
+| Dynamics | Compressor | Threshold, Ratio, Attack, Release, Makeup, Knee (Soft / Medium / Hard). |
+| Dynamics | Multiband | Lows, mids and highs each held together by their own compressor; the knob says how much (it finds its own threshold). 3 or 2 bands. |
+| Dynamics | Transient | Attack + / − (the front of each hit), Sustain + / − (the tail), Speed, Output, Mix; Focus on the lows or highs. |
+| Tone | Tone Balance | Warmth, Presence, Air (gentle shelves and a bell), Glue (light compression), Punch (attack). |
+| Tone | Loudness | Trim, Density (a blended-in compressor: fuller), Low End and Top End shelves. |
+| Tone | Harmonic | Drive, Even / Odd (warm or edgy), Tone (brighter / darker harmonics), Mix. |
+| Tone | Analog Touch | Tape (soft saturation, low bump, softer top), Console (subtle edge, channel bleed), Noise (hiss while it plays), Mix. |
+| Tone | Clip Control | Rounds off peaks over the Threshold; Softness; Oversampling 1x - 8x (cleaner); Mix. |
+| Stereo | Width | Width, Low / Mid / High Width (the side signal split at Low Below / High Above). 100 % = as it is. Mono tracks: nothing to widen (pan them). |
+| Tone | Final Touch | Width, Air, Glue, Output. |
+| Dynamics | Limiter | Nothing passes the Ceiling (sample or true peaks). Adds 5 ms of delay while it's on; Cubase lines the track up. On the full mix, leave the final limiting to Masterology. |
+
+**Mono Check** (Stereo page): the whole mix plays in mono while the red badge shows. It switches itself off when
+you leave the Stereo page or close Mixology, so a mixdown can never come out mono by mistake.
+
+CPU: a module that's off costs nothing. An EQ and a compressor on a track cost about 1.5 % of one CPU core.
+
 ## Mix styles
 
 The style in the header (for example "Hip Hop - Modern Clean") is what Mixology aims for. Click it (or
@@ -256,7 +310,7 @@ project.
 3. Masterology after Mixology (or in a mastering project): final EQ, loudness and limiting.
 
 Leave Masterology 3 to 6 dB of headroom: the Master page tells you when the mix peaks are in the right place.
-Mixology never limits the mix bus; that's Masterology's job.
+Final limiting is Masterology's job: keep Mixology's Limiter off on the Full Mix (or use it only as a safety).
 
 ## Troubleshooting
 
@@ -282,4 +336,10 @@ Mixology never limits the mix bus; that's Masterology's job.
   Mixology the panner's left edge (a full-width track would read "L100"), so Mixology never pans those tracks:
   pan them in Cubase.
 - **Strange notes on an instrument track**: untick "In 'All MIDI Inputs'" for both Mixology ports (setup step 3).
+- **A processing page says "its Mixology Link isn't answering"**: the track or its Link was removed. Pick
+  another target.
+- **A track isn't in the processing dropdown**: it has no Mixology Link, or its Link is from an older download
+  (copy both .vst3 folders again).
+- **A track sounds 5 ms late**: its Limiter is on and Cubase's delay compensation is switched off (Constrain
+  Delay Compensation). Switch that off again, or the Limiter.
 - **Send us the log**: Settings > Cubase Bridge > **Copy log**, then paste it into the chat.

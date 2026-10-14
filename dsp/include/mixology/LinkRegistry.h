@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mixology/AssistEq.h"
+#include "mixology/ProcParams.h"
 #include "mixology/TrackAnalyzer.h"
 
 #include <array>
@@ -25,13 +26,15 @@
       it, undo works). */
 namespace mixology::link
 {
-    constexpr std::uint32_t kLayoutVersion = 4;   // 2: analysis frames (M3), 3: + left / right balance, 4: + Assist EQ (M4)
+    constexpr std::uint32_t kLayoutVersion = 5;   // 2: analysis frames (M3), 3: + left / right balance, 4: + Assist EQ (M4), 5: + processing (M5)
     constexpr std::uint32_t kNoRequestSeen = 0xFFFFFFFFu;   // a Link's first look at a request counter: take none
     constexpr int kMaxLinks = 256;
     constexpr std::size_t kNameBytes = 128;
     constexpr std::uint64_t kAliveMs = 2000;   // a Link without a heartbeat for this long is gone
     constexpr std::uint64_t kAudioMs = 1000;   // ... and without audio for this long isn't playing
     constexpr float kSilentDb = -100.0f;
+    constexpr int kProcSlots = 192;            // room for every processing control (proc::count today, more later)
+    static_assert (proc::count <= kProcSlots);
 
     /** "MixologyLink.v<layout>" (SharedBlock adds the process ID). */
     std::string blockName();
@@ -75,6 +78,19 @@ namespace mixology::link
         std::array<std::atomic<float>, 5> assistNow;
         std::atomic<std::uint32_t> assistRequestSeq;
         std::array<std::atomic<float>, 5> assistRequest;
+
+        // Processing (M5): every control as it is now (Link's message thread), one request counter and value
+        // per control (Mixology: value first, then bump the counter), and the processing meters (Link's audio
+        // thread, once per meter window).
+        std::atomic<std::uint32_t> procCount;      // controls this Link knows (0: no processing)
+        std::array<std::atomic<float>, kProcSlots> procNow;
+        std::array<std::atomic<std::uint32_t>, kProcSlots> procRequestSeq;
+        std::array<std::atomic<float>, kProcSlots> procRequest;
+        std::array<std::atomic<float>, proc::kMeterValues> procMeters;
+        std::atomic<std::uint32_t> procRunning;    // bit per proc::Module
+        std::atomic<std::uint64_t> procMetersMs;
+        std::atomic<float> sampleRate;
+        std::atomic<std::uint32_t> latency;        // samples (the Limiter's lookahead while it is on)
     };
 
     struct alignas (64) Header
@@ -123,6 +139,11 @@ namespace mixology::link
         std::uint64_t analysisMs = 0;
 
         AssistSettings assist;      // the Link's Assist EQ as it is now
+
+        bool hasProcessing = false; // a Link with the M5 processing
+        std::uint32_t procRunning = 0;   // modules processing right now (bit per proc::Module)
+        float sampleRate = 0.0f;
+        int latency = 0;
     };
 
     class Registry
@@ -152,6 +173,14 @@ namespace mixology::link
         MatchStatus matchSeen (int slot, std::uint64_t nowMs) const;
         /** Analysis thread: one writer per slot. */
         void publishAnalysis (int slot, const AnalysisFrame&, bool playing, std::int64_t songSample, std::uint64_t nowMs);
+        /** Processing: the controls as they are now, and the Link's sample rate and latency (message thread). */
+        void publishProc (int slot, const proc::Values&, float sampleRate, int latency);
+        /** Audio thread: lock-free. */
+        void publishProcMeters (int slot, const proc::Meters&, std::uint64_t nowMs) noexcept;
+        /** Remembers every request counter as it is (call right after claim(): older requests are not ours). */
+        void learnProcRequests (int slot, std::array<std::uint32_t, kProcSlots>& seen) const;
+        /** Requests made since the last call: control indices and values (at most `max`), newest value each. */
+        int takeProcRequests (int slot, std::array<std::uint32_t, kProcSlots>& seen, int* indices, float* values, int max) const;
 
         // ---- Mixology side ---------------------------------------------------------------------
         void mainHeartbeat (std::uint64_t nowMs);
@@ -160,6 +189,11 @@ namespace mixology::link
         std::vector<LinkInfo> links (std::uint64_t nowMs) const;
         void requestTrim (int slot, std::uint32_t generation, float db);
         void requestAssist (int slot, std::uint32_t generation, const AssistSettings&);
+        void requestProc (int slot, std::uint32_t generation, int index, float value);
+        /** A Link's processing controls as it published them last (false: no such Link, or no processing). */
+        bool readProc (int slot, std::uint32_t generation, proc::Values&) const;
+        /** Its processing meters (false when it hasn't processed audio within kAudioMs). */
+        bool readProcMeters (int slot, std::uint32_t generation, proc::Meters&, std::uint64_t nowMs) const;
         /** Tells a Link whether it is paired with a channel on the Tracks page (shown in its window). */
         void reportMatch (int slot, std::uint32_t generation, MatchStatus, std::uint64_t nowMs);
 

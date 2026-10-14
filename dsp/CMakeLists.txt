@@ -1,6 +1,9 @@
 add_library(mixology_dsp STATIC
     src/AssistEq.cpp
     src/AssistRestore.cpp
+    src/ProcChain.cpp
+    src/ProcDsp.cpp
+    src/ProcParams.cpp
     src/BridgeProtocol.cpp
     src/BridgeSession.cpp
     src/FaderLaw.cpp

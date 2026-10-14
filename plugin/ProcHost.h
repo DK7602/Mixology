@@ -1,0 +1,105 @@
+#pragma once
+
+#include "mixology/ProcParams.h"
+
+#include <juce_audio_processors/juce_audio_processors.h>
+
+#include <array>
+#include <atomic>
+#include <cmath>
+
+/** Milestone 5: the processing controls (mixology::proc's table) as host parameters. Shared by Mixology Link
+    (each track) and Mixology (the full mix): same ids, ranges and texts in both. */
+namespace mixology::proc::host
+{
+    inline juce::String valueText (const ParamSpec& s, float v)
+    {
+        const juce::String unit (s.unit);
+        if (s.kind != Kind::number)
+        {
+            const auto names = juce::StringArray::fromTokens (s.choices, "|", "");
+            return names[juce::jlimit (0, names.size() - 1, juce::roundToInt (v))];
+        }
+        if (unit == "Hz") return v >= 1000.0f ? juce::String (v / 1000.0f, v >= 10000.0f ? 1 : 2) + " kHz" : juce::String (juce::roundToInt (v)) + " Hz";
+        if (unit == "dB") return (v > 0.04f ? "+" : "") + juce::String (v, 1) + " dB";
+        if (unit == "ms") return juce::String (v, v < 10.0f ? 2 : v < 100.0f ? 1 : 0) + " ms";
+        if (unit == "%") return juce::String (juce::roundToInt (v)) + " %";
+        if (unit == ":1") return juce::String (v, 1) + ":1";
+        return juce::String (v, 2);
+    }
+
+    inline float valueFromText (const ParamSpec& s, const juce::String& text)
+    {
+        if (s.kind != Kind::number)
+        {
+            const auto names = juce::StringArray::fromTokens (s.choices, "|", "");
+            const int i = names.indexOf (text.trim(), true);
+            return i >= 0 ? static_cast<float> (i) : text.getFloatValue();
+        }
+        float v = text.retainCharacters ("-+.0123456789").getFloatValue();
+        if (text.containsIgnoreCase ("k")) v *= 1000.0f;
+        return v;
+    }
+
+    /** Adds every processing control to a host parameter layout. */
+    inline void addParameters (juce::AudioProcessorValueTreeState::ParameterLayout& layout, int versionHint)
+    {
+        for (const auto& s : specs())
+        {
+            const juce::ParameterID pid { s.id, versionHint };
+            if (s.kind == Kind::toggle)
+            {
+                layout.add (std::make_unique<juce::AudioParameterBool> (pid, s.name, s.def > 0.5f));
+            }
+            else if (s.kind == Kind::choice)
+            {
+                layout.add (std::make_unique<juce::AudioParameterChoice> (pid, s.name, juce::StringArray::fromTokens (s.choices, "|", ""),
+                                                                          juce::roundToInt (s.def)));
+            }
+            else
+            {
+                juce::NormalisableRange<float> range (s.min, s.max, s.step);
+                if (s.curve == Curve::log) range.setSkewForCentre (std::sqrt (s.min * s.max));
+                const auto* spec = &s;
+                layout.add (std::make_unique<juce::AudioParameterFloat> (
+                    pid, s.name, range, s.def,
+                    juce::AudioParameterFloatAttributes()
+                        .withLabel (s.unit)
+                        .withStringFromValueFunction ([spec] (float v, int) { return valueText (*spec, v); })
+                        .withValueFromStringFunction ([spec] (const juce::String& t) { return valueFromText (*spec, t); })));
+            }
+        }
+    }
+
+    /** The parameters' raw values, read lock-free on the audio thread. */
+    struct Raw
+    {
+        std::array<std::atomic<float>*, count> p {};
+
+        void bind (juce::AudioProcessorValueTreeState& apvts)
+        {
+            for (int i = 0; i < count; ++i)
+                p[static_cast<std::size_t> (i)] = apvts.getRawParameterValue (specs()[static_cast<std::size_t> (i)].id);
+        }
+
+        Values read() const noexcept
+        {
+            Values v {};
+            for (std::size_t i = 0; i < p.size(); ++i) v[i] = p[i] != nullptr ? p[i]->load (std::memory_order_relaxed) : specs()[i].def;
+            return v;
+        }
+    };
+
+    /** Message thread: sets one control like a user move (the host sees it, the project saves it). */
+    inline void set (juce::AudioProcessorValueTreeState& apvts, int index, float value)
+    {
+        if (index < 0 || index >= count) return;
+        auto* p = apvts.getParameter (specs()[static_cast<std::size_t> (index)].id);
+        if (p == nullptr) return;
+        const auto n = p->convertTo0to1 (sanitise (index, value));
+        if (std::abs (n - p->getValue()) < 1.0e-7f) return;
+        p->beginChangeGesture();
+        p->setValueNotifyingHost (n);
+        p->endChangeGesture();
+    }
+}

@@ -2,6 +2,8 @@
 
 #include "MixologyUIData.h"
 
+#include "mixology/LinkRegistry.h"
+
 #include <cstring>
 
 namespace
@@ -26,6 +28,34 @@ namespace
     float roundTo (float v, float step) { return std::round (v / step) * step; }
 
     const juce::Colour kBackground (0xff05080f);
+
+    /** "link:<slot>:<generation>" -> slot and generation. */
+    bool parseLinkKey (const juce::String& key, int& slot, std::uint32_t& generation)
+    {
+        if (! key.startsWith ("link:")) return false;
+        const auto parts = juce::StringArray::fromTokens (key.substring (5), ":", "");
+        if (parts.size() != 2) return false;
+        slot = parts[0].getIntValue();
+        generation = static_cast<std::uint32_t> (parts[1].getLargeIntValue());
+        return slot >= 0;
+    }
+
+    juce::String linkKey (const mixology::link::LinkInfo& l)
+    {
+        return "link:" + juce::String (l.slot) + ":" + juce::String (static_cast<juce::int64> (l.generation));
+    }
+
+    juce::Array<juce::var> moduleKeys (const mixology::proc::Values& v, bool runningOnly, std::uint32_t running)
+    {
+        juce::Array<juce::var> out;
+        for (int m = 0; m < mixology::proc::kModules; ++m)
+        {
+            const auto mod = static_cast<mixology::proc::Module> (m);
+            const bool on = runningOnly ? ((running >> m) & 1u) != 0 : v[static_cast<std::size_t> (mixology::proc::onParam (mod))] > 0.5f;
+            if (on) out.add (mixology::proc::moduleKey (mod));
+        }
+        return out;
+    }
 }
 
 juce::WebBrowserComponent::Options MixWebEditor::makeBaseOptions()
@@ -84,12 +114,46 @@ juce::WebBrowserComponent::Options MixWebEditor::makeEditorOptions()
         .withNativeFunction ("setPage", [this] (const juce::Array<juce::var>& args, auto complete)
                              {
                                  if (args.size() > 0) currentPage = args[0].toString();
+                                 if (currentPage != "stereo") processor.monoListen.store (false);
                                  complete (true);
                              })
         .withNativeFunction ("setUiState", [this] (const juce::Array<juce::var>& args, auto complete)
                              {
                                  if (args.size() > 0) processor.setUiState (args[0].toString());
                                  complete (true);
+                             })
+        .withNativeFunction ("setMonoListen", [this] (const juce::Array<juce::var>& args, auto complete)
+                             {
+                                 processor.monoListen.store (args.size() > 0 && static_cast<bool> (args[0]));
+                                 complete (processor.monoListen.load());
+                             })
+        .withNativeFunction ("procTarget", [this] (const juce::Array<juce::var>& args, auto complete)
+                             {
+                                 procKey = args.size() > 0 && args[0].toString().isNotEmpty() ? args[0].toString() : juce::String ("mix");
+                                 procListCountdown = 0;
+                                 complete (true);
+                             })
+        .withNativeFunction ("procSet", [this] (const juce::Array<juce::var>& args, auto complete)
+                             {
+                                 // procSet (key, { id: value, ... }): moves on Mixology's own Full Mix processing, or
+                                 // requests to a track's Link (it applies them like your own moves).
+                                 const auto key = args.size() > 0 ? args[0].toString() : juce::String();
+                                 int slot = -1;
+                                 std::uint32_t generation = 0;
+                                 const bool link = parseLinkKey (key, slot, generation);
+                                 int applied = 0;
+                                 if (auto* changes = args.size() > 1 ? args[1].getDynamicObject() : nullptr)
+                                     for (const auto& p : changes->getProperties())
+                                     {
+                                         const int index = mixology::proc::indexOf (p.name.toString().toStdString());
+                                         if (index < 0) continue;
+                                         const auto value = static_cast<float> (static_cast<double> (p.value));
+                                         if (key == "mix") processor.setProc (index, value);
+                                         else if (link) mixology::link::processRegistry().requestProc (slot, generation, index, value);
+                                         else continue;
+                                         ++applied;
+                                     }
+                                 complete (applied);
                              })
         .withResourceProvider ([] (const auto& url) { return getResource (url); });
 }
@@ -118,6 +182,7 @@ MixWebEditor::MixWebEditor (MixologyAudioProcessor& p)
 MixWebEditor::~MixWebEditor()
 {
     stopTimer();
+    processor.monoListen.store (false);   // Mono Check never outlives the window
 }
 
 void MixWebEditor::paint (juce::Graphics& g)
@@ -207,6 +272,7 @@ void MixWebEditor::timerCallback()
     frame->setProperty ("integrated", roundTo (m.integrated.load(), 0.1f));
     frame->setProperty ("truePeak", roundTo (m.truePeak.load(), 0.1f));
     frame->setProperty ("sr", processor.getSampleRate());
+    frame->setProperty ("mono", processor.monoListen.load());
     frame->setProperty ("spectrum", makeSpectrum());
 
     if (currentPage == "stereo" || currentPage == "master")
@@ -214,6 +280,16 @@ void MixWebEditor::timerCallback()
 
     if (currentPage == "tracks")
         frame->setProperty ("trackMeters", hub.trackMeters());   // from each track's Mixology Link
+
+    if (currentPage == "eq" || currentPage == "dynamics" || currentPage == "tone" || currentPage == "stereo")
+    {
+        if (--procListCountdown <= 0)
+        {
+            procListCountdown = 15;
+            frame->setProperty ("procTargets", makeProcTargets());
+        }
+        frame->setProperty ("proc", makeProc());
+    }
 
     // Analyze Mix and the analyzer's track colours: five times a second.
     if (++frameCount % 6 == 0)
@@ -238,6 +314,133 @@ void MixWebEditor::timerCallback()
     }
 
     webView.emitEventIfBrowserIsVisible ("mixFrame", juce::var (frame));
+}
+
+juce::var MixWebEditor::makeProcTargets()
+{
+    using namespace mixology;
+    juce::Array<juce::var> list;
+    targetInfo.clear();
+
+    auto add = [&] (const juce::String& key, const juce::String& name, const juce::String& colour, const proc::Values& v,
+                    std::uint32_t running, const TargetInfo& info) {
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("key", key);
+        o->setProperty ("name", name);
+        o->setProperty ("colour", colour);
+        o->setProperty ("channels", info.channels);
+        o->setProperty ("on", moduleKeys (v, false, 0));
+        o->setProperty ("running", moduleKeys (v, true, running));
+        list.add (juce::var (o));
+        targetInfo[key] = info;
+    };
+
+    TargetInfo mix { juce::jmax (8000.0, processor.getSampleRate()), processor.getLatencySamples(), processor.getTotalNumOutputChannels(), "Full Mix" };
+    add ("mix", "Full Mix", {}, processor.procValues(), 0, mix);
+
+    auto& registry = link::processRegistry();
+    const auto ms = link::nowMs();
+    for (const auto& l : registry.links (ms))
+    {
+        if (! l.hasProcessing) continue;
+        proc::Values v {};
+        if (! registry.readProc (l.slot, l.generation, v)) continue;
+        const auto name = l.identity.hasName ? juce::String::fromUTF8 (l.identity.name.c_str()) : juce::String ("Track without a name");
+        const auto colour = l.identity.hasColour ? "#" + juce::String::toHexString (static_cast<int> (l.identity.rgb)).paddedLeft ('0', 6) : juce::String();
+        add (linkKey (l), name, colour, v, l.procRunning,
+             { l.sampleRate > 0.0f ? static_cast<double> (l.sampleRate) : 48000.0, l.latency, l.channels > 0 ? l.channels : 2, name });
+    }
+    return list;
+}
+
+juce::var MixWebEditor::trackSpectrum (const mixology::AnalysisFrame& f) const
+{
+    // The track's 1/3-octave bands in the units of the mix spectrum (per FFT bin, tilted 4.5 dB per octave),
+    // spread over the same 120 points (20 Hz - 20 kHz).
+    using namespace mixology;
+    const double binHz = std::max (8000.0, processor.getSampleRate()) / 8192.0;
+    std::array<double, kBands> db {};
+    for (int b = 0; b < kBands; ++b)
+    {
+        const double hz = bandHz (b);
+        db[static_cast<std::size_t> (b)] = f.bandDb[static_cast<std::size_t> (b)] - 10.0 * std::log10 (std::max (1.0, 0.2316 * hz / binHz))
+                                           + 4.5 * std::log2 (hz / 1000.0);
+    }
+    juce::Array<juce::var> out;
+    for (int i = 0; i < kSpectrumPoints; ++i)
+    {
+        const double hz = 20.0 * std::pow (1000.0, static_cast<double> (i) / (kSpectrumPoints - 1));
+        const double pos = std::clamp (3.0 * std::log2 (hz / 1000.0) + 17.0, 0.0, static_cast<double> (kBands - 1));
+        const int b = std::min (kBands - 2, static_cast<int> (pos));
+        const double t = pos - b;
+        out.add (roundTo (static_cast<float> (db[static_cast<std::size_t> (b)] * (1.0 - t) + db[static_cast<std::size_t> (b + 1)] * t), 0.1f));
+    }
+    return out;
+}
+
+juce::var MixWebEditor::makeProc()
+{
+    using namespace mixology;
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("key", procKey);
+    proc::Values v {};
+    proc::Meters m;
+    bool ok = false, metersOk = false;
+    if (procKey == "mix")
+    {
+        v = processor.procValues();
+        m = processor.takeProcMeters();
+        ok = metersOk = true;
+        targetInfo[procKey] = { juce::jmax (8000.0, processor.getSampleRate()), processor.getLatencySamples(), processor.getTotalNumOutputChannels(), "Full Mix" };
+    }
+    else
+    {
+        int slot = -1;
+        std::uint32_t generation = 0;
+        if (parseLinkKey (procKey, slot, generation))
+        {
+            auto& registry = link::processRegistry();
+            ok = registry.readProc (slot, generation, v);
+            metersOk = ok && registry.readProcMeters (slot, generation, m, link::nowMs());
+            AnalysisFrame f;
+            bool playing = false;
+            std::int64_t pos = 0;
+            std::uint64_t when = 0;
+            if (ok && registry.readAnalysis (slot, f, playing, pos, when) && link::nowMs() - std::min (link::nowMs(), when) < 1000 && ! f.silent)
+            {
+                o->setProperty ("spectrum", trackSpectrum (f));
+                o->setProperty ("corr", roundTo (f.correlation, 0.01f));   // the track's own stereo (the scope shows the mix)
+            }
+        }
+    }
+    o->setProperty ("ok", ok);
+    if (! ok) return juce::var (o);
+
+    juce::Array<juce::var> values;
+    for (auto x : v) values.add (roundTo (x, 0.001f));
+    o->setProperty ("values", values);
+    const auto info = targetInfo.count (procKey) ? targetInfo[procKey] : TargetInfo {};
+    o->setProperty ("sr", info.sampleRate);
+    o->setProperty ("channels", info.channels);
+    o->setProperty ("latencyMs", roundTo (static_cast<float> (info.latency * 1000.0 / info.sampleRate), 0.1f));
+    if (metersOk)
+    {
+        auto* mo = new juce::DynamicObject();
+        mo->setProperty ("inL", roundTo (m.inL, 0.1f));
+        mo->setProperty ("inR", roundTo (m.inR, 0.1f));
+        mo->setProperty ("outL", roundTo (m.outL, 0.1f));
+        mo->setProperty ("outR", roundTo (m.outR, 0.1f));
+        mo->setProperty ("comp", roundTo (m.comp, 0.1f));
+        mo->setProperty ("multi", juce::Array<juce::var> { roundTo (m.multiLow, 0.1f), roundTo (m.multiMid, 0.1f), roundTo (m.multiHigh, 0.1f) });
+        mo->setProperty ("trans", roundTo (m.trans, 0.1f));
+        mo->setProperty ("gate", roundTo (m.gate, 0.1f));
+        mo->setProperty ("limit", roundTo (m.limit, 0.1f));
+        mo->setProperty ("clip", roundTo (m.clip, 0.1f));
+        mo->setProperty ("glue", roundTo (m.glue, 0.1f));
+        mo->setProperty ("running", moduleKeys (v, true, m.running));
+        o->setProperty ("meters", juce::var (mo));
+    }
+    return juce::var (o);
 }
 
 void MixWebEditor::addStereo (juce::DynamicObject& frame)

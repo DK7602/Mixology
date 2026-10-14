@@ -1,7 +1,8 @@
-// Tone, Stereo and Master pages. Their meters and scopes are live (what Mixology hears on its channel);
-// the processing controls are previews until Milestone 5.
+// Tone, Stereo and Master pages. Tone and Stereo work on the target you pick (Full Mix or a track's Mixology
+// Link, Milestone 5); their meters and scopes are live. Master's finishing controls are still a preview.
 
 import { el, box, icon, fmt, clamp, Knob, Meter, select, graph, freqToX, moduleList, previewTag, store, cssVar } from "./ui.js";
+import { knobFor, biquad, magnitudeDb, MODULE_NAMES } from "./proc.js";
 
 function knobRow(host, defs, prefix, onChange) {
   host.innerHTML = "";
@@ -9,7 +10,7 @@ function knobRow(host, defs, prefix, onChange) {
   const cw = Math.floor((host.clientWidth || parseFloat(host.style.width)) / n);
   return defs.map((k, i) => {
     const card = el("div", "card", host, box(i * cw + 4, 0, cw - 8, parseFloat(host.style.height)));
-    return new Knob(card, { ...k, id: `${prefix}_${k.id}`, x: (cw - 8 - Math.min(cw, 170)) / 2, y: 24, w: Math.min(cw, 170), size: Math.min(112, cw - 46), def: k.value, labelGap: 14, valueGap: 12, onChange });
+    return new Knob(card, { ...k, id: prefix ? `${prefix}_${k.id}` : undefined, x: (cw - 8 - Math.min(cw, 170)) / 2, y: 24, w: Math.min(cw, 170), size: Math.min(112, cw - 46), def: k.def ?? k.value, labelGap: 14, valueGap: 12, onChange: k.onChange || onChange });
   });
 }
 
@@ -17,33 +18,53 @@ function knobRow(host, defs, prefix, onChange) {
 // TONE
 
 const TONE_MODULES = [
-  { id: "balance", label: "TONE BALANCE", icon: "gauge" },
-  { id: "loud", label: "LOUDNESS", icon: "speaker" },
-  { id: "clip", label: "CLIP CONTROL", icon: "clip" },
-  { id: "harm", label: "HARMONIC", icon: "harmonic" },
-  { id: "analog", label: "ANALOG TOUCH", icon: "analog" },
-  { id: "final", label: "FINAL TOUCH", icon: "finalTouch" },
+  { id: "balance", label: "TONE BALANCE", icon: "gauge", lamp: true },
+  { id: "loud", label: "LOUDNESS", icon: "speaker", lamp: true },
+  { id: "clip", label: "CLIP CONTROL", icon: "clip", lamp: true },
+  { id: "harm", label: "HARMONIC", icon: "harmonic", lamp: true },
+  { id: "analog", label: "ANALOG TOUCH", icon: "analog", lamp: true },
+  { id: "final", label: "FINAL TOUCH", icon: "finalTouch", lamp: true },
 ];
-const dbKnob = (id, label, value) => ({ id, label, min: -6, max: 6, value, bipolar: true, step: 0.1, format: (v) => fmt.db(v) });
-const pctKnob = (id, label, value) => ({ id, label, min: 0, max: 100, value, format: (v) => fmt.pct(v) });
+const dbK = (id, label) => ({ id, label, bipolar: true, format: (v) => fmt.db(v) });
+const pctK = (id, label) => ({ id, label, format: (v) => fmt.pct(v) });
 const TONE_KNOBS = {
-  balance: [dbKnob("warmth", "WARMTH", -0.8), dbKnob("presence", "PRESENCE", 1.2), dbKnob("air", "AIR", 1.5), dbKnob("glue", "GLUE", 0.6), dbKnob("punch", "PUNCH", 1.0)],
-  loud: [{ id: "trim", label: "TRIM", min: -12, max: 12, value: 0, bipolar: true, step: 0.1, format: (v) => fmt.db(v) }, pctKnob("density", "DENSITY", 20), dbKnob("lowend", "LOW END", 0), dbKnob("top", "TOP END", 0)],
-  clip: [{ id: "thr", label: "THRESHOLD", min: -12, max: 0, value: -2, step: 0.1, format: (v) => fmt.db(v) }, pctKnob("soft", "SOFTNESS", 50), { id: "os", label: "OVERSAMPLE", min: 0, max: 3, value: 2, step: 1, format: (v) => ["1x", "2x", "4x", "8x"][Math.round(v)] }, pctKnob("mix", "MIX", 100)],
-  harm: [pctKnob("drive", "DRIVE", 25), { id: "eo", label: "EVEN / ODD", min: 0, max: 100, value: 60, format: (v) => Math.round(v) + " / " + Math.round(100 - v) }, dbKnob("tone", "TONE", 0), pctKnob("mix", "MIX", 50)],
-  analog: [pctKnob("tape", "TAPE", 30), pctKnob("console", "CONSOLE", 20), pctKnob("hiss", "NOISE", 0), pctKnob("mix", "MIX", 100)],
-  final: [{ id: "width", label: "WIDTH", min: 0, max: 200, value: 100, format: (v) => fmt.pct(v) }, dbKnob("air", "AIR", 0), dbKnob("glue", "GLUE", 0), { id: "out", label: "OUTPUT", min: -12, max: 12, value: 0, bipolar: true, step: 0.1, format: (v) => fmt.db(v) }],
+  balance: [dbK("tb_warmth", "WARMTH"), dbK("tb_presence", "PRESENCE"), dbK("tb_air", "AIR"), pctK("tb_glue", "GLUE"),
+    { id: "tb_punch", label: "PUNCH", bipolar: true, format: (v) => fmt.signed(v, 0) + "%" }],
+  loud: [{ id: "ld_trim", label: "TRIM", bipolar: true, format: (v) => fmt.db(v) }, pctK("ld_density", "DENSITY"), dbK("ld_low", "LOW END"), dbK("ld_top", "TOP END")],
+  clip: [{ id: "clip_thr", label: "THRESHOLD", format: (v) => fmt.db(v) }, pctK("clip_soft", "SOFTNESS"), { id: "clip_os", label: "OVERSAMPLE", format: (v) => ["1x", "2x", "4x", "8x"][Math.round(v)] }, pctK("clip_mix", "MIX")],
+  harm: [pctK("harm_drive", "DRIVE"), { id: "harm_evenodd", label: "EVEN / ODD", format: (v) => Math.round(v) + " / " + Math.round(100 - v) }, dbK("harm_tone", "TONE"), pctK("harm_mix", "MIX")],
+  analog: [pctK("an_tape", "TAPE"), pctK("an_console", "CONSOLE"), pctK("an_noise", "NOISE"), pctK("an_mix", "MIX")],
+  final: [{ id: "fin_width", label: "WIDTH", format: (v) => fmt.pct(v) }, dbK("fin_air", "AIR"), pctK("fin_glue", "GLUE"), { id: "fin_out", label: "OUTPUT", bipolar: true, format: (v) => fmt.db(v) }],
+};
+const TONE_HELP = {
+  balance: "Warmth (low mids), Presence (3 kHz), Air (11 kHz) as gentle shelves and bells; Glue holds the sound together; Punch lifts (or softens) the front of each hit.",
+  loud: "Trim the level, Density blends in a hard-working compressor (fuller, louder feel), Low End and Top End shelves.",
+  clip: "Rounds off peaks over the Threshold (Softness = how round). Oversampling keeps it clean. Mix blends with the original.",
+  harm: "Adds harmonics: Even = warm, Odd = edgy. Tone tilts them brighter or darker. Mix blends with the original.",
+  analog: "Tape: soft saturation, a little low bump and a softer top. Console: subtle edge and channel bleed. Noise: tape hiss while it plays.",
+  final: "Width (100 % = as it is), Air on top, a little Glue, and the Output level.",
 };
 
+// The tonal change each module makes (for the graph), the engine's filters.
+function toneChange(proc, mod, f) {
+  const sr = proc.sr, g = (id) => proc.get(id);
+  const sum = (list) => list.reduce((a, [type, hz, db, q]) => a + (Math.abs(db) > 1e-4 ? magnitudeDb(biquad(type, hz, db, q, sr), f, sr) : 0), 0);
+  if (mod === "balance") return sum([["lowshelf", 220, g("tb_warmth"), 0.6], ["bell", 3200, g("tb_presence"), 0.8], ["highshelf", 11000, g("tb_air"), 0.6]]);
+  if (mod === "loud") return g("ld_trim") + sum([["lowshelf", 90, g("ld_low"), 0.7], ["highshelf", 9000, g("ld_top"), 0.7]]);
+  if (mod === "final") return g("fin_out") + sum([["highshelf", 14000, g("fin_air"), 0.6]]);
+  if (mod === "analog") { const t = g("an_tape") / 100 * g("an_mix") / 100; return sum([["bell", 75, 1.5 * t, 1.0], ["highshelf", 14000, -2.5 * t, 0.7]]); }
+  return null;
+}
+
 export function buildTone(root, app) {
+  const proc = app.proc;
   let mod = store.get("toneModule", "balance");
-  moduleList(root, TONE_MODULES, 0, 0, 252, 104, 18, mod, (id) => { mod = id; store.set("toneModule", id); renderKnobs(); });
+  const list = moduleList(root, TONE_MODULES, 0, 0, 252, 104, 18, mod, (id) => { mod = id; store.set("toneModule", id); renderKnobs(); power.draw(); });
 
   const top = el("div", "panel", root, box(266, 0, 870, 556));
-  previewTag(top, 22, 18);
-  const legend = el("div", "", top, { position: "absolute", left: "150px", top: "22px", display: "flex", gap: "22px", fontSize: "17px" });
-  const targetSel = select(top, 650, 14, 200, ["Full Mix"], store.get("toneTarget", "Full Mix"), (v) => store.set("toneTarget", v));
-  app.on("bridge", () => targetSel.setOptions(["Full Mix", ...((app.bridge && app.bridge.slots) || []).filter((s) => s.present).map((s) => s.title)]));
+  const power = proc.powerButton(top, 22, 16, () => mod);
+  const legend = el("div", "", top, { position: "absolute", left: "140px", top: "22px", display: "flex", gap: "22px", fontSize: "17px", whiteSpace: "nowrap" });
+  proc.targetSelect(top, 620, 14, 230);
   const g = graph(top, 18, 70, 834, 470);
   let mix = null;
 
@@ -53,8 +74,8 @@ export function buildTone(root, app) {
     const lf = Math.log2(f / 1000);
     const bass = p.bass * Math.exp(-Math.pow(Math.log2(f / 55), 2) / 2.2);
     const scoop = -p.scoop * Math.exp(-Math.pow(Math.log2(f / 350), 2) / 1.2);
-    const top = p.air * clamp((lf - 2) / 3, 0, 1);
-    return 2 + bass + scoop + top - 0.6 * lf;
+    const topEnd = p.air * clamp((lf - 2) / 3, 0, 1);
+    return 2 + bass + scoop + topEnd - 0.6 * lf;
   }
 
   g.draw = (ctx, w, h) => {
@@ -72,7 +93,6 @@ export function buildTone(root, app) {
       ctx.fillStyle = dim; ctx.textAlign = "right"; ctx.fillText(db > 0 ? "+" + db : String(db), L - 8, Y(db) + 5);
     }
     const dark = document.documentElement.dataset.theme !== "light";
-    // Your mix (smoothed), filled
     if (mix) {
       const n = mix.length;
       const pts = mix.map((v, i) => [L + (i / (n - 1)) * W, Y(clamp(v, -14, 14))]);
@@ -83,26 +103,54 @@ export function buildTone(root, app) {
       ctx.strokeStyle = dark ? "#ffffff" : "#1a2233"; ctx.lineWidth = 2;
       ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke();
     }
-    // Target
-    ctx.save();
-    ctx.strokeStyle = "#ff2a2a"; ctx.lineWidth = 3; ctx.shadowColor = "#ff2a2a"; ctx.shadowBlur = 12;
-    ctx.beginPath();
-    for (let i = 0; i <= 200; i++) { const f = 20 * Math.pow(1000, i / 200); const x = L + (i / 200) * W, y = Y(target(f)); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
-    ctx.stroke(); ctx.restore();
+    if (proc.key === "mix") {   // a genre's target only makes sense for the whole mix
+      ctx.save();
+      ctx.strokeStyle = "#ff2a2a"; ctx.lineWidth = 3; ctx.shadowColor = "#ff2a2a"; ctx.shadowBlur = 12;
+      ctx.beginPath();
+      for (let i = 0; i <= 200; i++) { const f = 20 * Math.pow(1000, i / 200); const x = L + (i / 200) * W, y = Y(target(f)); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+      ctx.stroke(); ctx.restore();
+    }
+    // What this module does to the tone (gold, around the 0 dB line).
+    if (toneChange(proc, mod, 1000) !== null) {
+      const on = proc.isOn(mod);
+      ctx.save();
+      ctx.strokeStyle = on ? "#ffd21f" : (dark ? "rgba(220,225,235,0.45)" : "rgba(40,50,70,0.45)"); ctx.lineWidth = 3;
+      if (on) { ctx.shadowColor = "#ffd21f"; ctx.shadowBlur = 10; }
+      ctx.setLineDash(on ? [] : [8, 6]);
+      ctx.beginPath();
+      for (let i = 0; i <= 200; i++) { const f = 20 * Math.pow(1000, i / 200); const x = L + (i / 200) * W, y = Y(clamp(toneChange(proc, mod, f), -12, 12)); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+      ctx.stroke(); ctx.restore();
+    }
   };
   function renderLegend() {
-    legend.innerHTML = `<span><span style="display:inline-block;width:22px;height:3px;background:#ff2a2a;vertical-align:5px;margin-right:8px;box-shadow:0 0 6px #ff2a2a"></span>Target: ${app.style.fullName}</span>
-      <span><span style="display:inline-block;width:22px;height:3px;background:var(--text);vertical-align:5px;margin-right:8px"></span>Your mix</span>`;
+    const sw = (c) => `<span style="display:inline-block;width:22px;height:3px;background:${c};vertical-align:5px;margin-right:8px"></span>`;
+    legend.innerHTML = (proc.key === "mix" ? `<span>${sw("#ff2a2a")}Target: ${app.style.fullName}</span><span>${sw("var(--text)")}Your mix</span>`
+      : `<span>${sw("var(--text)")}${proc.name}</span>`)
+      + (toneChange(proc, mod, 1000) !== null ? `<span>${sw("#ffd21f")}${MODULE_NAMES[mod]}</span>` : "");
   }
   app.on("preset", () => { renderLegend(); g.redraw(); });
   app.on("theme", () => g.redraw());
-  renderLegend();
 
   const bottom = el("div", "", root, box(266, 570, 870, 272));
-  function renderKnobs() { knobRow(bottom, TONE_KNOBS[mod], "tone_" + mod); }
-  renderKnobs();
+  let knobs = [];
+  function renderKnobs() {
+    knobs = knobRow(bottom, TONE_KNOBS[mod].map((k) => knobFor(proc, k.id, { label: k.label, format: k.format, bipolar: k.bipolar, onChange: (v) => proc.set(k.id, v), pid: k.id })), "");
+    list.set(mod);
+    renderLegend();
+    sync();
+  }
+  function sync() {
+    knobs.forEach((k) => { const v = proc.get(k.o.pid); if (!k.dragging && Math.abs(k.value - v) > 1e-3) k.set(v); });
+    list.lamps((m) => proc.switchedOn(m), (m) => proc.running(m));
+    power.el.title = TONE_HELP[mod];
+    g.redraw();
+  }
+  proc.on((why) => {
+    if (why === "values") sync();
+    if (why === "target") { mix = null; renderLegend(); sync(); }
+  });
 
-  // Right: loudness (live)
+  // Right: loudness of the full mix (live)
   const right = el("div", "panel", root, box(1150, 0, 262, 842));
   const lt = el("div", "", right, { position: "absolute", left: "0", right: "0", top: "18px", textAlign: "center", fontSize: "26px", fontWeight: "600" });
   lt.textContent = "LOUDNESS";
@@ -116,18 +164,22 @@ export function buildTone(root, app) {
   ml.innerHTML = "<span>L</span><span>S</span><span>R</span>";
   const stat = el("div", "", right, { position: "absolute", left: "22px", right: "22px", top: "712px", height: "66px", borderRadius: "12px", display: "grid", placeItems: "center", fontSize: "24px", fontWeight: "600", textAlign: "center", lineHeight: "1.1" });
   const statNote = el("div", "", right, { position: "absolute", left: "16px", right: "16px", top: "786px", textAlign: "center", fontSize: "15px", color: "var(--text-dim)" });
-  statNote.textContent = "Info only: Masterology sets the final loudness";
+  statNote.textContent = "Full mix, info only: Masterology sets the final loudness";
+
+  renderKnobs();
 
   return {
     onFrame(f) {
-      if (f.spectrum) {
-        const s = f.spectrum, k = 6;
+      const s = proc.key === "mix" ? f.spectrum : proc.spectrum;
+      if (s) {
+        const k = 6;
         const sm = s.map((_, i) => { let a = 0, c = 0; for (let j = Math.max(0, i - k); j <= Math.min(s.length - 1, i + k); j++) { a += s[j]; c++; } return a / c; });
         const mean = sm.reduce((a, b) => a + b, 0) / sm.length;
         const rel = sm.map((v) => v - mean);
         mix = mix && mix.length === rel.length ? mix.map((v, i) => 0.85 * v + 0.15 * rel[i]) : rel;
         g.redraw();
       }
+      list.lamps((m) => proc.switchedOn(m), (m) => proc.running(m));
       const st = f.shortTerm ?? -100, tp = f.truePeak ?? -100;
       big.textContent = fmt.lufs(st);
       mL.set(f.peakL ?? -100); mR.set(f.peakR ?? -100); mS.set(st);
@@ -146,22 +198,30 @@ export function buildTone(root, app) {
 // STEREO
 
 const STEREO_MODULES = [
-  { id: "width", label: "STEREO WIDTH", icon: "rings" },
+  { id: "width", label: "STEREO WIDTH", icon: "rings", lamp: true },
   { id: "pan", label: "PAN ASSIST", icon: "pan" },
   { id: "mono", label: "MONO CHECK", icon: "mono" },
-  { id: "freq", label: "FREQUENCY WIDTH", icon: "freq" },
+  { id: "freq", label: "FREQUENCY WIDTH", icon: "freq", lamp: true },
   { id: "corr", label: "CORRELATION", icon: "corr" },
 ];
 
 export function buildStereo(root, app) {
+  const proc = app.proc;
   let mod = store.get("stereoModule", "width");
-  moduleList(root, STEREO_MODULES, 0, 0, 252, 104, 18, mod, (id) => {
+  if (mod === "mono") mod = "width";
+  const list = moduleList(root, STEREO_MODULES, 0, 0, 252, 104, 18, mod, (id) => {
+    if (id === "mono") { proc.setMono(!proc.mono); list.set(mod); return; }
+    if (id === "pan") { app.toast("Pan Assist: use Stereo Architect on the Overview. It plans pans for every track (pairs spread, low end centred)."); list.set(mod); return; }
     mod = id; store.set("stereoModule", id);
-    if (id === "mono" || id === "pan" || id === "freq") app.toast({ mono: "Mono Check (listen in mono) goes live with the processing in Milestone 5. The scope and correlation below are live now.", pan: "Pan Assist: use Stereo Architect on the Overview. It plans pans for every track (pairs spread, low end centred).", freq: "Frequency Width view arrives with the processing pages (Milestone 5)." }[id]);
   });
 
   const centre = el("div", "panel", root, box(266, 0, 790, 842));
   const scope = graph(centre, 18, 18, 754, 640);
+  const scopeNote = el("div", "", centre, { position: "absolute", left: "30px", top: "26px", fontSize: "15px", color: "var(--text-dim)" });
+  scopeNote.textContent = "Scope: the full mix";
+  const monoBadge = el("div", "mono-badge", centre, { left: "50%", top: "24px", transform: "translateX(-50%)", display: "none" });
+  monoBadge.textContent = "LISTENING IN MONO";
+  monoBadge.title = "Mono Check is on: the full mix plays in mono. It switches off when you leave this page.";
   const corrBar = el("div", "", centre, { position: "absolute", left: "30px", right: "30px", top: "690px", height: "24px", borderRadius: "6px", background: "linear-gradient(90deg,#ff1d1d,#ff7a12,#ffe11f,#3dff5a,#19d3ff,#1f6bff,#ff2bf0)", boxShadow: "0 0 14px rgba(120,180,255,0.35)" });
   const corrMark = el("div", "", corrBar, { position: "absolute", top: "-8px", width: "6px", height: "40px", borderRadius: "3px", background: "#fff", boxShadow: "0 0 10px #fff, 0 0 0 1.5px #000", left: "50%" });
   const corrLab = el("div", "", centre, { position: "absolute", left: "30px", right: "30px", top: "726px", display: "flex", justifyContent: "space-between", fontSize: "26px", fontWeight: "500" });
@@ -169,16 +229,26 @@ export function buildStereo(root, app) {
   const corrText = el("div", "", centre, { position: "absolute", left: "0", right: "0", top: "772px", textAlign: "center", fontSize: "19px", color: "var(--text-dim)" });
 
   const right = el("div", "panel", root, box(1070, 0, 342, 842));
-  previewTag(right, 22, 22);
-  const src = select(right, 22, 60, 298, ["Full Mix"], store.get("stTarget", "Full Mix"), (v) => store.set("stTarget", v));
-  app.on("bridge", () => src.setOptions(["Full Mix", ...((app.bridge && app.bridge.slots) || []).filter((s) => s.present).map((s) => s.title)]));
-  const widthKnob = (id, label, value, x, y) => new Knob(right, { id: "st_" + id, label, x, y, w: 160, size: 112, min: 0, max: 200, def: value, format: (v) => fmt.pct(v), labelGap: 12, valueGap: 10 });
-  widthKnob("width", "WIDTH", 125, 6, 140);
-  widthKnob("low", "LOW WIDTH", 60, 176, 140);
-  widthKnob("mid", "MID WIDTH", 100, 6, 360);
-  widthKnob("high", "HIGH WIDTH", 145, 176, 360);
-  const note = el("div", "", right, { position: "absolute", left: "22px", right: "22px", top: "600px", fontSize: "17px", color: "var(--text-dim)", lineHeight: "1.4" });
-  note.innerHTML = "Low Width under 100% keeps kick and 808 solid in mono (clubs, phones). High Width above 100% opens up hats, pads and reverbs.";
+  proc.powerButton(right, 22, 16, () => "width");
+  proc.targetSelect(right, 22, 60, 298);
+  const KNOBS = [["st_width", "WIDTH", 6, 128], ["st_low", "LOW WIDTH", 176, 128], ["st_mid", "MID WIDTH", 6, 336], ["st_high", "HIGH WIDTH", 176, 336]];
+  const knobs = KNOBS.map(([id, label, x, y]) => new Knob(right, knobFor(proc, id, { label, x, y, w: 160, size: 104, format: (v) => fmt.pct(v), labelGap: 10, valueGap: 8, onChange: (v) => proc.set(id, v), pid: id })));
+  const XKNOBS = [["st_lowx", "LOW BELOW", 6, 548], ["st_highx", "HIGH ABOVE", 176, 548]];
+  knobs.push(...XKNOBS.map(([id, label, x, y]) => new Knob(right, knobFor(proc, id, { label, x, y, w: 160, size: 76, format: (v) => fmt.hz(v), labelGap: 8, valueGap: 6, onChange: (v) => proc.set(id, v), pid: id }))));
+  const note = el("div", "proc-note", right, { left: "22px", right: "22px", top: "730px", fontSize: "15px" });
+  note.textContent = "Low Width under 100 % keeps kick and 808 solid in mono (clubs, phones). High Width over 100 % opens up hats, pads and reverbs.";
+
+  function sync() {
+    knobs.forEach((k) => { const v = proc.get(k.o.pid); if (!k.dragging && Math.abs(k.value - v) > 1e-3) k.set(v); });
+    list.lamps((m) => (m === "width" || m === "freq") && proc.switchedOn("width"), (m) => (m === "width" || m === "freq") && proc.running("width"));
+    monoBadge.style.display = proc.mono ? "block" : "none";
+    list.buttons.find((b) => b.dataset.id === "mono").classList.toggle("active", proc.mono);
+    const mono = proc.key !== "mix" && proc.channels === 1;
+    note.textContent = mono ? `'${proc.name}' is a mono track: width does nothing here (pan it instead).`
+      : "Low Width under 100 % keeps kick and 808 solid in mono (clubs, phones). High Width over 100 % opens up hats, pads and reverbs.";
+  }
+  proc.on((why) => { if (why === "values" || why === "target" || why === "mono") sync(); });
+  sync();
 
   let dots = null, corr = null;
   const trail = [];
@@ -218,12 +288,15 @@ export function buildStereo(root, app) {
         dots = f.scope;
         scope.redraw();
       }
-      corr = f.corr;
-      if (corr === null || corr === undefined) { corrMark.style.left = "calc(50% - 3px)"; corrMark.style.opacity = "0.35"; corrText.textContent = "No audio"; }
+      list.lamps((m) => (m === "width" || m === "freq") && proc.switchedOn("width"), (m) => (m === "width" || m === "freq") && proc.running("width"));
+      const track = proc.key !== "mix";
+      corr = track ? proc.corr : f.corr;
+      const who = track ? `'${proc.name}'` : "Full mix";
+      if (corr === null || corr === undefined) { corrMark.style.left = "calc(50% - 3px)"; corrMark.style.opacity = "0.35"; corrText.textContent = track ? `${who}: no audio` : "No audio"; }
       else {
         corrMark.style.opacity = "1";
         corrMark.style.left = `calc(${((corr + 1) / 2) * 100}% - 3px)`;
-        corrText.textContent = `Correlation ${fmt.signed(corr, 2)}: ` + (corr < 0 ? "out of phase: parts will cancel in mono" : corr < 0.3 ? "very wide: check the mix in mono" : corr > 0.9 ? "almost mono" : "healthy stereo");
+        corrText.textContent = `${who} correlation ${fmt.signed(corr, 2)}: ` + (corr < 0 ? "out of phase: parts will cancel in mono" : corr < 0.3 ? "very wide: check the mix in mono" : corr > 0.9 ? "almost mono" : "healthy stereo");
       }
     },
   };

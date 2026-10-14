@@ -9,6 +9,7 @@ import { buildTone, buildStereo, buildMaster } from "./pages_output.js";
 import { openSettings, openHelp, openPresets, hookBridge } from "./sheets.js";
 import { hookTools } from "./tools.js";
 import { styleByKey } from "./mixstyles.js";
+import { createProc } from "./proc.js";
 
 // ---------------------------------------------------------------------------------------------
 // Fit the 1440 x 1080 design to the window.
@@ -37,6 +38,9 @@ export const native = {
   setSetting: fn("setSetting"),
   setUiState: fn("setUiState"),
   setPage: fn("setPage"),
+  procTarget: fn("procTarget"),
+  procSet: fn("procSet"),
+  setMonoListen: fn("setMonoListen"),
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -152,6 +156,7 @@ async function start() {
   store.setSaver((json) => native.setUiState(json));
   hookBridge(app);
   hookTools(app);
+  app.proc = createProc(app);   // the processing target and controls the EQ / Dynamics / Tone / Stereo pages share
 
   const build = {
     overview: buildOverview, tracks: buildTracks, eq: buildEq, dynamics: buildDynamics, space: buildSpace,
@@ -175,6 +180,7 @@ async function start() {
       app.bridge = frame.bridge;
       app.emit("bridge", frame.bridge);
     }
+    app.proc.onFrame(frame);
     for (const [id, p] of Object.entries(pages)) if (p.onFrame && (id === current || p.always)) p.onFrame(frame);
     app.emit("frame", frame);
   });

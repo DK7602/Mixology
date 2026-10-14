@@ -1,72 +1,57 @@
-// EQ, Dynamics and Space pages. Laid out and working as controls; their audio processing goes live in
-// Milestone 5 (inside Mixology Link on each track), so each page shows a "Preview" tag until then.
+// EQ, Dynamics and Space pages. EQ and Dynamics work on the target you pick (Full Mix or a track's Mixology
+// Link, Milestone 5); Space goes live with the FX channels (next round), so it still shows "Preview".
 
 import { el, box, icon, fmt, clamp, Knob, Meter, select, graph, freqToX, xToFreq, moduleList, previewTag, store, cssVar } from "./ui.js";
-
-const TRACK_CHOICES = () => ["Full Mix"];
-
-function trackOptions(app) {
-  const names = ((app.bridge && app.bridge.slots) || []).filter((s) => s.present).map((s) => s.title);
-  return ["Full Mix", ...names];
-}
-
-// =============================================================================================
-// EQ
+import { knobFor, eqBand, magnitudeDb, EQ_SHAPES, MODULE_NAMES } from "./proc.js";
 
 const SR = 48000;
 function biquadDb(type, f0, gainDb, q, f) {
-  // RBJ cookbook magnitude response, evaluated at f.
+  // RBJ cookbook magnitude response, evaluated at f (Space page's mini EQ).
   const A = Math.pow(10, gainDb / 40), w0 = (2 * Math.PI * f0) / SR, cw = Math.cos(w0), sw = Math.sin(w0), alpha = sw / (2 * q);
   let b0, b1, b2, a0, a1, a2;
-  if (type === "bell") { b0 = 1 + alpha * A; b1 = -2 * cw; b2 = 1 - alpha * A; a0 = 1 + alpha / A; a1 = -2 * cw; a2 = 1 - alpha / A; }
-  else if (type === "lowshelf") { const s = 2 * Math.sqrt(A) * alpha; b0 = A * ((A + 1) - (A - 1) * cw + s); b1 = 2 * A * ((A - 1) - (A + 1) * cw); b2 = A * ((A + 1) - (A - 1) * cw - s); a0 = (A + 1) + (A - 1) * cw + s; a1 = -2 * ((A - 1) + (A + 1) * cw); a2 = (A + 1) + (A - 1) * cw - s; }
-  else if (type === "highshelf") { const s = 2 * Math.sqrt(A) * alpha; b0 = A * ((A + 1) + (A - 1) * cw + s); b1 = -2 * A * ((A - 1) + (A + 1) * cw); b2 = A * ((A + 1) + (A - 1) * cw - s); a0 = (A + 1) - (A - 1) * cw + s; a1 = 2 * ((A - 1) - (A + 1) * cw); a2 = (A + 1) - (A - 1) * cw - s; }
-  else if (type === "lowcut") { b0 = (1 + cw) / 2; b1 = -(1 + cw); b2 = (1 + cw) / 2; a0 = 1 + alpha; a1 = -2 * cw; a2 = 1 - alpha; }
+  if (type === "lowcut") { b0 = (1 + cw) / 2; b1 = -(1 + cw); b2 = (1 + cw) / 2; a0 = 1 + alpha; a1 = -2 * cw; a2 = 1 - alpha; }
   else { b0 = (1 - cw) / 2; b1 = 1 - cw; b2 = (1 - cw) / 2; a0 = 1 + alpha; a1 = -2 * cw; a2 = 1 - alpha; }   // highcut
   const w = (2 * Math.PI * f) / SR, c1 = Math.cos(w), c2 = Math.cos(2 * w), s1 = Math.sin(w), s2 = Math.sin(2 * w);
   const nr = b0 + b1 * c1 + b2 * c2, ni = -(b1 * s1 + b2 * s2), dr = a0 + a1 * c1 + a2 * c2, di = -(a1 * s1 + a2 * s2);
-  const mag = Math.sqrt((nr * nr + ni * ni) / (dr * dr + di * di));
-  let db = 20 * Math.log10(Math.max(mag, 1e-9));
-  if (type === "lowcut" || type === "highcut") db *= 2;   // 24 dB / octave (two stages)
-  return db;
+  return 2 * 10 * Math.log10(Math.max((nr * nr + ni * ni) / (dr * dr + di * di), 1e-18));
 }
 
+// =============================================================================================
+// EQ: six bands on the target (graph: drag a point = frequency and gain, wheel = width; cards below).
+
 const EQ_BANDS = [
-  { colour: "#ff2a2a", f: 80, g: -2.5, q: 0.7, type: "lowshelf", shapes: ["lowcut", "lowshelf", "bell"] },
-  { colour: "#ffd21f", f: 250, g: -4.0, q: 1.0, type: "bell", shapes: ["lowshelf", "bell", "highshelf"] },
-  { colour: "#3dff5a", f: 800, g: 0.6, q: 0.7, type: "bell", shapes: ["lowshelf", "bell", "highshelf"] },
-  { colour: "#1f9bff", f: 2500, g: 3.5, q: 1.0, type: "bell", shapes: ["lowshelf", "bell", "highshelf"] },
-  { colour: "#2f5bff", f: 8000, g: -1.8, q: 0.9, type: "bell", shapes: ["lowshelf", "bell", "highshelf"] },
-  { colour: "#ff36e1", f: 16000, g: 2.6, q: 0.8, type: "highshelf", shapes: ["bell", "highshelf", "highcut"] },
+  { colour: "#ff2a2a", shapes: ["lowcut", "lowshelf", "bell"] },
+  { colour: "#ffd21f", shapes: ["lowshelf", "bell", "highshelf"] },
+  { colour: "#3dff5a", shapes: ["lowshelf", "bell", "highshelf"] },
+  { colour: "#1f9bff", shapes: ["lowshelf", "bell", "highshelf"] },
+  { colour: "#2f5bff", shapes: ["lowshelf", "bell", "highshelf"] },
+  { colour: "#ff36e1", shapes: ["bell", "highshelf", "highcut"] },
 ];
 const SHAPE_NAMES = { bell: "Bell", lowshelf: "Low shelf", highshelf: "High shelf", lowcut: "Low cut", highcut: "High cut" };
 
 export function buildEq(root, app) {
+  const proc = app.proc;
   const panel = el("div", "panel", root, box(0, 0, 1412, 842));
   const title = el("div", "panel-title", panel);
   title.textContent = "EQ";
-  previewTag(panel, 80, 26);
+  proc.powerButton(panel, 76, 20, () => "eq");
+  const status = el("div", "proc-note", panel, { left: "190px", top: "26px", width: "560px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });
 
-  const bands = EQ_BANDS.map((b, i) => ({
-    ...b,
-    f: store.value(`eqF${i}`, b.f), g: store.value(`eqG${i}`, b.g), q: store.value(`eqQ${i}`, b.q), type: store.value(`eqT${i}`, b.type),
-  }));
-  const save = (i) => { const b = bands[i]; store.setValue(`eqF${i}`, b.f); store.setValue(`eqG${i}`, b.g); store.setValue(`eqQ${i}`, b.q); store.setValue(`eqT${i}`, b.type); };
+  const id = (i, field) => `eq${i + 1}_${field}`;
+  const band = (i) => ({ type: Math.round(proc.get(id(i, "type"))), shape: EQ_SHAPES[Math.round(proc.get(id(i, "type")))], f: proc.get(id(i, "freq")), g: proc.get(id(i, "gain")), q: proc.get(id(i, "q")) });
+  const isCut = (shape) => shape === "lowcut" || shape === "highcut";
 
-  // Toolbar: character, target track, settings
+  // Toolbar: character, target, analyzer
   const modes = ["Precision", "Smooth", "Natural"];
-  let mode = store.get("eqMode", "Precision");
-  const chips = el("div", "", panel, { position: "absolute", right: "290px", top: "16px", display: "flex", gap: "10px" });
-  const chipEls = modes.map((m) => {
+  const chips = el("div", "", panel, { position: "absolute", right: "330px", top: "16px", display: "flex", gap: "10px" });
+  const chipEls = modes.map((m, k) => {
     const c = el("div", "chip", chips);
     c.textContent = m;
-    c.title = { Precision: "Clean digital curves (minimum phase)", Smooth: "Wider, gentler curves", Natural: "Analog-style curves that interact like a console EQ" }[m];
-    c.addEventListener("click", () => { mode = m; store.set("eqMode", m); chipEls.forEach((x, j) => x.classList.toggle("on", modes[j] === m)); });
+    c.title = { Precision: "Exact curves, steep 24 dB / octave cuts", Smooth: "Wider, gentler curves and 12 dB / octave cuts", Natural: "Console style: small moves broad, big moves narrower" }[m];
+    c.addEventListener("click", () => proc.set("eq_mode", k));
     return c;
   });
-  chipEls.forEach((x, j) => x.classList.toggle("on", modes[j] === mode));
-  const target = select(panel, 1142, 16, 180, TRACK_CHOICES(), store.get("eqTarget", "Full Mix"), (v) => store.set("eqTarget", v));
-  app.on("bridge", () => target.setOptions(trackOptions(app)));
+  proc.targetSelect(panel, 1102, 16, 220);
   const gearBtn = el("button", "small-btn", panel, { position: "absolute", left: "1334px", top: "16px", width: "56px", height: "44px", padding: "8px", color: "var(--gold)" });
   gearBtn.innerHTML = icon("gear");
   gearBtn.title = "Show the analyzer behind the curve";
@@ -82,9 +67,16 @@ export function buildEq(root, app) {
   const gy = (db) => 14 + (1 - (db + RANGE) / (2 * RANGE)) * plotH;
   let spectrum = null;
 
-  const response = (f) => bands.reduce((sum, b) => sum + biquadDb(b.type, b.f, b.g, b.q, f), 0);
+  const designs = () => {
+    const mode = Math.round(proc.get("eq_mode"));
+    return EQ_BANDS.map((_, i) => { const b = band(i); return eqBand(b.type, b.f, b.g, b.q, mode, proc.sr); });
+  };
+  const responseOf = (ds) => (f) => ds.reduce((sum, d) => sum + (d ? d.stages * magnitudeDb(d.k, f, proc.sr) : 0), 0);
+  const nodeY = (b) => gy(isCut(b.shape) ? 0 : b.g);
+
   g.draw = (ctx, w, h) => {
     const grid = cssVar("--grid"), strong = cssVar("--grid-strong"), dim = cssVar("--text-dim");
+    const on = proc.isOn("eq");
     ctx.font = "17px 'Barlow SC', sans-serif";
     for (const f of [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000]) {
       const x = fx(f);
@@ -108,18 +100,20 @@ export function buildEq(root, app) {
       ctx.lineTo(PAD_L + plotW, 14 + plotH);
       ctx.fill();
     }
-    // Curve coloured by the nearest band
+    const bands = EQ_BANDS.map((_, i) => band(i));
+    const response = responseOf(designs());
     const grad = ctx.createLinearGradient(PAD_L, 0, PAD_L + plotW, 0);
-    const sorted = [...bands].sort((a, b) => a.f - b.f);
-    sorted.forEach((b) => grad.addColorStop(clamp((fx(b.f) - PAD_L) / plotW, 0, 1), b.colour));
+    [...bands.map((b, i) => ({ f: b.f, colour: EQ_BANDS[i].colour }))].sort((a, b) => a.f - b.f)
+      .forEach((b) => grad.addColorStop(clamp((fx(b.f) - PAD_L) / plotW, 0, 1), b.colour));
     const pts = [];
     for (let i = 0; i <= 360; i++) {
       const x = PAD_L + (i / 360) * plotW;
       pts.push([x, gy(clamp(response(xToFreq(x - PAD_L, plotW)), -RANGE - 2, RANGE + 2))]);
     }
+    const ink = on ? grad : (document.documentElement.dataset.theme === "light" ? "rgba(40,50,70,0.45)" : "rgba(200,210,230,0.4)");
     ctx.save();
-    ctx.globalAlpha = 0.28;
-    ctx.fillStyle = grad;
+    ctx.globalAlpha = on ? 0.28 : 0.12;
+    ctx.fillStyle = ink;
     ctx.beginPath();
     ctx.moveTo(PAD_L, gy(0));
     pts.forEach(([x, y]) => ctx.lineTo(x, y));
@@ -127,36 +121,37 @@ export function buildEq(root, app) {
     ctx.fill();
     ctx.restore();
     ctx.save();
-    ctx.strokeStyle = grad;
+    ctx.strokeStyle = ink;
     ctx.lineWidth = 3.5;
-    ctx.shadowColor = "rgba(255,255,255,0.4)";
-    ctx.shadowBlur = 10;
+    if (on) { ctx.shadowColor = "rgba(255,255,255,0.4)"; ctx.shadowBlur = 10; }
     ctx.beginPath();
     pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
     ctx.stroke();
     ctx.restore();
-    // Nodes
-    bands.forEach((b) => {
-      const x = fx(b.f), y = gy(b.type === "lowcut" || b.type === "highcut" ? 0 : b.g);
+    bands.forEach((b, i) => {
+      const x = fx(b.f), y = nodeY(b), colour = EQ_BANDS[i].colour;
+      const flat = !isCut(b.shape) && Math.abs(b.g) < 0.05;
       ctx.save();
-      ctx.shadowColor = b.colour; ctx.shadowBlur = 18;
-      ctx.fillStyle = b.colour;
+      ctx.globalAlpha = on ? (flat ? 0.55 : 1) : 0.4;
+      ctx.shadowColor = colour; ctx.shadowBlur = flat ? 6 : 18;
+      ctx.fillStyle = colour;
       ctx.beginPath(); ctx.arc(x, y, 15, 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
+      ctx.shadowBlur = 0;
       ctx.strokeStyle = "rgba(255,255,255,0.9)"; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(x, y, 15, 0, Math.PI * 2); ctx.stroke();
       ctx.fillStyle = "#fff";
       ctx.beginPath(); ctx.arc(x, y, 4.5, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
     });
   };
 
-  // Node dragging (x = frequency, y = gain, wheel = Q)
+  // Node dragging (x = frequency, y = gain, wheel = Q, double-click = flat)
   let drag = -1;
   const toLocal = (e) => {
     const r = g.canvas.getBoundingClientRect();
     return [((e.clientX - r.left) / r.width) * GW, ((e.clientY - r.top) / r.height) * GH];
   };
-  const hit = (x, y) => bands.findIndex((b) => Math.hypot(fx(b.f) - x, gy(b.type === "lowcut" || b.type === "highcut" ? 0 : b.g) - y) < 22);
+  const hit = (x, y) => EQ_BANDS.findIndex((_, i) => Math.hypot(fx(band(i).f) - x, nodeY(band(i)) - y) < 22);
   g.canvas.addEventListener("pointerdown", (e) => {
     const [x, y] = toLocal(e);
     drag = hit(x, y);
@@ -166,66 +161,76 @@ export function buildEq(root, app) {
     const [x, y] = toLocal(e);
     g.canvas.style.cursor = drag >= 0 || hit(x, y) >= 0 ? "grab" : "default";
     if (drag < 0) return;
-    const b = bands[drag];
-    b.f = Math.round(clamp(xToFreq(x - PAD_L, plotW), 20, 20000));
-    if (b.type !== "lowcut" && b.type !== "highcut") b.g = Math.round(clamp(((14 + plotH - y) / plotH) * 2 * RANGE - RANGE, -RANGE, RANGE) * 10) / 10;
-    save(drag);
-    updateCards();
-    g.redraw();
+    const b = band(drag);
+    const changes = { [id(drag, "freq")]: Math.round(clamp(xToFreq(x - PAD_L, plotW), 20, 20000)) };
+    if (!isCut(b.shape)) changes[id(drag, "gain")] = Math.round(clamp(((14 + plotH - y) / plotH) * 2 * RANGE - RANGE, -RANGE, RANGE) * 10) / 10;
+    if (!proc.switchedOn("eq")) changes.eq_on = 1;
+    proc.setMany(changes);
   });
   g.canvas.addEventListener("pointerup", () => { drag = -1; });
+  g.canvas.addEventListener("dblclick", (e) => {
+    const [x, y] = toLocal(e);
+    const i = hit(x, y);
+    if (i >= 0 && !isCut(band(i).shape)) proc.set(id(i, "gain"), 0, { autoOn: false });
+  });
   g.canvas.addEventListener("wheel", (e) => {
     const [x, y] = toLocal(e);
     const i = hit(x, y);
     if (i < 0) return;
     e.preventDefault();
-    bands[i].q = Math.round(clamp(bands[i].q * (e.deltaY < 0 ? 1.08 : 1 / 1.08), 0.3, 10) * 10) / 10;
-    cards[i].q.set(bands[i].q);
-    save(i);
-    g.redraw();
+    proc.set(id(i, "q"), Math.round(clamp(band(i).q * (e.deltaY < 0 ? 1.08 : 1 / 1.08), 0.3, 10) * 100) / 100);
   }, { passive: false });
 
   // Band cards
-  const cards = bands.map((b, i) => {
+  const cards = EQ_BANDS.map((b, i) => {
     const c = el("div", "card", panel, box(16 + i * 232, 524, 222, 302));
-    const dot = el("div", "", c, { position: "absolute", left: "18px", top: "20px", width: "30px", height: "30px", borderRadius: "50%", background: b.colour, boxShadow: `0 0 12px ${b.colour}`, border: "2px solid rgba(255,255,255,0.8)" });
+    el("div", "", c, { position: "absolute", left: "18px", top: "20px", width: "30px", height: "30px", borderRadius: "50%", background: b.colour, boxShadow: `0 0 12px ${b.colour}`, border: "2px solid rgba(255,255,255,0.8)" });
     const freq = el("div", "value", c, { position: "absolute", left: "64px", top: "16px", fontSize: "27px" });
     const gain = el("div", "value", c, { position: "absolute", left: "64px", top: "60px", fontSize: "27px" });
     const shapeBtns = b.shapes.map((s, k) => {
       const sb = el("button", "small-btn", c, { position: "absolute", left: "12px", top: 104 + k * 62 + "px", width: "62px", height: "52px", padding: "8px 10px", color: "var(--text)" });
       sb.innerHTML = icon(s, 'stroke-width="2"');
       sb.title = SHAPE_NAMES[s];
-      sb.addEventListener("click", () => { b.type = s; save(i); updateCards(); g.redraw(); });
+      sb.addEventListener("click", () => proc.set(id(i, "type"), EQ_SHAPES.indexOf(s)));
       return sb;
     });
-    const q = new Knob(c, { x: 84, y: 112, w: 130, size: 104, min: 0.3, max: 10, curve: "log", value: b.q, def: 0.7, colour: b.colour, format: (v) => "Q " + v.toFixed(1), valueGap: 10,
-      onChange: (v) => { b.q = Math.round(v * 10) / 10; save(i); g.redraw(); } });
+    const q = new Knob(c, knobFor(proc, id(i, "q"), { x: 84, y: 112, w: 130, size: 104, colour: b.colour, format: (v) => "Q " + v.toFixed(1), valueGap: 10,
+      onChange: (v) => proc.set(id(i, "q"), Math.round(v * 100) / 100) }));
     q.valueEl.style.fontSize = "26px";
-    return { c, dot, freq, gain, shapeBtns, q };
+    return { freq, gain, shapeBtns, q };
   });
-  function updateCards() {
-    bands.forEach((b, i) => {
-      const cd = cards[i];
+  function update() {
+    const mode = Math.round(proc.get("eq_mode"));
+    chipEls.forEach((x, k) => x.classList.toggle("on", k === mode));
+    EQ_BANDS.forEach((def, i) => {
+      const b = band(i), cd = cards[i];
       cd.freq.textContent = fmt.hz(b.f);
-      cd.gain.textContent = b.type === "lowcut" || b.type === "highcut" ? "24 dB/oct" : fmt.db(b.g);
+      cd.gain.textContent = isCut(b.shape) ? (mode === 1 ? "12" : "24") + " dB/oct" : fmt.db(b.g);
       cd.shapeBtns.forEach((sb, k) => {
-        const on = b.shapes[k] === b.type;
-        sb.style.borderColor = on ? b.colour : "";
-        sb.style.boxShadow = on ? `0 0 10px ${b.colour}` : "";
-        sb.style.color = on ? b.colour : "var(--text)";
+        const on = def.shapes[k] === b.shape;
+        sb.style.borderColor = on ? def.colour : "";
+        sb.style.boxShadow = on ? `0 0 10px ${def.colour}` : "";
+        sb.style.color = on ? def.colour : "var(--text)";
       });
+      if (!cd.q.dragging && Math.abs(cd.q.value - b.q) > 0.005) cd.q.set(b.q);
     });
+    const target = proc.key === "mix" ? "the full mix (Stereo Out)" : `'${proc.name}'`;
+    status.textContent = !proc.ok ? `${proc.name}: its Mixology Link isn't answering (track removed?). Pick another target.`
+      : proc.switchedOn("eq") ? (proc.isOn("eq") ? `Working on ${target}` : `On, but the processing of ${target} is switched off in its Link window`)
+      : `Off on ${target}. Drag a point (or press ON) to start`;
+    g.redraw();
   }
-  updateCards();
+  proc.on((why) => { if (why === "values" || why === "target") update(); });
+  update();
   app.on("theme", () => g.redraw());
-  g.redraw();
 
   return {
     onFrame(f) {
-      if (showSpectrum && f.spectrum) {
-        spectrum = spectrum && spectrum.length === f.spectrum.length ? spectrum.map((v, i) => 0.7 * v + 0.3 * f.spectrum[i]) : f.spectrum.slice();
+      const s = proc.key === "mix" ? f.spectrum : proc.spectrum;
+      if (showSpectrum && s) {
+        spectrum = spectrum && spectrum.length === s.length ? spectrum.map((v, i) => 0.7 * v + 0.3 * s[i]) : s.slice();
         g.redraw();
-      }
+      } else if (spectrum && !s) { spectrum = null; g.redraw(); }
     },
   };
 }
@@ -234,73 +239,88 @@ export function buildEq(root, app) {
 // DYNAMICS
 
 const DYN_MODULES = [
-  { id: "comp", label: "COMPRESSOR", icon: "compressor" },
-  { id: "multi", label: "MULTIBAND", icon: "bars" },
-  { id: "trans", label: "TRANSIENT", icon: "transient" },
-  { id: "gate", label: "GATE / EXPAND", icon: "gate" },
-  { id: "limit", label: "LIMITER", icon: "clock" },
+  { id: "comp", label: "COMPRESSOR", icon: "compressor", lamp: true },
+  { id: "multi", label: "MULTIBAND", icon: "bars", lamp: true },
+  { id: "trans", label: "TRANSIENT", icon: "transient", lamp: true },
+  { id: "gate", label: "GATE / EXPAND", icon: "gate", lamp: true },
+  { id: "limit", label: "LIMITER", icon: "clock", lamp: true },
 ];
 
+// Each knob: the control it moves, its label and how it reads.
 const DYN_KNOBS = {
   comp: [
-    { id: "thr", label: "THRESHOLD", min: -60, max: 0, value: -28, step: 0.1, format: (v) => fmt.db(v) },
-    { id: "ratio", label: "RATIO", min: 1, max: 20, curve: "log", value: 3, format: (v) => fmt.ratio(v) },
-    { id: "att", label: "ATTACK", min: 0.1, max: 100, curve: "log", value: 10, format: (v) => fmt.ms(v) },
-    { id: "rel", label: "RELEASE", min: 10, max: 1000, curve: "log", value: 100, format: (v) => fmt.ms(v) },
-    { id: "mk", label: "MAKEUP", min: 0, max: 24, value: 2.5, step: 0.1, format: (v) => fmt.db(v) },
+    { id: "comp_thr", label: "THRESHOLD", format: (v) => fmt.db(v) },
+    { id: "comp_ratio", label: "RATIO", format: (v) => fmt.ratio(v) },
+    { id: "comp_att", label: "ATTACK", format: (v) => fmt.ms(v) },
+    { id: "comp_rel", label: "RELEASE", format: (v) => fmt.ms(v) },
+    { id: "comp_makeup", label: "MAKEUP", format: (v) => fmt.db(v) },
   ],
   multi: [
-    { id: "x1", label: "LOW / MID", min: 40, max: 1000, curve: "log", value: 160, format: (v) => fmt.hz(v) },
-    { id: "x2", label: "MID / HIGH", min: 800, max: 12000, curve: "log", value: 3500, format: (v) => fmt.hz(v) },
-    { id: "lo", label: "LOW", min: 0, max: 100, value: 40, format: (v) => fmt.pct(v) },
-    { id: "mid", label: "MID", min: 0, max: 100, value: 25, format: (v) => fmt.pct(v) },
-    { id: "hi", label: "HIGH", min: 0, max: 100, value: 30, format: (v) => fmt.pct(v) },
+    { id: "multi_x1", label: "LOW / MID", format: (v) => fmt.hz(v) },
+    { id: "multi_x2", label: "MID / HIGH", format: (v) => fmt.hz(v) },
+    { id: "multi_low", label: "LOW", format: (v) => fmt.pct(v) },
+    { id: "multi_mid", label: "MID", format: (v) => fmt.pct(v) },
+    { id: "multi_high", label: "HIGH", format: (v) => fmt.pct(v) },
   ],
   trans: [
-    { id: "att", label: "ATTACK", min: -100, max: 100, value: 25, bipolar: true, format: (v) => fmt.signed(v, 0) + "%" },
-    { id: "sus", label: "SUSTAIN", min: -100, max: 100, value: -15, bipolar: true, format: (v) => fmt.signed(v, 0) + "%" },
-    { id: "spd", label: "SPEED", min: 1, max: 50, curve: "log", value: 8, format: (v) => fmt.ms(v) },
-    { id: "out", label: "OUTPUT", min: -12, max: 12, value: 0, bipolar: true, step: 0.1, format: (v) => fmt.db(v) },
-    { id: "mix", label: "MIX", min: 0, max: 100, value: 100, format: (v) => fmt.pct(v) },
+    { id: "trans_attack", label: "ATTACK", bipolar: true, format: (v) => fmt.signed(v, 0) + "%" },
+    { id: "trans_sustain", label: "SUSTAIN", bipolar: true, format: (v) => fmt.signed(v, 0) + "%" },
+    { id: "trans_speed", label: "SPEED", format: (v) => fmt.ms(v) },
+    { id: "trans_out", label: "OUTPUT", bipolar: true, format: (v) => fmt.db(v) },
+    { id: "trans_mix", label: "MIX", format: (v) => fmt.pct(v) },
   ],
   gate: [
-    { id: "thr", label: "THRESHOLD", min: -80, max: 0, value: -45, step: 0.1, format: (v) => fmt.db(v) },
-    { id: "range", label: "RANGE", min: 0, max: 80, value: 18, step: 0.1, format: (v) => fmt.db(-v) },
-    { id: "att", label: "ATTACK", min: 0.1, max: 50, curve: "log", value: 1, format: (v) => fmt.ms(v) },
-    { id: "hold", label: "HOLD", min: 0, max: 500, value: 40, format: (v) => fmt.ms(v) },
-    { id: "rel", label: "RELEASE", min: 10, max: 2000, curve: "log", value: 150, format: (v) => fmt.ms(v) },
+    { id: "gate_thr", label: "THRESHOLD", format: (v) => fmt.db(v) },
+    { id: "gate_range", label: "RANGE", format: (v) => fmt.db(-v) },
+    { id: "gate_att", label: "ATTACK", format: (v) => fmt.ms(v) },
+    { id: "gate_hold", label: "HOLD", format: (v) => fmt.ms(v) },
+    { id: "gate_rel", label: "RELEASE", format: (v) => fmt.ms(v) },
   ],
   limit: [
-    { id: "in", label: "INPUT", min: 0, max: 12, value: 0, step: 0.1, format: (v) => fmt.db(v) },
-    { id: "ceil", label: "CEILING", min: -12, max: 0, value: -3, step: 0.1, format: (v) => fmt.db(v) },
-    { id: "rel", label: "RELEASE", min: 5, max: 1000, curve: "log", value: 80, format: (v) => fmt.ms(v) },
-    { id: "look", label: "LOOKAHEAD", min: 0, max: 5, value: 1.5, step: 0.1, format: (v) => v.toFixed(1) + " ms" },
-    { id: "char", label: "CHARACTER", min: 0, max: 100, value: 30, format: (v) => (v < 50 ? "Clean " : "Punchy ") + Math.round(v) + "%" },
+    { id: "lim_in", label: "INPUT", format: (v) => fmt.db(v) },
+    { id: "lim_ceil", label: "CEILING", format: (v) => fmt.db(v) },
+    { id: "lim_rel", label: "RELEASE", format: (v) => fmt.ms(v) },
+    { id: "lim_look", label: "LOOKAHEAD", format: (v) => v.toFixed(1) + " ms" },
+    { id: "lim_char", label: "CHARACTER", format: (v) => (v < 50 ? "Clean " : "Punchy ") + Math.round(v) + "%" },
   ],
 };
 const DYN_EXTRA = {
-  comp: { label: "KNEE", options: ["Soft", "Medium", "Hard"], value: "Soft" },
-  multi: { label: "BANDS", options: ["3 bands", "2 bands"], value: "3 bands" },
-  trans: { label: "FOCUS", options: ["Full", "Lows", "Highs"], value: "Full" },
-  gate: { label: "MODE", options: ["Gate", "Expander"], value: "Gate" },
-  limit: { label: "STAGE", options: ["Bus safety", "Track peak"], value: "Bus safety" },
+  comp: { label: "KNEE", id: "comp_knee" },
+  multi: { label: "BANDS", id: "multi_bands" },
+  trans: { label: "FOCUS", id: "trans_focus" },
+  gate: { label: "MODE", id: "gate_mode" },
+  limit: { label: "DETECT", id: "lim_detect" },
 };
+const DYN_HELP = {
+  comp: "Evens out the level: whatever goes over the Threshold is turned down by the Ratio. Attack = how fast it grabs, Release = how fast it lets go. Makeup brings the level back up.",
+  multi: "Three compressors, one per range (lows, mids, highs). Each knob says how much that range is held together: it finds its own threshold. Good for a boomy low end or harsh highs.",
+  trans: "Shapes every hit. Attack + makes the front snap, − softens it. Sustain + brings up the tail (ring, room), − tightens it.",
+  gate: "Turns the track down between notes (noise, bleed). Gate closes by the full Range; Expander turns quiet parts down gently.",
+  limit: "Catches peaks so nothing passes the Ceiling. Adds 5 ms of delay while on (Cubase lines it up). On the full mix, Masterology does the final limiting: use this only as a safety.",
+};
+const GR_OF = { comp: (m) => m.comp, multi: (m) => Math.max(...m.multi), trans: (m) => Math.abs(m.trans), gate: (m) => m.gate, limit: (m) => m.limit };
 
 export function buildDynamics(root, app) {
+  const proc = app.proc;
   let mod = store.get("dynModule", "comp");
-  moduleList(root, DYN_MODULES, 0, 0, 252, 92, 16, mod, (id) => { mod = id; store.set("dynModule", id); renderModule(); });
-  el("div", "card", root, box(0, 544, 252, 298));
+  const list = moduleList(root, DYN_MODULES, 0, 0, 252, 92, 16, mod, (id) => { mod = id; store.set("dynModule", id); renderModule(); power.draw(); });
+  const helpCard = el("div", "card", root, box(0, 544, 252, 298));
+  const help = el("div", "proc-note", helpCard, { left: "16px", right: "16px", top: "16px" });
+  const resetBtn = el("button", "small-btn", helpCard, { position: "absolute", left: "16px", right: "16px", bottom: "16px", height: "42px", fontSize: "17px" });
+  resetBtn.textContent = "Reset this module";
+  resetBtn.addEventListener("click", () => proc.reset(mod));
 
   const top = el("div", "panel", root, box(266, 0, 1146, 556));
-  previewTag(top, 22, 18);
-  const source = select(top, 836, 14, 290, TRACK_CHOICES(), store.get("dynTarget", "Full Mix"), (v) => store.set("dynTarget", v), { dot: "#1fd1ff" });
-  app.on("bridge", () => source.setOptions(trackOptions(app)));
+  const power = proc.powerButton(top, 22, 16, () => mod);
+  const note = el("div", "proc-note", top, { left: "140px", top: "22px", width: "560px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });
+  proc.targetSelect(top, 836, 14, 290, { dot: "#1fd1ff" });
 
   const GW = 790, GH = 474;
   const g = graph(top, 18, 66, GW, GH);
   const meters = [new Meter(top, 858, 94, 20, 396, [-48, 0]), new Meter(top, 894, 94, 20, 396, [-48, 0]), new Meter(top, 990, 94, 20, 396, [-48, 0]), new Meter(top, 1026, 94, 20, 396, [-48, 0])];
   const grMeter = el("div", "meter", top, box(1080, 94, 20, 396));
   const grFill = el("div", "", grMeter, { position: "absolute", left: 0, right: 0, top: 0, height: "0%", background: "linear-gradient(180deg,#ffb020,#ff5a10)", boxShadow: "0 0 10px rgba(255,140,30,0.6)" });
+  const grText = el("div", "", top, { position: "absolute", left: "1062px", top: "60px", width: "60px", textAlign: "center", fontSize: "17px", fontWeight: "600", color: "#ffa21f" });
   const mlab = el("div", "", top, { position: "absolute", left: "846px", top: "498px", width: "290px", display: "flex", fontSize: "18px", color: "var(--text-dim)" });
   mlab.innerHTML = `<span style="width:36px;text-align:center">L</span><span style="width:96px;text-align:left">R</span><span style="width:36px;text-align:center">IN</span><span style="width:54px">OUT</span><span>GR</span>`;
   const mscale = el("div", "", top, { position: "absolute", left: "818px", top: "86px", width: "32px", height: "410px", fontSize: "15px", color: "var(--text-dim)" });
@@ -315,22 +335,39 @@ export function buildDynamics(root, app) {
   const extraLabel = el("div", "label", extraCard, { position: "absolute", left: "0", right: "0", top: "28px", textAlign: "center" });
   let extraSel = null;
   let knobs = {};
+  let inLevel = -100, grNow = 0;
 
-  function v(id) { return knobs[id] ? knobs[id].value : 0; }
+  const v = (id) => proc.get(id);
 
   function renderModule() {
     knobHost.innerHTML = "";
     knobs = {};
     DYN_KNOBS[mod].forEach((k, i) => {
-      knobs[k.id] = new Knob(knobHost, { ...k, id: `dyn_${mod}_${k.id}`, x: 16 + i * 176, y: 28, w: 170, size: 118, def: k.value, labelGap: 14, valueGap: 12, onChange: () => g.redraw() });
+      knobs[k.id] = new Knob(knobHost, knobFor(proc, k.id, { label: k.label, format: k.format, bipolar: k.bipolar, x: 16 + i * 176, y: 28, w: 170, size: 118, labelGap: 14, valueGap: 12,
+        onChange: (val) => proc.set(k.id, val) }));
     });
-    const ex = DYN_EXTRA[mod];
+    const ex = DYN_EXTRA[mod], spec = proc.spec(ex.id);
     extraLabel.textContent = ex.label;
     if (extraSel) extraSel.el.remove();
-    extraSel = select(extraCard, 26, 98, 168, ex.options, store.get(`dyn_${mod}_extra`, ex.value), (val) => { store.set(`dyn_${mod}_extra`, val); g.redraw(); }, { h: 64 });
+    extraSel = select(extraCard, 26, 98, 168, spec.choices, spec.choices[Math.round(v(ex.id))], (val) => proc.set(ex.id, spec.choices.indexOf(val)), { h: 64 });
     extraSel.el.style.fontSize = "24px";
+    help.textContent = DYN_HELP[mod];
+    list.set(mod);
+    sync();
+  }
+
+  function sync() {
+    for (const [id, k] of Object.entries(knobs)) if (!k.dragging && Math.abs(k.value - v(id)) > 1e-3) k.set(v(id));
+    const ex = DYN_EXTRA[mod];
+    if (extraSel) extraSel.set(proc.spec(ex.id).choices[Math.round(v(ex.id))]);
+    list.lamps((m) => proc.switchedOn(m), (m) => proc.running(m));
+    const target = proc.key === "mix" ? "the full mix" : `'${proc.name}'`;
+    note.textContent = !proc.ok ? `${proc.name}: its Mixology Link isn't answering. Pick another target.`
+      : proc.switchedOn(mod) ? `${MODULE_NAMES[mod]} on ${target}` + (mod === "limit" && proc.latencyMs > 0 ? ` · ${fmt.num(proc.latencyMs, 1)} ms lookahead` : "")
+      : `${MODULE_NAMES[mod]} is off on ${target}. Turn a knob (or press ON) to start`;
     g.redraw();
   }
+  proc.on((why) => { if (why === "values" || why === "target") sync(); });
 
   // Graphs
   g.draw = (ctx, w, h) => {
@@ -338,33 +375,36 @@ export function buildDynamics(root, app) {
     const L = 60, T = 16, W = w - L - 18, H = h - T - 40;
     ctx.font = "16px 'Barlow SC', sans-serif";
     const dark = document.documentElement.dataset.theme !== "light";
-    const line = "#ffd21f";
+    const on = proc.isOn(mod);
+    const line = on ? "#ffd21f" : (dark ? "rgba(220,225,235,0.45)" : "rgba(40,50,70,0.45)");
 
     if (mod === "multi") {
-      // Frequency view: three bands split at the crossovers, height = amount
       for (const f of [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000]) {
         const x = L + freqToX(f, W);
         ctx.strokeStyle = grid; ctx.beginPath(); ctx.moveTo(x, T); ctx.lineTo(x, T + H); ctx.stroke();
         ctx.fillStyle = dim; ctx.textAlign = "center"; ctx.fillText(f >= 1000 ? f / 1000 + "k" : String(f), x, h - 12);
       }
-      const xs = [L, L + freqToX(v("x1"), W), L + freqToX(v("x2"), W), L + W];
-      const amounts = [v("lo"), v("mid"), v("hi")], colours = ["#ff7a12", "#3dff5a", "#1f9bff"], names = ["LOW", "MID", "HIGH"];
-      for (let i = 0; i < 3; i++) {
-        const top = T + H - (amounts[i] / 100) * H * 0.85;
-        const gr = ctx.createLinearGradient(0, top, 0, T + H);
-        gr.addColorStop(0, colours[i] + "aa"); gr.addColorStop(1, colours[i] + "10");
-        ctx.fillStyle = gr; ctx.fillRect(xs[i] + 2, top, xs[i + 1] - xs[i] - 4, T + H - top);
-        ctx.strokeStyle = colours[i]; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(xs[i] + 2, top); ctx.lineTo(xs[i + 1] - 2, top); ctx.stroke();
+      const three = Math.round(v("multi_bands")) === 0;
+      const xs = three ? [L, L + freqToX(v("multi_x1"), W), L + freqToX(Math.max(v("multi_x2"), v("multi_x1") * 1.5), W), L + W] : [L, L + freqToX(v("multi_x1"), W), L + W];
+      const amounts = three ? [v("multi_low"), v("multi_mid"), v("multi_high")] : [v("multi_low"), v("multi_high")];
+      const colours = three ? ["#ff7a12", "#3dff5a", "#1f9bff"] : ["#ff7a12", "#1f9bff"], names = three ? ["LOW", "MID", "HIGH"] : ["LOW", "HIGH"];
+      const gr = proc.meters ? (three ? proc.meters.multi : [proc.meters.multi[0], proc.meters.multi[2]]) : null;
+      for (let i = 0; i < amounts.length; i++) {
+        const topY = T + H - (amounts[i] / 100) * H * 0.85;
+        const fill = ctx.createLinearGradient(0, topY, 0, T + H);
+        fill.addColorStop(0, colours[i] + (on ? "aa" : "44")); fill.addColorStop(1, colours[i] + "10");
+        ctx.fillStyle = fill; ctx.fillRect(xs[i] + 2, topY, xs[i + 1] - xs[i] - 4, T + H - topY);
+        ctx.strokeStyle = colours[i]; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(xs[i] + 2, topY); ctx.lineTo(xs[i + 1] - 2, topY); ctx.stroke();
         ctx.fillStyle = cssVar("--text"); ctx.textAlign = "center"; ctx.font = "20px 'Barlow SC', sans-serif";
-        ctx.fillText(names[i], (xs[i] + xs[i + 1]) / 2, top - 12);
+        const label = names[i] + (on && gr && gr[i] > 0.05 ? `  −${gr[i].toFixed(1)} dB` : "");
+        ctx.fillText(label, (xs[i] + xs[i + 1]) / 2, topY - 12);
         ctx.font = "16px 'Barlow SC', sans-serif";
       }
-      ctx.fillStyle = dim; ctx.textAlign = "left"; ctx.fillText("Bar height = how much each band is compressed", L + 8, T + 22);
+      ctx.fillStyle = dim; ctx.textAlign = "left"; ctx.fillText("Bar height = how much each range is held together (live: how much it takes off)", L + 8, T + 22);
       return;
     }
     if (mod === "trans") {
-      // Envelope sketch: original hit (grey) vs shaped (yellow)
-      const att = v("att") / 100, sus = v("sus") / 100;
+      const att = v("trans_attack") / 100, sus = v("trans_sustain") / 100;
       for (let i = 0; i <= 8; i++) { const y = T + (i / 8) * H; ctx.strokeStyle = grid; ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + W, y); ctx.stroke(); }
       const env = (t, a, s) => { const rise = Math.min(1, t / 0.04); const decay = Math.exp(-(t - 0.04) * (6 - 3.5 * s)); return t < 0.04 ? rise * (1 + 0.6 * a) : (1 + 0.6 * a) * Math.exp(-(t - 0.04) * 25) * 0.45 + 0.55 * decay * (1 + 0.5 * s); };
       const draw = (a, s, col, width) => {
@@ -373,7 +413,7 @@ export function buildDynamics(root, app) {
         ctx.stroke();
       };
       draw(0, 0, dark ? "rgba(255,255,255,0.35)" : "rgba(20,30,50,0.35)", 2);
-      ctx.save(); ctx.shadowColor = line; ctx.shadowBlur = 12; draw(att, sus, line, 3.5); ctx.restore();
+      ctx.save(); if (on) { ctx.shadowColor = line; ctx.shadowBlur = 12; } draw(att, sus, line, 3.5); ctx.restore();
       ctx.fillStyle = dim; ctx.textAlign = "left"; ctx.fillText("Grey = original hit, yellow = shaped (Attack = front, Sustain = tail)", L + 8, T + 22);
       return;
     }
@@ -395,8 +435,8 @@ export function buildDynamics(root, app) {
 
     let curve, threshold;
     if (mod === "comp") {
-      const t = v("thr"), r = v("ratio"), mk = v("mk"), kneeName = store.get("dyn_comp_extra", "Soft");
-      const knee = { Soft: 12, Medium: 6, Hard: 0 }[kneeName] ?? 12;
+      const t = v("comp_thr"), r = v("comp_ratio"), mk = v("comp_makeup");
+      const knee = [12, 6, 0][Math.round(v("comp_knee"))] ?? 12;
       threshold = t;
       curve = (x) => {
         let y;
@@ -405,42 +445,59 @@ export function buildDynamics(root, app) {
         return y + mk;
       };
     } else if (mod === "gate") {
-      const t = v("thr"), range = v("range"), exp = store.get("dyn_gate_extra", "Gate") === "Expander";
+      const t = v("gate_thr"), range = v("gate_range"), exp = Math.round(v("gate_mode")) === 1;
       threshold = t;
-      curve = (x) => (x >= t ? x : exp ? t + (x - t) * 2 : x - range);
+      curve = (x) => (x >= t ? x : exp ? x - Math.min(range, t - x) : x - range);
     } else {
-      const gain = v("in"), ceil = v("ceil");
+      const gain = v("lim_in"), ceil = v("lim_ceil");
       threshold = ceil;
       curve = (x) => Math.min(x + gain, ceil);
     }
     const pts = [];
     for (let i = 0; i <= 240; i++) { const x = lo + (i / 240) * -lo; pts.push([X(x), Y(clamp(curve(x), lo - 6, 6))]); }
     const fill = ctx.createLinearGradient(0, T, 0, T + H);
-    fill.addColorStop(0, "rgba(255,210,31,0.32)"); fill.addColorStop(1, "rgba(255,210,31,0.04)");
+    fill.addColorStop(0, on ? "rgba(255,210,31,0.32)" : "rgba(160,170,190,0.16)"); fill.addColorStop(1, "rgba(255,210,31,0.04)");
     ctx.save();
     ctx.beginPath(); ctx.rect(L, T, W, H); ctx.clip();
     ctx.fillStyle = fill; ctx.beginPath(); ctx.moveTo(L, T + H); pts.forEach(([x, y]) => ctx.lineTo(x, y)); ctx.lineTo(L + W, T + H); ctx.fill();
-    ctx.shadowColor = line; ctx.shadowBlur = 14; ctx.strokeStyle = line; ctx.lineWidth = 3.5;
+    if (on) { ctx.shadowColor = line; ctx.shadowBlur = 14; }
+    ctx.strokeStyle = line; ctx.lineWidth = 3.5;
     ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke();
     ctx.restore();
-    // Threshold node + marks
-    ctx.strokeStyle = "rgba(255,210,31,0.55)"; ctx.lineWidth = 1.5;
+    ctx.strokeStyle = on ? "rgba(255,210,31,0.55)" : "rgba(160,170,190,0.4)"; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(X(threshold), T); ctx.lineTo(X(threshold), T + H); ctx.stroke();
-    for (const x of [-48, -36, -24, -12].filter((x) => x !== threshold)) {
-      ctx.fillStyle = line; ctx.beginPath(); ctx.arc(X(x), Y(clamp(curve(x), lo, 6)), 6, 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.save(); ctx.shadowColor = line; ctx.shadowBlur = 16; ctx.fillStyle = line;
+    ctx.save(); if (on) { ctx.shadowColor = line; ctx.shadowBlur = 16; } ctx.fillStyle = line;
     ctx.beginPath(); ctx.arc(X(threshold), Y(clamp(curve(threshold), lo, 6)), 11, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    // Where the sound is right now: a white ball riding the curve.
+    if (inLevel > lo) {
+      const x = clamp(inLevel, lo, 0), y = clamp(on ? curve(x) : x, lo, 6);
+      const dot = dark ? "#fff" : "#1a2233";
+      ctx.save(); ctx.fillStyle = dot; ctx.shadowColor = dot; ctx.shadowBlur = dark ? 12 : 4;
+      ctx.beginPath(); ctx.arc(X(x), Y(y), 7, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    }
   };
 
   renderModule();
   app.on("theme", () => g.redraw());
 
   return {
-    onFrame(f) {
-      const l = f.peakL ?? -100, r = f.peakR ?? -100;
-      meters[0].set(l); meters[1].set(r); meters[2].set(Math.max(l, r)); meters[3].set(Math.max(l, r));
-      grFill.style.height = "0%";   // no processing yet: no gain reduction
+    onFrame() {
+      const m = proc.meters;
+      if (m) {
+        meters[0].set(m.outL); meters[1].set(proc.channels === 1 ? m.outL : m.outR);
+        meters[2].set(Math.max(m.inL, m.inR)); meters[3].set(Math.max(m.outL, m.outR));
+        inLevel = Math.max(m.inL, m.inR);
+        const gr = proc.isOn(mod) ? GR_OF[mod](m) : 0;
+        grNow = gr > grNow ? gr : Math.max(gr, grNow - 0.6);
+      } else {
+        meters.forEach((x) => x.set(-100));
+        inLevel = -100;
+        grNow = Math.max(0, grNow - 0.6);
+      }
+      grFill.style.height = clamp(grNow / 24, 0, 1) * 100 + "%";
+      grText.textContent = grNow >= 0.1 ? (mod === "trans" && m && m.trans > 0 ? "+" : "−") + grNow.toFixed(1) : "";
+      list.lamps((x) => proc.switchedOn(x), (x) => proc.running(x));
+      if (mod !== "trans") g.redraw();
     },
   };
 }

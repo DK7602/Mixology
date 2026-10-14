@@ -74,6 +74,10 @@ namespace mixology::link
             s.audioMs.store (0, kRelaxed);
             s.mainMatchMs.store (0, kRelaxed);
             s.analysisMs.store (0, kRelaxed);
+            s.procCount.store (0, kRelaxed);
+            s.procRunning.store (0, kRelaxed);
+            s.procMetersMs.store (0, kRelaxed);
+            s.latency.store (0, kRelaxed);
             s.heartbeatMs.store (nowMs, kRelaxed);
             s.generation.fetch_add (1, kRelease);
             return i;
@@ -273,8 +277,81 @@ namespace mixology::link
         return false;
     }
 
+    void Registry::publishProc (int slot, const proc::Values& v, float sampleRate, int latency)
+    {
+        auto* s = slotPtr (slot);
+        if (s == nullptr) return;
+        for (std::size_t i = 0; i < v.size(); ++i) s->procNow[i].store (v[i], kRelaxed);
+        s->sampleRate.store (sampleRate, kRelaxed);
+        s->latency.store (static_cast<std::uint32_t> (std::max (0, latency)), kRelaxed);
+        s->procCount.store (static_cast<std::uint32_t> (v.size()), kRelease);
+    }
+
+    void Registry::publishProcMeters (int slot, const proc::Meters& m, std::uint64_t nowMs) noexcept
+    {
+        auto* s = slotPtr (slot);
+        if (s == nullptr) return;
+        float v[proc::kMeterValues];
+        proc::meterValues (m, v);
+        for (std::size_t i = 0; i < static_cast<std::size_t> (proc::kMeterValues); ++i) s->procMeters[i].store (v[i], kRelaxed);
+        s->procRunning.store (m.running, kRelaxed);
+        s->procMetersMs.store (nowMs, kRelease);
+    }
+
+    void Registry::learnProcRequests (int slot, std::array<std::uint32_t, kProcSlots>& seen) const
+    {
+        auto* s = slotPtr (slot);
+        for (std::size_t i = 0; i < seen.size(); ++i) seen[i] = s != nullptr ? s->procRequestSeq[i].load (kAcquire) : 0u;
+    }
+
+    int Registry::takeProcRequests (int slot, std::array<std::uint32_t, kProcSlots>& seen, int* indices, float* values, int max) const
+    {
+        auto* s = slotPtr (slot);
+        if (s == nullptr) return 0;
+        int n = 0;
+        for (std::size_t i = 0; i < static_cast<std::size_t> (proc::count) && n < max; ++i)
+        {
+            const auto seq = s->procRequestSeq[i].load (kAcquire);
+            if (seq == seen[i]) continue;
+            seen[i] = seq;
+            indices[n] = static_cast<int> (i);
+            values[n] = s->procRequest[i].load (kRelaxed);
+            ++n;
+        }
+        return n;
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Mixology side
+
+    void Registry::requestProc (int slot, std::uint32_t generation, int index, float value)
+    {
+        auto* s = slotPtr (slot);
+        if (s == nullptr || index < 0 || index >= proc::count || s->generation.load (kRelaxed) != generation) return;
+        s->procRequest[static_cast<std::size_t> (index)].store (value, kRelaxed);
+        s->procRequestSeq[static_cast<std::size_t> (index)].fetch_add (1, kRelease);
+    }
+
+    bool Registry::readProc (int slot, std::uint32_t generation, proc::Values& v) const
+    {
+        auto* s = slotPtr (slot);
+        if (s == nullptr || s->generation.load (kRelaxed) != generation) return false;
+        if (s->procCount.load (kAcquire) < static_cast<std::uint32_t> (proc::count)) return false;
+        for (std::size_t i = 0; i < v.size(); ++i) v[i] = s->procNow[i].load (kRelaxed);
+        return true;
+    }
+
+    bool Registry::readProcMeters (int slot, std::uint32_t generation, proc::Meters& m, std::uint64_t nowMs) const
+    {
+        auto* s = slotPtr (slot);
+        if (s == nullptr || s->generation.load (kRelaxed) != generation) return false;
+        const auto when = s->procMetersMs.load (kAcquire);
+        if (when == 0 || nowMs - std::min (nowMs, when) > kAudioMs) return false;
+        float v[proc::kMeterValues];
+        for (std::size_t i = 0; i < static_cast<std::size_t> (proc::kMeterValues); ++i) v[i] = s->procMeters[i].load (kRelaxed);
+        m = proc::metersFrom (v, s->procRunning.load (kRelaxed));
+        return true;
+    }
 
     void Registry::mainHeartbeat (std::uint64_t nowMs) { block.header.mainHeartbeatMs.store (nowMs, kRelaxed); }
 
@@ -309,6 +386,11 @@ namespace mixology::link
             info.channels = static_cast<int> (s.channels.load (kRelaxed));
             info.trimDb = s.trimDb.load (kRelaxed);
             info.assist = loadAssist (s.assistNow);
+            info.hasProcessing = s.procCount.load (kAcquire) >= static_cast<std::uint32_t> (proc::count);
+            const auto procWhen = s.procMetersMs.load (kAcquire);
+            info.procRunning = procWhen != 0 && nowMs - std::min (nowMs, procWhen) <= kAudioMs ? s.procRunning.load (kRelaxed) : 0u;
+            info.sampleRate = s.sampleRate.load (kRelaxed);
+            info.latency = static_cast<int> (s.latency.load (kRelaxed));
             std::uint64_t when = 0;
             if (readAnalysis (i, info.analysis, info.playing, info.songSample, when))
             {

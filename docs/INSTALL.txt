@@ -14,5 +14,5 @@ MIXOLOGY - install (Windows, Cubase)
 6. Insert Mixology Link on the tracks you want to see in Mixology (after the track's other plug-ins).
 
 Already set up? Only step 1 again: copy BOTH plug-ins from this download (the Cubase script is unchanged, v3).
-Then follow M4_TEST.md and send back the results + the copied log.
+Then follow M5_TEST.md and send back the results.
 The full manual is MANUAL.md (also inside Mixology: the ? button).

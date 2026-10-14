@@ -41,6 +41,9 @@ namespace
             juce::ParameterID { "pocketgain", 2 }, "Pocket Dip",
             juce::NormalisableRange<float> (-12.0f, 0.0f, 0.1f), 0.0f,
             juce::AudioParameterFloatAttributes().withLabel ("dB").withStringFromValueFunction (dbText)));
+
+        // Processing (Milestone 5): set from Mixology's EQ, Dynamics, Tone and Stereo pages.
+        mixology::proc::host::addParameters (layout, 3);
         return layout;
     }
 
@@ -64,12 +67,14 @@ MixologyLinkProcessor::MixologyLinkProcessor()
     mudDbParam = parameters.getRawParameterValue ("mudgain");
     pocketHzParam = parameters.getRawParameterValue ("pocketfreq");
     pocketDbParam = parameters.getRawParameterValue ("pocketgain");
+    procRaw.bind (parameters);
     instanceId = (static_cast<std::uint64_t> (static_cast<std::uint32_t> (juce::Random::getSystemRandom().nextInt())) << 32)
                  ^ static_cast<std::uint32_t> (juce::Random::getSystemRandom().nextInt()) ^ static_cast<std::uint64_t> (juce::Time::getHighResolutionTicks());
     slot = registry.claim (instanceId, mixology::link::nowMs());
+    registry.learnProcRequests (slot, procRequestSeen);
     snapL.resize (static_cast<std::size_t> (mixology::TrackAnalyzer::kSize));
     snapR.resize (static_cast<std::size_t> (mixology::TrackAnalyzer::kSize));
-    startTimerHz (10);
+    startTimerHz (30);
     analysisThread->addTimeSliceClient (this);
 }
 
@@ -111,6 +116,10 @@ void MixologyLinkProcessor::prepareToPlay (double sampleRate, int)
     trimGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (static_cast<double> (trimParam->load())));
     assist.setTarget (assistSettings());
     assist.prepare (sampleRate, juce::jmax (1, getTotalNumOutputChannels()));
+    const auto values = procRaw.read();
+    chain.prepare (sampleRate, juce::jmax (1, getTotalNumOutputChannels()));
+    chain.setValues (values);
+    setLatencySamples (chain.latencyFor (values));
 }
 
 mixology::AssistSettings MixologyLinkProcessor::assistSettings() const
@@ -165,7 +174,10 @@ void MixologyLinkProcessor::process (juce::AudioBuffer<Sample>& buffer)
     assist.setTarget (assistSettings());
     assist.process (buffer.getArrayOfWritePointers(), channels, n);
 
-    // Measured after the Trim and the Assist EQ: what this track sends on to the fader.
+    chain.setValues (procRaw.read());
+    chain.process (buffer.getArrayOfWritePointers(), channels, n);
+
+    // Measured after the Trim, the Assist EQ and the processing: what this track sends on to the fader.
     meter.process (buffer.getArrayOfReadPointers(), channels, n);
     ring.push (buffer.getArrayOfReadPointers(), channels, n);
     if (auto* ph = getPlayHead())
@@ -184,6 +196,9 @@ void MixologyLinkProcessor::process (juce::AudioBuffer<Sample>& buffer)
         shortTerm.store (meter.shortTermLufs(), std::memory_order_relaxed);
         const auto now = mixology::link::nowMs();
         registry.publishMeters (slot, l, r, meter.momentaryLufs(), meter.shortTermLufs(), meter.channels(), now);
+        const auto pm = chain.takeMeters();
+        running.store (pm.running, std::memory_order_relaxed);
+        registry.publishProcMeters (slot, pm, now);
         lastAudioMs.store (now, std::memory_order_relaxed);
     }
 }
@@ -250,6 +265,16 @@ void MixologyLinkProcessor::timerCallback()
         setAssist (wanted);
         trimNote = wanted.neutral() ? "Mixology cleared the Assist EQ" : "Mixology set the Assist EQ";
     }
+
+    // Processing: Mixology's page moves, applied like your own (host parameters), then what we have now.
+    int indices[mixology::proc::count];
+    float values[mixology::proc::count];
+    const int changed = registry.takeProcRequests (slot, procRequestSeen, indices, values, mixology::proc::count);
+    for (int i = 0; i < changed; ++i) setProc (indices[i], values[i]);
+    const auto now = procRaw.read();
+    const int latency = chain.latencyFor (now);
+    if (latency != getLatencySamples()) setLatencySamples (latency);   // the Limiter's lookahead, while it is on
+    registry.publishProc (slot, now, static_cast<float> (currentRate.load()), latency);
 }
 
 void MixologyLinkProcessor::getStateInformation (juce::MemoryBlock& destData)

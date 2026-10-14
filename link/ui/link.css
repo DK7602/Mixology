@@ -1,7 +1,7 @@
-/* Mixology Link: a 600 x 470 canvas in the same look as Mixology (tokens and building blocks come from
+/* Mixology Link: a 600 x 536 canvas in the same look as Mixology (tokens and building blocks come from
    styles.css). */
 
-#lstage { position: absolute; left: 0; top: 0; width: 600px; height: 470px; transform-origin: 0 0; }
+#lstage { position: absolute; left: 0; top: 0; width: 600px; height: 536px; transform-origin: 0 0; }
 
 #lframe {
   position: absolute; inset: 3px; border-radius: 16px;
@@ -60,3 +60,10 @@
 #lassist .ltext { position: absolute; left: 14px; right: 250px; top: 25px; font-size: 13.5px; line-height: 1.22; max-height: 34px; overflow: hidden; }
 #lassist canvas { position: absolute; right: 96px; top: 9px; width: 140px; height: 44px; }
 #lassist button { position: absolute; right: 12px; top: 15px; width: 74px; height: 32px; font-size: 14px; }
+
+#lproc { left: 16px; top: 464px; width: 568px; height: 58px; }
+#lproc .ltitle { position: absolute; left: 14px; top: 8px; font-size: 13px; letter-spacing: 0.14em; color: var(--gold); font-weight: 600; }
+#lproc .ltext { position: absolute; left: 14px; right: 110px; top: 27px; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#lproc .lchip { display: inline-block; padding: 1px 7px; margin-right: 5px; border-radius: 6px; border: 1px solid var(--panel-edge); font-size: 12.5px; }
+#lproc .lchip.live { border-color: var(--green); color: var(--green); }
+#lproc button { position: absolute; right: 12px; top: 13px; width: 86px; height: 32px; font-size: 14px; }

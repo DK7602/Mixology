@@ -100,6 +100,7 @@ const P = {
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
   note: '<path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.8"/><circle cx="17.5" cy="16" r="2.8"/>',
   film: '<rect x="3" y="9" width="18" height="12" rx="1.5"/><path d="M3 9l17.2-4.6.7 2.7L3.7 11.7M8 5.8l2 2.9M13 4.5l2 2.9"/>',
+  power: '<path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/>',
   // eq shapes
   bell: '<path d="M2 18c4 0 5-12 10-12s6 12 10 12"/>',
   lowshelf: '<path d="M2 7h5c3 0 5 10 9 10h6"/>',
@@ -301,6 +302,7 @@ export class Knob {
     let startY = 0, startN = 0, dragging = false;
     d.addEventListener("pointerdown", (e) => {
       dragging = true;
+      this.dragging = true;
       startY = e.clientY;
       startN = this.toNorm(this.value);
       d.setPointerCapture(e.pointerId);
@@ -312,7 +314,7 @@ export class Knob {
       const scale = (e.shiftKey ? 0.2 : 1) / (220 * renderScale);
       this.set(this.fromNorm(startN + (startY - e.clientY) * scale), true);
     });
-    const end = () => { if (dragging && this.o.onDragEnd) this.o.onDragEnd(); dragging = false; };
+    const end = () => { if (dragging && this.o.onDragEnd) this.o.onDragEnd(); dragging = false; this.dragging = false; };
     d.addEventListener("pointerup", end);
     d.addEventListener("pointercancel", end);
     d.addEventListener("dblclick", () => this.set(this.o.def, true));
@@ -447,14 +449,21 @@ export function popupMenu(anchor, items, onPick, width = 240) {
 export function moduleList(parent, items, x, y, w, h, gap, active, onSelect) {
   const buttons = items.map((it, i) => {
     const b = el("button", "btn", parent, box(x, y + i * (h + gap), w, h));
-    b.innerHTML = icon(it.icon) + `<span>${it.label}</span>`;
+    b.innerHTML = icon(it.icon) + `<span>${it.label}</span>` + (it.lamp ? '<i class="lamp"></i>' : "");
     b.addEventListener("click", () => { set(it.id); onSelect(it.id); });
     b.dataset.id = it.id;
     return b;
   });
   const set = (id) => buttons.forEach((b) => b.classList.toggle("active", b.dataset.id === id));
   set(active);
-  return { set, buttons };
+  /** Lamps (modules with a processing switch): green when on, pulsing while it works on the sound. */
+  const lamps = (isOn, isLive) => buttons.forEach((b) => {
+    const l = b.querySelector(".lamp");
+    if (!l) return;
+    l.classList.toggle("on", !!isOn(b.dataset.id));
+    l.classList.toggle("live", !!isLive(b.dataset.id));
+  });
+  return { set, buttons, lamps };
 }
 
 export function previewTag(parent, x, y, text = "Preview") {

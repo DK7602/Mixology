@@ -236,7 +236,7 @@
   window.__JUCE__ = {
     initialisationData: {
       __juce__platform: [], __juce__registeredGlobalEventIds: [], __juce__sliders: [], __juce__toggles: [], __juce__comboBoxes: [],
-      __juce__functions: ["bridgeCommand", "getBridgeState", "getSettings", "setSetting", "setUiState", "setPage"],
+      __juce__functions: ["bridgeCommand", "getBridgeState", "getSettings", "setSetting", "setUiState", "setPage", "procTarget", "procSet", "setMonoListen"],
     },
     postMessage(message) {
       const { eventId, payload } = JSON.parse(message);
@@ -250,11 +250,70 @@
         result = { theme: null, ui: ui || JSON.stringify(demoUi), version: "0.3.0 (preview)" };
       }
       else if (payload.name === "setUiState") { try { localStorage.setItem("mixology-ui", a); } catch (e) { /* none */ } }
-      else if (payload.name === "setPage") page = a;
+      else if (payload.name === "setPage") { page = a; if (page !== "stereo") P.mono = false; }
+      else if (payload.name === "procTarget") { P.key = a; P.listIn = 0; }
+      else if (payload.name === "procSet") result = procSet(a, b);
+      else if (payload.name === "setMonoListen") result = P.mono = !!a;
       send("__juce__complete", { promiseId: payload.resultId, result });
     },
   };
   let page = "overview";
+
+  // --- fake processing (Milestone 5): Full Mix + the linked tracks, each with every control ----------
+  const P = { spec: null, key: "mix", values: {}, listIn: 0, mono: false };
+  import("./procspec.js").then((m) => {
+    P.spec = m;
+    const fresh = () => m.PROC.map((p) => p.def);
+    P.values.mix = fresh();
+    chans.forEach((c, i) => { if (c.link) P.values["link:" + i + ":1"] = fresh(); });
+    const set = (key, id, v) => { if (P.values[key]) P.values[key][m.PROC_INDEX[id]] = v; };
+    const vox = "link:" + chans.findIndex((c) => c.name === "Lead Vox") + ":1";
+    set(vox, "eq_on", 1); set(vox, "eq1_type", 3); set(vox, "eq1_freq", 90); set(vox, "eq4_gain", 2.5); set(vox, "eq4_freq", 3200);
+    set(vox, "comp_on", 1); set(vox, "comp_thr", -24); set(vox, "tb_on", 1); set(vox, "tb_air", 1.5);
+  });
+  function procSet(key, changes) {
+    const v = P.values[key];
+    if (!v || !P.spec) return 0;
+    let n = 0;
+    for (const [id, val] of Object.entries(changes || {})) {
+      const i = P.spec.PROC_INDEX[id];
+      if (i === undefined) continue;
+      const sp = P.spec.PROC[i];
+      v[i] = Math.min(sp.max, Math.max(sp.min, sp.kind === "number" ? val : Math.round(val)));
+      n++;
+    }
+    return n;
+  }
+  function procFrame(frame, beat) {
+    if (!P.spec || !["eq", "dynamics", "tone", "stereo"].includes(page)) return;
+    const { PROC, PROC_INDEX, MODULES, MODULE_ON } = P.spec;
+    const keyOf = (i) => "link:" + i + ":1";
+    const onList = (v) => MODULES.filter((m) => v[PROC_INDEX[MODULE_ON[m]]] > 0.5);
+    if (P.listIn-- <= 0) {
+      P.listIn = 15;
+      frame.procTargets = [{ key: "mix", name: "Full Mix", colour: "", channels: 2, on: onList(P.values.mix), running: onList(P.values.mix) }]
+        .concat(chans.map((c, i) => c.link ? { key: keyOf(i), name: c.name, colour: c.colour, channels: c.name === "Lead Vox" || c.name === "808" ? 1 : 2, on: onList(P.values[keyOf(i)]), running: onList(P.values[keyOf(i)]) } : null).filter(Boolean));
+    }
+    const v = P.values[P.key];
+    if (!v) { frame.proc = { key: P.key, ok: false }; return; }
+    const g = (id) => v[PROC_INDEX[id]];
+    const chainOn = g("chain_on") > 0.5, on = (m) => chainOn && g(MODULE_ON[m]) > 0.5;
+    const inL = -14 + 9 * beat + (Math.random() - 0.5) * 2, inR = inL - 0.8;
+    const comp = on("comp") ? Math.max(0, (inL - g("comp_thr")) * (1 - 1 / g("comp_ratio"))) : 0;
+    const out = inL - comp + (on("comp") ? g("comp_makeup") : 0);
+    const limit = on("limit") ? Math.max(0, out + g("lim_in") - g("lim_ceil")) : 0;
+    const gate = on("gate") && inL < g("gate_thr") ? g("gate_range") : 0;
+    const multi = on("multi") ? [g("multi_low"), g("multi_mid"), g("multi_high")].map((a, i) => +(a / 100 * (4 + 3 * beat) * (i === 0 ? 1.2 : 0.8)).toFixed(1)) : [0, 0, 0];
+    const spectrum = P.key === "mix" ? undefined : frame.spectrum.map((x, i) => +(x - 6 + 4 * Math.sin(i / 9 + P.key.length)).toFixed(1));
+    frame.proc = {
+      key: P.key, ok: true, values: v.slice(), sr: 48000, channels: P.key === "mix" ? 2 : 2, latencyMs: on("limit") ? 5.3 : 0, spectrum,
+      corr: P.key === "mix" ? undefined : 0.8,
+      meters: { inL: +inL.toFixed(1), inR: +inR.toFixed(1), outL: +(out - limit).toFixed(1), outR: +(out - limit - 0.8).toFixed(1), comp: +comp.toFixed(1), multi,
+        trans: on("trans") ? +(g("trans_attack") / 100 * 6 * beat).toFixed(1) : 0, gate, limit: +limit.toFixed(1), clip: 0, glue: 0,
+        running: MODULES.filter((m) => on(m)) },
+    };
+    frame.mono = P.mono;
+  }
 
   // --- fake audio -----------------------------------------------------------------------------
   let t = 0, sentVersion = 0, sentLog = 0, integ = [];
@@ -311,6 +370,7 @@
       });
       frame.roleCurves = curves.map((c) => c && c.map((v) => +v.toFixed(1)));
     }
+    procFrame(frame, beat);
     if (B.version !== sentVersion) {
       sentVersion = B.version;
       frame.bridge = state(B.log.length !== sentLog);

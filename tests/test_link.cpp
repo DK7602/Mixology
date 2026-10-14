@@ -163,6 +163,59 @@ TEST_CASE ("Registry: Assist EQ requests and readback", "[link]")
     CHECK (r.links (20)[0].assist == want);
 }
 
+TEST_CASE ("Registry: processing controls travel both ways, requests once each", "[link]")
+{
+    SharedBlock mem (testName ("proc"), Registry::bytes());
+    Registry r (mem.data());
+    r.requestProc (0, 1, mixology::proc::eqOn, 1.0f);   // made before this Link existed: not ours
+    const int s = r.claim (5, 10);
+    REQUIRE (s == 0);
+    std::array<std::uint32_t, kProcSlots> seen {};
+    r.learnProcRequests (s, seen);
+    const auto gen = r.links (10)[0].generation;
+    CHECK_FALSE (r.links (10)[0].hasProcessing);
+
+    int idx[8];
+    float val[8];
+    CHECK (r.takeProcRequests (s, seen, idx, val, 8) == 0);
+    r.requestProc (s, gen + 1, mixology::proc::compOn, 1.0f);   // an older owner: ignored
+    r.requestProc (s, gen, mixology::proc::compThr, -24.0f);
+    r.requestProc (s, gen, mixology::proc::compThr, -30.0f);   // the newest value wins
+    r.requestProc (s, gen, mixology::proc::eq3Gain, 4.5f);
+    r.requestProc (s, gen, 999, 1.0f);                          // no such control
+    REQUIRE (r.takeProcRequests (s, seen, idx, val, 8) == 2);
+    CHECK (idx[0] == mixology::proc::eq3Gain);
+    CHECK (val[0] == 4.5f);
+    CHECK (idx[1] == mixology::proc::compThr);
+    CHECK (val[1] == -30.0f);
+    CHECK (r.takeProcRequests (s, seen, idx, val, 8) == 0);
+
+    auto v = mixology::proc::defaults();
+    v[mixology::proc::compThr] = -30.0f;
+    r.publishProc (s, v, 44100.0f, 233);
+    mixology::proc::Values back {};
+    REQUIRE (r.readProc (s, gen, back));
+    CHECK (back == v);
+    CHECK_FALSE (r.readProc (s, gen + 1, back));
+    auto info = r.links (20)[0];
+    CHECK (info.hasProcessing);
+    CHECK (info.sampleRate == 44100.0f);
+    CHECK (info.latency == 233);
+
+    mixology::proc::Meters m;
+    m.comp = 4.5f;
+    m.outL = -9.0f;
+    m.running = 1u << static_cast<int> (mixology::proc::Module::comp);
+    r.publishProcMeters (s, m, 100);
+    mixology::proc::Meters got;
+    REQUIRE (r.readProcMeters (s, gen, got, 150));
+    CHECK (got.comp == 4.5f);
+    CHECK (got.outL == -9.0f);
+    CHECK (got.running == m.running);
+    CHECK (r.links (150)[0].procRunning == m.running);
+    CHECK_FALSE (r.readProcMeters (s, gen, got, 100 + kAudioMs + 1));   // stale: the track stopped
+}
+
 TEST_CASE ("Registry: Mixology tells each Link whether it is paired", "[link]")
 {
     SharedBlock mem (testName ("match"), Registry::bytes());

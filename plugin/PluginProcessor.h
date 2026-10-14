@@ -4,15 +4,20 @@
 
 #include "mixology/AudioRing.h"
 #include "mixology/LoudnessMeter.h"
+#include "mixology/ProcChain.h"
 #include "BridgeHub.h"
+#include "ProcHost.h"
 #include "SpectrumTap.h"
 #include "StereoTap.h"
 
 #include <atomic>
 
-/** Mixology main plug-in. v0.1: passes audio through untouched (bit-exact), measures the mix
-    (peaks, loudness, spectrum) for the interface, and owns the Cubase bridge (shared hub). */
-class MixologyAudioProcessor final : public juce::AudioProcessor
+/** Mixology main plug-in: measures the mix (peaks, loudness, spectrum) for the interface, owns the Cubase
+    bridge (shared hub), and (Milestone 5) runs the "Full Mix" processing: the same chain as each Mixology
+    Link, all modules off by default (audio untouched, bit for bit). Analyze Mix hears the mix before that
+    processing (what the tracks add up to); the meters show it after. */
+class MixologyAudioProcessor final : public juce::AudioProcessor,
+                                     private juce::Timer
 {
 public:
     MixologyAudioProcessor();
@@ -67,11 +72,26 @@ public:
 
     juce::SharedResourcePointer<BridgeHub> bridgeHub;
 
+    // ---- Full Mix processing (message thread) ----------------------------------------------------
+    mixology::proc::Values procValues() const { return procRaw.read(); }
+    void setProc (int index, float value) { mixology::proc::host::set (parameters, index, value); }
+    /** The processing meters since the last call (largest values; message thread). */
+    mixology::proc::Meters takeProcMeters();
+    /** Mono Check: you hear the full mix in mono. Never saved; the window switches it off when you leave
+        the Stereo page or close Mixology, so a mixdown can't come out mono by mistake. */
+    std::atomic<bool> monoListen { false };
+
 private:
+    void timerCallback() override;   // the Limiter's latency
+
     template <typename Sample>
     void process (juce::AudioBuffer<Sample>&);
 
     mixology::LoudnessMeter loudness;
+    mixology::proc::host::Raw procRaw;
+    mixology::proc::Chain chain;
+    std::array<std::atomic<float>, mixology::proc::kMeterValues> procMeters {};
+    std::atomic<std::uint32_t> procRunning { 0 };
     juce::CriticalSection stateLock;
     juce::String uiState;
 

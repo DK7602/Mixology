@@ -9,7 +9,8 @@
 /** Mixology Link's small window: the track it sits on, its meters, the Trim knob, and whether Mixology
     can see it. Same look as Mixology (shared stylesheet, knobs and meters), in its own 3:2 canvas.
 
-    C++ -> JS: "linkFrame" at 30 Hz. JS -> C++: native functions getLinkInfo(), setTrim(db). */
+    C++ -> JS: "linkFrame" at 30 Hz. JS -> C++: native functions getLinkInfo(), setTrim(db), trimGesture(on), clearAssist(),
+    setProcessing(on). */
 class LinkEditor final : public juce::AudioProcessorEditor,
                          private juce::Timer
 {
@@ -23,7 +24,7 @@ public:
     static bool isSupported();
 
     static constexpr int kDesignWidth = 600;
-    static constexpr int kDesignHeight = 470;
+    static constexpr int kDesignHeight = 536;
 
 private:
     void timerCallback() override;

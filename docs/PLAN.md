@@ -97,7 +97,7 @@ with the project. Song-position tagging was not needed: moments are taken togeth
 - Overview analyzer shows each role in its colour; Mix Assistant gives real suggestions in plain language with a
   "Do I need to fix it?" line, like Voxology's Learn.
 
-### M4 - Auto Mix and the smart tools (built: you test it, docs/M4_TEST.md)
+### M4 - Auto Mix and the smart tools (tested in Cubase, follow-ups done: docs/M4_TEST.md)
 Built: plans you approve before anything changes (MixPlanner: Balance, Stereo Architect, Clean Up, Vocal Pocket,
 Auto Mix), applied across the whole project (BridgeSession::applyPlan pages the bank and comes back; per-apply Undo
 with exact positions; Restore all reaches every page too). Mixology Link gained the Assist EQ (low cut, mud dip,
@@ -111,36 +111,16 @@ and switches A / B level-matched (solo + Trim). Ducking (sidechain) stays with t
 - Hard limits: never more than +/-6 dB per move without asking, never touch locked channels or the Stereo Out, never
   aim the mix at a loudness target, keep 3-6 dB of headroom for Masterology.
 
-### M5 - Processing pages
-- EQ, Dynamics (compressor, multiband, transient, gate / expand, limiter), Tone (warmth, presence, air, glue, punch),
-  Stereo (width, low / high width, pan assist, mono check, correlation) running inside each track's Link.
-- Space: Reverb, Delay, Chorus, Phaser, Hall, Room, Special FX on an FX channel's Link, each with its own correct
-  controls and scene picture, plus EQ and ducking.
-- Master page: monitoring and gentle finishing only (no limiter fight with Masterology).
-- Auto Mix may then also propose EQ / dynamics moves through the Links.
-
-### M6 - Suite and polish
-- Recognise Voxology on a track (no double compression of vocals), hand-off notes for Masterology.
-- Built-in manual (docs/MANUAL.md shown by the ? button), presets, undo history, CPU checks with 40+ tracks.
-- Later: code signing, timeline clip-gain study (separate feasibility test).
-
-## Things we test instead of assume
-| Question | Where it gets answered |
-| --- | --- |
-| Can a VST3 open the virtual MIDI ports while Cubase also uses them? | M1: yes (loopMIDI) |
-| Exact dB <-> fader value curve in Cubase 14 | M1: learned from Cubase's display text, lands exactly |
-| Do remote moves write automation when a track is in Write / Latch? | M1 / M2 (Mixology refuses with W on) |
-| Do remote moves show in Cubase's undo? | M2: not in Edit History (user, Artist 14). Mixology's Restore is the undo |
-| Does every channel type (mono, stereo, group, FX, instrument) bank and report correctly? | M1: yes |
-| Track name / colour from VST3 channel context in Cubase Artist 14 | M2: yes (Mixology Link shows both) |
-| Can two plug-in libraries share memory inside Cubase? | M2 (named shared memory; checked in CI on Windows) |
-| CPU with a Link on every track | M3 |
-| Does a muted track's insert still get audio (reference song heard by its Link)? | M4 test, step 18 |
-
-## Your one-time setup (done in M1)
-1. Install loopMIDI (free, Tobias Erichsen) and create two ports named exactly `Mixology to Cubase` and
-   `Cubase to Mixology`. (Windows 11 with the new Windows MIDI Services can use its built-in loopback instead.)
-2. Copy the `Mixology` folder from `bridge/cubase` into
-   `Documents\Steinberg\Cubase\MIDI Remote\Driver Scripts\Local\` and restart Cubase.
-3. In Studio Setup > MIDI Port Setup untick "In 'All MIDI Inputs'" for both Mixology ports.
-Full steps: docs/M1_TEST.md (passed). Milestone 2 adds Mixology Link: copy `Mixology Link.vst3` next to Mixology.
+### M5 - Processing pages (in three test rounds)
+Round 1 built (you test it, docs/M5_TEST.md): one processing chain (ProcChain, framework-free, 14 tests) in every
+Mixology Link and in Mixology for the Full Mix: Gate / Expand, 6-band EQ (Precision / Smooth / Natural), Compressor,
+Multiband (auto-threshold), Transient, Tone Balance, Loudness, Harmonic, Analog Touch, Clip Control (oversampled),
+Stereo width (3 bands), Final Touch, lookahead Limiter (sample / true peak; latency only while on). 100 controls
+from one table (ProcParams) become host parameters in both plug-ins and plugin/ui/procspec.js (generated, checked).
+All modules start off: audio untouched, bit for bit. Mixology's pages pick a target (Full Mix or a Link) and talk to
+the Link through the registry (layout 5: per-control requests, values and processing meters back). Mono Check on the
+Stereo page (never saved, off when you leave the page). Link window: PROCESSING strip with On / Off.
+- Round 2: Space on an FX channel's Link (Reverb, Delay, Chorus, Phaser, Hall, Room, Special FX, each with its own
+  controls and scene picture), its EQ, and ducking under the vocal (the vocal's Link shares its level).
+- Round 3: Master page finishing (Glue, Tilt, Width, Trim on Mixology; no limiter fight with Masterology), and Auto
+  Mix / the Mix Assistant proposing EQ and dynamics moves through the Links (preview, Apply, Undo like M4).

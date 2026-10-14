@@ -5,16 +5,16 @@ import { $, el, Knob, Meter, fmt, setRenderScale } from "./ui.js";
 
 const stage = $("lstage");
 function fit() {
-  const s = Math.min(window.innerWidth / 600, window.innerHeight / 470);
+  const s = Math.min(window.innerWidth / 600, window.innerHeight / 536);
   stage.style.transform = `scale(${s})`;
   stage.style.left = Math.max(0, (window.innerWidth - 600 * s) / 2) + "px";
-  stage.style.top = Math.max(0, (window.innerHeight - 470 * s) / 2) + "px";
+  stage.style.top = Math.max(0, (window.innerHeight - 536 * s) / 2) + "px";
   setRenderScale(s);
 }
 window.addEventListener("resize", fit);
 
 const fn = (name) => { const f = Juce.getNativeFunction(name); return (...a) => f(...a).catch(() => undefined); };
-const native = { getLinkInfo: fn("getLinkInfo"), setTrim: fn("setTrim"), trimGesture: fn("trimGesture"), clearAssist: fn("clearAssist") };
+const native = { getLinkInfo: fn("getLinkInfo"), setTrim: fn("setTrim"), trimGesture: fn("trimGesture"), clearAssist: fn("clearAssist"), setProcessing: fn("setProcessing") };
 
 // Light / dark: follows Mixology's saved choice; the logo switches this window.
 function applyTheme(theme) {
@@ -101,6 +101,26 @@ function drawAssist(a) {
   ctx.stroke();
 }
 
+// Processing: what Mixology's EQ, Dynamics, Tone and Stereo pages switched on for this track.
+const procCard = $("lproc");
+el("div", "ltitle", procCard).textContent = "PROCESSING";
+const procText = el("div", "ltext", procCard);
+const procBtn = el("button", "small-btn", procCard);
+let procOn = true, procKey = "";
+procBtn.addEventListener("click", () => native.setProcessing(!procOn));
+const MODULE_NAMES = { gate: "Gate", eq: "EQ", comp: "Compressor", multi: "Multiband", trans: "Transient", balance: "Tone Balance",
+  loud: "Loudness", harm: "Harmonics", analog: "Analog", clip: "Clip", width: "Stereo", final: "Final Touch", limit: "Limiter" };
+function drawProc(p) {
+  procOn = !!p.on;
+  procBtn.textContent = procOn ? "On" : "Off";
+  procBtn.title = procOn ? "Switch all processing off (compare with the plain track)" : "Switch the processing back on";
+  procBtn.style.color = procOn ? "var(--green)" : "var(--text-dim)";
+  if (!p.modules.length) { procText.textContent = "Nothing on. Mixology's EQ, Dynamics, Tone and Stereo pages work here."; procText.style.color = "var(--text-dim)"; return; }
+  procText.style.color = procOn ? "var(--text)" : "var(--text-dim)";
+  procText.innerHTML = p.modules.map((m) => `<span class="lchip${p.running.includes(m) ? " live" : ""}">${MODULE_NAMES[m] || m}</span>`).join("")
+    + (p.latencyMs > 0 ? `<span style="color:var(--text-dim)">${fmt.num(p.latencyMs, 1)} ms lookahead</span>` : "");
+}
+
 let peakHold = -100, peakTime = 0;
 function frame(f) {
   mL.set(f.peakL);
@@ -118,6 +138,11 @@ function frame(f) {
   $("lname").style.color = f.name ? "var(--text)" : "var(--text-dim)";
   $("lcolour").style.background = f.colour || "var(--text-faint)";
   $("lsub").textContent = f.note || (f.channels === 1 ? "Mono track" : "Stereo track") + " · put Mixology Link after your other plug-ins on this track";
+
+  if (f.proc) {
+    const key = JSON.stringify(f.proc);
+    if (key !== procKey) { procKey = key; drawProc(f.proc); }
+  }
 
   if (f.assist) {
     const key = JSON.stringify(f.assist);

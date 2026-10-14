@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 namespace
 {
@@ -219,6 +220,50 @@ int main (int argc, char** argv)
         play (*kick, sr, block, 0.2, 0.5f);   // glides out
         const float cleared = play (*kick, sr, block, 0.5, 0.5f);
         check (std::abs (cleared - before) < 1.0e-6f, "cleared: audio untouched again");
+    }
+
+    // Milestone 5: Mixology switches on the Kick Link's EQ (+6 dB right on the test tone) through the registry,
+    // the Link applies it as host parameters and reports it back; the Limiter's lookahead reaches the host.
+    {
+        using namespace mixology::proc;
+        check (findParameter (*kick, "EQ 3 Gain") != nullptr && findParameter (*kick, "Limiter Ceiling") != nullptr,
+               "processing parameters exposed to the host (" + juce::String (static_cast<int> (kick->getParameters().size())) + " in all)");
+        links = registry.links (nowMs());
+        const auto* kl = byName (links, "Kick");
+        check (kl != nullptr && kl->hasProcessing, "Kick Link publishes its processing");
+        if (kl == nullptr) return 1;
+        const int kSlot = kl->slot;
+        const auto kGen = kl->generation;
+        Values v {};
+        bool allOff = registry.readProc (kSlot, kGen, v);
+        for (int m = 0; m < kModules; ++m)
+            allOff = allOff && v[static_cast<std::size_t> (onParam (static_cast<Module> (m)))] < 0.5f;
+        check (allOff && v[chainOn] > 0.5f, "every module starts off");
+        const float before = play (*kick, sr, block, 0.5, 0.5f);
+
+        registry.requestProc (kSlot, kGen, eqOn, 1.0f);
+        registry.requestProc (kSlot, kGen, eq3Freq, 997.0f);
+        registry.requestProc (kSlot, kGen, eq3Gain, 6.0f);
+        pump (300);
+        const float boosted = play (*kick, sr, block, 0.5, 0.5f);
+        const float change = juce::Decibels::gainToDecibels (boosted / before);
+        check (std::abs (change - 6.0f) < 0.3f, "EQ request applied: the 997 Hz tone is +" + juce::String (change, 2) + " dB");
+        check (registry.readProc (kSlot, kGen, v) && v[eqOn] > 0.5f && std::abs (v[eq3Gain] - 6.0f) < 0.01f, "and reported back");
+        mixology::proc::Meters m;
+        check (registry.readProcMeters (kSlot, kGen, m, nowMs()) && (m.running & (1u << static_cast<int> (Module::eq))) != 0, "the EQ reports it is running");
+
+        check (kick->getLatencySamples() == 0, "no latency without the Limiter");
+        registry.requestProc (kSlot, kGen, limOn, 1.0f);
+        pump (300);
+        check (kick->getLatencySamples() > 0, "Limiter on: the host is told its lookahead (" + juce::String (kick->getLatencySamples()) + " samples)");
+
+        registry.requestProc (kSlot, kGen, limOn, 0.0f);
+        registry.requestProc (kSlot, kGen, eqOn, 0.0f);
+        pump (300);
+        play (*kick, sr, block, 0.3, 0.5f);   // fades out
+        const float off = play (*kick, sr, block, 0.5, 0.5f);
+        check (std::memcmp (&off, &before, sizeof off) == 0, "modules off again: audio untouched, bit for bit");
+        check (kick->getLatencySamples() == 0, "and no latency");
     }
 
     // A renamed track is seen under its new name.
