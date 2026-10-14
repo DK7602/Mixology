@@ -238,19 +238,19 @@ export function buildStereo(root, app) {
   const note = el("div", "proc-note", right, { left: "22px", right: "22px", top: "730px", fontSize: "15px" });
   note.textContent = "Low Width under 100 % keeps kick and 808 solid in mono (clubs, phones). High Width over 100 % opens up hats, pads and reverbs.";
 
+  let dots = null, corr = null, shownMono = null;
   function sync() {
     knobs.forEach((k) => { const v = proc.get(k.o.pid); if (!k.dragging && Math.abs(k.value - v) > 1e-3) k.set(v); });
     list.lamps((m) => (m === "width" || m === "freq") && proc.switchedOn("width"), (m) => (m === "width" || m === "freq") && proc.running("width"));
     monoBadge.style.display = proc.mono ? "block" : "none";
     list.buttons.find((b) => b.dataset.id === "mono").classList.toggle("active", proc.mono);
     const mono = proc.key !== "mix" && proc.channels === 1;
-    note.textContent = mono ? `'${proc.name}' is a mono track: width does nothing here (pan it instead).`
-      : "Low Width under 100 % keeps kick and 808 solid in mono (clubs, phones). High Width over 100 % opens up hats, pads and reverbs.";
+    if (mono) { note.textContent = `'${proc.name}' is a mono track: width does nothing here (pan it instead).`; note.style.color = "var(--amber)"; shownMono = "track"; }
+    else if (shownMono === "track") shownMono = null;
   }
   proc.on((why) => { if (why === "values" || why === "target" || why === "mono") sync(); });
   sync();
 
-  let dots = null, corr = null;
   const trail = [];
   scope.draw = (ctx, w, h) => {
     const dark = document.documentElement.dataset.theme !== "light";
@@ -291,6 +291,15 @@ export function buildStereo(root, app) {
       list.lamps((m) => (m === "width" || m === "freq") && proc.switchedOn("width"), (m) => (m === "width" || m === "freq") && proc.running("width"));
       const track = proc.key !== "mix";
       corr = track ? proc.corr : f.corr;
+      // Mono material: width has nothing to work with (left = right). Say so instead of looking broken.
+      const monoNow = corr !== null && corr !== undefined && corr > 0.985;
+      if (monoNow !== shownMono) {
+        shownMono = monoNow;
+        note.style.color = monoNow ? "var(--amber)" : "";
+        note.textContent = monoNow
+          ? `${track ? `'${proc.name}'` : "The full mix"} is mono right now (left = right${track ? "" : ": e.g. a mono group on the way"}), so width can't change it. Widen a stereo track instead, or make that group / output stereo.`
+          : "Low Width under 100 % keeps kick and 808 solid in mono (clubs, phones). High Width over 100 % opens up hats, pads and reverbs.";
+      }
       const who = track ? `'${proc.name}'` : "Full mix";
       if (corr === null || corr === undefined) { corrMark.style.left = "calc(50% - 3px)"; corrMark.style.opacity = "0.35"; corrText.textContent = track ? `${who}: no audio` : "No audio"; }
       else {

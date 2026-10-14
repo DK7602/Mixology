@@ -81,7 +81,7 @@ jobs:
         shell: bash
         run: |
           exe=$(find build/tools/linkcheck -type f \( -name MixologyLinkCheck.exe -o -name MixologyLinkCheck \) | head -1)
-          "$exe" "build/link/MixologyLink_artefacts/Release/VST3/Mixology Link.vst3"
+          "$exe" "build/link/MixologyLink_artefacts/Release/VST3/Mixology Link.vst3" "build/plugin/Mixology_artefacts/Release/VST3/Mixology.vst3"
 
       # One folder with everything to install: the plug-in, the Cubase script, the manual and the test steps.
       - name: Package

@@ -101,16 +101,24 @@ export function createProc(app) {
 
     /** The on / off switch for a module, in the style of the page's tags. */
     powerButton(parent, x, y, getMod) {
+      // Built once; only its text and colour change (and only when they must). A button whose insides were
+      // rebuilt while you held the mouse down never gets the click (the meters update 30 times a second).
       const b = el("button", "power-btn", parent, { left: x + "px", top: y + "px" });
+      b.innerHTML = icon("power", 'stroke-width="2.6"');
+      const label = el("span", "", b);
+      let shown = "";
       const draw = () => {
         const mod = getMod();
         const on = api.switchedOn(mod);
-        b.innerHTML = icon("power", 'stroke-width="2.6"') + `<span>${on ? "ON" : "OFF"}</span>`;
+        const key = mod + (on ? ":on:" : ":off:") + api.name;
+        if (key === shown) return;
+        shown = key;
+        label.textContent = on ? "ON" : "OFF";
         b.classList.toggle("on", on);
         b.title = (on ? "Switch " : "Switch on ") + (MODULE_NAMES[mod] || mod) + (on ? " off (compare without it)" : "") + " on " + api.name;
       };
-      b.addEventListener("click", () => api.toggle(getMod()));
-      api.on(draw);
+      b.addEventListener("click", () => { api.toggle(getMod()); draw(); });
+      api.on((why) => { if (why !== "frame") draw(); });
       draw();
       return { el: b, draw };
     },

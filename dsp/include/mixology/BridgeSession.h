@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <deque>
+#include <set>
 #include <map>
 #include <string>
 #include <vector>
@@ -173,6 +174,10 @@ namespace mixology
         /** Is the channel heard on the Stereo Out? Not when it is muted, or when another channel is soloed
             and this one isn't (as far as Mixology has seen them). Its Mixology Link still hears it either way. */
         bool isAudible (std::uint32_t hash) const;
+        /** Cubase didn't follow a pan move on this channel (no pan control there: a mono track going to a mono
+            group or output, where the MIDI Remote still reports a pan, usually "L100"). Mixology then leaves
+            that pan alone. Learned this session, the first time a pan move doesn't land. */
+        bool panIgnored (std::uint32_t hash) const { return noPan.count (hash) != 0; }
         /** Fader levels of every channel seen so far (in the bank, or during a scan). */
         const std::map<std::uint32_t, KnownFader>& knownFaders() const { return faders; }
         /** Steps the bank through all channels to read their faders, then puts it back where it was.
@@ -282,6 +287,15 @@ namespace mixology
             bool restoring = false;
             std::deque<bridge::BankAction> pending;   // the way back, one step at a time
         };
+        // A pan move is watched: if Cubase's pan doesn't follow within kPanLandSeconds, that channel has no
+        // working pan (see panIgnored).
+        struct PanWatch { int slot = -1; std::uint32_t hash = 0; double from = 0.5, to = 0.5, sentAt = 0.0; };
+        std::vector<PanWatch> panWatches;
+        std::set<std::uint32_t> noPan;
+        static constexpr double kPanLandSeconds = 1.2;
+        void watchPan (int slot, double to, double now);
+        void checkPanWatches (double now);
+
         void scanStep (double now);
         void scanAdvance (double now);
         bool applyPlanHere (double now);

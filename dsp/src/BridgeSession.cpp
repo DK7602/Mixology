@@ -73,9 +73,37 @@ namespace mixology
         }
     }
 
+    void BridgeSession::watchPan (int slot, double to, double now)
+    {
+        if (slot < 0 || slot >= slotCount()) return;
+        const auto& s = slots[static_cast<std::size_t> (slot)];
+        if (! s.present || ! s.hasPan || std::abs (s.pan - to) < 0.01) return;
+        panWatches.erase (std::remove_if (panWatches.begin(), panWatches.end(), [slot] (const PanWatch& w) { return w.slot == slot; }), panWatches.end());
+        panWatches.push_back ({ slot, s.hash, s.pan, to, now });
+    }
+
+    void BridgeSession::checkPanWatches (double now)
+    {
+        for (auto it = panWatches.begin(); it != panWatches.end();)
+        {
+            const auto& w = *it;
+            const auto& s = slots[static_cast<std::size_t> (w.slot)];
+            if (! s.present || s.hash != w.hash || std::abs (s.pan - w.to) < 0.01) { it = panWatches.erase (it); continue; }   // gone, or it landed
+            if (now - w.sentAt < kPanLandSeconds) { ++it; continue; }
+            if (std::abs (s.pan - w.from) < 0.003 && noPan.insert (w.hash).second)
+            {
+                addLog (now, quoted (s.title) + ": Cubase didn't follow the pan move (it stays at " + s.panText
+                                 + "). Its output is probably mono (e.g. a mono group), so it plays in the middle. Mixology leaves its pan alone.");
+                changed();
+            }
+            it = panWatches.erase (it);
+        }
+    }
+
     void BridgeSession::tick (double now)
     {
         if (linkState == Link::offline) return;
+        if (! panWatches.empty()) checkPanWatches (now);
 
         if (linkState == Link::waiting || linkState == Link::lost)
         {
@@ -495,6 +523,8 @@ namespace mixology
         if (s.automationWrite) return { false, quoted (s.title) + " is writing automation (W is on). Switch W off first." };
         if (field == Field::volume && ! s.hasVolume) return { false, "Waiting for Cubase to report " + quoted (s.title) + "'s fader." };
         if (field == Field::pan && ! s.hasPan) return { false, quoted (s.title) + " has no pan control." };
+        if (field == Field::pan && panIgnored (s.hash))
+            return { false, quoted (s.title) + " doesn't pan in Cubase: its output is mono (a mono group or output), so it plays in the middle. Mixology leaves its pan alone." };
         return { true, {} };
     }
 
@@ -633,6 +663,7 @@ namespace mixology
         auto m = writeMessage (Cmd::setPan, ref.slot);
         m.value = std::clamp (normalised, 0.0, 1.0);
         send (m);
+        watchPan (ref.slot, m.value, now);
         changed();
         return warningsFor (ref.slot, ok, now);
     }
@@ -757,9 +788,12 @@ namespace mixology
 
         if (p.hasPan && s.hasPan && std::abs (s.pan - p.pan) > 1.0e-6)
         {
-            auto m = writeMessage (Cmd::setPan, ref.slot);
-            m.value = p.pan;
-            send (m);
+            if (! panIgnored (s.hash))
+            {
+                auto m = writeMessage (Cmd::setPan, ref.slot);
+                m.value = p.pan;
+                send (m);
+            }
         }
         for (auto [cmd, want, have] : { std::tuple { Cmd::setMute, p.mute, s.mute },
                                         std::tuple { Cmd::setSolo, p.solo, s.solo } })
@@ -1079,7 +1113,11 @@ namespace mixology
             before.exactVolume = true;
             before.position = s.volume;
             before.checkFrom = true;   // undo only if it is still where this plan puts it
-            before.fromDb = step.exactVolume ? law.toDb (step.position) : step.db;
+            // ... which is the target as Cubase can take it: a fader stops at its top (+6 dB), so a plan asking
+            // for more leaves it there, and Undo must still recognise it as the plan's own move.
+            double landed = step.exactVolume ? law.toDb (step.position) : step.db;
+            if (! std::isfinite (landed) || landed < -144.0) landed = FaderLaw::kMinusInf;
+            before.fromDb = std::min (landed, kMaxDb);
             before.setPan = doPan;
             before.pan = s.pan;
             before.checkPan = true;
@@ -1118,11 +1156,12 @@ namespace mixology
                     }
                 }
             }
-            if (doPan && std::abs (s.pan - step.pan) > 1.0e-6)
+            if (doPan && std::abs (s.pan - step.pan) > 1.0e-6 && ! panIgnored (s.hash))
             {
                 auto m = writeMessage (Cmd::setPan, i);
                 m.value = std::clamp (step.pan, 0.0, 1.0);
                 send (m);
+                watchPan (i, m.value, now);
             }
             for (auto [want, cmd, on, have] : { std::tuple { step.setMute, Cmd::setMute, step.mute, s.mute },
                                                 std::tuple { step.setSolo, Cmd::setSolo, step.solo, s.solo } })

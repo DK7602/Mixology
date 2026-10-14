@@ -21,6 +21,7 @@ struct FakeCubase
         std::uint32_t rgb = 0x3366CC;
         std::uint32_t id = 0;   // Cubase channel ID hash (0 = host doesn't report one)
         int automationPointsWritten = 0;
+        bool panIgnored = false;   // no working pan (a mono track into a mono group): pan writes don't land
     };
 
     std::vector<Channel> channels;
@@ -132,7 +133,7 @@ struct FakeCubase
                 }
                 else if (m->cmd == Cmd::setPan)
                 {
-                    c->pan = m->value;
+                    if (! c->panIgnored) c->pan = m->value;
                     Message p; p.cmd = Cmd::slotPan; p.slot = m->slot; p.value = c->pan; p.text = panText (c->pan); out (p);
                 }
                 else if (m->cmd == Cmd::setMute)

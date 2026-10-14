@@ -753,9 +753,12 @@ juce::var BridgeHub::getState (bool includeLog)
             // MIDI Remote reports (full width = "L100"). Its real position is unknown to Mixology.
             so->setProperty ("stereoPanner", sl.channels == 2 && s.hasPan && s.pan <= 0.0005);
         }
+        // Cubase didn't follow a pan move here: no working pan (mono track into a mono group / output).
+        so->setProperty ("noPan", s.present && bridge.panIgnored (s.hash));
         slots.add (juce::var (so));
     }
     o->setProperty ("slots", slots);
+    o->setProperty ("mixMono", report.valid && report.monoMix);   // pans change nothing at the Stereo Out
     int changedFaders = 0, changedEq = 0;
     o->setProperty ("changedCount", changedTotal (&changedFaders, &changedEq));
     o->setProperty ("changedFaders", changedFaders);
@@ -962,6 +965,8 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
     {
         const auto tool = mixology::mix::toolFromKey (value.toString().toStdString());
         if (! tool) r = { false, "Unknown tool." };
+        else if (bridge.applying())   // faders are still on their way (Apply / Undo): a plan now would see them half-moved
+            r = { false, "Mixology is still moving faders (" + bridge.planProgress().what + "): open it again in a moment." };
         else
         {
             currentPlan = mixology::mix::makePlan (*tool, report, channelsNow());
@@ -1059,6 +1064,7 @@ std::vector<mixology::mix::ChannelNow> BridgeHub::channelsNow() const
             c.channels = l->channels;
             c.panUnknown = l->channels == 2 && f.hasPan && f.pan <= 0.0005;   // Stereo Combined Panner (see getState)
         }
+        if (bridge.panIgnored (hash)) c.panUnknown = true;   // Cubase doesn't pan it (mono group / output)
         seen.insert (hash);
         out.push_back (c);
     }

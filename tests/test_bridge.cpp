@@ -443,6 +443,34 @@ TEST_CASE ("Bridge: Restore puts back volume, pan, mute and solo", "[bridge]")
     CHECK (r.session.lastMoveResult().find ("Restored 'Kick'") != std::string::npos);
 }
 
+TEST_CASE ("Bridge: a channel whose pan Cubase ignores (mono group) is learned and left alone", "[bridge]")
+{
+    Rig r;
+    r.cubase.channels[1].pan = 0.0;   // what the MIDI Remote reports for a mono track into a mono group: "L100"
+    r.cubase.channels[1].panIgnored = true;
+    r.run (0.2);
+    const auto snare = r.ref ("Snare");
+    CHECK_FALSE (r.session.panIgnored (snare.hash));
+    REQUIRE (r.session.setPan (snare, 0.5, r.now).ok);   // the user turns it to the middle: Cubase doesn't follow
+    r.run (0.5);
+    CHECK_FALSE (r.session.panIgnored (snare.hash));     // not yet: Cubase may still be answering
+    r.run (1.0);
+    CHECK (r.session.panIgnored (snare.hash));
+    bool logged = false;
+    for (const auto& line : r.session.logLines()) logged = logged || line.text.find ("didn't follow the pan move") != std::string::npos;
+    CHECK (logged);
+    const auto again = r.session.setPan (snare, 0.7, r.now);
+    CHECK_FALSE (again.ok);
+    CHECK (again.message.find ("output is mono") != std::string::npos);
+
+    // A channel whose pan works is never marked.
+    const auto kick = r.ref ("Kick");
+    REQUIRE (r.session.setPan (kick, 0.2, r.now).ok);
+    r.run (2.0);
+    CHECK_FALSE (r.session.panIgnored (kick.hash));
+    CHECK (r.cubase.channels[0].pan == Catch::Approx (0.2).margin (1.0e-6));
+}
+
 TEST_CASE ("Bridge: Restore all brings back every changed channel in view", "[bridge]")
 {
     Rig r;
@@ -581,6 +609,33 @@ TEST_CASE ("Bridge: a plan sets levels and pans across the whole project, with i
     bool keptNote = false;
     for (const auto& n : r.session.planProgress().notes) keptNote = keptNote || (n.find ("'Lead Vox'") != std::string::npos && n.find ("moved since") != std::string::npos);
     CHECK (keptNote);
+}
+
+TEST_CASE ("Bridge: Undo also takes back a move that stopped at the fader top", "[bridge]")
+{
+    Rig r;
+    r.run (0.2);
+    const auto kick = r.ref ("Kick");
+    REQUIRE (r.session.setVolumeDb (kick, 4.5, r.now).ok);   // like the Drum Machine at +4.5 dB
+    r.run (0.6);
+    const double before = r.cubase.channels[0].volume;
+    BridgeSession::PlanStep st;
+    st.hash = kick.hash;
+    st.title = "Kick";
+    st.setVolume = true;
+    st.db = 6.5;                 // more than the fader can do: it stops at +6
+    st.checkFrom = true;
+    st.fromDb = 4.5;
+    REQUIRE (r.session.applyPlan ("Auto Mix", { st }, r.now).ok);
+    r.run (3.0);
+    REQUIRE_FALSE (r.session.applying());
+    CHECK (r.cubaseDb (0) == Catch::Approx (6.0).margin (0.06));
+    const auto undo = r.session.planProgress().undo;
+    REQUIRE (undo.size() == 1);
+    REQUIRE (r.session.applyPlan ("Undo Auto Mix", undo, r.now).ok);
+    r.run (3.0);
+    CHECK (r.cubase.channels[0].volume == Catch::Approx (before).margin (1.0 / 16384.0));   // back, not "moved since"
+    CHECK (r.session.planProgress().skipped == 0);
 }
 
 TEST_CASE ("Bridge: a plan for channels in view doesn't move the bank", "[bridge]")

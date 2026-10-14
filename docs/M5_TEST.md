@@ -1,5 +1,32 @@
 # Milestone 5, round 1 test: EQ, Dynamics, Tone and Stereo make sound
 
+## Retest after your first round (do this first, about 10 minutes)
+
+What your first test found, and what changed:
+- **ON / OFF buttons didn't react** (EQ, Transient, Tone Balance, Stereo...): the button redrew itself 30 times a
+  second, so a normal click got lost. Fixed. (Turning a knob worked, that's why those turned modules on.)
+- **Tone and Stereo seemed to do nothing**: checked with the real plug-in: Tone Balance Warmth +6 lifts the lows by
+  5.8 dB, Width 200 % doubles the stereo spread. Your mix reaches the Stereo Out in **mono**, so Width on the
+  Full Mix has nothing to widen: the Stereo page now says so.
+- **Electric guitars at "L100"** though you hear them in both ears: those channels have no working pan in Cubase
+  (most likely they feed a mono group), and Cubase then reports "L100". The first time Cubase ignores a pan move,
+  Mixology now shows **No pan** under that strip and never touches its pan again.
+- **Auto Mix had fewer changes after Undo**: Undo could skip a fader it had moved, and a tool opened while Undo was
+  still moving faders saw them half-way. Both fixed.
+
+1. **Power buttons**: on the EQ, Dynamics (Transient), Tone (Tone Balance) and Stereo pages, click **ON** / **OFF**
+   a few times. **Report**: does every click switch it?
+2. **Tone**: pick a track (or Full Mix), Tone Balance ON, **WARMTH** +6 dB then −6 dB, **AIR** +6 dB.
+   **Report**: do you hear it now?
+3. **Pans**: Tracks page, turn one Electric guitar's pan knob in Mixology. After a second it should read **No pan**.
+   **Report**: does it?
+4. **Auto Mix**: Analyze Mix, open Auto Mix, note how many changes, Apply, **Undo**, wait for the list to come back.
+   **Report**: same number of changes as the first time?
+5. **Space** page while the song plays: Delay (echoes run all the way down the tunnel), Hall (the light reaches the
+   edges), Special FX (the crystal turns on every beat; shock waves, sparks, beams). **Report**: what you'd change.
+
+The original steps follow.
+
 Goal: the EQ, Dynamics, Tone and Stereo pages now change the sound of the track you pick (inside its Mixology
 Link) or of the full mix (inside Mixology on the Stereo Out). Nothing changes until you switch something on.
 About 30 minutes. **Use a copy of a project** (File > Save As... first).

@@ -91,6 +91,24 @@ M5 split in rounds: 1 = EQ / Dynamics / Tone / Stereo processing (this), 2 = Spa
   request -> +6.00 dB, limiter latency 252 samples at 48 k, off again bit-exact; pluginval 10 local (Linux) passed
   for both plug-ins.
 
+### M5 user test 1 (2026-10-14, video) and the fixes
+- Power buttons dead with a real (100 ms+) click: proc.js redrew the button's innerHTML on every 30 Hz frame, so the
+  pressed element was gone at mouseup (Chromium drops the click). Fixed: built once, text/class updated only on
+  change. Same guard for the Tracks padlock and the Analyze button. Playwright test with 160 ms clicks: old code fails,
+  new passes.
+- Tone "did nothing", Stereo "no difference": linkcheck now hosts the real Mixology.vst3 (2nd arg, CI too): Warmth +6
+  -> +5.80 dB at 60 Hz, Width 200 % -> side +6.02 dB, state round trip. The user's mix is MONO at the Stereo Out, so
+  width on Full Mix can't work: Stereo page says so (corr > 0.985).
+- Guitars "L100" (mono Links, heard in both ears): channels without a working pan (mono track into a mono group).
+  BridgeSession watches every pan write (setPan, plans; kPanLandSeconds 1.2): Cubase not following -> noPan set,
+  log line, checkWritable refuses pan, plans skip it; hub slot "noPan" -> strip shows "No pan"; channelsNow
+  panUnknown. Global "mixMono" (report.monoMix) dims pans with a tooltip.
+- Auto Mix 7 -> Undo -> 3: undo steps' fromDb now = the target as Cubase can take it (capped at +6, -inf), test added;
+  hub "plan" refuses while bridge.applying() (a list opened mid-undo saw half-moved faders).
+- Space: delay echoes travel the whole tunnel in perspective (4 beats of echoes, faint ones kept >= 22 %), hall wave
+  expands to the far corner each beat and lights the hall's own lamps in its ring, Special FX crystal turns a
+  20-60 deg step per beat (spinPatch: round feathered patch), beams, shock waves (Feedback), sparks, bar flash.
+
 ## Milestone 4 status (v0.4.0): TESTED by the user, follow-ups done (docs/M4_TEST.md)
 User asked (2026-10-13): "Once fixed move forward with M4?" after the M3 test video + a Duck Under list cut off.
 - M3 follow-ups done first: vocal level vs the WHOLE mix (mix loudness minus vocals, so a printed Beat without a

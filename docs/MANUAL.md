@@ -55,8 +55,8 @@ Mixology remembers your choice.
 - **Space**: Reverb, Delay, Chorus, Phaser, Hall, Room, Special FX, each with its own controls,
   plus EQ and Ducking (the effect gets quieter while the vocal sings). The picture comes alive while the song
   plays and moves with its beat (Cubase's tempo): lights bloom and fade with the reverb's Decay, echoes run down
-  the delay's tunnel at its Time, the phaser's rings swirl at its Rate, and so on. It only moves while the Space
-  page is open.
+  the delay's tunnel at its Time, the phaser's rings swirl at its Rate, a wave of light rolls through the hall, the
+  Special FX crystal turns on every beat with shock waves and sparks. It only moves while the Space page is open.
 - **Tone**: Tone Balance, Loudness, Clip Control, Harmonic, Analog Touch, Final Touch; your mix's tonal balance
   against the style's target (red line), and loudness.
 - **Stereo**: Width (and Low / Mid / High Width), Mono Check, and how wide your mix is.
@@ -343,6 +343,11 @@ Final limiting is Masterology's job: keep Mixology's Limiter off on the Full Mix
   another target.
 - **A track isn't in the processing dropdown**: it has no Mixology Link, or its Link is from an older download
   (copy both .vst3 folders again).
+- **A strip says "No pan"**: Cubase didn't follow a pan move on that channel: its output is mono (for example a mono
+  group the track plays through), so it sits in the middle whatever its pan says. Mixology leaves it alone. To pan
+  it, make the group / output stereo in Cubase.
+- **The Stereo page says the mix is mono**: left and right are the same at the Stereo Out (usually a mono group on
+  the way), so Width can't change anything there.
 - **A track sounds 5 ms late**: its Limiter is on and Cubase's delay compensation is switched off (Constrain
   Delay Compensation). Switch that off again, or the Limiter.
 - **Send us the log**: Settings > Cubase Bridge > **Copy log**, then paste it into the chat.

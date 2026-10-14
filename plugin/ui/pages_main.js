@@ -193,9 +193,10 @@ export function buildOverview(root, app) {
     const a = b && b.analysis;
     const on = a && (a.state === "reading" || a.state === "listening");
     lp.style.display = on ? "block" : "none";
-    analyze.innerHTML = !a || !on ? `ANALYZE MIX<span class="sub">Scan tracks and build a mix</span>`
+    const label = !a || !on ? `ANALYZE MIX<span class="sub">Scan tracks and build a mix</span>`
       : a.state === "reading" ? `READING FADERS<span class="sub">One moment...</span>`
       : `LISTENING ${Math.floor(a.seconds)} s<span class="sub">${a.playing ? "Keep playing" : "Press play in Cubase"}</span>`;
+    if (analyze.dataset.label !== label) { analyze.dataset.label = label; analyze.innerHTML = label; }   // rebuilt only when it changes (keeps clicks)
     if (!on) return;
     const s = a.seconds || 0;
     barFill.style.width = Math.min(100, (s / (a.max || 60)) * 100) + "%";
@@ -504,6 +505,12 @@ export function buildTracks(root, app) {
         app.toast(`'${strip.data.title}' uses Cubase's Stereo Combined Panner: Cubase only tells Mixology its left edge. Pan it in Cubase.`);
         return;
       }
+      if (strip.data && strip.data.noPan) {
+        pan.set(0);
+        pan.valueEl.textContent = "No pan";
+        app.toast(`'${strip.data.title}' doesn't pan in Cubase: its output is mono (a mono group or output), so it plays in the middle.`);
+        return;
+      }
       if (!guarded()) { pan.set(strip.data && strip.data.present ? Math.round((strip.data.pan - 0.5) * 200) : 0); return; }
       send("pan", (v + 100) / 200);
     };
@@ -587,7 +594,7 @@ export function buildTracks(root, app) {
 
       // Padlock: closed = protected (Mixology never moves it).
       const prot = present && d.protected;
-      st.lock.innerHTML = icon(prot ? "lock" : "unlock", 'stroke-width="2.2"');
+      if (st.lockKey !== prot) { st.lockKey = prot; st.lock.innerHTML = icon(prot ? "lock" : "unlock", 'stroke-width="2.2"'); }
       st.lock.style.color = prot ? "var(--gold)" : "var(--text-faint)";
       st.lock.title = prot ? "Protected: Mixology won't move this channel. Click to allow." : "Click to protect: Mixology will never move this channel";
       st.s.style.boxShadow = prot ? "inset 0 0 0 1.5px rgba(227,178,96,0.55)" : "";
@@ -628,10 +635,16 @@ export function buildTracks(root, app) {
       st.val.style.color = light ? `color-mix(in srgb, ${R.colour} 62%, #000)` : R.colour;
       st.val.style.cursor = present && !blocked ? "text" : "default";
       const panBusy = st.panDragging || performance.now() < (st.panHoldUntil || 0) || document.activeElement === st.pan.root;
-      if (present && !panBusy) st.pan.set(d.stereoPanner ? 0 : Math.round((d.pan - 0.5) * 200));
+      const panInert = present && (d.stereoPanner || d.noPan);
+      if (present && !panBusy) st.pan.set(panInert ? 0 : Math.round((d.pan - 0.5) * 200));
       if (present && d.stereoPanner) st.pan.valueEl.textContent = "Stereo";
-      st.pan.root.title = present && d.stereoPanner ? "Cubase's Stereo Combined Panner: Cubase only tells Mixology its left edge (\"L100\" at full width). Pan this track in Cubase." : "";
-      st.pan.root.style.opacity = present && d.hasPan !== false && !d.stereoPanner ? "1" : "0.5";
+      if (present && d.noPan) st.pan.valueEl.textContent = "No pan";
+      st.pan.root.title = !present ? ""
+        : d.noPan ? "Cubase didn't follow a pan move on this channel: its output is mono (a mono group or output), so it plays in the middle whatever the pan says. Mixology leaves it alone."
+        : d.stereoPanner ? "Cubase's Stereo Combined Panner: Cubase only tells Mixology its left edge (\"L100\" at full width). Pan this track in Cubase."
+        : b && b.mixMono ? "Your mix plays in mono at the Stereo Out (Analyze Mix heard left = right): pans change nothing until the output is stereo."
+        : "";
+      st.pan.root.style.opacity = present && d.hasPan !== false && !panInert && !(b && b.mixMono) ? "1" : "0.5";
       if (st.marksKey !== JSON.stringify(marks)) {
         st.marksKey = JSON.stringify(marks);
         st.scale.innerHTML = "";

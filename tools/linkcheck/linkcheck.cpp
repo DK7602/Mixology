@@ -76,7 +76,7 @@ int main (int argc, char** argv)
     juce::ScopedJuceInitialiser_GUI gui;
     if (argc < 2)
     {
-        std::printf ("usage: MixologyLinkCheck <path to Mixology Link.vst3>\n");
+        std::printf ("usage: MixologyLinkCheck <path to Mixology Link.vst3> [path to Mixology.vst3]\n");
         return 2;
     }
 
@@ -279,6 +279,85 @@ int main (int argc, char** argv)
     bass.reset();
     pump (100);
     check (registry.links (nowMs()).empty(), "removing the plug-ins frees their slots");
+
+    // Mixology itself (when its path is given): the Full Mix processing changes the sound through its host
+    // parameters, the way the EQ / Dynamics / Tone / Stereo pages set them.
+    if (argc > 2)
+    {
+        juce::OwnedArray<juce::PluginDescription> mainTypes;
+        format.findAllTypesForFile (mainTypes, juce::String::fromUTF8 (argv[2]));
+        check (mainTypes.size() == 1, "found Mixology in " + juce::String (argv[2]));
+        if (mainTypes.isEmpty()) return 1;
+        auto mix = format.createInstanceFromDescription (*mainTypes[0], sr, block, error);
+        check (mix != nullptr, "Mixology created " + error);
+        if (mix == nullptr) return 1;
+        mix->setPlayConfigDetails (2, 2, sr, block);
+        mix->prepareToPlay (sr, block);
+
+        auto set = [&] (const char* name, float normalised) {
+            if (auto* p = findParameter (*mix, name)) { p->setValueNotifyingHost (normalised); return true; }
+            check (false, juce::String ("parameter '") + name + "' exposed");
+            return false;
+        };
+        // Plays a sine (left, and right = side * left) and returns the output's left and side levels in dB.
+        auto measure = [&] (double hz, float side) {
+            juce::AudioBuffer<float> buffer (2, block);
+            juce::MidiBuffer midi;
+            double sumL = 0.0, sumS = 0.0;
+            int count = 0;
+            const int blocks = static_cast<int> (1.0 * sr / block);
+            for (int b2 = 0; b2 < blocks; ++b2)
+            {
+                for (int i = 0; i < block; ++i)
+                {
+                    const auto x = 0.1f * static_cast<float> (std::sin (2.0 * juce::MathConstants<double>::pi * hz * (b2 * block + i) / sr));
+                    buffer.setSample (0, i, x);
+                    buffer.setSample (1, i, x * side);
+                }
+                mix->processBlock (buffer, midi);
+                if (b2 > blocks / 2)
+                    for (int i = 0; i < block; ++i)
+                    {
+                        const double l = buffer.getSample (0, i), r = buffer.getSample (1, i);
+                        sumL += l * l;
+                        sumS += 0.25 * (l - r) * (l - r);
+                        ++count;
+                    }
+            }
+            return std::pair { 10.0 * std::log10 (sumL / count + 1.0e-20), 10.0 * std::log10 (sumS / count + 1.0e-20) };
+        };
+
+        const auto plain = measure (60.0, 1.0f);
+        set ("Tone Balance", 1.0f);
+        set ("Warmth", 1.0f);   // +6 dB
+        measure (60.0, 1.0f);    // glides in
+        const auto warm = measure (60.0, 1.0f);
+        check (std::abs (warm.first - plain.first - 5.8) < 0.6, "Full Mix Tone Balance: Warmth +6 lifts 60 Hz by " + juce::String (warm.first - plain.first, 2) + " dB");
+        set ("Tone Balance", 0.0f);
+        measure (60.0, 1.0f);
+        const auto off = measure (60.0, 1.0f);
+        check (std::abs (off.first - plain.first) < 0.01, "switched off again: " + juce::String (off.first - plain.first, 3) + " dB");
+
+        const auto wideBefore = measure (1000.0, -0.5f);   // a stereo sound (left and right differ)
+        set ("Stereo", 1.0f);
+        set ("Width", 1.0f);    // 200 %
+        measure (1000.0, -0.5f);
+        const auto wide = measure (1000.0, -0.5f);
+        check (std::abs (wide.second - wideBefore.second - 6.02) < 0.3, "Full Mix Width 200 %: side +" + juce::String (wide.second - wideBefore.second, 2) + " dB");
+        const auto monoBefore = measure (1000.0, 1.0f);
+        check (monoBefore.second < -100.0, "a mono sound has nothing to widen (side stays silent)");
+        set ("Stereo", 0.0f);
+
+        // The settings are saved with the project.
+        set ("Tone Balance", 1.0f);
+        juce::MemoryBlock state;
+        mix->getStateInformation (state);
+        set ("Tone Balance", 0.0f);
+        mix->setStateInformation (state.getData(), static_cast<int> (state.getSize()));
+        auto* tb = findParameter (*mix, "Tone Balance");
+        check (tb != nullptr && tb->getValue() > 0.5f, "Full Mix settings come back with the project");
+        mix->releaseResources();
+    }
 
     std::printf ("%s (%d failed)\n", failures == 0 ? "ALL PASSED" : "FAILED", failures);
     return failures == 0 ? 0 : 1;
