@@ -60,7 +60,9 @@ namespace suite
             gate       = 1u << 9,
             beat       = 1u << 10,  // Voxology in Beat mode: this track is the beat (Voxology only listens to its key)
         };
-        enum class Style : std::uint32_t { unknown = 0, trapLead = 1, rap = 2, melodic = 3, adlibs = 4, rnb = 5 };
+        /** Voxology's Auto-Edit style (its aeStyle choice + 1). */
+        enum class Style : std::uint32_t { unknown = 0, trapLead, rap, melodic, robot, rnb, pop, folk, naturalSinger };
+        static constexpr std::uint32_t kStyles = 8;
 
         std::string trackName;        // as the host reported it ("" = unknown)
         std::uint32_t nameHash = 0;   // of trackName (0 = unknown)

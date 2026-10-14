@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-14, v0.7.1)
+# Mixology: resume here (updated 2026-10-14, v0.8.0)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,36 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## M6 round 1 (v0.8.0): the suite link, BUILT, waiting for the Cubase test (docs/M6_TEST.md)
+- User: "will mixology communicate with voxology and masterology?" then "yes go ahead with M6"; approved changing the
+  other two repos. Voxology 0.47.0 (repo DK7602/voxology, branch claude/upbeat-faraday-iyzicv) and Masterology 0.26.0
+  (repo DK7602/polisher, branch claude/eloquent-einstein-sscadx) were changed and pushed in the same session.
+- dsp/include/suite/SuiteLink.h + dsp/src/SuiteLink.cpp: THE SAME FILES in all three repos (this copy is the master;
+  copy changes over, bump kLayout when the memory layout changes). One named block per process,
+  "VoxMixMasterSuite.v1.<pid>" (Windows CreateFileMappingA "Local\...", POSIX shm never unlinked, private fallback).
+  vocals[64] (Voxology), mix (Mixology), masters[4] (Masterology). Seqlocks; heartbeat kAliveMs 2 s; claim publishes an
+  empty record (version 0 = readers skip); a stale slot is taken over by CAS on its heartbeat; publish* returns false
+  when the slot is no longer yours (claim again). VocalInfo::Style = Voxology's aeStyle + 1 (Trap Lead ... Natural
+  Singer); flags incl. beat (BEAT mode).
+- Hub: updateSuite() at 4 Hz in the timer (only after enable(), i.e. once the window opened): suiteVocals by name hash
+  (merged when two Voxologys share a channel; kept 5 s after the last heartbeat), suiteMasters. voxRole: Voxology
+  (Vocal mode) = vox, or adlibs when roleFromName says so. Role order: yours > Voxology > report > name.
+  settingsForAnalysis() adds TrackSettings.fromVoxology (never saved) -> roleFrom "voxology". A role change re-evaluates.
+  getState slot.voxology {beat, on, style, comp, compDb, deEsser, reverb, delay, eq, pitch, doubler, version}.
+- Planner: ChannelNow.voxology {on, compressor, reverb, delay, eq, compressionDb}; Polish skips the vocal compressor,
+  the lead reverb (also on the FX channel; warns when Voxology's reverb + an FX reverb), the ad-lib delay; the generic
+  "another plug-in" reverb note only when the lead has no Voxology. toneAgainstStyle(Report) shared with the hand-off.
+- Plug-in: publishHandoff() every 4th tick of its 10 Hz timer when it is the hub's mix owner: style key / name parsed from
+  its UI state (app.js stores "preset" and "presetName"), true peak, integrated / short-term LUFS, limited (Limiter on),
+  hub.handoffTone() (analysed, monoMix, tone) when the report is for the same style, version JucePlugin_VersionCode.
+- UI: Tracks strip gold VOX / BEAT tag (top 91 px, under the icon) + tooltip; sheets role "(Voxology)"; Master page rsub
+  "Masterology: −9 LUFS · −1.0 dBTP" (title: goal, genre), 4th check (Masterology on / open it), the limiter check is
+  real now (frame.master.limOn).
+- Tests: test_suite.cpp (5), Polish with Voxology, the tone hand-off, role from Voxology (test_analysis). linkcheck
+  reads the real plug-in's hand-off; optional args 3 / 4 = Voxology.vst3 / Masterology.vst3 (local: all three real
+  plug-ins pass: vocal + compressor + reverb seen, Masterology's goal and target change seen, both gone on removal).
+- Next in M6: presets, undo history, CPU check with 40+ tracks (code signing later).
 
 ## v0.7.1 (user's round 3 test, 2026-10-14: "L100 bug fixed. it all seemed to work correctly")
 - Polish put the vocal reverb on the FX channel "100 % in the mix: too much": a plate comes out ~5 dB under its

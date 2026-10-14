@@ -64,6 +64,82 @@ namespace
         return peak;
     }
 
+    const suite::VocalInfo* vocalNamed (const std::vector<suite::VocalInfo>& vocals, const std::string& name)
+    {
+        for (auto& v : vocals)
+            if (v.trackName == name) return &v;
+        return nullptr;
+    }
+
+    // Voxology on "Lead Vox": the suite link tells what it does there (its compressor, its reverb), and forgets it
+    // when it is removed.
+    void checkVoxology (juce::VST3PluginFormat& format, const juce::String& path, double sr, int block)
+    {
+        juce::OwnedArray<juce::PluginDescription> types;
+        format.findAllTypesForFile (types, path);
+        check (! types.isEmpty(), "found Voxology in " + path);
+        if (types.isEmpty()) return;
+        juce::String error;
+        auto vox = format.createInstanceFromDescription (*types[0], sr, block, error);
+        check (vox != nullptr, "Voxology created " + error);
+        if (vox == nullptr) return;
+        vox->prepareToPlay (sr, block);
+        juce::AudioProcessor::TrackProperties track;
+        track.name = juce::String ("Lead Vox");
+        vox->updateTrackProperties (track);
+        pump (800);
+        auto vocals = suite::Link::process().vocals (suite::nowMs());
+        const auto* v = vocalNamed (vocals, "Lead Vox");
+        check (v != nullptr && v->nameHash == mixology::bridge::nameHash ("Lead Vox") && (v->flags & suite::VocalInfo::processing) != 0,
+               "Voxology tells Mixology the vocal it sits on ('Lead Vox')");
+        check (v != nullptr && (v->flags & (suite::VocalInfo::compressor | suite::VocalInfo::reverb)) == 0, "... neutral at first: no compressor, no reverb");
+
+        auto set = [&] (const char* name, float normalised) {
+            if (auto* p = findParameter (*vox, name)) { p->setValueNotifyingHost (normalised); return true; }
+            check (false, juce::String ("Voxology parameter '") + name + "' found");
+            return false;
+        };
+        set ("Compressor Ratio", 0.5f);
+        set ("Reverb Mix", 0.2f);
+        pump (800);
+        vocals = suite::Link::process().vocals (suite::nowMs());
+        v = vocalNamed (vocals, "Lead Vox");
+        check (v != nullptr && (v->flags & suite::VocalInfo::compressor) != 0 && (v->flags & suite::VocalInfo::reverb) != 0
+                   && std::abs (v->reverbMix - 0.2f) < 0.01f,
+               "... its compressor and its reverb (mix " + juce::String (v != nullptr ? v->reverbMix * 100.0f : -1.0f, 0) + " %) once they are on");
+        vox->releaseResources();
+        vox.reset();
+        pump (100);
+        check (vocalNamed (suite::Link::process().vocals (suite::nowMs()), "Lead Vox") == nullptr, "... and nothing once Voxology is removed");
+    }
+
+    // Masterology after Mixology: its goal reaches Mixology, Mixology's hand-off reaches it.
+    void checkMasterology (juce::VST3PluginFormat& format, const juce::String& path, double sr, int block)
+    {
+        juce::OwnedArray<juce::PluginDescription> types;
+        format.findAllTypesForFile (types, path);
+        check (! types.isEmpty(), "found Masterology in " + path);
+        if (types.isEmpty()) return;
+        juce::String error;
+        auto master = format.createInstanceFromDescription (*types[0], sr, block, error);
+        check (master != nullptr, "Masterology created " + error);
+        if (master == nullptr) return;
+        master->prepareToPlay (sr, block);
+        pump (800);
+        auto goals = suite::Link::process().masters (suite::nowMs());
+        check (goals.size() == 1 && std::abs (goals[0].targetLufs + 9.0f) < 0.01f && goals[0].goalName == "Loud release" && goals[0].version != 0,
+               "Masterology tells Mixology its goal (" + juce::String (goals.empty() ? std::string ("none") : goals[0].goalName) + ", "
+                   + juce::String (goals.empty() ? 0.0f : goals[0].targetLufs, 1) + " LUFS, ceiling " + juce::String (goals.empty() ? 0.0f : goals[0].ceilingDbtp, 1) + " dBTP)");
+        if (auto* target = findParameter (*master, "Auto-Master Target")) target->setValueNotifyingHost (0.0f);   // Stream -14
+        pump (800);
+        goals = suite::Link::process().masters (suite::nowMs());
+        check (goals.size() == 1 && std::abs (goals[0].targetLufs + 14.0f) < 0.01f && goals[0].goalName == "Streaming", "... and follows its target (Streaming, -14 LUFS)");
+        master->releaseResources();
+        master.reset();
+        pump (100);
+        check (suite::Link::process().masters (suite::nowMs()).empty(), "... and nothing once Masterology is removed");
+    }
+
     const mixology::link::LinkInfo* byName (const std::vector<mixology::link::LinkInfo>& links, const std::string& name)
     {
         for (auto& l : links)
@@ -77,7 +153,7 @@ int main (int argc, char** argv)
     juce::ScopedJuceInitialiser_GUI gui;
     if (argc < 2)
     {
-        std::printf ("usage: MixologyLinkCheck <path to Mixology Link.vst3> [path to Mixology.vst3]\n");
+        std::printf ("usage: MixologyLinkCheck <path to Mixology Link.vst3> [path to Mixology.vst3] [Voxology.vst3] [Masterology.vst3]\n");
         return 2;
     }
 
@@ -475,6 +551,10 @@ int main (int argc, char** argv)
         check (seen && suite::Link::processShared(), "Mixology's hand-off reaches another plug-in (suite link)");
         check (seen && handoff.integratedLufs > -40.0f && handoff.peakDbtp > -40.0f && handoff.version != 0,
                "... with the mix's loudness and peaks (" + juce::String (handoff.integratedLufs, 1) + " LUFS, " + juce::String (handoff.peakDbtp, 1) + " dBTP)");
+
+        // Optional (local): the real Voxology and Masterology next to Mixology, all three in this one process.
+        if (argc > 3) checkVoxology (format, juce::String::fromUTF8 (argv[3]), sr, block);
+        if (argc > 4) checkMasterology (format, juce::String::fromUTF8 (argv[4]), sr, block);
         mix->releaseResources();
     }
 

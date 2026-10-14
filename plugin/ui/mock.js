@@ -24,8 +24,8 @@
   const ROLE_OF = { Kick: "kick", Snare: "snare", Hats: "hats", Perc: "perc", "808": "bass", Keys: "keys", Synth: "synth", Guitar: "guitar", "Lead Vox": "vox", FX: "fx", Adlibs: "adlibs", "Vox Double": "adlibs", Pad: "synth", Riser: "fx" };
   // Voxology on the vocals (M6, the suite link), as the hub reports it.
   const VOXOLOGY = {
-    "Lead Vox": { beat: false, on: true, style: "Trap lead", comp: true, compDb: 4.2, deEsser: true, reverb: true, delay: false, eq: true, pitch: true, doubler: false, version: "0.47.0" },
-    Adlibs: { beat: false, on: true, style: "Ad-libs", comp: true, compDb: 3.1, deEsser: true, reverb: false, delay: true, eq: true, pitch: true, doubler: false, version: "0.47.0" },
+    "Lead Vox": { beat: false, on: true, style: "Trap Lead", comp: true, compDb: 4.2, deEsser: true, reverb: true, delay: false, eq: true, pitch: true, doubler: false, version: "0.47.0" },
+    Adlibs: { beat: false, on: true, style: "Rap", comp: true, compDb: 3.1, deEsser: true, reverb: false, delay: true, eq: true, pitch: true, doubler: false, version: "0.47.0" },
   };
   const roleOf = (c) => (B.settings[c.hash] && B.settings[c.hash].role) || ROLE_OF[c.name] || "other";
   function fakeReport() {

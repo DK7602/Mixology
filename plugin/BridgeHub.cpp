@@ -550,11 +550,14 @@ namespace
     {
         switch (s)
         {
-            case suite::VocalInfo::Style::trapLead: return "Trap lead";
+            case suite::VocalInfo::Style::trapLead: return "Trap Lead";
             case suite::VocalInfo::Style::rap: return "Rap";
             case suite::VocalInfo::Style::melodic: return "Melodic";
-            case suite::VocalInfo::Style::adlibs: return "Ad-libs";
+            case suite::VocalInfo::Style::robot: return "Robot";
             case suite::VocalInfo::Style::rnb: return "R&B";
+            case suite::VocalInfo::Style::pop: return "Pop";
+            case suite::VocalInfo::Style::folk: return "Folk";
+            case suite::VocalInfo::Style::naturalSinger: return "Natural Singer";
             case suite::VocalInfo::Style::unknown: break;
         }
         return "";
@@ -618,9 +621,8 @@ std::optional<mixology::mix::Role> BridgeHub::voxRole (std::uint32_t hash, const
     using mixology::mix::Role;
     const auto* v = voxologyOn (hash);
     if (v == nullptr) return std::nullopt;
-    // Voxology says it is a vocal; its style (or the channel's name) says whether it is the ad-libs.
-    if (v->style == suite::VocalInfo::Style::adlibs || mixology::mix::roleFromName (name) == Role::adlibs) return Role::adlibs;
-    return Role::vox;
+    // Voxology says it is a vocal; the channel's name says whether it is the ad-libs.
+    return mixology::mix::roleFromName (name) == Role::adlibs ? Role::adlibs : Role::vox;
 }
 
 std::map<std::uint32_t, mixology::mix::TrackSettings> BridgeHub::settingsForAnalysis() const

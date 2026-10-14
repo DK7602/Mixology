@@ -392,7 +392,7 @@ Voxology 0.47, Mixology 0.8 and Masterology 0.26 (or newer).
 
 - **Voxology on a vocal.** The Tracks page shows a small gold **VOX** tag under the track's icon (hover it to
   see what Voxology does there: compressing, de-essing, its reverb or delay...). Mixology then:
-  - treats the track as a vocal (the lead, or the ad-libs when Voxology's style or the track's name says so),
+  - treats the track as a vocal (the lead, or the ad-libs when the track's name says so),
     even when its name doesn't say "vocal". Your own choice in the role menu still wins.
   - never stacks a second compressor where Voxology compresses, a second reverb on the lead vocal where Voxology
     adds its reverb, or a ping-pong delay on ad-libs where Voxology adds its delay. Auto Mix and Polish say so in

@@ -111,7 +111,7 @@ and switches A / B level-matched (solo + Trim). Ducking (sidechain) stays with t
 - Hard limits: never more than +/-6 dB per move without asking, never touch locked channels or the Stereo Out, never
   aim the mix at a loudness target, keep 3-6 dB of headroom for Masterology.
 
-### M5 - Processing pages (in three test rounds)
+### M5 - Processing pages (in three test rounds): TESTED (2026-10-14)
 Round 1 built (you test it, docs/M5_TEST.md): one processing chain (ProcChain, framework-free, 14 tests) in every
 Mixology Link and in Mixology for the Full Mix: Gate / Expand, 6-band EQ (Precision / Smooth / Natural), Compressor,
 Multiband (auto-threshold), Transient, Tone Balance, Loudness, Harmonic, Analog Touch, Clip Control (oversampled),
@@ -136,3 +136,14 @@ Balance against the style. Settings are absolute from the processing at analysis
 proposes nothing more; Undo restores every control (and the duck list). Master page: Glue / Tilt / Width / Trim live on
 the Full Mix (Final Touch + Tone Balance). Also: pans Cubase doesn't take (snap back to "L100") become "No pan",
 saved with the project; Cubase script v4.
+
+### M6 - Suite and polish
+Round 1 built (you test it, docs/M6_TEST.md): the suite link. Voxology, Mixology and Masterology share one small block
+of memory per Cubase process (dsp/include/suite/SuiteLink.h, the same file in all three repos; Mixology's copy is the
+master). Voxology (0.47) publishes each vocal it sits on and what it does there; Mixology treats those tracks as vocals,
+shows a VOX tag on the Tracks page, and Polish / Auto Mix add no second compressor, lead reverb or ad-lib delay.
+Mixology publishes its hand-off (style, peaks, loudness, tone against the style, mono mix, its limiter on) for
+Masterology (0.26), which shows it in Learn and offers the matching genre; Masterology publishes its goal (target,
+ceiling, genre), shown on Mixology's Master page.
+Still to come in M6: presets (save / load your Mixology settings), an undo history, a CPU check with 40+ tracks,
+code signing (later).
