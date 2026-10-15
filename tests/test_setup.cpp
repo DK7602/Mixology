@@ -125,7 +125,7 @@ TEST_CASE ("Setup: the issues name the likely group and the vocals without a Lin
     CHECK (list[0].kind == "warn");
     CHECK (list[0].text.find ("Most likely 'Beat' is a mono group") != std::string::npos);
     CHECK (list[0].text.find ("'Pop Kit 1' and 'HALion Sonic 01'") != std::string::npos);
-    CHECK (list[0].steps[0].find ("bottom of 'Beat'") != std::string::npos);
+    CHECK (list[0].steps[0].find ("Find 'Beat' in {daw:mixer}") != std::string::npos);   // the window says how, in your DAW's words
     CHECK (list[0].tracks == std::vector<std::string> { "Beat" });
     CHECK (list[1].id == "setup-vocal-link");
     CHECK (list[1].title == "3 vocals have no Mixology Link");

@@ -62,6 +62,15 @@ export async function openToolSheet(app, tool) {
     return;
   }
 
+  // ---- fix these first (a vocal Voxology heard recorded too hot): before the moves, which are worked out from it
+  if (plan.first && plan.first.length) {
+    const fb = el("div", "card", body, { position: "relative", flex: "none", margin: "0 0 12px", padding: "12px 16px 12px 52px", fontSize: "17px", lineHeight: "1.4",
+      border: "1.5px solid #ff8f3c", boxShadow: "0 0 12px rgba(255,120,40,0.25)" });
+    fb.insertAdjacentHTML("beforeend", `<div style="position:absolute;left:14px;top:12px;width:28px;height:28px;color:#ff8f3c">${icon("headroom")}</div>`);
+    el("div", "", fb, { color: "#ff8f3c", fontSize: "14px", letterSpacing: "0.08em", fontWeight: "600", marginBottom: "4px" }).textContent = "FIX THIS FIRST";
+    for (const n of plan.first) el("div", "", fb, { marginBottom: "4px" }).textContent = n;
+  }
+
   // ---- your ears: how the vocal sounds right now (Balance and Auto Mix aim for it; saved with the project)
   const report = app.bridge && app.bridge.analysis && app.bridge.analysis.report;
   if ((tool === "balance" || tool === "auto") && report && report.hasVocal) {

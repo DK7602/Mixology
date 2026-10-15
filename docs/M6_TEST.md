@@ -1,5 +1,18 @@
 # Milestone 6 tests
 
+## Version 0.13.0 (10 minutes): your DAW, and "fix this first"
+
+Install all three together: Mixology 0.13.0, Voxology 0.50.0 and Masterology 0.29.0 (older ones don't see the new link).
+1. **FIX THIS FIRST**: on the vocal Voxology called TOO HOT, open Mixology's **AUTO MIX**. At the top, an orange box says
+   Voxology heard it recorded too hot and how to lower its clip gain in Cubase. Lower it (the event's volume handle) until
+   the loudest words peak around -6 dB, run Auto-Edit in Voxology again, and the box goes.
+2. **DAW**: Mixology > Settings (gear): the top line says **DAW: Found: Cubase**. Pick Studio One: the tips change to
+   Studio One's words (open the Mix Assistant's cards, Auto Mix's notes). Voxology's bottom bar (DAW, next to the
+   version) and Masterology's Settings follow within a second.
+3. Pick **Found: Cubase** again in any of the three: all three go back to Cubase.
+
+**Report**: anything still saying Cubase where it shouldn't, or a step that's wrong for your DAW?
+
 ## Version 0.12.0 (10 minutes): one song style for all three
 
 Install all three together: Mixology 0.12.0, Voxology 0.49.0 and Masterology 0.28.0 (older ones don't see the new

@@ -92,6 +92,11 @@ public:
     std::string songStyleKey() const { const juce::ScopedLock sl (stateLock); return songStyle.style().key; }
     std::uint32_t songStyleVersion() const { return styleVersion.load(); }
 
+    // ---- the DAW you work in, shared the same way: found from the host, or picked in any of the three --------
+    void pickDaw (const std::string& key);
+    suite::StyleInfo dawNow() const { const juce::ScopedLock sl (stateLock); return daw.style(); }
+    std::string dawDetected() const { return detectedDaw; }
+
     // ---- Full Mix processing (message thread) ----------------------------------------------------
     mixology::proc::Values procValues() const { return procRaw.read(); }
     void setProc (int index, float value) { mixology::proc::host::set (parameters, index, value); }
@@ -108,6 +113,8 @@ private:
     int handoffCountdown = 0;
     suite::SongStyle songStyle { suite::StyleInfo::From::mixology };   // under stateLock
     std::atomic<std::uint32_t> styleVersion { 0 };
+    const std::string detectedDaw = suite::dawFromHostPath (juce::PluginHostType::getHostPath().toStdString());
+    suite::SharedChoice daw { suite::StyleInfo::From::mixology, suite::Choice::daw };   // under stateLock
     const std::uint64_t instanceId = (static_cast<std::uint64_t> (juce::Random::getSystemRandom().nextInt64()) | 1u);
     void syncStyle();
 

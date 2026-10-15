@@ -41,6 +41,10 @@ if(NODE_EXECUTABLE)
     add_test(NAME role_names_in_sync
              COMMAND ${NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../tools/rolecheck/rolecheck.js
                      ${CMAKE_CURRENT_SOURCE_DIR}/../plugin/ui/roles.js ${CMAKE_CURRENT_SOURCE_DIR}/role_names.txt)
+    # Every DAW has its words for every job, and every {daw:phrase} in the sources is one of them.
+    add_test(NAME daw_words
+             COMMAND ${NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../tools/dawcheck/dawcheck.mjs
+                     ${CMAKE_CURRENT_SOURCE_DIR}/../plugin/ui/daws.js ${CMAKE_CURRENT_SOURCE_DIR}/../dsp ${CMAKE_CURRENT_SOURCE_DIR}/../plugin)
 endif()
 
 # The interface's copy of the processing control table must match the engine's.

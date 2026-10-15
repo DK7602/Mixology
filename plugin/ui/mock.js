@@ -18,6 +18,7 @@
     ["Lead Vox", -2, 0.5, "#4fd66b", 1], ["FX", -14, 0.7, "#d6d23a", 0], ["Adlibs", -7.5, 0.6, "#d68a3a", 1], ["Vox Double", -13, 0.3, "#6bd64f", 0],
     ["Pad", -16, 0.5, "#5a7bd6", 0], ["Riser", -18, 0.5, "#c7c7c7", 0], ["FX 1-Vox Verb", -12, 0.5, "#9a6bd6", 1],
   ].map(([name, db, pan, colour, link]) => ({ name, hash: hashOf(name), volume: toNorm(db), pan, mute: false, solo: false, read: name === "FX", write: false, colour, link: !!link, trim: 0, protected: name === "Lead Vox" }));
+  const MOCK_DAW = { key: location.hash === "#studioone" ? "studioone" : "cubase", picked: location.hash === "#studioone", from: 3, detected: "cubase" };
   const B = { offset: 0, lastMove: "", log: [], version: 1, restore: {}, an: { state: "idle", seconds: 0, playing: true, report: null, auto: { on: false, pause: "", seconds: 0, checked: 0, updated: 0 } }, settings: {},
     apply: { active: false, what: "", done: 0, total: 0, skipped: 0, message: "", notes: [], serial: 0, canUndo: false, undoWhat: "", hearingReference: false },
     planId: 0, plan: null, undo: null };
@@ -195,10 +196,11 @@
       const changes = value === "auto" ? [...parts.balance, ...parts.stereo, ...parts.clean, ...parts.pocket, ...parts.polish] : parts[value] || [];
       const notes = ["'Lead Vox': protected (padlock), so it stays where it is (it would have moved +1.5 dB)."];
       if (value === "auto" || value === "clean" || value === "pocket") notes.push("'Synth' has no Mixology Link Mixology can reach: vocal pocket skipped.");
-      if (value === "auto" || value === "polish") notes.push("Send 'Lead Vox' to 'FX 1-Vox Verb' in Cubase (MixConsole, Sends, about -10 dB): Mixology can't add sends.");
+      if (value === "auto" || value === "polish") notes.push("Send 'Lead Vox' to 'FX 1-Vox Verb' ({daw:sendHow}): Mixology can't add sends.");
+      const first = value === "auto" || value === "balance" ? ["Voxology says 'Lead Vox' was recorded too hot (it reaches +0.2 dB coming in, over the top of the meter; 29 spots clipped while it was recorded). Lower its clip gain first, until its loudest words peak around -6 dB. In {daw}: {daw:clipGain}. Then let Analyze Mix hear it again (Auto Analyze does it by itself): these moves are worked out from how loud it is now."] : [];
       const hd = value === "auto" || value === "balance" ? { headroomDb: -12.8, headroomCount: 8, headroomWhy: "Your mix peaks at +6.8 dBTP. Masterology works best with peaks around -6: every fader goes down 12.8 dB together. The balance stays the same, the mix just gets quieter (Masterology brings the level back)." } : { headroomDb: 0, headroomCount: 0, headroomWhy: "" };
       const busSet = Object.values(B.settings).some((x) => x && x.musicBus);
-      B.plan = { ...hd, groupHints: (value === "auto" || value === "balance") && !busSet ? ["Pad"] : [], id: B.planId, tool: value, title, valid: true, summary: `${changes.length} changes for ${window.__mixStyle || "Hip Hop - Modern Clean"}: levels: the hats -3.4 dB, the kick -1.5 dB; pans: 2 tracks; 1 low cut, 1 mud dip; 2 pocket dips.`, notes, changes };
+      B.plan = { ...hd, groupHints: (value === "auto" || value === "balance") && !busSet ? ["Pad"] : [], id: B.planId, tool: value, title, valid: true, summary: `${changes.length} changes for ${window.__mixStyle || "Hip Hop - Modern Clean"}: levels: the hats -3.4 dB, the kick -1.5 dB; pans: 2 tracks; 1 low cut, 1 mud dip; 2 pocket dips.`, notes, first, changes };
       return { ok: true, plan: B.plan };
     }
     if (name === "vocalTaste") {
@@ -304,7 +306,7 @@
   window.__JUCE__ = {
     initialisationData: {
       __juce__platform: [], __juce__registeredGlobalEventIds: [], __juce__sliders: [], __juce__toggles: [], __juce__comboBoxes: [],
-      __juce__functions: ["bridgeCommand", "getBridgeState", "getSettings", "setSetting", "setUiState", "setPage", "procTarget", "procSet", "setMonoListen", "spaceDuck",
+      __juce__functions: ["pickDaw", "pickStyle", "bridgeCommand", "getBridgeState", "getSettings", "setSetting", "setUiState", "setPage", "procTarget", "procSet", "setMonoListen", "spaceDuck",
         "presetList", "presetApply", "presetSave", "presetDelete", "presetUndo"],
     },
     postMessage(message) {
@@ -312,7 +314,8 @@
       if (eventId !== "__juce__invoke") return;
       const [a, b] = payload.params || [];
       let result = true;
-      if (payload.name === "bridgeCommand") result = command(a, b);
+      if (payload.name === "pickDaw") { MOCK_DAW.key = a || "cubase"; MOCK_DAW.picked = !!a; MOCK_DAW.from = 2; }
+      else if (payload.name === "bridgeCommand") result = command(a, b);
       else if (payload.name === "getBridgeState") result = state(true);
       else if (payload.name === "getSettings") {
         let ui = null; try { ui = localStorage.getItem("mixology-ui"); } catch (e) { /* none */ }
@@ -521,6 +524,7 @@
       frame.roleCurves = curves.map((c) => c && c.map((v) => +v.toFixed(1)));
     }
     procFrame(frame, beat);
+    frame.daw = { ...MOCK_DAW };   // the DAW: found from the host (here: Cubase), or picked
     if (page === "space") {   // a song at 92 BPM, playing
       const bpm = 92, ppq = (performance.now() / 60000) * bpm;
       frame.beat = { bpm, ppq, bar: Math.floor(ppq / 4) * 4, num: 4, playing: B.an.playing !== false };

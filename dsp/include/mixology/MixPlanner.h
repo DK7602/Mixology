@@ -64,6 +64,10 @@ namespace mixology::mix
             bool on = false;           // a Voxology (Vocal mode) sits on it, processing
             bool compressor = false, reverb = false, delay = false, eq = false;
             double compressionDb = 0.0;
+            // What its last Auto-Edit heard in the recording itself: fixed at the source, before any mixing.
+            bool recordedHot = false, recordedClipped = false;
+            double recordedPeakDb = -100.0;
+            int clippedSpots = 0;
         };
         Voxology voxology;
     };
@@ -110,6 +114,7 @@ namespace mixology::mix
         std::string summary;
         std::vector<Change> changes;
         std::vector<std::string> notes;   // what it left alone, and why
+        std::vector<std::string> first;   // fix these before applying (a vocal recorded too hot): shown above the changes
 
         /** Room for Masterology, offered on its own (you tick it): every fader that plays moves headroomDb
             (< 0) together, on top of the level changes. 0 = not needed. */

@@ -526,7 +526,7 @@ namespace mixology::mix
             if (ts.empty()) return {};
             if (r.monoMix)
             {
-                plan.notes.push_back ("Your mix is mono at the Stereo Out (left and right are the same), so panning changes nothing: "
+                plan.notes.push_back ("Your mix is mono at the {daw:master} channel (left and right are the same), so panning changes nothing: "
                                       "a mono group or output is on the way. Stereo Architect leaves the pans alone (see 'Your mix is mono' in the Mix Assistant).");
                 return "pans have no effect (mono mix)";
             }
@@ -671,7 +671,7 @@ namespace mixology::mix
                 if (best == nullptr)
                 {
                     plan.notes.push_back ("The mix leans " + std::string (lean > 0.0 ? "left" : "right") + " (" + fmt1 (std::abs (lean))
-                                          + " dB) from tracks Mixology can't pan (stereo stems or channels without a Link): check those in Cubase.");
+                                          + " dB) from tracks Mixology can't pan (stereo stems or channels without a Link): check those in {daw}.");
                     break;
                 }
                 best->to = bestTo;
@@ -1258,7 +1258,7 @@ namespace mixology::mix
                     plan.changes.push_back (c);
                     ++spaces;
                     if (! sendHeard)
-                        plan.notes.push_back ("Send " + quoted (lead->name) + " to " + quoted (target->name) + " in Cubase (MixConsole, Sends, at 0 dB): Mixology can't add sends. "
+                        plan.notes.push_back ("Send " + quoted (lead->name) + " to " + quoted (target->name) + " ({daw:sendHow}): Mixology can't add sends. "
                                               "The effect's LEVEL (Space page) sets how much comes back.");
                 }
                 else if (leadCh != nullptr && leadCh->hasLink && leadCh->hasProc && ! leadCh->locked && pv (leadCh->proc, proc::chainOn) > 0.5f)
@@ -1451,6 +1451,23 @@ namespace mixology::mix
         if (tool == Tool::autoMix || tool == Tool::cleanUp) add (planCleanUp (r, look, plan));
         if (tool == Tool::autoMix || tool == Tool::pocket) add (planPocket (r, look, plan));
         if (tool == Tool::autoMix || tool == Tool::polish) add (planPolish (r, look, channels, mix, plan));
+
+        // Fix first: a vocal Voxology heard recorded too hot. Lowering it at the source changes how loud it is, and
+        // every level move here is worked out from how loud it is now.
+        if (tool == Tool::autoMix || tool == Tool::balance || tool == Tool::polish || tool == Tool::pocket)
+            for (const auto& c : channels)
+            {
+                const auto& v = c.voxology;
+                if (! v.on || (! v.recordedHot && ! v.recordedClipped)) continue;
+                std::string what;
+                if (v.recordedHot && v.recordedPeakDb > -99.0) what = "it reaches " + signedDb (v.recordedPeakDb) + " coming in, over the top of the meter";
+                if (v.recordedClipped && v.clippedSpots > 0)
+                    what += (what.empty() ? "" : "; ") + std::to_string (v.clippedSpots) + " spot" + (v.clippedSpots == 1 ? "" : "s") + " clipped while it was recorded";
+                if (what.empty()) what = v.recordedClipped ? "it clipped while it was recorded" : "it comes in over the top of the meter";
+                plan.first.push_back ("Voxology says " + quoted (c.name) + " was recorded too hot (" + what + "). Lower its clip gain first, "
+                                      "until its loudest words peak around -6 dB. In {daw}: {daw:clipGain}. Then let Analyze Mix hear it again "
+                                      "(Auto Analyze does it by itself): these moves are worked out from how loud it is now.");
+            }
 
         // Notes once each, in order.
         std::vector<std::string> unique;

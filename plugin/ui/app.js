@@ -9,6 +9,7 @@ import { buildTone, buildStereo, buildMaster } from "./pages_output.js";
 import { openSettings, openHelp, openPresets, openStyles, openHistory, hookBridge } from "./sheets.js";
 import { hookTools } from "./tools.js";
 import { styleByKey } from "./mixstyles.js";
+import { fillDaw, dawOf } from "./daws.js";
 import { createProc } from "./proc.js";
 
 // ---------------------------------------------------------------------------------------------
@@ -27,9 +28,17 @@ window.addEventListener("resize", fit);
 // ---------------------------------------------------------------------------------------------
 // Native functions
 
+// Text from the engine carries {daw} / {daw:phrase} tokens: they become your DAW's words here, as it arrives.
+function withDaw(v, depth = 0) {
+  if (typeof v === "string") return v.indexOf("{daw") < 0 ? v : fillDaw(v, app.daw);
+  if (!v || typeof v !== "object" || depth > 8) return v;
+  if (Array.isArray(v)) { for (let i = 0; i < v.length; i++) if (typeof v[i] !== "number") v[i] = withDaw(v[i], depth + 1); return v; }
+  for (const k of Object.keys(v)) if (typeof v[k] !== "number") v[k] = withDaw(v[k], depth + 1);
+  return v;
+}
 const fn = (name) => {
   const f = Juce.getNativeFunction(name);
-  return (...args) => f(...args).catch(() => undefined);
+  return (...args) => f(...args).then((r) => withDaw(r)).catch(() => undefined);
 };
 export const native = {
   bridgeCommand: fn("bridgeCommand"),
@@ -38,6 +47,7 @@ export const native = {
   setSetting: fn("setSetting"),
   setUiState: fn("setUiState"),
   pickStyle: fn("pickStyle"),
+  pickDaw: fn("pickDaw"),
   setPage: fn("setPage"),
   procTarget: fn("procTarget"),
   procSet: fn("procSet"),
@@ -53,13 +63,15 @@ export const native = {
 // ---------------------------------------------------------------------------------------------
 // Shared context for the pages
 
-const listeners = { frame: [], bridge: [], theme: [], preset: [] };
+const listeners = { frame: [], bridge: [], theme: [], preset: [], daw: [] };
 const lastToast = { text: "", time: 0 };
 export const app = {
   native,
   bridge: null,       // latest bridge state (see BridgeHub::getState)
   frame: null,        // latest meter frame
   style: styleByKey(0),   // the mix style (see mixstyles.js)
+  daw: "cubase",          // the DAW you work in (daws.js): found from the host, or picked in any of the three
+  dawPicked: false,
   on(kind, f) { listeners[kind].push(f); },
   emit(kind, data) { for (const f of listeners[kind]) f(data); },
   showPage,
@@ -192,6 +204,15 @@ async function start() {
   let styleSeen = -1;
   window.__JUCE__.backend.addEventListener("mixFrame", (frame) => {
     app.frame = frame;
+    if (frame.daw && (frame.daw.key !== app.daw || !!frame.daw.picked !== app.dawPicked)) {
+      app.daw = frame.daw.key || "other";
+      app.dawPicked = !!frame.daw.picked;
+      app.dawDetected = frame.daw.detected;
+      if (frame.daw.picked && frame.daw.from !== 2 && performance.now() > 5000) app.toast(`DAW: ${dawOf(app.daw).name} (picked in another plug-in of the suite)`);
+      app.emit("daw", app.daw);
+      native.getBridgeState().then((b) => { if (b) { app.bridge = b; app.emit("bridge", b); } });   // its text again, in this DAW's words
+    }
+    if (frame.bridge) withDaw(frame.bridge);
     // The song's style, shared with Voxology and Masterology: the project's, or one picked in one of them.
     const ss = frame.songStyle;
     if (ss && ss.version !== styleSeen) {

@@ -1190,7 +1190,7 @@ TEST_CASE ("A mono mix: said so, and Stereo Architect leaves the pans alone", "[
     std::vector<ChannelNow> chans { channel ("Vocals"), channel ("Electric Lead", 0.0, -100.0), channel ("Electric Lead (D)", 0.0, -100.0), channel ("Drum Machine 01") };
     const auto p = makePlan (Tool::stereo, r, chans);
     CHECK (p.changes.empty());
-    CHECK (noted (p, "mono at the Stereo Out"));
+    CHECK (noted (p, "mono at the {daw:master} channel"));
 }
 
 TEST_CASE ("Analysis: Voxology on a track makes it a vocal; your choice still wins", "[analysis][suite]")

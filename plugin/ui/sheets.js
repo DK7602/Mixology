@@ -2,6 +2,7 @@
 
 import { $, el, icon, fmt, popupMenu } from "./ui.js";
 import { GENRES } from "./mixstyles.js";
+import { DAWS, dawOf, dawName, say } from "./daws.js";
 import { ROLES, ROLE_ORDER, roleIcon } from "./roles.js";
 
 let historyRender = null;
@@ -26,6 +27,7 @@ let bridgeRender = null;
 
 export function openSettings(app, tab = "bridge") {
   const body = sheet("SETTINGS");
+  dawRow(app, body);
   const tabs = el("div", "", body, { display: "flex", gap: "10px", marginBottom: "18px" });
   const content = el("div", "", body);
   const names = [["bridge", "Cubase Bridge"], ["display", "Display"], ["about", "About"]];
@@ -45,6 +47,31 @@ export function openSettings(app, tab = "bridge") {
     else aboutPanel(app, content);
   }
   show(tab);
+}
+
+// Your DAW: found from the host Mixology runs in, or picked here (or in Voxology / Masterology: all three follow).
+// The Mix Assistant, the tools and every tip then tell you how to do things in that DAW.
+function dawRow(app, root) {
+  const row = el("div", "card", root, { position: "relative", display: "flex", alignItems: "center", gap: "14px", padding: "12px 18px", marginBottom: "16px", fontSize: "19px" });
+  el("span", "", row, { fontWeight: "600", color: "var(--gold)" }).textContent = "DAW";
+  const sel = el("select", "", row, { height: "40px", fontSize: "18px", padding: "0 10px", borderRadius: "9px", border: "1.5px solid var(--select-edge)", background: "var(--well)", color: "var(--text)", font: "inherit" });
+  const found = dawOf(app.dawDetected || app.daw);
+  const auto = el("option", "", sel);
+  auto.value = "";
+  auto.textContent = `Found: ${found.key === "other" ? "not known" : found.name}`;
+  for (const d of DAWS) {
+    const o = el("option", "", sel);
+    o.value = d.key;
+    o.textContent = d.name + (d.also ? ` (${d.also})` : "");
+  }
+  sel.value = app.dawPicked ? app.daw : "";
+  const note = el("span", "", row, { flex: "1", fontSize: "16px", color: "var(--text-dim)", lineHeight: "1.3" });
+  const explain = () => {
+    note.textContent = (app.daw === "cubase" ? "Tips and fixes are written for Cubase. " : `Tips and fixes are written for ${dawOf(app.daw).name}. Moving faders (the Tracks page, Auto Mix's fader moves) needs Cubase for now. `)
+      + "Voxology and Masterology follow your pick.";
+  };
+  explain();
+  sel.addEventListener("change", () => { app.native.pickDaw(sel.value); app.daw = sel.value || found.key; app.dawPicked = !!sel.value; explain(); });
 }
 
 function displayPanel(app, root) {
@@ -195,7 +222,7 @@ export function openHistory(app) {
     el("p", "", body, { fontSize: "17px", color: "var(--text-dim)", margin: "0 0 12px", lineHeight: "1.4" }).textContent =
       "Every change Mixology makes, newest first: faders, pans, mute and solo, Trim, every knob, presets, the smart tools and Restore. " +
       "GO BACK HERE puts the mix back to how it was right after that step. Undone steps stay (dimmed) until you change something new. " +
-      "Moves you make in Cubase itself aren't here (Cubase's Edit > History has those).";
+      `Moves you make in ${dawName(app.daw)} itself aren't here (its own undo history has those).`;
 
     if (!steps.length) {
       el("p", "", body, { fontSize: "19px", margin: "18px 0" }).textContent = "Nothing yet. Every change Mixology makes from now on shows up here.";
@@ -232,7 +259,7 @@ export function openHistory(app) {
     if (h.current === 0) el("span", "", start, { fontSize: "16px", fontWeight: "600", color: "var(--gold)", letterSpacing: "0.06em" }).textContent = "NOW";
     else btn(start, "UNDO EVERYTHING", () => go("historyTo", 0)).disabled = h.busy;
     el("p", "", body, { fontSize: "16px", color: "var(--text-dim)", margin: "12px 0 0", lineHeight: "1.4" }).textContent =
-      "Click a step to see each change. A fader you moved in Cubase since Mixology moved it stays where you put it. The history lasts while Cubase is open (the last 200 steps).";
+      `Click a step to see each change. A fader you moved in Cubase since Mixology moved it stays where you put it. The history lasts while ${dawName(app.daw)} is open (the last 200 steps).`;
   }
   historyRender = (b) => { if (b && b.history && b.history.version !== seen && !busy) render(); };
   render();
@@ -296,7 +323,7 @@ export async function openHelp(app) {
 
 const ROLE_WORD = { kick: "kick", snare: "snare", hats: "hi-hat", perc: "percussion", bass: "bass / 808", keys: "keys", synth: "synth", guitar: "guitar",
   vox: "vocal", adlibs: "ad-lib", fx: "FX", other: "" };
-const KIND_TITLE = { track: "Tracks", fx: "FX channels (100 % wet returns)", mix: "Full Mix (Mixology on the Stereo Out)" };
+const KIND_TITLE = { track: "Tracks", fx: "FX channels (100 % wet returns)", mix: "Full Mix (Mixology on the master channel)" };
 
 export async function openPresets(app) {
   const body = sheet("PRESETS");
@@ -545,7 +572,7 @@ export function openTracksSheet(app) {
     }
     if (report.routingFromSound) {
       const ro = el("p", "", body, { fontSize: "17px", color: "var(--text-dim)", marginTop: "10px", lineHeight: "1.4" });
-      ro.textContent = `How your tracks reach the Stereo Out (worked out from the sound: group faders, group processing, pan law): `
+      ro.textContent = `How your tracks reach the ${say(app.daw, "master")} channel (worked out from the sound: group faders, group processing, pan law): `
         + `instruments ${fmt.db(report.musicPathDb)}, vocals ${fmt.db(report.vocalPathDb)} on the way. The levels above include it.`;
     }
   };

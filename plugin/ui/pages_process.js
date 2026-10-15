@@ -4,6 +4,7 @@
 import { el, box, icon, fmt, clamp, Knob, Meter, select, graph, freqToX, xToFreq, moduleList, store, cssVar } from "./ui.js";
 import { knobFor, eqBand, magnitudeDb, EQ_SHAPES, MODULE_NAMES } from "./proc.js";
 import { createScene } from "./space_scene.js";
+import { dawName, say } from "./daws.js";
 
 const SR = 48000;
 function biquadDb(type, f0, gainDb, q, f) {
@@ -215,7 +216,7 @@ export function buildEq(root, app) {
       });
       if (!cd.q.dragging && Math.abs(cd.q.value - b.q) > 0.005) cd.q.set(b.q);
     });
-    const target = proc.key === "mix" ? "the full mix (Stereo Out)" : `'${proc.name}'`;
+    const target = proc.key === "mix" ? `the full mix (${say(app.daw, "master")})` : `'${proc.name}'`;
     status.textContent = !proc.ok ? `${proc.name}: its Mixology Link isn't answering (track removed?). Pick another target.`
       : proc.switchedOn("eq") ? (proc.isOn("eq") ? `Working on ${target}` : `On, but the processing of ${target} is switched off in its Link window`)
       : `Off on ${target}. Drag a point (or press ON) to start`;
@@ -297,7 +298,7 @@ const DYN_HELP = {
   multi: "Three compressors, one per range (lows, mids, highs). Each knob says how much that range is held together: it finds its own threshold. Good for a boomy low end or harsh highs.",
   trans: "Shapes every hit. Attack + makes the front snap, − softens it. Sustain + brings up the tail (ring, room), − tightens it.",
   gate: "Turns the track down between notes (noise, bleed). Gate closes by the full Range; Expander turns quiet parts down gently.",
-  limit: "Catches peaks so nothing passes the Ceiling. Adds 5 ms of delay while on (Cubase lines it up). On the full mix, Masterology does the final limiting: use this only as a safety.",
+  limit: "Catches peaks so nothing passes the Ceiling. Adds 5 ms of delay while on (your DAW lines it up). On the full mix, Masterology does the final limiting: use this only as a safety.",
 };
 const GR_OF = { comp: (m) => m.comp, multi: (m) => Math.max(...m.multi), trans: (m) => Math.abs(m.trans), gate: (m) => m.gate, limit: (m) => m.limit };
 
@@ -609,7 +610,7 @@ export function buildSpace(root, app) {
   usedLabel.textContent = "USED AS";
   const routeSel = select(knobPanel, 96, 12, 300, [{ value: 0, label: "On this track" }, { value: 1, label: "FX channel (100 % wet)" }], 0,
     (v) => { routeNote = ""; proc.set("sp_route", v, { autoOn: false }); sync(); }, { h: 40 });
-  routeSel.el.title = "On this track: MIX blends the effect in. FX channel: put this on an FX channel and send tracks to it in Cubase; only the effect comes out.";
+  routeSel.el.title = `On this track: MIX blends the effect in. FX channel: put this on an FX channel and send tracks to it in ${dawName(app.daw)}; only the effect comes out.`;
   const modeRow = el("div", "", knobPanel, { position: "absolute", left: "418px", top: "12px", display: "flex", gap: "8px" });
   const knobArea = el("div", "", knobPanel, box(0, 64, 756, 230));
   const note = el("div", "proc-note", knobPanel, { left: "16px", top: "296px", width: "600px", fontSize: "15px" });
@@ -786,7 +787,7 @@ export function buildSpace(root, app) {
     const mode = Math.round(proc.get("spx_mode"));
     modeChips.forEach((c, k) => c.classList.toggle("on", k === mode));
     if (d.id === "special") knobs[0].root.style.opacity = mode === 0 ? "1" : "0.4";   // Shift: Shimmer only
-    if (knobs[4]) knobs[4].root.title = fxRoute() ? "LEVEL: how loud the effect comes back on this FX channel (how much of each track goes in is its Send in Cubase)"
+    if (knobs[4]) knobs[4].root.title = fxRoute() ? `LEVEL: how loud the effect comes back on this FX channel (how much of each track goes in is its Send in ${dawName(app.daw)})`
       : "MIX: how much of the effect is blended into the track";
     presetSel.set(presetNow());
     routeSel.set(fxRoute() ? 1 : 0);
@@ -804,9 +805,9 @@ export function buildSpace(root, app) {
     if (!text && d.id === "delay") {
       const bpm = bpmNow > 0 ? bpmNow : 120;
       const ms = DELAY_BEATS[Math.round(proc.get("dly_time"))] * 60000 / bpm;
-      text = `${DELAY_NOTES[Math.round(proc.get("dly_time"))]} = ${Math.round(ms)} ms at ${Math.round(bpm)} BPM${bpmNow > 0 ? "" : " (play the song: it follows Cubase's tempo)"}`;
+      text = `${DELAY_NOTES[Math.round(proc.get("dly_time"))]} = ${Math.round(ms)} ms at ${Math.round(bpm)} BPM${bpmNow > 0 ? "" : ` (play the song: it follows ${dawName(app.daw)}'s tempo)`}`;
     } else if (!text && d.id === "special") text = MODE_HELP[d.modes[Math.round(proc.get("spx_mode"))]];
-    if (!text) text = fxRoute() ? "FX channel: LEVEL is how loud the effect comes back. Send the tracks to it in Cubase (their Sends, 0 dB is fine)." : "MIX: how much of the effect is blended into the track.";
+    if (!text) text = fxRoute() ? `FX channel: LEVEL is how loud the effect comes back. Send the tracks to it in ${dawName(app.daw)} (${say(app.daw, "sendHow")}).` : "MIX: how much of the effect is blended into the track.";
     note.textContent = text;
   }
   function syncDuck() {

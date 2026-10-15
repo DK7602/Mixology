@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-15, v0.12.0)
+# Mixology: resume here (updated 2026-10-15, v0.13.0)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,36 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## v0.13.0: your DAW for the trio + "fix this first" (2026-10-15) + Voxology 0.50.0 + Masterology 0.29.0
+- User sent Voxology's TOO HOT / CLIPPED RECORDING cards next to Auto Mix (+2.1 dB on the vocal): "are these reports
+  conflicting?" Answer: no (Voxology = the recording's peaks before any plug-in, Mixology = the balance after the fader);
+  fix clip gain first, then Auto Mix. Asked: (1) Auto Mix should say so ("yes"), (2) a DAW line in each plug-in's settings,
+  DAW-specific instructions and fixes in Learn, a change in one updates the rest.
+- suite link kLayout 3: Choice {style, daw}, ChoiceSlot x2, shareChoice/readChoice/leaveChoice (shareStyle etc. wrap
+  them), SharedChoice(from, Choice) (SongStyle = SharedChoice), dawFromHostPath(path) / dawName(key) (JUCE
+  PluginHostType::getHostPath()); VocalInfo flags recordedHot / recordedClipped + recordedPeakDb + clippedSpots. Tests:
+  "the DAW is a second shared choice...", "the DAW is found from the host program" (copied to the sisters' test_suite).
+- plugin/ui/daws.js (THE SAME FILE IN ALL THREE): DAWS (cubase incl. Nuendo, studioone, fl, ableton, reaper, bitwig,
+  logic, other) + phrasebook P; say(daw, phrase), dawName(daw) ("your DAW" for other), fillDaw(text, daw) replaces
+  {daw} / {daw:phrase}. A phrase may give only cubase + other (the rest fall back to other). tools/dawcheck/dawcheck.mjs
+  (ctest daw_words): every phrase has words for every DAW, no tokens inside phrases, every token in dsp/ + plugin/ exists.
+- Mixology: processor daw (SharedChoice, stateLock): setUnpicked(detected) at start, pickDaw(key, "" = back to found),
+  synced in syncStyle(), "daw" attribute only when picked; native pickDaw; frame.daw {key, picked, from, detected}.
+  app.js: app.daw / dawPicked / dawDetected; withDaw() fills every native function result and frame.bridge (deep, strings
+  only); a DAW change re-fetches getBridgeState and emits "daw"; toast when picked in another plug-in. Settings: dawRow at
+  the top (select "Found: X" + every DAW; the note says moving faders needs Cubase). Engine text tokens: MixAnalysis,
+  MixPlanner, SetupCheck (mono group fix, Mixology on a mono channel, vocals without a Link), BridgeHub (noFaderLink, play,
+  history / reference refusals). UI: Overview (press play, the Not-connected card becomes "<DAW>: you set the faders" in
+  other DAWs), Tracks cover (other DAWs: this page moves Cubase's faders, use <mixer>), Stereo / Master / process pages.
+  The Cubase Bridge's own texts stay Cubase (it only exists there). Fixed: the headroom advice no longer says to use the
+  Stereo Out fader (it comes after Mixology and Masterology; same fix in Masterology's tips and manual).
+- FIX THIS FIRST: MixPlanner Plan.first (planToVar "first"), filled for autoMix / balance / polish / pocket from
+  ChannelNow.voxology.recordedHot / recordedClipped (hub fillVoxology from the suite VocalInfo); tools.js shows an orange
+  box above the toolbar. Voxology publishes it from its last Auto-Edit report (peak > 0 dB, >= 3 clipped spots).
+- Voxology 0.50: DAW pick in the bottom bar (#daw-select; meters narrowed to fit), tip() / para() / list() / note
+  parsers fill tokens; AutoEdit.cpp / AutoAnalyze.cpp tokens. Masterology 0.29: Settings popover DAW row, para / tip /
+  item fill; AutoMaster.cpp tokens; manual + live Claude Docs copy.
 
 ## v0.12.0: one song style for the trio (2026-10-15) + Voxology 0.49.0 + Masterology 0.28.0
 - CI green: Mixology run 38761860225 (c59d288), Voxology run 38762282646 (aebbed0), Masterology run 38767985381

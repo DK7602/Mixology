@@ -1501,7 +1501,7 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
     }
     else if (name == "analyzeFinish")
     {
-        if (! analysis.hasMoments()) r = { false, "Nothing heard yet: press play in Cubase." };
+        if (! analysis.hasMoments()) r = { false, "Nothing heard yet: press play in {daw}." };
         else finishAnalysis();
     }
     else if (name == "analyzeCancel")
@@ -1713,6 +1713,10 @@ void BridgeHub::fillVoxology (mixology::mix::ChannelNow& c) const
     c.voxology.delay = (v->flags & suite::VocalInfo::delay) != 0;
     c.voxology.eq = (v->flags & suite::VocalInfo::eq) != 0;
     c.voxology.compressionDb = v->compressionDb;
+    c.voxology.recordedHot = (v->flags & suite::VocalInfo::recordedHot) != 0;
+    c.voxology.recordedClipped = (v->flags & suite::VocalInfo::recordedClipped) != 0;
+    c.voxology.recordedPeakDb = v->recordedPeakDb;
+    c.voxology.clippedSpots = static_cast<int> (v->clippedSpots);
 }
 
 std::vector<mixology::mix::ChannelNow> BridgeHub::channelsNow() const
@@ -1778,6 +1782,9 @@ juce::var BridgeHub::planToVar (const mixology::mix::Plan& p) const
     juce::Array<juce::var> notes;
     for (const auto& n : p.notes) notes.add (juce::String::fromUTF8 (n.c_str()));
     o->setProperty ("notes", notes);
+    juce::Array<juce::var> first;
+    for (const auto& n : p.first) first.add (juce::String::fromUTF8 (n.c_str()));
+    o->setProperty ("first", first);
     juce::Array<juce::var> changes;
     for (const auto& c : p.changes)
     {
@@ -1901,7 +1908,7 @@ mixology::BridgeSession::Result BridgeHub::applyCurrentPlan (const juce::var& pi
     if (steps.empty() && eq.empty() && procs.empty())
         return { false, noLink.empty() ? std::string ("Tick at least one change.") : "Mixology Link isn't reachable on those tracks any more." };
     if (! steps.empty() && bridge.link() != mixology::BridgeSession::Link::connected)
-        return { false, "Not connected to Cubase, so faders and pans can't move (Settings > Cubase Bridge)." };
+        return { false, "{daw:noFaderLink}" };
 
     LastApply next;
     next.valid = true;
@@ -1997,7 +2004,7 @@ mixology::BridgeSession::Result BridgeHub::undoLastApply (std::string& info)
     const auto serial = bridge.planProgress().serial + 1;
     if (! lastApply.bridgeUndo.empty())
     {
-        if (bridge.link() != mixology::BridgeSession::Link::connected) return { false, "Not connected to Cubase: can't put the faders back yet." };
+        if (bridge.link() != mixology::BridgeSession::Link::connected) return { false, "Mixology isn't connected to {daw}'s faders: it can't put them back yet." };
         const auto r = bridge.applyPlan ("Undo " + lastApply.title, lastApply.bridgeUndo, now());
         if (! r.ok) return r;
     }
@@ -2066,7 +2073,7 @@ mixology::BridgeSession::Result BridgeHub::listenToReference (bool toReference, 
 {
     const auto& ref = report.reference;
     if (! ref.chosen) return { false, "Choose your reference song first." };
-    if (bridge.link() != mixology::BridgeSession::Link::connected) return { false, "Not connected to Cubase: Mixology can't solo the reference." };
+    if (bridge.link() != mixology::BridgeSession::Link::connected) return { false, "Mixology isn't connected to {daw}'s faders: it can't solo the reference." };
     mixology::BridgeSession::PlanStep st;
     st.hash = ref.hash;
     st.title = ref.name;
@@ -2305,7 +2312,7 @@ mixology::BridgeSession::Result BridgeHub::moveHistory (const juce::String& how,
     if (needsCubase && bridge.link() != mixology::BridgeSession::Link::connected)
     {
         history.moveTo (was);   // nothing happened
-        return { false, "Not connected to Cubase, so the faders can't move back (Settings > Cubase Bridge)." };
+        return { false, "{daw:noFaderLink}" };
     }
     const auto r = playHistory (changes, what, info);
     if (! r.ok)

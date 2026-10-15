@@ -164,6 +164,10 @@ Suite rule (user, 2026-10-15): Mixology, Voxology and Masterology all keep Auto 
 v0.12.0: one song style for the trio (user: "yes go ahead, do it here"): suite link layout 2 (StyleSlot + SongStyle,
 newest pick wins), Mixology's processor owns the style, Masterology 0.28 (picker, Auto-Master genre from the style),
 Voxology 0.49 (SONG chip + picker, suggests the vocal style unless you picked it on that track).
+v0.13.0 (with Voxology 0.50, Masterology 0.29): your DAW, shared (suite link layout 3, found from the host or picked),
+every tip in that DAW's words (plugin/ui/daws.js, the same file in all three; {daw:...} tokens in engine text); Auto Mix,
+Balance, Polish and Vocal Pocket show FIX THIS FIRST when Voxology heard a vocal recorded too hot or clipped. Fixed:
+the headroom advice said to use the Stereo Out fader, which comes after Mixology and Masterology.
 Still to come in M6: code signing (later).
 
 ### Built in v0.11.0 - Auto Analyze (asked 2026-10-15: "once an analyze mix has been run should have an auto analyze option")

@@ -637,10 +637,10 @@ namespace mixology::mix
             const bool one = r.groupHints.size() == 1;
             out.push_back ({ "group-hint", "info", "link",
                              one ? quoteName (r.groupHints.front()) + " adds no sound of its own" : std::to_string (r.groupHints.size()) + " channels add no sound of their own",
-                             "Everything Mixology hears on the Stereo Out is already on your tracks with a Link, so " + joinNames (r.groupHints, 4)
+                             "Everything Mixology hears on the {daw:master} channel is already on your tracks with a Link, so " + joinNames (r.groupHints, 4)
                                  + (one ? " is" : " are") + " a group your tracks play through (or silent). Mixology doesn't count "
                                  + (one ? "it" : "them") + " as extra music"
-                                 + (r.routingFromSound && std::abs (r.musicPathDb) >= 0.5 ? ", and allows for the " + signedDb (r.musicPathDb) + " the instruments get on their way to the Stereo Out." : "."),
+                                 + (r.routingFromSound && std::abs (r.musicPathDb) >= 0.5 ? ", and allows for the " + signedDb (r.musicPathDb) + " the instruments get on their way to the {daw:master} channel." : "."),
                              "No: Mixology already takes care of it. Optional: if your instruments play through it, say so, and Balance moves the music on that one fader instead of each instrument.",
                              { "Optional: press 'It's the music group' below, or click its icon on the Tracks page and choose Music group." },
                              r.groupHints });
@@ -900,7 +900,7 @@ namespace mixology::mix
                 out.push_back ({ "low-wide", "warn", "mono", "The low end isn't centred",
                                  (wideLows.empty() ? std::string ("Part of the mix's low end") : joinNames (wideLows)) + " spreads bass to the sides. Low end should sit in the middle: club systems and phones play it in mono and it can thin out or vanish.",
                                  "Yes: it's an easy win for every playback system.",
-                                 { "Make the low end mono below about 120 Hz (Cubase's MultiPanner or a stereo-width plug-in on those tracks).",
+                                 { "Make the low end mono below about 120 Hz ({daw:monoLows}).",
                                    "Check any stereo widener or chorus on bass sounds." }, wideLows });
             std::vector<std::string> outOfPhase;
             for (const auto& t : r.tracks)
@@ -926,12 +926,12 @@ namespace mixology::mix
             for (const auto& t : r.tracks)
                 if (counts (t) && t.width > 0.03) stereoTracks.push_back (t.name);
             out.push_back ({ "mono-mix", "info", "mono", "Your mix is mono",
-                             "Left and right of the Stereo Out are the same: every track ends up in the middle, and panning changes nothing."
+                             "Left and right of the {daw:master} channel are the same: every track ends up in the middle, and panning changes nothing."
                                  + (stereoTracks.empty() ? std::string()
-                                                         : " " + joinNames (stereoTracks) + (stereoTracks.size() == 1 ? " is" : " are") + " stereo on its track but reaches the Stereo Out in mono.")
+                                                         : " " + joinNames (stereoTracks) + (stereoTracks.size() == 1 ? " is" : " are") + " stereo on its track but reaches the {daw:master} channel in mono.")
                                  + " That usually means a mono group or output on the way (for example a mono group the instruments play through).",
                              "Only if you want width: most songs are stereo (guitar pairs left and right, a wide drum kit).",
-                             { "In Cubase's MixConsole a mono channel shows one meter instead of two: check your groups (and the Stereo Out).",
+                             { "{daw:monoMeter}.",
                                "To keep the width, use a stereo group instead (add a stereo group track and route the same tracks to it).",
                                "Then Stereo Architect can place pairs left and right." }, stereoTracks });
         }
@@ -976,7 +976,7 @@ namespace mixology::mix
                                  { "Bring them up until you just notice them, then 1 - 2 dB more, or mute them if the song doesn't miss them." }, quiet });
             if (! hot.empty())
                 out.push_back ({ "hot", "info", "headroom", "Very hot tracks before the fader",
-                                 joinNames (hot) + (hot.size() == 1 ? " peaks" : " peak") + " above 0 dB before the fader. Cubase doesn't distort inside, but plug-ins and meters behave better with room to spare.",
+                                 joinNames (hot) + (hot.size() == 1 ? " peaks" : " peak") + " above 0 dB before the fader. {daw} doesn't distort inside, but plug-ins and meters behave better with room to spare.",
                                  "Not for the sound. It's good housekeeping.",
                                  { std::string ("Turn the Trim in ") + (hot.size() == 1 ? "its" : "their") + " Mixology Link down about 6 dB and the fader up as much." }, hot });
         }
@@ -988,7 +988,8 @@ namespace mixology::mix
                 out.push_back ({ "headroom", "warn", "headroom", "No headroom left for mastering",
                                  "The mix peaks at about " + fmt1 (r.mixPeak) + " dBFS. Masterology (or any mastering) works best with 3 - 6 dB to spare.",
                                  "Yes, before mastering.",
-                                 { "Pull all faders down together (or the Stereo Out fader) until the loudest parts peak around -6 to -3 dBFS." }, {} });
+                                 { "Pull the track faders down together until the loudest parts peak around -6 to -3 dBFS (not the {daw:master} fader: "
+                                   "it comes after Mixology and Masterology, so they would still hear the peaks)." }, {} });
             else if (r.mixPeak > -3.0)
                 out.push_back ({ "headroom", "info", "headroom", "A bit hot for mastering",
                                  "The mix peaks at about " + fmt1 (r.mixPeak) + " dBFS. Aim for peaks around -6 to -3 dBFS.",

@@ -3,6 +3,7 @@
 
 import { el, box, icon, fmt, clamp, Knob, Meter, select, graph, freqToX, moduleList, store, cssVar } from "./ui.js";
 import { knobFor, biquad, magnitudeDb, MODULE_NAMES } from "./proc.js";
+import { dawName, say } from "./daws.js";
 
 function knobRow(host, defs, prefix, onChange) {
   host.innerHTML = "";
@@ -300,8 +301,8 @@ export function buildStereo(root, app) {
       if (shownMono !== "track" && noteKey !== shownMono) {   // a mono track keeps its own note (sync)
         shownMono = noteKey;
         note.style.color = monoNow || fold ? "var(--amber)" : "";
-        note.textContent = fold && fold.id === "setup-mono-mixology" ? "Mixology sits on a mono channel, so it hears the whole mix in mono. Put it on the Stereo Out (Overview > Mix Assistant says how)."
-          : fold ? `Your tracks are stereo, but the mix arrives in mono${fold.tracks && fold.tracks.length ? `: most likely '${fold.tracks[0]}' is a mono group` : " (a mono group on the way)"}. Make it stereo in Cubase (Overview > Mix Assistant says how).`
+        note.textContent = fold && fold.id === "setup-mono-mixology" ? `Mixology sits on a mono channel, so it hears the whole mix in mono. Put it on the ${say(app.daw, "master")} channel (Overview > Mix Assistant says how).`
+          : fold ? `Your tracks are stereo, but the mix arrives in mono${fold.tracks && fold.tracks.length ? `: most likely '${fold.tracks[0]}' is a mono group` : " (a mono group on the way)"}. Make it stereo in ${dawName(app.daw)} (Overview > Mix Assistant says how).`
           : monoNow
           ? `${track ? `'${proc.name}'` : "The full mix"} is mono right now (left = right${track ? "" : ": e.g. a mono group on the way"}), so width can't change it. Widen a stereo track instead, or make that group / output stereo.`
           : "Low Width under 100 % keeps kick and 808 solid in mono (clubs, phones). High Width over 100 % opens up hats, pads and reverbs.";
@@ -409,7 +410,7 @@ export function buildMaster(root, app) {
         const want = [m.finOn ? m.glue : 0, m.tbOn ? (m.air - m.warmth) / 2 : 0, m.finOn ? m.width : 100, m.finOn ? m.out : 0];
         if (now - movedAt > 800)
           finishing.forEach((k, i) => { if (!k.dragging && Math.abs(k.value - want[i]) > 0.05) k.set(want[i]); });
-        finNote.textContent = "These work on the Full Mix (Mixology on the Stereo Out), before Masterology."
+        finNote.textContent = `These work on the Full Mix (Mixology on the ${say(app.daw, "master")} channel), before Masterology.`
           + (m.finOn && m.glue > 0 ? ` Glue now ${m.glueGr >= 0.1 ? fmt.db(-m.glueGr) : "0.0 dB"}.` : "");
       }
       hist.redraw();
@@ -431,7 +432,7 @@ export function buildMaster(root, app) {
       ];
       if (f.master) items.push(g
         ? [true, `Masterology is on${g.goal ? " (" + g.goal + ")" : ""}: it gets this mix's style and tone`]
-        : [null, "Open Masterology after Mixology on the Stereo Out: it picks up this mix's style and tone"]);
+        : [null, `Open Masterology after Mixology on the ${say(app.daw, "master")} channel: it picks up this mix's style and tone`]);
       checks.innerHTML = items.map(([ok, text]) => `<div style="display:flex;gap:10px;align-items:flex-start"><span style="width:22px;height:22px;flex:none;color:${ok === null ? "var(--text-faint)" : ok ? "var(--green)" : "var(--amber)"}">${icon(ok === false ? "headroom" : "check", 'stroke-width="2.4"')}</span><span>${text}</span></div>`).join("");
     },
   };

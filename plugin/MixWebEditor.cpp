@@ -130,6 +130,12 @@ juce::WebBrowserComponent::Options MixWebEditor::makeEditorOptions()
                                                                            args.size() < 3 || static_cast<bool> (args[2]));
                                  complete (true);
                              })
+        .withNativeFunction ("pickDaw", [this] (const juce::Array<juce::var>& args, auto complete)
+                             {
+                                 // Your DAW ("" = the one Mixology found): Voxology and Masterology in this project follow.
+                                 processor.pickDaw (args.size() > 0 ? args[0].toString().toStdString() : std::string());
+                                 complete (true);
+                             })
         .withNativeFunction ("setMonoListen", [this] (const juce::Array<juce::var>& args, auto complete)
                              {
                                  processor.monoListen.store (args.size() > 0 && static_cast<bool> (args[0]));
@@ -339,6 +345,13 @@ void MixWebEditor::timerCallback()
         so->setProperty ("key", juce::String::fromUTF8 (processor.songStyleKey().c_str()));
         so->setProperty ("version", static_cast<int> (processor.songStyleVersion()));
         frame->setProperty ("songStyle", juce::var (so));
+        const auto d = processor.dawNow();
+        auto* dw = new juce::DynamicObject();
+        dw->setProperty ("key", juce::String::fromUTF8 (d.key.c_str()));
+        dw->setProperty ("picked", d.pickedAt != 0);   // false: found from the host
+        dw->setProperty ("from", static_cast<int> (d.from));
+        dw->setProperty ("detected", juce::String::fromUTF8 (processor.dawDetected().c_str()));
+        frame->setProperty ("daw", juce::var (dw));
     }
     frame->setProperty ("mono", processor.monoListen.load());
     frame->setProperty ("spectrum", makeSpectrum());

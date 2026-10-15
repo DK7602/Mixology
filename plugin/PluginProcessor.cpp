@@ -33,6 +33,7 @@ MixologyAudioProcessor::MixologyAudioProcessor()
       parameters (*this, nullptr, "MixologyParams", makeLayout())
 {
     procRaw.bind (parameters);
+    daw.setUnpicked (detectedDaw, suite::dawName (detectedDaw));   // until you pick one (here or in Voxology / Masterology)
     for (int i = 0; i < mixology::proc::kMeterValues; ++i) procMeters[static_cast<std::size_t> (i)].store (meterDefault (i));
     // Polish / Auto Mix can propose the Full Mix's tone: they read and set it through the hub.
     bridgeHub->setMixProcessing (this, { [this] { return procRaw.read(); }, [this] (int index, float value) { setProc (index, value); } });
@@ -45,6 +46,7 @@ MixologyAudioProcessor::~MixologyAudioProcessor()
     {
         const juce::ScopedLock sl (stateLock);
         songStyle.leave (suite::Link::process(), instanceId);
+        daw.leave (suite::Link::process(), instanceId);
     }
 }
 
@@ -87,6 +89,19 @@ void MixologyAudioProcessor::syncStyle()
     // The song's style: the newest choice in Voxology, Mixology or Masterology wins; the interface follows.
     const juce::ScopedLock sl (stateLock);
     if (songStyle.sync (suite::Link::process(), instanceId, suite::nowMs())) ++styleVersion;
+    if (daw.sync (suite::Link::process(), instanceId, suite::nowMs())) ++styleVersion;
+}
+
+void MixologyAudioProcessor::pickDaw (const std::string& key)
+{
+    {
+        const juce::ScopedLock sl (stateLock);
+        if (key == daw.style().key && daw.style().pickedAt != 0) return;
+        if (key.empty()) daw.setUnpicked (detectedDaw, suite::dawName (detectedDaw));   // back to the one found
+        else daw.pick (key, suite::dawName (key));
+        ++styleVersion;
+    }
+    syncStyle();
 }
 
 void MixologyAudioProcessor::publishHandoff()
@@ -231,6 +246,8 @@ void MixologyAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     {
         const juce::ScopedLock sl (stateLock);
         xml.setAttribute ("songStyle", juce::String::fromUTF8 (songStyle.save().c_str()));   // + when you picked it
+        if (daw.style().pickedAt != 0)   // your DAW, when you picked one (else it is found from the host each time)
+            xml.setAttribute ("daw", juce::String::fromUTF8 (daw.save().c_str()));
     }
     if (auto params = parameters.copyState().createXml())           // the Full Mix processing
         xml.addChildElement (params.release());
@@ -254,6 +271,9 @@ void MixologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
                     if (key.isString() && key.toString().isNotEmpty())
                         songStyle.restore (key.toString().toStdString() + "|" + ui.getProperty ("presetName", "").toString().toStdString() + "|1|2");
                 }
+                daw = suite::SharedChoice { suite::StyleInfo::From::mixology, suite::Choice::daw };
+                if (! daw.restore (xml->getStringAttribute ("daw").toStdString()))
+                    daw.setUnpicked (detectedDaw, suite::dawName (detectedDaw));
                 ++styleVersion;   // an open interface shows it
             }
             bridgeHub->setProtectedState (xml->getStringAttribute ("protected"));

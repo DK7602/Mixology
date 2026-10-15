@@ -95,11 +95,10 @@ namespace mixology::setup
             s.title = "Mixology is on a mono channel";
             s.text = "Mixology sits on a channel with one audio channel, so it hears your whole mix in mono: no width, no pans, "
                      "and its stereo advice can't work.";
-            s.need = "Yes: Mixology belongs on the Stereo Out, which is stereo.";
-            s.steps = { "In Cubase, remove Mixology from this channel.",
-                        "Put it on the Stereo Out (MixConsole, the Stereo Out channel's inserts), before Masterology.",
-                        "If the Stereo Out itself is mono: Studio > Audio Connections > Outputs, add a Stereo bus with Left and Right "
-                        "on your interface, and send everything there." };
+            s.need = "Yes: Mixology belongs on the {daw:master} channel, which is stereo.";
+            s.steps = { "Remove Mixology from this channel.",
+                        "Put it on the {daw:master} channel, before Masterology: {daw:loadOnMaster}.",
+                        "If the {daw:master} channel itself is mono: {daw:outputsStereo}." };
             out.push_back (std::move (s));
         }
         else if (c.monoFold)
@@ -111,20 +110,18 @@ namespace mixology::setup
             s.title = "Your mix arrives in mono";
             const std::string evidence = c.stereoTracks.empty() ? std::string ("Your tracks play in stereo")
                                                                  : "Your tracks play in stereo (for example " + joinQuoted (c.stereoTracks, 3) + ")";
-            s.text = evidence + ", but at the Stereo Out left and right are exactly the same: every pan and every stereo sound is "
+            s.text = evidence + ", but at the {daw:master} channel left and right are exactly the same: every pan and every stereo sound is "
                      "folded to the middle on the way. ";
             if (! c.busCandidates.empty())
                 s.text += "Most likely " + quoted (c.busCandidates.front()) + " is a mono group: everything that plays through it comes out in the middle.";
             else
-                s.text += "Something between them and the Stereo Out is mono: usually a group channel they play through.";
+                s.text += "Something between them and the {daw:master} channel is mono: usually a group channel they play through.";
             s.need = "Yes, unless the song is meant to be mono: width and pans are half of a modern mix.";
             const std::string where = c.busCandidates.empty() ? std::string ("each group channel your tracks play through")
                                                               : quoted (c.busCandidates.front());
-            s.steps = { "In Cubase's MixConsole, find the small button at the bottom of " + where + " (next to its channel number): "
-                        "one circle = mono, two linked circles = stereo.",
-                        "Stop playback and click it once: it switches to stereo.",
-                        "Check the other groups and FX channels the tracks play through the same way, and the Stereo Out "
-                        "(Studio > Audio Connections > Outputs: Left and Right both connected).",
+            s.steps = { "Find " + where + " in {daw:mixer}: {daw:monoBusFix}.",
+                        "Check the other groups and FX channels the tracks play through the same way, and the {daw:master} channel "
+                        "({daw:outputsStereo}).",
                         "Press play: the Stereo page's scope opens up. Then run Analyze Mix again." };
             s.tracks = c.busCandidates;
             if (s.tracks.size() > 3) s.tracks.resize (3);
@@ -145,10 +142,8 @@ namespace mixology::setup
                      + ", so Mixology can't hear " + (n == 1 ? "it" : "them") + " on " + (n == 1 ? "its" : "their")
                      + " own: Analyze Mix and Auto Mix can't set the vocal level against the beat or polish " + (n == 1 ? "it." : "them.");
             s.need = "Yes: the vocal is the most important part of the mix.";
-            s.steps = { "In Cubase, add Mixology Link to each of " + std::string (n == 1 ? "it" : "them") + " in the insert slot right under "
-                        "Voxology (after it, still above the fader divider line).",
-                        "Several at once: select the channels, hold Shift + Alt and pick Mixology Link in one empty slot (or use Q-Link). "
-                        "Pick a slot that is empty on all of them.",
+            s.steps = { "Add Mixology Link to each of " + std::string (n == 1 ? "it" : "them") + " {daw:linkAfterVoxology}.",
+                        "{daw:manyAtOnce}.",
                         "Then run Analyze Mix again." };
             s.tracks = c.vocalsWithoutLink;
             out.push_back (std::move (s));

@@ -1,6 +1,6 @@
 # Mixology manual
 
-Manual for version 0.12.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
+Manual for version 0.13.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -53,6 +53,20 @@ there. The Tracks page shows your channels through the Cubase bridge.
 Insert **Mixology Link** on the tracks you want Mixology to hear one by one, after the track's other plug-ins.
 It is light (no latency, very little CPU) and passes the sound through, apart from its Trim and the processing
 you switch on for that track.
+
+## Your DAW
+
+Settings (the gear) > **DAW**. Mixology finds the program it runs in (Cubase or Nuendo, Studio One, FL Studio, Ableton
+Live, REAPER, Bitwig Studio) and writes every tip, step and fix for it: where the master channel is, how to lower a
+clip's gain, add a send, make a mono group stereo, keep the outputs stereo. "Found: ..." uses the one it found; pick
+another if it got it wrong. Voxology and Masterology share it: pick it in any of the three and the others follow (the
+newest choice wins, also after you reopen the project).
+
+**Moving faders needs Cubase (for now).** Mixology moves faders through Cubase's MIDI Remote (the Cubase Bridge). In
+another DAW, Analyze Mix, the Mix Assistant, Mixology Link and every tool's EQ, compression, space and the mix's tone
+work as usual; the Tracks page and the fader and pan moves don't: Auto Mix and Balance list those moves for you to set
+by hand (untick their rows to apply the rest). A level and pan control inside each Mixology Link, so this works in any
+DAW, is planned (docs/PLAN.md, "Link Mix mode").
 
 ## Light or dark
 
@@ -201,6 +215,11 @@ only gives advice: it never moves anything. Your choice is saved with the projec
 Analyze is still on, with no need to press Analyze Mix. When you press play it reads the faders once (as Analyze Mix
 does) and the first advice comes about 20 seconds in. Pick another style in the header and the next check gives
 advice for that style.
+
+**Recorded too hot?** When Voxology's Auto-Edit finds a vocal clipped or over the top of the meter in the recording
+itself, Auto Mix, Balance, Polish and Vocal Pocket show **FIX THIS FIRST** above their changes: lower that vocal's clip
+gain (how, in your DAW), then let Analyze Mix hear it again (Auto Analyze does it by itself). Their level moves are worked
+out from how loud the vocal is now, so fixing it after would change the balance again.
 
 **Your tracks** (button under the Mix Assistant) shows what Analyze Mix heard for each track: its role, level
 after the fader, peak and width. **Live view** switches the Mix Assistant back to the live readings.

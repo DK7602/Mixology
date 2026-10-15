@@ -355,7 +355,7 @@ TEST_CASE ("Polish: the FX channel reverb's level sits under the vocal", "[polis
     REQUIRE (fx != nullptr);
     CHECK (value (*fx, proc::spLevel) == Catch::Approx (-15.0f));
     CHECK (fx->toText == "Vocal Plate, level -15.0 dB");
-    CHECK (noted (p, "at 0 dB"));
+    CHECK (noted (p, "{daw:sendHow}"));   // the window says how, in your DAW's words
 
     // The send was there while Mixology listened (the FX channel passed the vocal 10 dB down): level -5 dB.
     auto send = track ("FX 1-Vox Verb", Role::fx, vocalBands (-24.0, 5.0, 2.0));

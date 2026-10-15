@@ -4,6 +4,7 @@
 
 import { PROC, PROC_INDEX, MODULE_ON } from "./procspec.js";
 import { el, icon, select, store } from "./ui.js";
+import { say } from "./daws.js";
 
 export { PROC, PROC_INDEX, MODULE_ON };
 
@@ -99,7 +100,7 @@ export function createProc(app) {
       const shown = () => (options().some((o) => o.value === api.key) ? api.key : opts.placeholder || api.key);
       const s = select(parent, x, y, w, options(), shown(), (k) => api.select(k), opts);
       s.el.title = opts.tracksOnly ? "The track (its Mixology Link) or FX channel these controls work on"
-        : "What these controls work on: the full mix (Mixology on the Stereo Out) or one track (its Mixology Link)";
+        : `What these controls work on: the full mix (Mixology on the ${say(app.daw, "master")} channel) or one track (its Mixology Link)`;
       const refresh = () => { s.setOptions(options()); s.set(shown()); };
       api.on((why) => { if (why === "targets" || why === "target") refresh(); });
       return s;
