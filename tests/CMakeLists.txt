@@ -12,7 +12,8 @@ add_executable(mixology_tests
     test_proc.cpp
     test_space.cpp
     test_polish.cpp
-    test_suite.cpp)
+    test_suite.cpp
+    test_setup.cpp)
 
 target_link_libraries(mixology_tests PRIVATE mixology_dsp Catch2::Catch2WithMain)
 set_target_properties(mixology_tests PROPERTIES FOLDER "Mixology")

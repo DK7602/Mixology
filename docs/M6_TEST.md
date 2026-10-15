@@ -1,5 +1,20 @@
 # Milestone 6 tests
 
+## Version 0.8.1 (5 minutes): the setup check
+
+From your round 1: the **VOX tag works** (thank you). You also hit two setup problems by hand: the mono "Beat" group
+and vocals without Mixology Link. Mixology now spots both while the song plays and says what to do.
+
+1. Install Mixology 0.8.1 (both .vst3 as usual; Voxology and Masterology stay as they are).
+2. To see it work, put the problem back for a minute: switch **Beat** to mono again (its one-circle button) and press
+   play. Within about 10 seconds the **Mix Assistant** (Overview) shows **"Your mix arrives in mono"** at the top, and the
+   Tracks page's top bar says it too. Click it: it should name **'Beat'**. Switch Beat back to stereo: the warning goes
+   within a few seconds of playing.
+3. Remove Mixology Link from one vocal (or add Voxology to a track without a Link): the Mix Assistant says that vocal has
+   no Mixology Link. Put the Link back.
+
+**Report**: did it name the right channel? Anything it warned about that wasn't a problem?
+
 ## Round 1: Voxology, Mixology and Masterology talk to each other (about 15 minutes)
 
 Goal: in one Cubase project the three plug-ins now share what they do. Each still works on its own exactly as before.

@@ -1,10 +1,20 @@
 # Mixology manual
 
-Manual for version 0.8.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
+Manual for version 0.8.1 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
-channel, ducking under the vocal, the Master page's finishing knobs, and the suite link: Mixology sees Voxology
-on your vocals and Masterology after it).
+channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
+on your vocals and Masterology after it, and the setup check).
+
+**Setup check.** While the song plays, Mixology watches for problems in the Cubase project that no mixing move can
+fix, and puts them at the top of the Mix Assistant (Overview), and in the Tracks page's top bar (click it for the
+fix):
+- **Your mix arrives in mono**: your tracks play in stereo (or are panned), but left and right are the same at the
+  Stereo Out. Usually a mono group channel they play through; Mixology names the one it most likely is (for
+  example your music group "Beat") and says which button to click in Cubase.
+- **Vocals without Mixology Link**: a vocal with Voxology on it but no Mixology Link, so Mixology can't hear it on
+  its own (add the Link under Voxology).
+- **Mixology on a mono channel**: it belongs on the Stereo Out.
 
 **Voxology** makes each vocal sound great. **Mixology** makes all your tracks work together.
 **Masterology** turns the finished mix into the master.
@@ -26,7 +36,8 @@ on your vocals and Masterology after it).
 | Space page: reverbs, delay, chorus, phaser, special effects on a track or an FX channel, ducking | Live |
 | Polish (and Auto Mix): EQ, compression, vocal reverb / delay and the mix's tone proposed for you | Live |
 | Master page's finishing knobs (Glue, Tilt, Width, Trim on the Full Mix) | Live |
-| Suite link: Voxology on your vocals (VOX tag, no second compressor / reverb / delay), Masterology's goal on the Master page, the hand-off to Masterology | Live: this is what we're testing now (needs Voxology 0.47 and Masterology 0.26 or newer) |
+| Suite link: Voxology on your vocals (VOX tag, no second compressor / reverb / delay), Masterology's goal on the Master page, the hand-off to Masterology | Live (needs Voxology 0.47 and Masterology 0.26 or newer) |
+| Setup check: a mono group or output on the way, vocals without Mixology Link (Mix Assistant, Tracks page) | Live: this is what we're testing now |
 
 Nothing changes your sound until you ask: every processing module starts switched off (the audio passes
 through bit for bit). What can change it: the Cubase faders and pans Mixology moves, the Assist EQ / Trim in
@@ -444,6 +455,9 @@ unless you mix in one project and master in another; then Masterology simply wor
 - **A strip reads "L100" but you hear it in the middle**: turn its pan knob in Mixology once: it changes to "No pan"
   (see above). This needs the Cubase script v4 or later (Settings > Cubase Bridge shows the version; the log says
   when a newer one came with the download).
+- **"Your mix arrives in mono"** (Mix Assistant): click it. In Cubase's MixConsole, the small button at the bottom of
+  each channel shows one circle for mono, two linked circles for stereo: click the named group's button (playback
+  stopped) to make it stereo.
 - **The Stereo page says the mix is mono**: left and right are the same at the Stereo Out (usually a mono group on
   the way), so Width can't change anything there.
 - **A track sounds 5 ms late**: its Limiter is on and Cubase's delay compensation is switched off (Constrain

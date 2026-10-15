@@ -7,6 +7,7 @@
 #include "mixology/LinkRegistry.h"
 #include "mixology/MixAnalysis.h"
 #include "mixology/MixPlanner.h"
+#include "mixology/SetupCheck.h"
 #include "suite/SuiteLink.h"
 
 #include <juce_audio_devices/juce_audio_devices.h>
@@ -63,14 +64,17 @@ public:
 
     /** Everything the Tracks page and Settings > Cubase Bridge show. */
     juce::var getState (bool includeLog);
-    std::uint64_t stateVersion() const { return bridge.stateVersion() + linkVersion + analysisVersion + applyVersion + suiteVersion; }
+    std::uint64_t stateVersion() const { return bridge.stateVersion() + linkVersion + analysisVersion + applyVersion + suiteVersion + setupVersion; }
+
+    /** The setup check's issues right now (a mono group, vocals without a Link...), as Mix Assistant suggestions. */
+    const std::vector<mixology::mix::Suggestion>& setupIssues() const { return setupNow; }
 
     /** Per strip: [peak L, peak R] dBFS from its paired Mixology Link, or null. */
     juce::var trackMeters() const;
 
     /** Analyze Mix, five times a second from the editor: the mix as Mixology hears it, and whether the
         host's transport is running. Adds a moment while listening. */
-    void analysisTick (const mixology::AnalysisFrame& mix, bool playing);
+    void analysisTick (const mixology::AnalysisFrame& mix, bool playing, int mixChannels = 2);
     /** The Overview analyzer's six colours (kick, bass, drums, vocals, instruments, other): each a list of
         31 band levels in the analyzer's units, or null when nothing of that kind plays. */
     juce::var roleCurves (double sampleRate) const;
@@ -197,6 +201,14 @@ private:
     const suite::VocalInfo* voxologyOn (std::uint32_t hash) const;   // a Voxology in Vocal mode on it
     std::optional<mixology::mix::Role> voxRole (std::uint32_t hash, const std::string& name) const;
     std::map<std::uint32_t, mixology::mix::TrackSettings> settingsForAnalysis() const;
+
+    // The setup check (fed with every analysis tick): problems no mixing move fixes, with the fix.
+    mixology::setup::MonoWatch monoWatch;
+    int mixChannels = 2;
+    std::vector<mixology::mix::Suggestion> setupNow;
+    std::string setupKey;
+    std::uint64_t setupVersion = 0;
+    void updateSetup();
 
     enum class Analyze { idle, reading, listening, done };
     Analyze analyzeState = Analyze::idle;

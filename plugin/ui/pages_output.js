@@ -294,10 +294,15 @@ export function buildStereo(root, app) {
       corr = track ? proc.corr : f.corr;
       // Mono material: width has nothing to work with (left = right). Say so instead of looking broken.
       const monoNow = corr !== null && corr !== undefined && corr > 0.985;
-      if (monoNow !== shownMono) {
-        shownMono = monoNow;
-        note.style.color = monoNow ? "var(--amber)" : "";
-        note.textContent = monoNow
+      // The setup check knows more: stereo tracks folded by a mono group (and which one it most likely is).
+      const fold = !track && ((app.bridge && app.bridge.setup) || []).find((s) => s.id === "setup-mono-group" || s.id === "setup-mono-mixology");
+      const noteKey = monoNow + "|" + track + "|" + (fold ? fold.id + (fold.tracks || []).join(",") : "");
+      if (shownMono !== "track" && noteKey !== shownMono) {   // a mono track keeps its own note (sync)
+        shownMono = noteKey;
+        note.style.color = monoNow || fold ? "var(--amber)" : "";
+        note.textContent = fold && fold.id === "setup-mono-mixology" ? "Mixology sits on a mono channel, so it hears the whole mix in mono. Put it on the Stereo Out (Overview > Mix Assistant says how)."
+          : fold ? `Your tracks are stereo, but the mix arrives in mono${fold.tracks && fold.tracks.length ? `: most likely '${fold.tracks[0]}' is a mono group` : " (a mono group on the way)"}. Make it stereo in Cubase (Overview > Mix Assistant says how).`
+          : monoNow
           ? `${track ? `'${proc.name}'` : "The full mix"} is mono right now (left = right${track ? "" : ": e.g. a mono group on the way"}), so width can't change it. Widen a stereo track instead, or make that group / output stereo.`
           : "Low Width under 100 % keeps kick and 808 solid in mono (clubs, phones). High Width over 100 % opens up hats, pads and reverbs.";
       }

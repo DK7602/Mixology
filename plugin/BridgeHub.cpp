@@ -1,5 +1,6 @@
 #include "BridgeHub.h"
 
+#include <regex>
 #include <set>
 
 namespace
@@ -29,6 +30,27 @@ namespace
         for (const auto& d : devices)
             if (d.name.containsIgnoreCase (wanted)) return d;
         return {};
+    }
+
+    juce::var stringList (const std::vector<std::string>& items)
+    {
+        juce::Array<juce::var> a;
+        for (const auto& s : items) a.add (juce::String::fromUTF8 (s.c_str()));
+        return a;
+    }
+
+    juce::var suggestionVar (const mixology::mix::Suggestion& sg)
+    {
+        auto* so = new juce::DynamicObject();
+        so->setProperty ("id", juce::String (sg.id));
+        so->setProperty ("kind", juce::String (sg.kind));
+        so->setProperty ("icon", juce::String (sg.icon));
+        so->setProperty ("title", juce::String::fromUTF8 (sg.title.c_str()));
+        so->setProperty ("text", juce::String::fromUTF8 (sg.text.c_str()));
+        so->setProperty ("need", juce::String::fromUTF8 (sg.need.c_str()));
+        so->setProperty ("steps", stringList (sg.steps));
+        so->setProperty ("tracks", stringList (sg.tracks));
+        return juce::var (so);
     }
 
     juce::String stamp (double seconds)
@@ -442,14 +464,16 @@ std::optional<mixology::mix::Role> BridgeHub::roleFor (std::uint32_t hash, const
     return mixology::mix::roleFromName (name);
 }
 
-void BridgeHub::analysisTick (const mixology::AnalysisFrame& mixFrame, bool playing)
+void BridgeHub::analysisTick (const mixology::AnalysisFrame& mixFrame, bool playing, int channels)
 {
     using namespace mixology;
     if (playing != transportPlaying) { transportPlaying = playing; ++analysisVersion; }
     if (analyzeState == Analyze::reading && ! bridge.scanning()) { analyzeState = Analyze::listening; ++analysisVersion; }
+    mixChannels = channels;
 
     const auto ms = link::nowMs();
     std::vector<mix::TrackSample> tracks;
+    std::vector<setup::TrackNow> setupTracks;
     for (const auto& l : link::processRegistry().links (ms))
     {
         if (! l.hasAnalysis || ms - std::min (ms, l.analysisMs) > 500) continue;
@@ -467,9 +491,32 @@ void BridgeHub::analysisTick (const mixology::AnalysisFrame& mixFrame, bool play
                 t.faderKnown = true;
             }
         t.frame = l.analysis;
+
+        // The setup check: what this track should give the mix's width (its own width, or its pan if it's mono).
+        setup::TrackNow s;
+        s.name = t.name;
+        s.loudness = t.frame.silent ? kSilentDb : t.frame.loudness;
+        s.width = t.frame.width;
+        s.faderDb = t.faderKnown ? t.faderDb : 0.0;
+        if (t.hash != 0 && l.channels == 1)   // a stereo track's pan reads its left edge only (Combined Panner)
+            if (auto it = bridge.knownFaders().find (t.hash); it != bridge.knownFaders().end() && it->second.hasPan)
+            {
+                s.panKnown = true;
+                s.pan = (it->second.pan - 0.5) * 200.0;
+                s.panWorks = ! bridge.panIgnored (t.hash);
+            }
+        setupTracks.push_back (std::move (s));
         tracks.push_back (std::move (t));
     }
     if (static_cast<int> (tracks.size()) != tracksHeard) { tracksHeard = static_cast<int> (tracks.size()); ++analysisVersion; }
+
+    setup::MixNow heard;
+    heard.playing = playing;
+    heard.loudness = mixFrame.silent ? kSilentDb : mixFrame.loudness;
+    heard.width = mixFrame.width;
+    heard.correlation = mixFrame.correlation;
+    monoWatch.add (heard, setupTracks);
+    updateSetup();
 
     if (analyzeState != Analyze::listening || ! playing) return;
     mix::Moment m;
@@ -606,6 +653,58 @@ void BridgeHub::updateSuite (double t)
         suiteRoleKey = roles;
         reevaluate();   // a vocal Voxology sits on is a vocal in the advice too
         ++analysisVersion;
+    }
+}
+
+void BridgeHub::updateSetup()
+{
+    using namespace mixology;
+    setup::Context c;
+    c.mixChannels = mixChannels;
+    c.monoFold = monoWatch.monoFold();
+    c.stereoTracks = monoWatch.stereoTracks();
+
+    std::set<std::uint32_t> linked;
+    for (const auto& l : link::processRegistry().links (link::nowMs()))
+        if (l.identity.hasName) linked.insert (l.nameHash);
+    auto titleOf = [this] (std::uint32_t hash, const std::string& fallback) {
+        const auto it = bridge.knownFaders().find (hash);
+        return it != bridge.knownFaders().end() && ! it->second.title.empty() ? it->second.title : fallback;
+    };
+
+    if (c.monoFold)
+    {
+        // The mono group it most likely is: the music group you marked, a Voxology in BEAT mode (it sits on the beat's
+        // group), the channels Analyze Mix found adding no sound of their own, then channels named like a group.
+        auto add = [&c] (const std::string& n) {
+            if (! n.empty() && std::find (c.busCandidates.begin(), c.busCandidates.end(), n) == c.busCandidates.end()) c.busCandidates.push_back (n);
+        };
+        for (const auto& [hash, ts] : trackSettings)
+            if (ts.musicBus) add (titleOf (hash, ""));
+        for (const auto& [hash, sv] : suiteVocals)
+            if ((sv.info.flags & suite::VocalInfo::beat) != 0) add (titleOf (hash, sv.info.trackName));
+        if (report.valid)
+            for (const auto& g : report.groupHints) add (g);
+        static const std::regex groupName (R"(\b(group|grp|bus|beat|instrumental|music|submix|stems?)\b)", std::regex::icase);
+        for (const auto& [hash, f] : bridge.knownFaders())
+            if (linked.count (hash) == 0 && voxologyOn (hash) == nullptr && std::regex_search (f.title, groupName)) add (f.title);
+    }
+
+    for (const auto& [hash, sv] : suiteVocals)
+        if (voxologyOn (hash) != nullptr && linked.count (hash) == 0)
+            c.vocalsWithoutLink.push_back (titleOf (hash, sv.info.trackName));
+
+    setupNow = setup::issues (c);
+    std::string key;
+    for (const auto& s : setupNow)
+    {
+        key += s.id + "|" + s.title + "|";
+        for (const auto& t : s.tracks) key += t + ",";
+    }
+    if (key != setupKey)
+    {
+        setupKey = key;
+        ++setupVersion;
     }
 }
 
@@ -776,19 +875,7 @@ juce::var BridgeHub::analysisState() const
         r->setProperty ("reference", juce::var (ro));
 
         juce::Array<juce::var> sugs;
-        for (const auto& sg : report.suggestions)
-        {
-            auto* so = new juce::DynamicObject();
-            so->setProperty ("id", juce::String (sg.id));
-            so->setProperty ("kind", juce::String (sg.kind));
-            so->setProperty ("icon", juce::String (sg.icon));
-            so->setProperty ("title", juce::String::fromUTF8 (sg.title.c_str()));
-            so->setProperty ("text", juce::String::fromUTF8 (sg.text.c_str()));
-            so->setProperty ("need", juce::String::fromUTF8 (sg.need.c_str()));
-            so->setProperty ("steps", list (sg.steps));
-            so->setProperty ("tracks", list (sg.tracks));
-            sugs.add (juce::var (so));
-        }
+        for (const auto& sg : report.suggestions) sugs.add (suggestionVar (sg));
         r->setProperty ("suggestions", sugs);
         o->setProperty ("report", juce::var (r));
     }
@@ -930,6 +1017,9 @@ juce::var BridgeHub::getState (bool includeLog)
     }
     o->setProperty ("slots", slots);
     o->setProperty ("mixMono", report.valid && report.monoMix);   // pans change nothing at the Stereo Out
+    juce::Array<juce::var> setupList;   // the setup check: a mono group on the way, vocals without a Link...
+    for (const auto& sg : setupNow) setupList.add (suggestionVar (sg));
+    o->setProperty ("setup", setupList);
     int changedFaders = 0, changedEq = 0;
     o->setProperty ("changedCount", changedTotal (&changedFaders, &changedEq));
     o->setProperty ("changedFaders", changedFaders);

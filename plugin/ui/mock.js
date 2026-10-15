@@ -27,6 +27,20 @@
     "Lead Vox": { beat: false, on: true, style: "Trap Lead", comp: true, compDb: 4.2, deEsser: true, reverb: true, delay: false, eq: true, pitch: true, doubler: false, version: "0.47.0" },
     Adlibs: { beat: false, on: true, style: "Rap", comp: true, compDb: 3.1, deEsser: true, reverb: false, delay: true, eq: true, pitch: true, doubler: false, version: "0.47.0" },
   };
+  // The setup check (open the preview with ?setup to see it): what the hub reports for the user's song with a mono 'Beat'.
+  const SETUP_DEMO = /[?&]setup\b/.test(location.search);
+  const SETUP = [
+    { id: "setup-mono-group", kind: "warn", icon: "mono", title: "Your mix arrives in mono",
+      text: "Your tracks play in stereo (for example 'Pop Kit 1' and 'HALion Sonic 01'), but at the Stereo Out left and right are exactly the same: every pan and every stereo sound is folded to the middle on the way. Most likely 'Beat' is a mono group: everything that plays through it comes out in the middle.",
+      need: "Yes, unless the song is meant to be mono: width and pans are half of a modern mix.",
+      steps: ["In Cubase's MixConsole, find the small button at the bottom of 'Beat' (next to its channel number): one circle = mono, two linked circles = stereo.", "Stop playback and click it once: it switches to stereo.", "Check the other groups and FX channels the tracks play through the same way, and the Stereo Out (Studio > Audio Connections > Outputs: Left and Right both connected).", "Press play: the Stereo page's scope opens up. Then run Analyze Mix again."],
+      tracks: ["Beat"] },
+    { id: "setup-vocal-link", kind: "warn", icon: "link", title: "3 vocals have no Mixology Link",
+      text: "'Lead Vox 1', 'Lead Vox 1.5' and 'Lead Vox 2' have Voxology on them but no Mixology Link, so Mixology can't hear them on their own: Analyze Mix and Auto Mix can't set the vocal level against the beat or polish them.",
+      need: "Yes: the vocal is the most important part of the mix.",
+      steps: ["In Cubase, add Mixology Link to each of them in the insert slot right under Voxology (after it, still above the fader divider line).", "Several at once: select the channels, hold Shift + Alt and pick Mixology Link in one empty slot (or use Q-Link). Pick a slot that is empty on all of them.", "Then run Analyze Mix again."],
+      tracks: ["Lead Vox 1", "Lead Vox 1.5", "Lead Vox 2"] },
+  ];
   const roleOf = (c) => (B.settings[c.hash] && B.settings[c.hash].role) || ROLE_OF[c.name] || "other";
   function fakeReport() {
     const linked = chans.filter((c) => c.link);
@@ -88,6 +102,7 @@
       analysis: { state: B.an.state, seconds: B.an.seconds, enough: 20, max: 60, playing: B.an.playing, heard: chans.filter((c) => c.link).length, report: B.an.report },
       apply: { ...B.apply },
       linksSeen: chans.filter((c) => c.link).length, linksPaired: slots.filter((s) => s.linkStatus === "matched").length, linksShared: true,
+      setup: SETUP_DEMO ? SETUP : [],
       lastMove: B.lastMove, lawPoints: 37, marks: [6, 0, -6, -12, -24, -36, -48].map((db) => ({ db, pos: toNorm(db) })),
       logVersion: B.log.length, log: withLog ? B.log.slice() : undefined,
     };

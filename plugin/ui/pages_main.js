@@ -5,6 +5,8 @@ import { ROLES, ROLE_ORDER, GROUPS, guessRole, roleIcon } from "./roles.js";
 import { openSuggestion, openTracksSheet } from "./sheets.js";
 import { openToolSheet, openReferenceSheet } from "./tools.js";
 
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
 export { ROLES, guessRole };
 
 // =============================================================================================
@@ -255,8 +257,9 @@ export function buildOverview(root, app) {
     const st = f.shortTerm ?? -100, tp = f.truePeak ?? -100;
     const report = b.analysis && b.analysis.report;
     const useReport = report && !showLive;
-    const key = useReport ? "r|" + JSON.stringify(report.suggestions.map((x) => x.id + x.kind + x.title)) + report.seconds + report.style
-      : [b.link, (b.slots || []).filter((s) => s.present).length, b.linksPaired, b.linksSeen, Math.round(st), Math.round(tp), !!report].join("|");
+    const setup = b.setup || [];
+    const key = JSON.stringify(setup.map((x) => x.id + x.title)) + "|" + (useReport ? "r|" + JSON.stringify(report.suggestions.map((x) => x.id + x.kind + x.title)) + report.seconds + report.style
+      : [b.link, (b.slots || []).filter((s) => s.present).length, b.linksPaired, b.linksSeen, Math.round(st), Math.round(tp), !!report].join("|"));
     if (key === lastKey) return;
     lastKey = key;
     list.innerHTML = "";
@@ -264,6 +267,11 @@ export function buildOverview(root, app) {
     list.style.bottom = report ? "70px" : "12px";
     liveBtn.textContent = showLive ? "Analysis" : "Live view";
     if (report) tracksBtn.textContent = `Your tracks (${report.tracks.length})`;
+    // The setup check first: things in the Cubase project no mixing move can fix (a mono group, vocals without a Link).
+    const setupHint = (sg) => sg.id === "setup-mono-group" ? (sg.tracks && sg.tracks.length ? `Most likely '${esc(sg.tracks[0])}' is a mono group: click for the fix` : "A mono group or output on the way: click for the fix")
+      : sg.id === "setup-vocal-link" ? "Add Mixology Link under Voxology on each: click for how"
+      : sg.id === "setup-mono-mixology" ? "Put it on the Stereo Out: click for how" : sg.need;
+    for (const sg of setup) card(sg.icon, KIND.warn, sg.title, setupHint(sg), () => openSuggestion(app, sg));
     if (useReport) {
       sub.textContent = `From Analyze Mix (${Math.round(report.seconds)} s heard):`;
       for (const sg of report.suggestions)
@@ -582,7 +590,12 @@ export function buildTracks(root, app) {
     restoreBtn.style.color = changed ? "var(--info)" : "";
     const named = slots.filter((d) => d && d.present).length;
     const paired = (b && b.linksPaired) || 0;
-    hint.innerHTML = !connected ? ""
+    const setupIssue = connected && b.setup && b.setup.length ? b.setup[0] : null;
+    hint.style.cursor = setupIssue ? "pointer" : "";
+    hint.onclick = setupIssue ? () => openSuggestion(app, setupIssue) : null;
+    hint.title = setupIssue ? setupIssue.text : "";
+    hint.innerHTML = setupIssue ? `<span style="color:var(--amber)">⚠ ${esc(setupIssue.title)}</span> <span style="text-decoration:underline">What to do</span>`
+      : !connected ? ""
       : named === 0 ? `<span style="color:var(--amber)">●</span> Connected, but Cubase hasn't reported any channels yet. Settings › Cubase Bridge › <b>Refresh</b>, then <b>Copy log</b>.`
       : paired === 0 ? "Drag, scroll or click a level to move it. Meters: add Mixology Link to your tracks."
       : `Drag, scroll or click a level to move it. <span style="color:var(--green)">${paired}</span> with Mixology Link.`;

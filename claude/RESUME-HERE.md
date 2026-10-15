@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-14, v0.8.0)
+# Mixology: resume here (updated 2026-10-15, v0.8.1)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,22 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## v0.8.1: the setup check (2026-10-15)
+- User's round 1 so far: "yes Vox tag worked" (VOX tags OK in Cubase). While testing, they hit by hand: (1) "New Lilly 2025"
+  mix mono at the Stereo Out because the "Beat" group was MONO (MixConsole bottom row: one circle = mono, two linked =
+  stereo; the instruments are stereo instrument tracks into Beat); fixed by switching Beat to stereo; (2) Lead Vox 1 / 1.5
+  / 2 had Voxology but no Mixology Link. User: "you decide what is most valuable" -> the setup check.
+- dsp SetupCheck.h/.cpp (framework-free, tests/test_setup.cpp): MonoWatch fed every analysis tick (5 Hz, only while the
+  editor is open: the editor drives analysisTick): expected mix side share = sum(track energy after fader x max(own width,
+  panWidth(pan) for mono Links whose pan works)) / mix energy; judged only when expected >= 0.03; a moment is mono when mix
+  width <= 0.002 and correlation >= 0.998; monoFold = 27 of the last 30 judged moments mono (window 150). issues(Context):
+  setup-mono-mixology (Mixology's own output has 1 channel), setup-mono-group (names busCandidates[0]), setup-vocal-link.
+- Hub updateSetup(): busCandidates = marked music group, Voxology BEAT-mode channels, report.groupHints, Link-less channels
+  named group/grp/bus/beat/instrumental/music/submix/stem(s); vocalsWithoutLink = suite vocals (Vocal mode) with no Link of
+  that name. getState "setup" (suggestion objects); setupVersion in stateVersion.
+- UI: Mix Assistant cards at the top (both views; action-first hint), Tracks hint bar "⚠ title · What to do" (opens the
+  suggestion sheet), Stereo page note names the group. Preview: index.html?setup shows the demo issues (mock SETUP).
 
 ## M6 round 1 (v0.8.0): the suite link, BUILT, waiting for the Cubase test (docs/M6_TEST.md)
 - User: "will mixology communicate with voxology and masterology?" then "yes go ahead with M6"; approved changing the

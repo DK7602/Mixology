@@ -374,7 +374,7 @@ void MixWebEditor::timerCallback()
         mixR.resize (mixL.size());
         processor.analysisRing.copyLatest (mixL.data(), mixR.data(), mixology::TrackAnalyzer::kSize);
         const auto mixFrame = mixAnalyzer.analyse (mixL.data(), mixR.data(), juce::jmax (8000.0, processor.getSampleRate()));
-        hub.analysisTick (mixFrame, processor.transportPlaying.load());
+        hub.analysisTick (mixFrame, processor.transportPlaying.load(), processor.getTotalNumOutputChannels());
         if (currentPage == "overview")
             frame->setProperty ("roleCurves", hub.roleCurves (processor.getSampleRate()));
     }
