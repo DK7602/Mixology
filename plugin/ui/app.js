@@ -37,6 +37,7 @@ export const native = {
   getSettings: fn("getSettings"),
   setSetting: fn("setSetting"),
   setUiState: fn("setUiState"),
+  pickStyle: fn("pickStyle"),
   setPage: fn("setPage"),
   procTarget: fn("procTarget"),
   procSet: fn("procSet"),
@@ -133,7 +134,8 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("overlay
 // clicking the name opens the genre / style picker.
 $("preset-prev").innerHTML = icon("chevL", 'stroke-width="2.6"');
 $("preset-next").innerHTML = icon("chevR", 'stroke-width="2.6"');
-function setStyle(key) {
+// how: "you" (picked here: Voxology and Masterology follow), "suite" (picked in one of them: follow it), "start".
+function setStyle(key, how = "you") {
   app.style = styleByKey(key);
   const name = $("preset-name");
   name.textContent = app.style.fullName;
@@ -143,6 +145,7 @@ function setStyle(key) {
   store.set("preset", app.style.key);
   store.set("presetName", app.style.fullName);   // the plug-in hands the style to Masterology (M6)
   app.emit("preset", app.style);
+  if (how !== "suite") native.pickStyle(app.style.key, app.style.fullName, how === "you");
   // Auto Analyze listens for this style (also when the project opens with it on and no advice yet).
   const st = app.style;
   native.bridgeCommand("autoStyle", { value: { key: st.key, name: st.fullName, bass: st.bass, scoop: st.scoop, air: st.air } });
@@ -180,14 +183,24 @@ async function start() {
     pages[id] = Object.assign({ root }, b(root, app) || {});
   }
   fit();
-  setStyle(store.get("preset", 0));
+  setStyle(store.get("preset", 0), "start");
   showPage(store.get("page", "overview"));
 
   const bridge = await native.getBridgeState();
   if (bridge) { app.bridge = bridge; app.emit("bridge", bridge); }
 
+  let styleSeen = -1;
   window.__JUCE__.backend.addEventListener("mixFrame", (frame) => {
     app.frame = frame;
+    // The song's style, shared with Voxology and Masterology: the project's, or one picked in one of them.
+    const ss = frame.songStyle;
+    if (ss && ss.version !== styleSeen) {
+      styleSeen = ss.version;
+      if (ss.key && ss.key !== app.style.key) {
+        setStyle(ss.key, "suite");
+        if (performance.now() > 5000) app.toast(`Style: ${app.style.fullName} (picked in another plug-in of the suite)`);
+      }
+    }
     if (frame.bridge) {
       if (!frame.bridge.log && app.bridge && app.bridge.log) frame.bridge.log = app.bridge.log;
       app.bridge = frame.bridge;

@@ -1,5 +1,20 @@
 # Milestone 6 tests
 
+## Version 0.12.0 (10 minutes): one song style for all three
+
+Install all three together: Mixology 0.12.0, Voxology 0.49.0 and Masterology 0.28.0 (older ones don't see the new
+style link). Use a project with Voxology on a vocal, Mixology on the Stereo Out and Masterology after it.
+1. In **Mixology**, pick a style in the header (for example Trap & Drill - Melodic).
+2. Open **Masterology**: its genre pill now shows "TRAP & DRILL / Melodic" (Auto-Master's genre: Trap / Hip-Hop).
+   Click the name: the same list of styles as Mixology. Pick R&B & Soul - Smooth R&B.
+3. Back in **Mixology**: within a second the header says R&B & Soul - Smooth R&B, with a note at the bottom.
+4. Open **Voxology** on the vocal: the small chip next to STYLE says "SONG · SMOOTH R&B" and its vocal STYLE says R&B
+   (suggested, because you never picked it on that track). Now pick Melodic with the arrows, then change the song
+   style again in Mixology: Voxology's vocal style stays Melodic (your choice).
+5. Save, close and reopen the project: all three still show the last style you picked.
+
+**Report**: did all three always agree? Did anything change that you didn't expect?
+
 ## Version 0.11.1 (5 minutes): Auto Analyze stays on
 
 1. With Auto Analyze on, save the project, close Cubase, open the project again and open Mixology.

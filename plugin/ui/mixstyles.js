@@ -1,3 +1,7 @@
+// THE SONG'S STYLES: THIS FILE IS THE SAME IN ALL THREE REPOSITORIES (Mixology plugin/ui, Voxology plugin/ui,
+// Masterology plugin/ui). Change it in Mixology, copy it to the other two. The style picked in any of them is shared
+// through the suite link (suite/SuiteLink.h: SongStyle), so the keys ("genre.style") must never change.
+//
 // Mix styles: pick a genre, then a style. Each style is a tonal target (bass weight, low-mid scoop, top sheen,
 // all in dB against a flat, tilted reference) for the Tone page and Analyze Mix; the genre also sets the
 // level targets Balance and Auto Mix aim for (MixPlanner).

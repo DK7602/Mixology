@@ -122,6 +122,14 @@ juce::WebBrowserComponent::Options MixWebEditor::makeEditorOptions()
                                  if (args.size() > 0) processor.setUiState (args[0].toString());
                                  complete (true);
                              })
+        .withNativeFunction ("pickStyle", [this] (const juce::Array<juce::var>& args, auto complete)
+                             {
+                                 // You picked a style: Voxology and Masterology in this project follow.
+                                 // At start (third argument false) it only fills in a project that has no style yet.
+                                 if (args.size() > 1) processor.pickStyle (args[0].toString().toStdString(), args[1].toString().toStdString(),
+                                                                           args.size() < 3 || static_cast<bool> (args[2]));
+                                 complete (true);
+                             })
         .withNativeFunction ("setMonoListen", [this] (const juce::Array<juce::var>& args, auto complete)
                              {
                                  processor.monoListen.store (args.size() > 0 && static_cast<bool> (args[0]));
@@ -325,6 +333,13 @@ void MixWebEditor::timerCallback()
     frame->setProperty ("integrated", roundTo (m.integrated.load(), 0.1f));
     frame->setProperty ("truePeak", roundTo (m.truePeak.load(), 0.1f));
     frame->setProperty ("sr", processor.getSampleRate());
+    {
+        // The song's style (shared with Voxology and Masterology): the interface follows when it changed.
+        auto* so = new juce::DynamicObject();
+        so->setProperty ("key", juce::String::fromUTF8 (processor.songStyleKey().c_str()));
+        so->setProperty ("version", static_cast<int> (processor.songStyleVersion()));
+        frame->setProperty ("songStyle", juce::var (so));
+    }
     frame->setProperty ("mono", processor.monoListen.load());
     frame->setProperty ("spectrum", makeSpectrum());
 

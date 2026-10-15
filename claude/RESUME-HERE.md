@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-15, v0.11.1)
+# Mixology: resume here (updated 2026-10-15, v0.12.0)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -35,6 +35,30 @@ sends higher-resolution art, re-run it.
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
 
+## v0.12.0: one song style for the trio (2026-10-15) + Voxology 0.49.0 + Masterology 0.28.0
+- User: v0.11.0 Auto Analyze "it worked". Asked for one style list for the trio (Mixology's), a pop-up picker in each,
+  a change in one changes all; then "yes go ahead, do it here". This session attached DK7602/voxology and
+  DK7602/polisher (push). Clones: /home/user/voxology (branch claude/upbeat-faraday-iyzicv), /home/user/polisher
+  (claude/eloquent-einstein-sscadx). Other threads work on those too ("Voxology Auto Analyze" v0.48, "Masterology
+  Auto Edit" v0.27 = its Auto Analyze): fetch + rebase before pushing; Masterology's became 0.28.0 on top of theirs.
+- Bulk python edits in the sister repos were refused by the permission check: use Edit / cp there.
+- suite/SuiteLink.h/.cpp (master here, copied to both): kLayout 2; StyleSlot {seq taken by CAS, heartbeatMs, holder,
+  pickedAt, from, key, name}; Link::shareStyle(mine, id, now) (newer pickedAt or no live holder -> mine goes in;
+  holding the same refreshes), readStyle, leaveStyle(id) (lapses at once if id refreshed last); wallMs();
+  SongStyle {pick (pickedAt = max(wallMs, previous + 1)), setUnpicked, sync -> true when adopted, save/restore
+  "key|name|pickedAt|from", leave}. tests/test_suite.cpp "the song's style" (same case in the sisters' test_suite).
+- plugin/ui/mixstyles.js marked THE SAME FILE IN ALL THREE; copied to both sisters' plugin/ui.
+- Mixology: the processor owns the style (songStyle under stateLock, "songStyle" attribute; projects from before:
+  the UI state's preset with pickedAt 1 = picked, older than any new pick); syncStyle() every 0.4 s (timer), on
+  adoption ++styleVersion; leave() in the destructor; publishHandoff uses it. Native pickStyle(key, name, byYou):
+  byYou false (UI start) only fills an empty style (setUnpicked). frame.songStyle {key, version}: app.js follows a
+  version change (setStyle(key, "suite") + toast after the first 5 s). setStyle(key, how) "you"/"suite"/"start".
+- Masterology 0.28: genre pill shows the style (genre small above), click = picker (.style-picker, stp-* classes),
+  arrows step styles of the genre; processor pickStyle / sync -> amGenre = genreForMixStyle; MasterInfo.genreName =
+  style name; plug-in test. Manual (+ live Claude Docs copy) updated.
+- Voxology 0.49: SONG chip next to STYLE + #song-picker; vox/SongStyle.h vocalStyleFor (test: all 75 keys);
+  suggests aeStyle unless vocalStyleMine (arrows set it; old projects count as mine) or Beat mode.
+
 ## v0.11.1: Auto Analyze stays on after reopening (2026-10-15)
 - User: v0.11.0 "it worked". Asked: (1) one style list + picker for the trio, synced (discussing, PLAN "Proposed - One
   style list for the trio"); (2) all three keep Auto Analyze on across sessions (they had to re-analyze after reopening).
@@ -47,7 +71,7 @@ sends higher-resolution art, re-run it.
   was refused, so nothing pushed there. Voxology's Auto Analyze is its own thread (not built); Masterology has none yet.
 
 ## v0.11.0: Auto Analyze + the logo centred (2026-10-15, session "Mixology part 2")
-- CI green: run 38739894769 (ec91d91). Download for the user: that run's Mixology-Windows.
+- CI green: run 38739894769 (ec91d91). v0.11.1: run 38750265763 green. Download for the user: that run's Mixology-Windows.
 - User tested v0.10.0: "Everything works" (History, the v0.9.2 fixes). One to watch: a vocal preset sounded like a
   small change (probably subtle on purpose). Said YES to Auto Analyze, and asked to centre the logo (beaker was right
   of centre, squashing the right waveform) keeping its size.

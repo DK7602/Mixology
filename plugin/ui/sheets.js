@@ -413,7 +413,7 @@ export function openStyles(app) {
   const body = sheet("MIX STYLES");
   body.className = "scroll";
   const note = el("p", "", body, { fontSize: "18px", color: "var(--text-dim)", margin: "0 0 6px 0", lineHeight: "1.4" });
-  note.textContent = "Pick your genre, then the style. It tells Mixology what you're going for: the Tone page's target, the Mix Assistant's advice, and the levels Auto Mix and Balance aim for.";
+  note.textContent = "Pick your genre, then the style. It tells Mixology what you're going for: the Tone page's target, the Mix Assistant's advice, and the levels Auto Mix and Balance aim for. Voxology and Masterology share this list: pick it in any of them and all three follow.";
   const now = el("p", "", body, { fontSize: "19px", margin: "0 0 16px 0" });
   now.innerHTML = `Now: <b style="color:var(--gold)">${app.style.fullName}</b>`;
 

@@ -9,6 +9,7 @@
 #include "ProcHost.h"
 #include "SpectrumTap.h"
 #include "StereoTap.h"
+#include "suite/SuiteLink.h"
 
 #include <atomic>
 
@@ -83,6 +84,14 @@ public:
 
     juce::SharedResourcePointer<BridgeHub> bridgeHub;
 
+    // ---- the song's style, shared with Voxology and Masterology (suite link; message thread) ----------
+    /** You picked a style in the header. */
+    void pickStyle (const std::string& key, const std::string& name, bool byYou = true);
+    /** The style this project uses ("" = none yet: the interface's own default) and a counter that goes up when
+        another plug-in's choice replaced it (the interface then follows). */
+    std::string songStyleKey() const { const juce::ScopedLock sl (stateLock); return songStyle.style().key; }
+    std::uint32_t songStyleVersion() const { return styleVersion.load(); }
+
     // ---- Full Mix processing (message thread) ----------------------------------------------------
     mixology::proc::Values procValues() const { return procRaw.read(); }
     void setProc (int index, float value) { mixology::proc::host::set (parameters, index, value); }
@@ -97,8 +106,10 @@ private:
     /** M6: what Masterology should know about this mix (the style, peaks, loudness, tone), a few times a second. */
     void publishHandoff();
     int handoffCountdown = 0;
-    juce::String styleFrom;            // the UI state the style below was read from
-    std::string styleKey, styleName;
+    suite::SongStyle songStyle { suite::StyleInfo::From::mixology };   // under stateLock
+    std::atomic<std::uint32_t> styleVersion { 0 };
+    const std::uint64_t instanceId = (static_cast<std::uint64_t> (juce::Random::getSystemRandom().nextInt64()) | 1u);
+    void syncStyle();
 
     template <typename Sample>
     void process (juce::AudioBuffer<Sample>&);

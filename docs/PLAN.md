@@ -161,7 +161,9 @@ every 15 s, replaces the advice only when it changed. The logo centred on the be
 v0.11.1: Auto Analyze stays on when the project opens again: with no advice yet it listens by itself (one fader read
 at the first play), first advice ~20 s in; follows the header's style (the interface sends it: command autoStyle).
 Suite rule (user, 2026-10-15): Mixology, Voxology and Masterology all keep Auto Analyze on across sessions.
-Proposed - one style list for the trio (being discussed with the user), see below.
+v0.12.0: one song style for the trio (user: "yes go ahead, do it here"): suite link layout 2 (StyleSlot + SongStyle,
+newest pick wins), Mixology's processor owns the style, Masterology 0.28 (picker, Auto-Master genre from the style),
+Voxology 0.49 (SONG chip + picker, suggests the vocal style unless you picked it on that track).
 Still to come in M6: code signing (later).
 
 ### Built in v0.11.0 - Auto Analyze (asked 2026-10-15: "once an analyze mix has been run should have an auto analyze option")
@@ -174,7 +176,7 @@ Still to come in M6: code signing (later).
 - Pauses by itself: transport stopped, a plan applying, the window closed for long, or the mix not playing.
 - Never changes the mix: advice only. Auto Mix / Polish still ask first.
 
-### Proposed - One style list for the trio (asked 2026-10-15, being discussed)
+### Built in v0.12.0 - One style list for the trio (asked 2026-10-15)
 - Mixology's list (14 genres, 75 styles) becomes the suite's list. Voxology and Masterology get the same pop-up picker.
   Each turns the style into its own settings: Masterology its tone curve, loudness, dynamics and punch; Voxology its
   vocal chain's starting point. Voxology keeps its vocal type (Trap Lead, Rap, Melodic...) as a second choice: one song

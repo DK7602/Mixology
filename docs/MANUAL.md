@@ -1,6 +1,6 @@
 # Mixology manual
 
-Manual for version 0.11.1 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
+Manual for version 0.12.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -408,6 +408,18 @@ The style sets the Tone page's target curve and what Analyze Mix compares your m
 vocal sits). Its genre also sets the levels Balance and Auto Mix aim for. The style is saved with the
 project.
 
+**One style for the whole song (Voxology, Mixology and Masterology).** The three plug-ins share this list of styles.
+Pick the style in any of them and the others in the project follow within a second (Mixology shows "Style: ...
+(picked in another plug-in of the suite)"). The newest choice wins, also after you reopen the project. What each one
+does with it:
+- **Mixology**: everything above (the Tone page's target, Analyze Mix, Balance and Auto Mix levels).
+- **Masterology**: the Auto-Master genre the style belongs to (Hip Hop and Trap: Trap / Hip-Hop; R&B and Gospel:
+  R&B; Pop, Worship, Latin and Afro: Pop; Electronic: EDM; Rock: Rock; the rest: Acoustic). Your master doesn't
+  change until you run Auto-Master again.
+- **Voxology**: suggests the vocal STYLE Auto-Edit aims for (Rap for Hip Hop, Melodic for melodic trap, R&B for
+  R&B...), only on a vocal track where you haven't picked the vocal style yourself. One song can have rap verses and
+  a melodic hook: set each track's vocal style with its arrows and it stays.
+
 ## Presets
 
 **PRESETS** (top bar) saves and loads a track's sound: its processing (EQ, Dynamics, Tone, Stereo, Space), on any
@@ -468,7 +480,8 @@ Final limiting is Masterology's job: keep Mixology's Limiter off on the Full Mix
 ### The three talk to each other (the suite link)
 
 In the same Cubase project, the three plug-ins tell each other what they do. Nothing to set up: just use
-Voxology 0.47, Mixology 0.8 and Masterology 0.26 (or newer).
+Voxology 0.47, Mixology 0.8 and Masterology 0.26 (or newer). The shared song style needs Voxology 0.49,
+Mixology 0.12 and Masterology 0.28: update all three together (older and newer versions don't see each other).
 
 - **Voxology on a vocal.** The Tracks page shows a small gold **VOX** tag under the track's icon (hover it to
   see what Voxology does there: compressing, de-essing, its reverb or delay...). Mixology then:
@@ -484,6 +497,7 @@ Voxology 0.47, Mixology 0.8 and Masterology 0.26 (or newer).
 - **Mixology's hand-off to Masterology.** Mixology tells Masterology the mix style you picked, the mix's peaks
   and loudness, and (after Analyze Mix) how its tone sits against the style and whether the mix is mono.
   Masterology shows it and can start from the matching genre.
+- **One song style** for all three (see Mix styles): pick it in any of them, the others follow.
 
 The link only works inside one program: Voxology, Mixology and Masterology must run in the same Cubase (they do,
 unless you mix in one project and master in another; then Masterology simply works on its own as before).

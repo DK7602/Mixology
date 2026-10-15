@@ -42,6 +42,10 @@ MixologyAudioProcessor::MixologyAudioProcessor()
 MixologyAudioProcessor::~MixologyAudioProcessor()
 {
     bridgeHub->clearMixProcessing (this);
+    {
+        const juce::ScopedLock sl (stateLock);
+        songStyle.leave (suite::Link::process(), instanceId);
+    }
 }
 
 void MixologyAudioProcessor::timerCallback()
@@ -58,22 +62,42 @@ void MixologyAudioProcessor::timerCallback()
     if (--handoffCountdown <= 0)
     {
         handoffCountdown = 4;
+        syncStyle();
         publishHandoff();
     }
+}
+
+void MixologyAudioProcessor::pickStyle (const std::string& key, const std::string& name, bool byYou)
+{
+    {
+        const juce::ScopedLock sl (stateLock);
+        if (! byYou)
+        {
+            if (songStyle.style().key.empty()) songStyle.setUnpicked (key, name);   // the default: the others' choice wins
+            return;
+        }
+        if (key == songStyle.style().key) return;
+        songStyle.pick (key, name);
+    }
+    syncStyle();   // the others follow at once
+}
+
+void MixologyAudioProcessor::syncStyle()
+{
+    // The song's style: the newest choice in Voxology, Mixology or Masterology wins; the interface follows.
+    const juce::ScopedLock sl (stateLock);
+    if (songStyle.sync (suite::Link::process(), instanceId, suite::nowMs())) ++styleVersion;
 }
 
 void MixologyAudioProcessor::publishHandoff()
 {
     // One Mixology publishes: the one on the Stereo Out (the hub's Full Mix).
     if (! bridgeHub->isMixOwner (this)) return;
-    const auto ui = getUiState();
-    if (ui != styleFrom)
+    std::string styleKey, styleName;
     {
-        styleFrom = ui;
-        const auto parsed = juce::JSON::parse (ui);
-        const auto key = parsed.getProperty ("preset", juce::var());
-        styleKey = key.isString() ? key.toString().toStdString() : std::string();
-        styleName = styleKey.empty() ? std::string() : parsed.getProperty ("presetName", "").toString().toStdString();
+        const juce::ScopedLock sl (stateLock);
+        styleKey = songStyle.style().key;
+        styleName = songStyle.style().name;
     }
     suite::MixInfo m;
     m.styleKey = styleKey;
@@ -204,6 +228,10 @@ void MixologyAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     xml.setAttribute ("protected", bridgeHub->protectedState());   // the padlocks on the Tracks page
     xml.setAttribute ("tracks", bridgeHub->trackSettingsState());  // your track roles, tracks left out of Analyze Mix
     xml.setAttribute ("prefs", bridgeHub->mixPrefsState());         // how you like your vocal
+    {
+        const juce::ScopedLock sl (stateLock);
+        xml.setAttribute ("songStyle", juce::String::fromUTF8 (songStyle.save().c_str()));   // + when you picked it
+    }
     if (auto params = parameters.copyState().createXml())           // the Full Mix processing
         xml.addChildElement (params.release());
     copyXmlToBinary (xml, destData);
@@ -215,6 +243,19 @@ void MixologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
         if (xml->hasTagName ("MixologyState"))
         {
             setUiState (xml->getStringAttribute ("ui"));
+            {
+                // The song's style. Projects from before the suite style kept it in the interface's state only:
+                // that was your choice, so it counts as picked (just older than any choice made since).
+                const juce::ScopedLock sl (stateLock);
+                if (! songStyle.restore (xml->getStringAttribute ("songStyle").toStdString()))
+                {
+                    const auto ui = juce::JSON::parse (uiState);
+                    const auto key = ui.getProperty ("preset", juce::var());
+                    if (key.isString() && key.toString().isNotEmpty())
+                        songStyle.restore (key.toString().toStdString() + "|" + ui.getProperty ("presetName", "").toString().toStdString() + "|1|2");
+                }
+                ++styleVersion;   // an open interface shows it
+            }
             bridgeHub->setProtectedState (xml->getStringAttribute ("protected"));
             bridgeHub->setTrackSettingsState (xml->getStringAttribute ("tracks"));
             bridgeHub->setMixPrefsState (xml->getStringAttribute ("prefs"));
