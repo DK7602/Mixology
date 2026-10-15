@@ -36,6 +36,7 @@ sends higher-resolution art, re-run it.
   Bump kProtocolVersion + PROTOCOL_VERSION together.
 
 ## v0.11.0: Auto Analyze + the logo centred (2026-10-15, session "Mixology part 2")
+- CI green: run 38739894769 (ec91d91). Download for the user: that run's Mixology-Windows.
 - User tested v0.10.0: "Everything works" (History, the v0.9.2 fixes). One to watch: a vocal preset sounded like a
   small change (probably subtle on purpose). Said YES to Auto Analyze, and asked to centre the logo (beaker was right
   of centre, squashing the right waveform) keeping its size.
