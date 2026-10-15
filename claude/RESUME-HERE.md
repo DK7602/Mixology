@@ -64,6 +64,7 @@ sends higher-resolution art, re-run it.
   reads the real plug-in's hand-off; optional args 3 / 4 = Voxology.vst3 / Masterology.vst3 (local: all three real
   plug-ins pass: vocal + compressor + reverb seen, Masterology's goal and target change seen, both gone on removal).
 - Next in M6: presets, undo history, CPU check with 40+ tracks (code signing later).
+- CI green: v0.8.0 run 38652688272 (0464022), follow-up run 38656779141. Voxology 0.47.0 run 38655919112 (a226824). Masterology 0.26.0 run 38657259925.
 
 ## v0.7.1 (user's round 3 test, 2026-10-14: "L100 bug fixed. it all seemed to work correctly")
 - Polish put the vocal reverb on the FX channel "100 % in the mix: too much": a plate comes out ~5 dB under its
