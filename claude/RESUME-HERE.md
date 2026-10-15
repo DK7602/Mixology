@@ -37,7 +37,7 @@ sends higher-resolution art, re-run it.
 
 ## v0.11.1: Auto Analyze stays on after reopening (2026-10-15)
 - User: v0.11.0 "it worked". Asked: (1) one style list + picker for the trio, synced (discussing, PLAN "Proposed - One
-  style list for the trio"); (2) all three keep Auto Analyze on across sessions (he had to re-analyze after reopening).
+  style list for the trio"); (2) all three keep Auto Analyze on across sessions (they had to re-analyze after reopening).
 - Fix: autoTick also runs in Analyze::idle; with autoAnalyze on, no report and the style known (UI sends command
   autoStyle {value: style} from setStyle, at start and on every change) it listens from scratch; the first play asks
   ONE bridge.scanAllChannels (autoScanAsked) when channelOrder() is empty; the first check sets report + analyzeState
