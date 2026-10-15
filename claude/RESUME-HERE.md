@@ -36,6 +36,9 @@ sends higher-resolution art, re-run it.
   Bump kProtocolVersion + PROTOCOL_VERSION together.
 
 ## v0.12.0: one song style for the trio (2026-10-15) + Voxology 0.49.0 + Masterology 0.28.0
+- CI green: Mixology run 38761860225 (c59d288), Voxology run 38762282646 (aebbed0), Masterology run 38767985381
+  (68cc864; the first run's UI smoke failed: it stepped genres with the arrows, now picks styles in the picker).
+  Download for the user: each run's -Windows artifact. Install all three together.
 - User: v0.11.0 Auto Analyze "it worked". Asked for one style list for the trio (Mixology's), a pop-up picker in each,
   a change in one changes all; then "yes go ahead, do it here". This session attached DK7602/voxology and
   DK7602/polisher (push). Clones: /home/user/voxology (branch claude/upbeat-faraday-iyzicv), /home/user/polisher
