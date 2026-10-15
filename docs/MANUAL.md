@@ -1,6 +1,6 @@
 # Mixology manual
 
-Manual for version 0.13.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
+Manual for version 0.13.1 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -57,10 +57,11 @@ you switch on for that track.
 ## Your DAW
 
 Settings (the gear) > **DAW**. Mixology finds the program it runs in (Cubase or Nuendo, Studio One, FL Studio, Ableton
-Live, REAPER, Bitwig Studio) and writes every tip, step and fix for it: where the master channel is, how to lower a
+Live, REAPER, Bitwig Studio, Cakewalk by BandLab / Sonar) and writes every tip, step and fix for it: where the master channel is, how to lower a
 clip's gain, add a send, make a mono group stereo, keep the outputs stereo. "Found: ..." uses the one it found; pick
 another if it got it wrong. Voxology and Masterology share it: pick it in any of the three and the others follow (the
-newest choice wins, also after you reopen the project).
+newest choice wins, also after you reopen the project). BandLab: pick **Cakewalk** (BandLab's desktop DAW for
+Windows). BandLab's web studio (in the browser or the app) can't load plug-ins, so the three can't run there.
 
 **Moving faders needs Cubase (for now).** Mixology moves faders through Cubase's MIDI Remote (the Cubase Bridge). In
 another DAW, Analyze Mix, the Mix Assistant, Mixology Link and every tool's EQ, compression, space and the mix's tone

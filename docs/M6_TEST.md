@@ -10,6 +10,8 @@ Install all three together: Mixology 0.13.0, Voxology 0.50.0 and Masterology 0.2
    Studio One's words (open the Mix Assistant's cards, Auto Mix's notes). Voxology's bottom bar (DAW, next to the
    version) and Masterology's Settings follow within a second.
 3. Pick **Found: Cubase** again in any of the three: all three go back to Cubase.
+4. (0.13.1) The list now has **Cakewalk** (by BandLab, and Sonar): BandLab's desktop DAW. BandLab's web studio can't
+   load plug-ins.
 
 **Report**: anything still saying Cubase where it shouldn't, or a step that's wrong for your DAW?
 

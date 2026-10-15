@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-15, v0.13.0)
+# Mixology: resume here (updated 2026-10-15, v0.13.1)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,11 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## v0.13.1 + Voxology 0.50.1 + Masterology 0.29.1: Cakewalk (BandLab) in the DAW list (2026-10-15)
+- User: "add bandlab to the DAWs list". BandLab's web studio can't host VST3 (said so); added key "cakewalk" (Cakewalk by
+  BandLab, Sonar): daws.js DAWS + words for every phrase that has per-DAW words, dawFromHostPath ("cakewalk" in the path
+  or a file starting "sonar"), dawName, test. No layout change (a key: older builds show it as Other DAW).
 
 ## v0.13.0: your DAW for the trio + "fix this first" (2026-10-15) + Voxology 0.50.0 + Masterology 0.29.0
 - User sent Voxology's TOO HOT / CLIPPED RECORDING cards next to Auto Mix (+2.1 dB on the vocal): "are these reports
