@@ -48,6 +48,7 @@ sends higher-resolution art, re-run it.
 - Hub updateSetup(): busCandidates = marked music group, Voxology BEAT-mode channels, report.groupHints, Link-less channels
   named group/grp/bus/beat/instrumental/music/submix/stem(s); vocalsWithoutLink = suite vocals (Vocal mode) with no Link of
   that name. getState "setup" (suggestion objects); setupVersion in stateVersion.
+- CI green: run 38669271873 (82c6794).
 - UI: Mix Assistant cards at the top (both views; action-first hint), Tracks hint bar "⚠ title · What to do" (opens the
   suggestion sheet), Stereo page note names the group. Preview: index.html?setup shows the demo issues (mock SETUP).
 
