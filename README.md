@@ -7,7 +7,7 @@ HTML / CSS / JS interface in the platform web view, GitHub Actions builds on eve
 The plan and milestones: [docs/PLAN.md](docs/PLAN.md). User manual (also built into the plug-in): [docs/MANUAL.md](docs/MANUAL.md).
 Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_TEST.md) (passed), [docs/M3_TEST.md](docs/M3_TEST.md), [docs/M4_TEST.md](docs/M4_TEST.md), [docs/M5_TEST.md](docs/M5_TEST.md), [docs/M6_TEST.md](docs/M6_TEST.md) (current).
 
-## Status: v0.11.0
+## Status: v0.11.1
 
 | Piece | State |
 | --- | --- |
@@ -27,7 +27,8 @@ Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_T
 | Presets (v0.9.0): Mixology's starting points per kind of track, FX returns and the Full Mix; yours saved for every song; undo | Tested: the track list was empty on Windows, fixed in v0.9.2 |
 | v0.9.2 fixes: roles from whole words in the name ("Keys - Verse" = keys), renamed channels forgotten at the next read | Passed in Cubase |
 | History (v0.10.0): every change Mixology makes, step by step; back to any point, forward again | Passed in Cubase |
-| Auto Analyze (v0.11.0): after Analyze Mix, keeps listening while the song plays; new advice every 15 s when it changed | Built, waiting for the Cubase test |
+| Auto Analyze (v0.11.0): after Analyze Mix, keeps listening while the song plays; new advice every 15 s when it changed | Passed in Cubase |
+| v0.11.1: Auto Analyze stays on when the project opens again (listens by itself, first advice ~20 s in) and follows the style | Built, waiting for the Cubase test |
 | CPU check (v0.8.2): 48 real Links + Mixology timed on every build (tools/cpucheck); the idle chain made cheaper | Done: typical 48-track session about 17 % of one core |
 
 ## Layout

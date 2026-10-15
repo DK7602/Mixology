@@ -1,6 +1,16 @@
 # Milestone 6 tests
 
-## Version 0.11.0 (10 minutes): Auto Analyze, and the logo centred
+## Version 0.11.1 (5 minutes): Auto Analyze stays on
+
+1. With Auto Analyze on, save the project, close Cubase, open the project again and open Mixology.
+2. The switch is still green, and the Mix Assistant says "Auto Analyze is on". Do NOT press Analyze Mix.
+3. Press play. The faders get read once (the strips step through, like Analyze Mix), then "Listening 5 s"... About
+   20 seconds in, the advice appears ("Auto Analyze, updated (time)").
+4. Pick another style in the header and keep playing: within about 20 seconds the advice is for the new style.
+
+**Report**: did it come back on by itself and give advice without Analyze Mix?
+
+## Version 0.11.0 (10 minutes): Auto Analyze, and the logo centred (passed)
 
 1. Look at the logo: the beaker sits in the middle, the same amount of waveform on each side, same size as before.
 2. Press **ANALYZE MIX** and let it finish. Under the advice there is a new switch: **AUTO ANALYZE**. Click it: the

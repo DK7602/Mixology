@@ -1277,6 +1277,9 @@ TEST_CASE ("Auto Analyze: only a real change in the advice replaces the report",
     CHECK (adviceChanged (shown, listen (beat (-8.0)).evaluate ({})));         // the vocal dropped: new advice
     CHECK_FALSE (adviceChanged (shown, Report {}));                           // nothing new heard: keep it
     CHECK (adviceChanged (Report {}, shown));
+    auto otherStyle = shown;
+    otherStyle.style.key = "pop.modern";   // you picked another style: new advice even if the points are the same
+    CHECK (adviceChanged (shown, otherStyle));
 
     // Another track joined the mix.
     const auto more = listen ([] (int) { return std::vector<TrackSample> {

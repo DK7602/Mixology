@@ -56,6 +56,7 @@ namespace mixology::mix
     {
         if (! fresh.valid) return false;
         if (! shown.valid) return true;
+        if (shown.style.key != fresh.style.key) return true;   // you picked another style
 
         auto points = [] (const Report& r) {
             std::set<std::pair<std::string, std::string>> s;

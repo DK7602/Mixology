@@ -651,7 +651,7 @@ void BridgeHub::analysisTick (const mixology::AnalysisFrame& mixFrame, bool play
     monoWatch.add (heard, setupTracks);
     updateSetup();
 
-    if (analyzeState == Analyze::done) { autoTick (mixFrame, std::move (tracks), playing); return; }
+    if (analyzeState == Analyze::done || analyzeState == Analyze::idle) { autoTick (mixFrame, std::move (tracks), playing); return; }
     if (analyzeState != Analyze::listening || ! playing) return;
     mix::Moment m;
     m.mix = mixFrame;
@@ -946,6 +946,17 @@ void BridgeHub::finishAnalysis()
     ++analysisVersion;
 }
 
+mixology::mix::Style BridgeHub::styleFromVar (const juce::var& st)
+{
+    mixology::mix::Style style;
+    style.key = st.getProperty ("key", "hiphop.modern").toString().toStdString();
+    style.name = st.getProperty ("name", "Hip Hop - Modern Clean").toString().toStdString();
+    style.bass = st.getProperty ("bass", 4.0);
+    style.scoop = st.getProperty ("scoop", 1.5);
+    style.air = st.getProperty ("air", 2.0);
+    return style;
+}
+
 std::uint64_t BridgeHub::autoMixKey() const
 {
     // FNV-1a over everything that changes the sound but isn't a fader: every Link's processing and Assist EQ,
@@ -978,7 +989,14 @@ void BridgeHub::autoTick (const mixology::AnalysisFrame& mixFrame, std::vector<m
 {
     using namespace mixology;
     juce::String pause;
-    if (! autoAnalyze || ! report.valid) pause = "off";
+    // From scratch (the project opened with Auto Analyze on, no advice yet): read every fader once, like Analyze Mix.
+    if (autoAnalyze && ! report.valid && autoStyleKnown && ! autoScanAsked && playing
+        && bridge.link() == BridgeSession::Link::connected && bridge.channelOrder().empty() && ! bridge.busy())
+    {
+        autoScanAsked = true;
+        bridge.scanAllChannels (now());
+    }
+    if (! autoAnalyze || (! report.valid && ! autoStyleKnown)) pause = "off";
     else if (bridge.applying() || bridge.scanning() || hearingReference) { pause = "busy"; autoListen.reset(); }   // the mix is changing
     else if (! playing) pause = "stopped";
     else if (mixFrame.silent) pause = "quiet";
@@ -1003,6 +1021,7 @@ void BridgeHub::autoTick (const mixology::AnalysisFrame& mixFrame, std::vector<m
             analysis = a;   // role changes re-evaluate the moments behind the advice on screen
             useSnapshot (autoSnapshot);
             autoUpdatedMs = autoCheckedMs;
+            analyzeState = Analyze::done;   // the first advice, when Auto Analyze started from scratch
         }
         ++analysisVersion;
     }
@@ -1437,13 +1456,7 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
     }
     else if (name == "analyze")
     {
-        const auto& st = value;
-        mixology::mix::Style style;
-        style.key = st.getProperty ("key", "hiphop.modern").toString().toStdString();
-        style.name = st.getProperty ("name", "Hip Hop - Modern Clean").toString().toStdString();
-        style.bass = st.getProperty ("bass", 4.0);
-        style.scoop = st.getProperty ("scoop", 1.5);
-        style.air = st.getProperty ("air", 2.0);
+        const auto style = styleFromVar (value);
         if (bridge.applying())
             r = { false, "Mixology is still applying " + bridge.planProgress().what + ": try again in a second." };
         else if (mixology::link::processRegistry().links (mixology::link::nowMs()).empty())
@@ -1457,6 +1470,22 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
                 analyzeState = Analyze::reading;   // first every channel's fader, then listen
             else
                 analyzeState = Analyze::listening;
+            ++analysisVersion;
+        }
+    }
+    else if (name == "autoStyle")
+    {
+        // The interface's style, at start and on every change. Auto Analyze listens for it (and a new style is new
+        // advice at the next check). Analyze Mix's own listening is left alone.
+        const auto st = styleFromVar (value);
+        auto differs = [] (double a, double b) { return std::abs (a - b) > 1e-6; };
+        const bool changed = ! autoStyleKnown || st.key != autoStyle.key || differs (st.bass, autoStyle.bass)
+                             || differs (st.scoop, autoStyle.scoop) || differs (st.air, autoStyle.air);
+        autoStyle = st;
+        autoStyleKnown = true;
+        if (changed && analyzeState != Analyze::reading && analyzeState != Analyze::listening)
+        {
+            autoListen.start (autoStyle);
             ++analysisVersion;
         }
     }

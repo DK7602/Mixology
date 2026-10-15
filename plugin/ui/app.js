@@ -143,6 +143,9 @@ function setStyle(key) {
   store.set("preset", app.style.key);
   store.set("presetName", app.style.fullName);   // the plug-in hands the style to Masterology (M6)
   app.emit("preset", app.style);
+  // Auto Analyze listens for this style (also when the project opens with it on and no advice yet).
+  const st = app.style;
+  native.bridgeCommand("autoStyle", { value: { key: st.key, name: st.fullName, bass: st.bass, scoop: st.scoop, air: st.air } });
 }
 function stepStyle(delta) {
   const list = app.style.genre.styles;

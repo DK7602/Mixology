@@ -157,7 +157,11 @@ every control, presets, ducking, the smart tools and their Undo, Restore); go ba
 again; one bridge plan moves the faders back, the Links take the rest.
 v0.11.0: Auto Analyze (the user said yes; switch under the Mix Assistant's advice): keeps listening while the song
 plays, one version of the mix at a time (starts again when a fader or any processing changes), checks at 20 s then
-every 15 s, replaces the advice only when it changed. The logo centred on the beaker (same size).
+every 15 s, replaces the advice only when it changed. The logo centred on the beaker (same size). Passed in Cubase.
+v0.11.1: Auto Analyze stays on when the project opens again: with no advice yet it listens by itself (one fader read
+at the first play), first advice ~20 s in; follows the header's style (the interface sends it: command autoStyle).
+Suite rule (user, 2026-10-15): Mixology, Voxology and Masterology all keep Auto Analyze on across sessions.
+Proposed - one style list for the trio (being discussed with the user), see below.
 Still to come in M6: code signing (later).
 
 ### Built in v0.11.0 - Auto Analyze (asked 2026-10-15: "once an analyze mix has been run should have an auto analyze option")
@@ -169,6 +173,17 @@ Still to come in M6: code signing (later).
   MixConsole (that's the visible part of Analyze Mix): it uses the faders it already knows and its own moves.
 - Pauses by itself: transport stopped, a plan applying, the window closed for long, or the mix not playing.
 - Never changes the mix: advice only. Auto Mix / Polish still ask first.
+
+### Proposed - One style list for the trio (asked 2026-10-15, being discussed)
+- Mixology's list (14 genres, 75 styles) becomes the suite's list. Voxology and Masterology get the same pop-up picker.
+  Each turns the style into its own settings: Masterology its tone curve, loudness, dynamics and punch; Voxology its
+  vocal chain's starting point. Voxology keeps its vocal type (Trap Lead, Rap, Melodic...) as a second choice: one song
+  has rap verses and a melodic hook, so the vocal type stays per track, suggested from the style.
+- Sync through the suite link (it already carries Mixology's style to Masterology): one style per project, the last one
+  you changed wins, every plug-in follows within a second. Each saves it with the project, so it opens the same.
+- Careful: Masterology's Auto-Master Genre is a plug-in parameter (6 choices) that old projects and automation use:
+  keep it and map the 75 styles onto it, never rename its choices.
+- Needs push access to the Voxology and Masterology repositories from this session (or their own threads).
 
 ### Later - Other DAWs (asked 2026-10-15: "add that to the plan for later")
 Today everything except the Tracks page and Auto Mix's fader / pan moves works in any VST3 host (Studio One, Reaper,

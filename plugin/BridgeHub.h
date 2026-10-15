@@ -187,12 +187,18 @@ private:
     // Auto Analyze (after the first Analyze Mix): keeps listening while the song plays and refreshes the
     // advice every 15 s of playback when it changed. Advice only: never moves anything. Saved with the project.
     bool autoAnalyze = false;
+    // The style picked in the header (the interface sends it): Auto Analyze starts from it when the project
+    // opens with Auto Analyze on and no advice yet, and follows it when you pick another style.
+    mixology::mix::Style autoStyle;
+    bool autoStyleKnown = false;
+    bool autoScanAsked = false;       // the one fader read Auto Analyze asks for when it starts from scratch
     mixology::mix::AutoAnalyze autoListen;
     AtAnalysis autoSnapshot;          // the mix at the start of autoListen's window
     double autoCheckedMs = 0.0, autoUpdatedMs = 0.0;   // wall clock (ms since 1970)
     juce::String autoPause;           // why it isn't listening right now ("" = listening)
     int autoSecondsShown = -1;
     std::uint64_t autoMixKey() const; // changes whenever any processing changes
+    static mixology::mix::Style styleFromVar (const juce::var&);
     void autoTick (const mixology::AnalysisFrame& mix, std::vector<mixology::mix::TrackSample> tracks, bool playing);
     mixology::mix::Plan currentPlan;
     std::uint64_t currentPlanId = 0;

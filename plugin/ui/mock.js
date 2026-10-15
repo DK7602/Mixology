@@ -159,6 +159,7 @@
       setTimeout(() => { B.an.state = "listening"; B.version++; }, 1200);
       return { ok: true };
     }
+    if (name === "autoStyle") return { ok: true };
     if (name === "autoAnalyze") { B.an.auto = { on: !!value, pause: "", seconds: 0, checked: 0, updated: 0 }; B.version++; return { ok: true, info: value && !B.an.report ? "Auto Analyze starts after your first Analyze Mix." : undefined }; }
     if (name === "analyzeFinish") { if (B.an.seconds < 1) return fail("Nothing heard yet: press play in Cubase."); B.an.state = "done"; B.an.report = fakeReport(); B.version++; return { ok: true }; }
     if (name === "analyzeCancel") { B.an.state = B.an.report ? "done" : "idle"; B.version++; return { ok: true }; }
@@ -492,13 +493,13 @@
       frame.scope = dots;
       frame.corr = +(0.62 + 0.15 * Math.sin(t / 3)).toFixed(2);
     }
-    if (B.an.state === "done" && B.an.auto.on && B.an.playing) {   // Auto Analyze: checks at 20 s, then every 15 s
+    if ((B.an.state === "done" || B.an.state === "idle") && B.an.auto.on && B.an.playing) {   // Auto Analyze: checks at 20 s, then every 15 s
       const was = Math.floor(B.an.auto.seconds);
       B.an.auto.seconds += 1 / 30;
       const s = Math.floor(B.an.auto.seconds);
       if (s !== was) {
         B.version++;
-        if (s >= 20 && (s - 20) % 15 === 0) { B.an.auto.checked = Date.now(); if (s === 20) { B.an.auto.updated = Date.now(); B.an.report = fakeReport(); } }
+        if (s >= 20 && (s - 20) % 15 === 0) { B.an.auto.checked = Date.now(); if (s === 20) { B.an.auto.updated = Date.now(); B.an.state = "done"; B.an.report = fakeReport(); } }
       }
     }
     if (B.an.state === "listening" && B.an.playing) {

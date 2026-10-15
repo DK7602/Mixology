@@ -245,15 +245,16 @@ export function buildOverview(root, app) {
   autoBtn.addEventListener("click", () => { const au = app.bridge && app.bridge.analysis && app.bridge.analysis.auto; app.command("autoAnalyze", { value: !(au && au.on) }); });
   function renderAuto(b) {
     const a = b && b.analysis, au = a && a.auto;
-    const show = !!(a && a.report && au);
+    const show = !!(a && au && (a.report || au.on));
     autoBtn.style.display = show ? "block" : "none";
-    list.style.bottom = show ? "124px" : a && a.report ? "70px" : "12px";
+    autoBtn.style.bottom = a && a.report ? "68px" : "12px";   // above Your tracks / Live view once there is advice
+    list.style.bottom = (show ? 56 : 0) + (a && a.report ? 70 : 12) + "px";
     if (!show) return;
     const status = !au.on ? "Off"
       : au.pause === "stopped" ? "Press play"
       : au.pause === "quiet" ? "Waiting for sound"
       : au.pause === "busy" ? "Paused" : au.pause ? "Off"
-      : au.seconds < 20 ? `Listening ${au.seconds} s` : "Listening";
+      : au.seconds < 20 ? `Listening ${au.seconds} s` : a.report ? "Listening" : "Checking...";
     const html = `<span class="lamp${au.on ? " on" : ""}${au.on && !au.pause ? " live" : ""}"></span>AUTO ANALYZE<span style="float:right;color:var(--text-dim)">${status}</span>`;
     if (autoBtn.dataset.html !== html) { autoBtn.dataset.html = html; autoBtn.innerHTML = html; }
   }
@@ -278,7 +279,7 @@ export function buildOverview(root, app) {
     const useReport = report && !showLive;
     const setup = b.setup || [];
     const key = JSON.stringify(setup.map((x) => x.id + x.title)) + "|" + (useReport ? "r|" + JSON.stringify(report.suggestions.map((x) => x.id + x.kind + x.title)) + report.seconds + report.style + (b.analysis.auto && b.analysis.auto.on ? b.analysis.auto.updated : "")
-      : [b.link, (b.slots || []).filter((s) => s.present).length, b.linksPaired, b.linksSeen, Math.round(st), Math.round(tp), !!report].join("|"));
+      : [b.link, (b.slots || []).filter((s) => s.present).length, b.linksPaired, b.linksSeen, Math.round(st), Math.round(tp), !!report, !!(b.analysis && b.analysis.auto && b.analysis.auto.on)].join("|"));
     if (key === lastKey) return;
     lastKey = key;
     list.innerHTML = "";
@@ -316,7 +317,9 @@ export function buildOverview(root, app) {
       else if (tp > -3) card("headroom", "#ffc04a", `Peaks reach ${fmt.num(tp, 1)} dBTP`, "A bit hot for mastering: aim for peaks around -6 to -3");
       else card("check", "#39e26b", `Headroom is good (peaks ${fmt.num(tp, 1)} dBTP)`, "Plenty of room for Masterology");
     }
-    if (!report)
+    if (!report && b.analysis && b.analysis.auto && b.analysis.auto.on)
+      card("bulb", "#ff36e1", "Auto Analyze is on", "Play the song: the first advice comes about 20 seconds in");
+    else if (!report)
       card("bulb", "#ff36e1", "Press Analyze Mix for real advice", b.linksSeen ? `Play the busiest part of the song: Mixology listens to your ${b.linksSeen} track${b.linksSeen === 1 ? "" : "s"} with Mixology Link` : "First insert Mixology Link on your tracks (after their other plug-ins)");
   }
 

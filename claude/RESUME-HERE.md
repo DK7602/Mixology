@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-15, v0.11.0)
+# Mixology: resume here (updated 2026-10-15, v0.11.1)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,17 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## v0.11.1: Auto Analyze stays on after reopening (2026-10-15)
+- User: v0.11.0 "it worked". Asked: (1) one style list + picker for the trio, synced (discussing, PLAN "Proposed - One
+  style list for the trio"); (2) all three keep Auto Analyze on across sessions (he had to re-analyze after reopening).
+- Fix: autoTick also runs in Analyze::idle; with autoAnalyze on, no report and the style known (UI sends command
+  autoStyle {value: style} from setStyle, at start and on every change) it listens from scratch; the first play asks
+  ONE bridge.scanAllChannels (autoScanAsked) when channelOrder() is empty; the first check sets report + analyzeState
+  done. A style change restarts autoListen; adviceChanged also true when the style key differs. UI: the switch shows
+  when auto is on even without a report (bottom 12 px then), card "Auto Analyze is on".
+- Voxology / Masterology: this session can READ them (public, anonymous clones in /home/user/dk7602/) but add_repo push
+  was refused, so nothing pushed there. Voxology's Auto Analyze is its own thread (not built); Masterology has none yet.
 
 ## v0.11.0: Auto Analyze + the logo centred (2026-10-15, session "Mixology part 2")
 - CI green: run 38739894769 (ec91d91). Download for the user: that run's Mixology-Windows.
