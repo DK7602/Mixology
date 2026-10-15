@@ -831,6 +831,22 @@ TEST_CASE ("Bridge: reading every channel's fader, then back to the same bank", 
 }
 
 
+TEST_CASE ("Bridge: where a fader is heading while Cubase hasn't answered (the History's nudges)", "[bridge]")
+{
+    Rig r;
+    r.run (0.2);
+    CHECK_FALSE (r.session.movingToDb (0).has_value());
+    REQUIRE (r.session.nudgeDb (r.session.refOf (0), 1.0, r.now).ok);
+    const auto first = r.session.movingToDb (0);
+    REQUIRE (first.has_value());
+    REQUIRE (r.session.nudgeDb (r.session.refOf (0), 1.0, r.now).ok);   // adds up from there
+    REQUIRE (r.session.movingToDb (0).has_value());
+    CHECK (*r.session.movingToDb (0) == Catch::Approx (*first + 1.0));
+    r.run (2.0);
+    CHECK_FALSE (r.session.movingToDb (0).has_value());
+    CHECK_FALSE (r.session.movingToDb (99).has_value());
+}
+
 TEST_CASE ("Bridge: a channel renamed or deleted is forgotten at the next full read", "[bridge]")
 {
     Rig r;

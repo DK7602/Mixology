@@ -7,6 +7,7 @@
 #include <deque>
 #include <set>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -233,6 +234,8 @@ namespace mixology
         // ---- commands --------------------------------------------------------------------------
         Result setVolumeDb (ChannelRef, double db, double now);
         Result nudgeDb (ChannelRef, double deltaDb, double now);
+        /** Where a slot's fader is heading (a move Cubase hasn't finished), if it is moving. */
+        std::optional<double> movingToDb (int slot) const;
         /** Exact fader position, for dragging a fader in Mixology. Replaces a move in progress (latest wins). */
         Result setVolumeNormalised (ChannelRef, double position, double now);
         /** Logs where a Mixology fader drag ended (drags themselves aren't logged step by step). */

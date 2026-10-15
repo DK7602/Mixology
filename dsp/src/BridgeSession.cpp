@@ -670,6 +670,13 @@ namespace mixology
         return setVolumeDb (ref, std::round ((from + deltaDb) * 100.0) / 100.0, now);
     }
 
+    std::optional<double> BridgeSession::movingToDb (int slotIndex) const
+    {
+        if (slotIndex < 0 || slotIndex >= slotCount()) return std::nullopt;
+        const auto& mv = meta[static_cast<std::size_t> (slotIndex)].move;
+        return mv.active && mv.kind == MoveKind::setDb ? std::optional<double> (mv.targetDb) : std::nullopt;
+    }
+
     BridgeSession::Result BridgeSession::setVolumeNormalised (ChannelRef ref, double position, double now)
     {
         auto ok = checkWritable (ref, Field::volume);

@@ -1234,8 +1234,10 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
         };
         if (name == "setDb" || name == "minusInf" || name == "nudge" || name == "fader")
         {
+            // Nudges in a row (mouse wheel) add up from where the fader is heading, as the bridge does.
+            const double nudgeFrom = bridge.movingToDb (ref.slot).value_or (s.volumeDb);
             const double db = name == "setDb" ? number : name == "minusInf" ? mixology::FaderLaw::kMinusInf
-                            : name == "nudge" ? s.volumeDb + number : bridge.faderLaw().toDb (number);
+                            : name == "nudge" ? std::round ((nudgeFrom + number) * 100.0) / 100.0 : bridge.faderLaw().toDb (number);
             add (HWhat::fader, s.volumeDb, db, "Fader", "fader");
             hist.back().beforePos = s.volume;
             if (name == "fader") hist.back().afterPos = number;

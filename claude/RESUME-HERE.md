@@ -63,6 +63,8 @@ sends higher-resolution art, re-run it.
   click for the change lines), "The start" with UNDO EVERYTHING; re-renders on bridge history.version. mock.js has 4
   demo steps (H, hList, hMove).
 - Not saved with the project (lasts while Cubase is open, 200 steps); Cubase-side moves aren't recorded.
+- Nudges (mouse wheel) record from BridgeSession::movingToDb(slot) (the active setDb move's target), as nudgeDb adds
+  up, so the step's 'after' matches where the fader lands (else going back would see 'moved since').
 
 ## v0.9.2: fixes from the user's presets test (2026-10-15)
 - User confirmed: scroll bar works; the mono Beat warning (setup check) was detected.
