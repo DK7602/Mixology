@@ -172,6 +172,17 @@ juce::WebBrowserComponent::Options MixWebEditor::makeEditorOptions()
                                  procListCountdown = 0;   // the list shows it with the next frames
                                  complete (true);
                              })
+        // Presets: { target, targets, factory, mine, undo } for a target; load / save / delete / undo.
+        .withNativeFunction ("presetList", [this] (const juce::Array<juce::var>& args, auto complete)
+                             { complete (presetList (args.size() > 0 ? args[0].toString() : juce::String ("mix"))); })
+        .withNativeFunction ("presetApply", [this] (const juce::Array<juce::var>& args, auto complete)
+                             { complete (presetApply (args[0].toString(), args.size() > 1 ? args[1].toString() : juce::String(), args.size() > 2 && static_cast<bool> (args[2]))); })
+        .withNativeFunction ("presetSave", [this] (const juce::Array<juce::var>& args, auto complete)
+                             { complete (presetSave (args[0].toString(), args.size() > 1 ? args[1].toString() : juce::String())); })
+        .withNativeFunction ("presetDelete", [this] (const juce::Array<juce::var>& args, auto complete)
+                             { complete (args.size() > 0 && hub.deleteUserPreset (args[0].toString().toStdString())); })
+        .withNativeFunction ("presetUndo", [this] (const juce::Array<juce::var>& args, auto complete)
+                             { complete (presetUndo (args.size() > 0 ? args[0].toString() : juce::String ("mix"))); })
         .withResourceProvider ([] (const auto& url) { return getResource (url); });
 }
 
@@ -437,6 +448,161 @@ juce::var MixWebEditor::makeProcTargets()
         o->setProperty ("duck", duck);
     }
     return list;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Presets
+
+MixWebEditor::PresetTarget MixWebEditor::readPresetTarget (const juce::String& key)
+{
+    using namespace mixology;
+    PresetTarget t;
+    if (key == "mix")
+    {
+        t.ok = true;
+        t.name = "Full Mix";
+        t.kind = presets::Kind::mix;
+        t.values = processor.procValues();
+        return t;
+    }
+    int slot = -1;
+    std::uint32_t generation = 0;
+    if (! parseLinkKey (key, slot, generation)) return t;
+    auto& registry = link::processRegistry();
+    if (! registry.readProc (slot, generation, t.values)) return t;
+    t.ok = true;
+    for (const auto& l : registry.links (link::nowMs()))
+        if (l.slot == slot && l.generation == generation)
+        {
+            t.name = l.identity.hasName ? juce::String::fromUTF8 (l.identity.name.c_str()) : juce::String ("Track without a name");
+            if (l.identity.hasName)
+                if (auto role = hub.trackRole (l.nameHash, l.identity.name)) t.role = mix::roleKey (*role);
+            t.voxologyCompresses = l.identity.hasName && hub.voxologyCompresses (l.nameHash);
+        }
+    const bool fxReturn = t.values[static_cast<std::size_t> (proc::spRoute)] > 0.5f;
+    t.kind = fxReturn ? presets::Kind::fx : presets::Kind::track;
+    return t;
+}
+
+void MixWebEditor::writePresetTarget (const juce::String& key, const mixology::proc::Values& from, const mixology::proc::Values& to)
+{
+    using namespace mixology;
+    int slot = -1;
+    std::uint32_t generation = 0;
+    const bool link = key != "mix" && parseLinkKey (key, slot, generation);
+    for (int i = 0; i < proc::count; ++i)
+    {
+        const auto k = static_cast<std::size_t> (i);
+        if (std::abs (to[k] - from[k]) < 1.0e-6f) continue;
+        if (key == "mix") processor.setProc (i, to[k]);
+        else if (link) link::processRegistry().requestProc (slot, generation, i, to[k]);
+    }
+    procListCountdown = 0;   // the pages show the new settings with the next frames
+}
+
+namespace
+{
+    juce::var presetVar (const mixology::presets::Preset& p, bool suits)
+    {
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("name", juce::String::fromUTF8 (p.name.c_str()));
+        o->setProperty ("about", juce::String::fromUTF8 (p.about.c_str()));
+        o->setProperty ("kind", mixology::presets::kindKey (p.kind));
+        o->setProperty ("roles", juce::String (p.roles));
+        o->setProperty ("factory", p.factory);
+        o->setProperty ("suits", suits);
+        return juce::var (o);
+    }
+
+    juce::var result (bool ok, const juce::String& message)
+    {
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("ok", ok);
+        o->setProperty ("message", message);
+        return juce::var (o);
+    }
+
+    juce::String q (const juce::String& s) { return "'" + s + "'"; }
+}
+
+juce::var MixWebEditor::presetList (const juce::String& key)
+{
+    using namespace mixology::presets;
+    const auto t = readPresetTarget (key);
+    auto suits = [&t] (const Preset& p) {
+        if (! t.ok) return false;
+        if (t.kind == Kind::mix || p.kind == Kind::mix) return p.kind == t.kind;
+        if (t.kind == Kind::fx || p.kind == Kind::fx) return p.kind == t.kind;
+        if (t.voxologyCompresses && std::any_of (p.values.begin(), p.values.end(), [] (const auto& v) { return v.first == "comp_on" && v.second > 0.5f; }))
+            return false;   // Voxology compresses this vocal already
+        return ! t.role.empty() && ! p.roles.empty() && p.suits (t.role);
+    };
+    auto* o = new juce::DynamicObject();
+    auto* to = new juce::DynamicObject();
+    to->setProperty ("key", key);
+    to->setProperty ("ok", t.ok);
+    to->setProperty ("name", t.name);
+    to->setProperty ("kind", kindKey (t.kind));
+    to->setProperty ("role", juce::String (t.role));
+    to->setProperty ("voxology", t.voxologyCompresses);
+    o->setProperty ("target", juce::var (to));
+    juce::Array<juce::var> targets;
+    for (const auto& x : *makeProcTargets().getArray())
+    {
+        auto* xo = new juce::DynamicObject();
+        xo->setProperty ("key", x["key"]);
+        xo->setProperty ("name", x["name"]);
+        targets.add (juce::var (xo));
+    }
+    o->setProperty ("targets", targets);
+    juce::Array<juce::var> own, mine;
+    for (const auto& p : factory()) own.add (presetVar (p, suits (p)));
+    for (const auto& p : hub.userPresets()) mine.add (presetVar (p, suits (p)));
+    o->setProperty ("factory", own);
+    o->setProperty ("mine", mine);
+    const auto undo = hub.presetUndoName (key);
+    o->setProperty ("undo", undo.empty() ? juce::var() : juce::var (juce::String::fromUTF8 (undo.c_str())));
+    return juce::var (o);
+}
+
+juce::var MixWebEditor::presetApply (const juce::String& key, const juce::String& name, bool factoryPreset)
+{
+    using namespace mixology::presets;
+    const Preset* p = nullptr;
+    const auto wanted = name.toStdString();
+    if (factoryPreset) { for (const auto& x : factory()) if (x.name == wanted) p = &x; }
+    else for (const auto& x : hub.userPresets()) if (x.name == wanted) p = &x;
+    if (p == nullptr) return result (false, "That preset isn't there any more.");
+    const auto t = readPresetTarget (key);
+    if (! t.ok) return result (false, "This track's Mixology Link isn't answering: pick the track again.");
+    const auto to = forTarget (*p, t.values);
+    hub.rememberPresetUndo (key, p->name, t.values);
+    writePresetTarget (key, t.values, to);
+    return result (true, "Loaded " + q (name) + " on " + q (t.name) + ". UNDO puts back what it had.");
+}
+
+juce::var MixWebEditor::presetSave (const juce::String& key, const juce::String& rawName)
+{
+    using namespace mixology::presets;
+    const auto name = cleanName (rawName.toStdString());
+    if (name.empty()) return result (false, "Give it a name first.");
+    for (const auto& x : factory())
+        if (x.name == name) return result (false, q (juce::String::fromUTF8 (name.c_str())) + " is one of Mixology's presets: pick another name.");
+    const auto t = readPresetTarget (key);
+    if (! t.ok) return result (false, "This track's Mixology Link isn't answering: pick the track again.");
+    hub.saveUserPreset (capture (name, t.kind, t.role, t.values));
+    return result (true, "Saved " + q (juce::String::fromUTF8 (name.c_str())) + " from " + q (t.name) + " (My presets, for every song).");
+}
+
+juce::var MixWebEditor::presetUndo (const juce::String& key)
+{
+    std::string name;
+    mixology::proc::Values before {};
+    if (! hub.takePresetUndo (key, name, before)) return result (false, "Nothing to undo here.");
+    const auto t = readPresetTarget (key);
+    if (! t.ok) return result (false, "This track's Mixology Link isn't answering: pick the track again.");
+    writePresetTarget (key, t.values, before);
+    return result (true, "Back to how " + q (t.name) + " was before " + q (juce::String::fromUTF8 (name.c_str())) + ".");
 }
 
 juce::var MixWebEditor::trackSpectrum (const mixology::AnalysisFrame& f) const

@@ -263,6 +263,68 @@ void BridgeHub::timerCallback()
     }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Presets (yours): one text file beside Mixology's settings, shared by every project and every Mixology.
+
+juce::File BridgeHub::userPresetFile() const
+{
+    return settingsFile->getFile().getSiblingFile ("Mixology Presets.txt");
+}
+
+const std::vector<mixology::presets::Preset>& BridgeHub::userPresets()
+{
+    if (! userPresetsLoaded)
+    {
+        userPresetsLoaded = true;
+        const auto file = userPresetFile();
+        if (file.existsAsFile()) userPresetList = mixology::presets::parse (file.loadFileAsString().toStdString());
+    }
+    return userPresetList;
+}
+
+void BridgeHub::saveUserPreset (const mixology::presets::Preset& p)
+{
+    userPresets();
+    auto it = std::find_if (userPresetList.begin(), userPresetList.end(), [&p] (const auto& q) { return q.name == p.name; });
+    if (it != userPresetList.end()) *it = p;
+    else userPresetList.push_back (p);
+    std::sort (userPresetList.begin(), userPresetList.end(), [] (const auto& a, const auto& b) { return juce::String (a.name).compareNatural (b.name) < 0; });
+    const auto file = userPresetFile();
+    file.getParentDirectory().createDirectory();
+    file.replaceWithText (juce::String::fromUTF8 (mixology::presets::serialise (userPresetList).c_str()));
+}
+
+bool BridgeHub::deleteUserPreset (const std::string& name)
+{
+    userPresets();
+    const auto before = userPresetList.size();
+    userPresetList.erase (std::remove_if (userPresetList.begin(), userPresetList.end(), [&name] (const auto& q) { return q.name == name; }), userPresetList.end());
+    if (userPresetList.size() == before) return false;
+    userPresetFile().replaceWithText (juce::String::fromUTF8 (mixology::presets::serialise (userPresetList).c_str()));
+    return true;
+}
+
+void BridgeHub::rememberPresetUndo (const juce::String& key, const std::string& name, const mixology::proc::Values& before)
+{
+    presetUndo[key] = { name, before };
+}
+
+bool BridgeHub::takePresetUndo (const juce::String& key, std::string& name, mixology::proc::Values& before)
+{
+    const auto it = presetUndo.find (key);
+    if (it == presetUndo.end()) return false;
+    name = it->second.name;
+    before = it->second.before;
+    presetUndo.erase (it);
+    return true;
+}
+
+std::string BridgeHub::presetUndoName (const juce::String& key) const
+{
+    const auto it = presetUndo.find (key);
+    return it == presetUndo.end() ? std::string() : it->second.name;
+}
+
 juce::String BridgeHub::logText() const
 {
     juce::String text;

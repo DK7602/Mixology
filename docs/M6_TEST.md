@@ -1,11 +1,22 @@
 # Milestone 6 tests
 
+## Version 0.9.0 (10 minutes): presets
+
+1. Install Mixology 0.9.0 (both .vst3). Open Mixology, click **PRESETS** (top bar).
+2. **For:** pick **Lead Vox 1**. The first presets are for vocals; with Voxology on it, "Lead Vocal: Sit in the Beat"
+   comes first (EQ only: Voxology already compresses). **LOAD** it and listen. **UNDO** puts it back.
+3. Pick your 808 (or kick) and load its preset; pick **Full Mix** and try "Mix Bus: Gentle Glue".
+4. Make a sound you like on a track (any page: EQ, Dynamics...), then in PRESETS type a name and **SAVE**. Open another
+   song: your preset is there under **My presets**.
+
+**Report**: did the presets sound like a good starting point? Anything confusing in the sheet?
+
 ## Version 0.8.1 (5 minutes): the setup check
 
 From your round 1: the **VOX tag works** (thank you). You also hit two setup problems by hand: the mono "Beat" group
 and vocals without Mixology Link. Mixology now spots both while the song plays and says what to do.
 
-1. Install Mixology 0.8.1 (both .vst3 as usual; Voxology and Masterology stay as they are).
+1. Use Mixology 0.8.1 or newer (Voxology and Masterology stay as they are).
 2. To see it work, put the problem back for a minute: switch **Beat** to mono again (its one-circle button) and press
    play. Within about 10 seconds the **Mix Assistant** (Overview) shows **"Your mix arrives in mono"** at the top, and the
    Tracks page's top bar says it too. Click it: it should name **'Beat'**. Switch Beat back to stereo: the warning goes

@@ -267,7 +267,8 @@
   window.__JUCE__ = {
     initialisationData: {
       __juce__platform: [], __juce__registeredGlobalEventIds: [], __juce__sliders: [], __juce__toggles: [], __juce__comboBoxes: [],
-      __juce__functions: ["bridgeCommand", "getBridgeState", "getSettings", "setSetting", "setUiState", "setPage", "procTarget", "procSet", "setMonoListen", "spaceDuck"],
+      __juce__functions: ["bridgeCommand", "getBridgeState", "getSettings", "setSetting", "setUiState", "setPage", "procTarget", "procSet", "setMonoListen", "spaceDuck",
+        "presetList", "presetApply", "presetSave", "presetDelete", "presetUndo"],
     },
     postMessage(message) {
       const { eventId, payload } = JSON.parse(message);
@@ -286,6 +287,7 @@
       else if (payload.name === "procSet") result = procSet(a, b);
       else if (payload.name === "setMonoListen") result = P.mono = !!a;
       else if (payload.name === "spaceDuck") { P.duck[a] = (b || []).map(Number); P.listIn = 0; }
+      else if (payload.name.startsWith("preset")) result = presetCall(payload.name, payload.params || []);
       send("__juce__complete", { promiseId: payload.resultId, result });
     },
   };
@@ -309,6 +311,66 @@
     const ad = "link:" + chans.findIndex((c) => c.name === "Adlibs") + ":1";
     set(ad, "sp_on", 1); set(ad, "sp_type", 1); set(ad, "dly_time", 4);
   });
+  // --- presets (a few of Mixology's own, yours kept in memory) ---------------------------------------
+  const FACTORY = [
+    ["Lead Vocal: Sit in the Beat", "After Voxology (it already compresses): a low cut, a little less mud, presence and air so the words sit on top of the beat. EQ only.", "track", "vox", { eq_on: 1, eq1_type: 3, eq1_freq: 100, eq4_gain: 1.5, eq4_freq: 3200 }],
+    ["Lead Vocal: Clear & Upfront", "For a vocal without Voxology: the same EQ, a bit brighter, plus a 3:1 compressor that keeps every word in front.", "track", "vox", { eq_on: 1, comp_on: 1 }],
+    ["Backing Vocals: Soft Bed", "Doubles and harmonies under the lead: less low end and presence, gently compressed, in a short room.", "track", "vox", { eq_on: 1, comp_on: 1, sp_on: 1, sp_type: 5 }],
+    ["Ad-libs: Behind & Bouncing", "Thinner than the lead and echoing left and right on the 1/8.", "track", "adlibs", { eq_on: 1, sp_on: 1, sp_type: 1 }],
+    ["Kick: Punch", "Weight at 60 Hz, the box at 400 Hz out of the way, a little click on top, a sharper hit.", "track", "kick", { eq_on: 1, trans_on: 1 }],
+    ["808: Solid & Mono", "An even 808 under the whole song, its lows in the middle, and harmonics so it still shows on phones.", "track", "bass", { eq_on: 1, comp_on: 1, st_on: 1, harm_on: 1 }],
+    ["Keys & Pads: Room for the Vocal", "Clears the low end and dips where the words are (2 - 3 kHz), a bit wider (stereo sounds).", "track", "keys,synth", { eq_on: 1, st_on: 1 }],
+    ["FX Return: Vocal Plate", "A short, bright plate for the vocal on an FX channel. Send the vocals to it; LEVEL sets how much comes back.", "fx", "fx", { sp_on: 1, sp_type: 0 }],
+    ["Mix Bus: Gentle Glue", "A little bus compression that makes the mix hang together. Nothing else.", "mix", "", { fin_on: 1, fin_glue: 30 }],
+    ["Mix Bus: Warm & Wide", "A touch warmer, a touch more air, a bit wider, lightly glued.", "mix", "", { tb_on: 1, fin_on: 1, fin_width: 110 }],
+  ].map(([name, about, kind, roles, values]) => ({ name, about, kind, roles, values, factory: true }));
+  const MINE = [{ name: "My Lead Vox", about: "", kind: "track", roles: "vox", values: { eq_on: 1, comp_on: 1 }, factory: false }];
+  const UNDO = {};
+  function presetTarget(key) {
+    if (key === "mix") return { key, ok: true, name: "Full Mix", kind: "mix", role: "" };
+    const i = Number(String(key).split(":")[1]), c = chans[i];
+    if (!c || !P.values[key]) return { key, ok: false, name: "", kind: "track", role: "" };
+    const fx = P.spec && P.values[key][P.spec.PROC_INDEX.sp_route] > 0.5;
+    return { key, ok: true, name: c.name, kind: fx ? "fx" : "track", role: roleOf(c), voxology: !!(VOXOLOGY[c.name] && VOXOLOGY[c.name].comp) };
+  }
+  function presetCall(name, [a, b, c]) {
+    const msg = (ok, message) => ({ ok, message });
+    if (name === "presetList") {
+      const t = presetTarget(a);
+      const suits = (p) => t.ok && (t.kind === "mix" || p.kind === "mix" ? p.kind === t.kind : t.kind === "fx" || p.kind === "fx" ? p.kind === t.kind
+        : !(t.voxology && p.values.comp_on) && !!t.role && p.roles.split(",").includes(t.role));
+      const list = (arr) => arr.map((p) => ({ name: p.name, about: p.about, kind: p.kind, roles: p.roles, factory: p.factory, suits: suits(p) }));
+      const targets = [{ key: "mix", name: "Full Mix" }].concat(chans.map((ch, i) => (ch.link ? { key: "link:" + i + ":1", name: ch.name } : null)).filter(Boolean));
+      return { target: t, targets, factory: list(FACTORY), mine: list(MINE), undo: UNDO[a] ? UNDO[a].name : null };
+    }
+    if (name === "presetApply") {
+      const p = (c ? FACTORY : MINE).find((x) => x.name === b), t = presetTarget(a);
+      if (!p || !t.ok || !P.spec) return msg(false, "That preset isn't there any more.");
+      UNDO[a] = { name: p.name, before: P.values[a].slice() };
+      P.values[a] = P.spec.PROC.map((s) => s.def);
+      procSet(a, p.values);
+      return msg(true, `Loaded '${p.name}' on '${t.name}'. UNDO puts back what it had.`);
+    }
+    if (name === "presetUndo") {
+      const u = UNDO[a];
+      if (!u) return msg(false, "Nothing to undo here.");
+      P.values[a] = u.before;
+      delete UNDO[a];
+      return msg(true, `Back to how it was before '${u.name}'.`);
+    }
+    if (name === "presetSave") {
+      const t = presetTarget(a), n = String(b || "").trim();
+      if (!n) return msg(false, "Give it a name first.");
+      if (FACTORY.some((p) => p.name === n)) return msg(false, `'${n}' is one of Mixology's presets: pick another name.`);
+      const old = MINE.findIndex((p) => p.name === n);
+      const p = { name: n, about: "", kind: t.kind, roles: t.role, values: {}, factory: false };
+      if (old >= 0) MINE[old] = p; else MINE.push(p);
+      MINE.sort((x, y) => x.name.localeCompare(y.name));
+      return msg(true, `Saved '${n}' from '${t.name}' (My presets, for every song).`);
+    }
+    if (name === "presetDelete") { const i = MINE.findIndex((p) => p.name === a); if (i >= 0) MINE.splice(i, 1); return i >= 0; }
+    return false;
+  }
   function procSet(key, changes) {
     const v = P.values[key];
     if (!v || !P.spec) return 0;

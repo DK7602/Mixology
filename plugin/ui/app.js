@@ -6,7 +6,7 @@ import { $, el, icon, store, setRenderScale } from "./ui.js";
 import { buildOverview, buildTracks } from "./pages_main.js";
 import { buildEq, buildDynamics, buildSpace } from "./pages_process.js";
 import { buildTone, buildStereo, buildMaster } from "./pages_output.js";
-import { openSettings, openHelp, openPresets, hookBridge } from "./sheets.js";
+import { openSettings, openHelp, openPresets, openStyles, hookBridge } from "./sheets.js";
 import { hookTools } from "./tools.js";
 import { styleByKey } from "./mixstyles.js";
 import { createProc } from "./proc.js";
@@ -42,6 +42,11 @@ export const native = {
   procSet: fn("procSet"),
   setMonoListen: fn("setMonoListen"),
   spaceDuck: fn("spaceDuck"),
+  presetList: fn("presetList"),
+  presetApply: fn("presetApply"),
+  presetSave: fn("presetSave"),
+  presetDelete: fn("presetDelete"),
+  presetUndo: fn("presetUndo"),
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -145,7 +150,7 @@ function stepStyle(delta) {
 app.setStyle = setStyle;
 $("preset-prev").addEventListener("click", () => stepStyle(-1));
 $("preset-next").addEventListener("click", () => stepStyle(1));
-$("preset-name").addEventListener("click", () => openPresets(app));
+$("preset-name").addEventListener("click", () => openStyles(app));
 
 // ---------------------------------------------------------------------------------------------
 // Start

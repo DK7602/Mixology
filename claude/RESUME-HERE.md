@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-15, v0.8.2)
+# Mixology: resume here (updated 2026-10-15, v0.9.0)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,25 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## v0.9.0: presets (2026-10-15)
+- User: "Go for it" (presets after the CPU check). Decided: processing presets (not whole-mix snapshots; those belong
+  with the undo history). PRESETS tab now opens the Presets sheet; the header style name (and a "Mix style" button in
+  the sheet) opens the old genre / style picker (sheets.js openStyles, was openPresets).
+- dsp Presets.h/.cpp (tests/test_presets.cpp): Preset {name, about, kind track|fx|mix, roles "a,b", factory, values
+  id->value}; factory() 17 presets (11 track by role, 3 FX returns, 3 mix bus) with every id real and every value
+  in range (test); valuesOf = defaults + values (sanitised); forTarget keeps the target's sp_route unless kind fx
+  (then route 1); capture = only non-default values; serialise / parse text ("Mixology presets 1", [preset] blocks,
+  key=value, to_chars / from_chars, unknown ids skipped); cleanName (one line, <= 60 chars, UTF-8 safe).
+- Hub: user presets in "Mixology Presets.txt" beside the settings file (lazy load, sorted, replace by name);
+  one-step undo per target key (rememberPresetUndo / takePresetUndo / presetUndoName); voxologyCompresses(hash).
+- Editor natives: presetList(key) {target {key, ok, name, kind, role, voxology}, targets, factory, mine (each with
+  suits), undo}, presetApply(key, name, factory), presetSave(key, name) (refuses factory names), presetDelete(name),
+  presetUndo(key). Links get requestProc for changed controls only; the Full Mix setProc. suits: same kind for mix /
+  fx; tracks by role; a compressor preset never suits a vocal Voxology compresses.
+- Sheet: For: <select> (also selects the processing pages' target), UNDO bar, FOR '<track>' list, MY PRESETS (save row:
+  name + SAVE '<TRACK>' AS A PRESET; REPLACE? / SURE? confirmations), MIXOLOGY PRESETS by kind. Cards need position:
+  relative in the sheet (.card is absolute by default).
 
 ## v0.8.2: the CPU check (2026-10-15)
 - User: "can we go ahead with the CPU check?" (hasn't tried the setup check's mono Beat test yet; will).

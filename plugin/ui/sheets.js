@@ -197,7 +197,126 @@ export async function openHelp(app) {
 // ---------------------------------------------------------------------------------------------
 // Mix styles: pick a genre, then its style in a pop-up (so the list never gets cluttered).
 
-export function openPresets(app) {
+// ---------------------------------------------------------------------------------------------
+// Presets: a track's (or the Full Mix's) processing under a name. Mixology's own starting points by kind of track,
+// and yours (saved from any track, for every song). Loading sets every control; UNDO puts back what it had.
+
+const ROLE_WORD = { kick: "kick", snare: "snare", hats: "hi-hat", perc: "percussion", bass: "bass / 808", keys: "keys", synth: "synth", guitar: "guitar",
+  vox: "vocal", adlibs: "ad-lib", fx: "FX", other: "" };
+const KIND_TITLE = { track: "Tracks", fx: "FX channels (100 % wet returns)", mix: "Full Mix (Mixology on the Stereo Out)" };
+
+export async function openPresets(app) {
+  const body = sheet("PRESETS");
+  body.className = "scroll";
+  let key = (app.proc && app.proc.key) || "mix";
+  let draftName = "";
+  const btn = (parent, text, onClick, extra = {}) => {
+    const b = el("button", "small-btn", parent, extra);
+    b.textContent = text;
+    b.addEventListener("click", onClick);
+    return b;
+  };
+  const say = (r) => { if (r && r.message) app.toast(r.message, r.ok ? undefined : "warn"); };
+
+  async function render() {
+    const r = await app.native.presetList(key);
+    if (!r || !r.target) { body.textContent = "Presets need the plug-in."; return; }
+    const t = r.target;
+    key = t.key;
+    body.innerHTML = "";
+
+    // For: which track (or the Full Mix); the mix style lives here too.
+    const top = el("div", "", body, { display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "12px" });
+    el("span", "", top, { fontSize: "19px", color: "var(--text-dim)" }).textContent = "For:";
+    const pick = el("select", "", top, { height: "42px", minWidth: "260px", borderRadius: "9px", border: "1.5px solid var(--select-edge)", background: "var(--well)",
+      color: "var(--text)", font: "500 19px var(--font)", padding: "0 10px" });
+    for (const x of r.targets || []) {
+      const o = el("option", "", pick);
+      o.value = x.key;
+      o.textContent = x.name;
+      o.selected = x.key === key;
+    }
+    pick.addEventListener("change", () => {
+      key = pick.value;
+      if (app.proc) {   // the processing pages follow
+        if (!app.proc.targets.some((x) => x.key === key)) app.proc.targets = r.targets;
+        app.proc.select(key);
+      }
+      render();
+    });
+    el("span", "", top, { fontSize: "17px", color: "var(--text-dim)" }).textContent = t.kind === "mix" ? "" : t.kind === "fx" ? "an FX channel (its Space is 100 % wet)"
+      : (ROLE_WORD[t.role] ? `a ${ROLE_WORD[t.role]} track` : "") + (t.voxology ? (ROLE_WORD[t.role] ? ", " : "") + "Voxology compresses it already" : "");
+    el("span", "", top, { flex: "1" });
+    btn(top, `Mix style: ${app.style.fullName}`, () => openStyles(app));
+
+    if (!t.ok) {
+      el("p", "", body, { fontSize: "19px", color: "var(--amber)" }).textContent = "This track's Mixology Link isn't answering. Pick it again, or another track.";
+      return;
+    }
+    if (r.undo) {
+      const u = el("div", "card", body, { position: "relative", display: "flex", alignItems: "center", gap: "14px", padding: "10px 16px", marginBottom: "12px", borderColor: "var(--gold)" });
+      el("span", "", u, { flex: "1", fontSize: "19px" }).textContent = `'${r.undo}' was loaded on '${t.name}'.`;
+      btn(u, "UNDO", async () => { say(await app.native.presetUndo(key)); render(); });
+    }
+
+    const row = (parent, p) => {
+      const c = el("div", "card", parent, { position: "relative", display: "flex", alignItems: "center", gap: "14px", padding: "12px 16px", marginBottom: "8px" });
+      const text = el("div", "", c, { flex: "1", minWidth: "0" });
+      el("div", "", text, { fontSize: "20px", fontWeight: "600" }).textContent = p.name;
+      el("div", "", text, { fontSize: "16px", color: "var(--text-dim)", marginTop: "3px", lineHeight: "1.3" }).textContent =
+        p.about || (p.factory ? "" : p.kind === "mix" ? "Yours, from the Full Mix." : p.kind === "fx" ? "Yours, from an FX channel." : `Yours, from ${ROLE_WORD[p.roles] ? "a " + ROLE_WORD[p.roles] : "a"} track.`);
+      btn(c, "LOAD", async () => { say(await app.native.presetApply(key, p.name, p.factory)); render(); });
+      if (!p.factory) btn(c, "DELETE", async (e) => {
+        const b = e.currentTarget;
+        if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "SURE?"; return; }
+        await app.native.presetDelete(p.name);
+        app.toast(`Deleted '${p.name}'.`);
+        render();
+      });
+    };
+    const head = (text) => { el("div", "", body, { fontSize: "18px", fontWeight: "600", color: "var(--gold)", letterSpacing: "0.06em", margin: "16px 0 8px" }).textContent = text; };
+
+    const forThis = r.factory.filter((p) => p.suits).concat(r.mine.filter((p) => p.suits));
+    if (forThis.length) {
+      head(`FOR '${t.name.toUpperCase()}'`);
+      forThis.forEach((p) => row(body, p));
+    }
+
+    head("MY PRESETS");
+    const save = el("div", "", body, { display: "flex", gap: "10px", alignItems: "center", marginBottom: "10px", flexWrap: "wrap" });
+    const input = el("input", "num", save, { width: "360px", textAlign: "left" });
+    input.placeholder = t.kind === "mix" ? "A name, e.g. My Mix Bus" : `A name, e.g. My ${t.name}`;
+    input.maxLength = 60;
+    input.value = draftName;
+    const saveBtn = btn(save, "", async () => {
+      const name = input.value.trim();
+      if (!name) { input.focus(); app.toast("Give it a name first.", "warn"); return; }
+      if (r.mine.some((p) => p.name === name) && saveBtn.dataset.sure !== "1") { saveBtn.dataset.sure = "1"; saveBtn.textContent = `REPLACE '${name}'?`; return; }
+      const res = await app.native.presetSave(key, name);
+      say(res);
+      if (res && res.ok) { draftName = ""; render(); }
+    });
+    const label = () => { saveBtn.dataset.sure = ""; saveBtn.textContent = `SAVE '${t.name.toUpperCase()}' AS A PRESET`; };
+    label();
+    input.addEventListener("input", () => { draftName = input.value; label(); });
+    input.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") saveBtn.click(); });
+    if (!r.mine.length) el("p", "", body, { fontSize: "17px", color: "var(--text-dim)", margin: "0 0 6px" }).textContent =
+      "None yet. Dial in a sound you like (EQ, Dynamics, Tone, Stereo, Space), then save it here: it's there on every song.";
+    r.mine.filter((p) => !p.suits).forEach((p) => row(body, p));
+
+    for (const kind of ["track", "fx", "mix"]) {
+      const rest = r.factory.filter((p) => !p.suits && p.kind === kind);
+      if (!rest.length) continue;
+      head(`MIXOLOGY PRESETS: ${KIND_TITLE[kind].toUpperCase()}`);
+      rest.forEach((p) => row(body, p));
+    }
+    el("p", "", body, { fontSize: "16px", color: "var(--text-dim)", margin: "14px 0 0", lineHeight: "1.4" }).textContent =
+      "A preset sets the processing only (EQ, Dynamics, Tone, Stereo, Space): never the fader, the Trim or the Assist EQ. A track keeps its own routing: an FX channel stays 100 % wet.";
+  }
+  render();
+}
+
+export function openStyles(app) {
   const body = sheet("MIX STYLES");
   body.className = "scroll";
   const note = el("p", "", body, { fontSize: "18px", color: "var(--text-dim)", margin: "0 0 6px 0", lineHeight: "1.4" });

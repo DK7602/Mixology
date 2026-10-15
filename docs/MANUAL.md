@@ -1,10 +1,10 @@
 # Mixology manual
 
-Manual for version 0.8.2 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
+Manual for version 0.9.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
-on your vocals and Masterology after it, and the setup check).
+on your vocals and Masterology after it, the setup check, and presets).
 
 **Setup check.** While the song plays, Mixology watches for problems in the Cubase project that no mixing move can
 fix, and puts them at the top of the Mix Assistant (Overview), and in the Tracks page's top bar (click it for the
@@ -362,8 +362,8 @@ stopped if you can. A Space effect uses 0.3 - 2.3 % of one CPU core (Delay the l
 
 ## Mix styles
 
-The style in the header (for example "Hip Hop - Modern Clean") is what Mixology aims for. Click it (or
-**PRESETS**) to choose: first the **genre**, then its **style** in the pop-up. The arrows next to the name step
+The style in the header (for example "Hip Hop - Modern Clean") is what Mixology aims for. Click it (or **Mix
+style** at the top of PRESETS) to choose: first the **genre**, then its **style** in the pop-up. The arrows next to the name step
 through the styles of the genre you're in.
 
 | Genre | Styles |
@@ -386,6 +386,27 @@ through the styles of the genre you're in.
 The style sets the Tone page's target curve and what Analyze Mix compares your mix with (tone, how loud the
 vocal sits). Its genre also sets the levels Balance and Auto Mix aim for. The style is saved with the
 project.
+
+## Presets
+
+**PRESETS** (top bar) saves and loads a track's sound: its processing (EQ, Dynamics, Tone, Stereo, Space), on any
+track with Mixology Link, or the Full Mix.
+
+1. **For:** pick the track (it starts on the one the processing pages show). Its kind is shown next to it.
+2. **For 'Lead Vox'**: the presets made for that kind of track come first. Click **LOAD**.
+3. Not right? **UNDO** (at the top) puts back exactly what the track had.
+
+- **Mixology presets**: starting points for each kind of track: the lead vocal ("Sit in the Beat" when Voxology is on
+  it: EQ only, no second compressor; "Clear & Upfront" without Voxology), backing vocals, ad-libs, kick, 808, snare,
+  hats, percussion, keys and pads, guitar; FX channel returns (vocal plate, hall, 1/4 echo); and the Full Mix (gentle
+  glue, warm and wide, bright and modern). When Voxology compresses a vocal, the presets with a compressor aren't
+  offered first for it.
+- **My presets**: dial in a sound you like, type a name and **SAVE**. Yours are kept for every song and every project
+  (in one small file next to Mixology's settings). Saving under a name you already used asks **REPLACE?** first.
+  **DELETE** asks **SURE?** first.
+- A preset sets every processing control (what it doesn't use is switched off), so a track sounds the same whatever
+  it had before. It never touches the fader, the Trim, the Assist EQ or what Space ducks under. A track keeps its own
+  routing: an FX channel stays a 100 % wet return.
 
 ## How it works with Voxology and Masterology
 

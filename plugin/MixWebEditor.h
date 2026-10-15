@@ -47,6 +47,23 @@ private:
     void addStereo (juce::DynamicObject&);
     juce::var makeProc();
     juce::var makeProcTargets();
+
+    // Presets (the Presets sheet): a target's processing, read and written by its key ("mix" or a Link's).
+    struct PresetTarget
+    {
+        bool ok = false;
+        juce::String name;
+        std::string role;   // the track's role key ("" = unknown, or the Full Mix)
+        bool voxologyCompresses = false;   // Voxology on it compresses already (no preset with a second compressor suits it)
+        mixology::presets::Kind kind = mixology::presets::Kind::track;
+        mixology::proc::Values values {};
+    };
+    PresetTarget readPresetTarget (const juce::String& key);
+    void writePresetTarget (const juce::String& key, const mixology::proc::Values& from, const mixology::proc::Values& to);
+    juce::var presetList (const juce::String& key);
+    juce::var presetApply (const juce::String& key, const juce::String& name, bool factory);
+    juce::var presetSave (const juce::String& key, const juce::String& name);
+    juce::var presetUndo (const juce::String& key);
     juce::var trackSpectrum (const mixology::AnalysisFrame&) const;
     static juce::WebBrowserComponent::Options makeBaseOptions();
     juce::WebBrowserComponent::Options makeEditorOptions();

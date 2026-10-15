@@ -7,6 +7,7 @@
 #include "mixology/LinkRegistry.h"
 #include "mixology/MixAnalysis.h"
 #include "mixology/MixPlanner.h"
+#include "mixology/Presets.h"
 #include "mixology/SetupCheck.h"
 #include "suite/SuiteLink.h"
 
@@ -104,6 +105,21 @@ public:
     /** Global settings file shared by all instances (theme, learned fader curve). */
     juce::PropertiesFile& settings() { return *settingsFile; }
 
+    // ---- Presets: yours live in one small file beside the settings (the same for every project). Message thread.
+    const std::vector<mixology::presets::Preset>& userPresets();
+    void saveUserPreset (const mixology::presets::Preset&);   // replaces one of the same name
+    bool deleteUserPreset (const std::string& name);
+    /** Loading a preset can be undone (one step per target): what it replaced. */
+    void rememberPresetUndo (const juce::String& targetKey, const std::string& presetName, const mixology::proc::Values& before);
+    bool takePresetUndo (const juce::String& targetKey, std::string& presetName, mixology::proc::Values& before);
+    std::string presetUndoName (const juce::String& targetKey) const;
+    /** Voxology (Vocal mode, processing) on this channel, and whether it compresses. */
+    bool voxologyCompresses (std::uint32_t hash) const
+    {
+        const auto* v = voxologyOn (hash);
+        return v != nullptr && (v->flags & suite::VocalInfo::processing) != 0 && (v->flags & suite::VocalInfo::compressor) != 0;
+    }
+
     /** A track's role (yours, or guessed from its name), for the Space page ("duck under the vocal"). */
     std::optional<mixology::mix::Role> trackRole (std::uint32_t hash, const std::string& name) const { return roleFor (hash, name); }
 
@@ -112,6 +128,12 @@ private:
     void handleIncomingMidiMessage (juce::MidiInput*, const juce::MidiMessage&) override;
 
     void openPorts();
+
+    std::vector<mixology::presets::Preset> userPresetList;
+    bool userPresetsLoaded = false;
+    juce::File userPresetFile() const;
+    struct PresetUndo { std::string name; mixology::proc::Values before {}; };
+    std::map<juce::String, PresetUndo> presetUndo;
     void closePorts (const juce::String& why);
     void updateLinks();
     void applyPendingProtected();

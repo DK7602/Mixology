@@ -147,8 +147,10 @@ Masterology (0.26), which shows it in Learn and offers the matching genre; Maste
 ceiling, genre), shown on Mixology's Master page.
 v0.8.1: the setup check (a mono group or output on the way, named; vocals with Voxology but no Mixology Link;
 Mixology on a mono channel) in the Mix Assistant, the Tracks page and the Stereo page.
-Still to come in M6: presets (save / load your Mixology settings), an undo history, a CPU check with 40+ tracks,
-code signing (later).
+v0.8.2: the CPU check (48 real Links + Mixology timed on every build): a typical 48-track session about 17 % of one core.
+v0.9.0: presets (PRESETS tab): Mixology's starting points per kind of track, FX returns and the Full Mix; yours, saved
+for every song; one-step UNDO per track.
+Still to come in M6: an undo history (every change Mixology makes, step by step), code signing (later).
 
 ### Later - Other DAWs (asked 2026-10-15: "add that to the plan for later")
 Today everything except the Tracks page and Auto Mix's fader / pan moves works in any VST3 host (Studio One, Reaper,

@@ -15,6 +15,7 @@ add_library(mixology_dsp STATIC
     src/SharedBlock.cpp
     src/SuiteLink.cpp
     src/SetupCheck.cpp
+    src/Presets.cpp
     src/TrackMeter.cpp
     src/TrackAnalyzer.cpp
     src/KWeighting.cpp
