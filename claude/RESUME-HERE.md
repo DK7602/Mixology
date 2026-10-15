@@ -48,6 +48,8 @@ sends higher-resolution art, re-run it.
 - UI: the bank arrows are gone; a 360 px gold scroll bar + "13-24 of 41": drag (sends on release), click (centred),
   wheel (one channel per notch, sent after 250 ms). Reads the channels by itself once (Tracks page shown, never read,
   at most once a minute); stale order -> read again when touched.
+- CI green: run 38678861735 (6ec7878), with v0.9.0 presets (its first run failed on Windows: test_presets.cpp lacked
+  #include <algorithm>; GCC got it indirectly).
 
 ## v0.9.0: presets (2026-10-15)
 - User: "Go for it" (presets after the CPU check). Decided: processing presets (not whole-mix snapshots; those belong
