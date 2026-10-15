@@ -547,13 +547,15 @@ juce::var MixWebEditor::presetList (const juce::String& key)
     to->setProperty ("voxology", t.voxologyCompresses);
     o->setProperty ("target", juce::var (to));
     juce::Array<juce::var> targets;
-    for (const auto& x : *makeProcTargets().getArray())
-    {
-        auto* xo = new juce::DynamicObject();
-        xo->setProperty ("key", x["key"]);
-        xo->setProperty ("name", x["name"]);
-        targets.add (juce::var (xo));
-    }
+    const auto all = makeProcTargets();   // kept alive: a loop over *makeProcTargets().getArray() reads freed memory
+    if (const auto* list = all.getArray())
+        for (const auto& x : *list)
+        {
+            auto* xo = new juce::DynamicObject();
+            xo->setProperty ("key", x["key"]);
+            xo->setProperty ("name", x["name"]);
+            targets.add (juce::var (xo));
+        }
     o->setProperty ("targets", targets);
     juce::Array<juce::var> own, mine;
     for (const auto& p : factory()) own.add (presetVar (p, suits (p)));

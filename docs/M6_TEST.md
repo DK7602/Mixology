@@ -1,6 +1,18 @@
 # Milestone 6 tests
 
-## Version 0.9.1 (3 minutes): the Tracks page scroll bar
+## Version 0.9.2 (5 minutes): your three bugs from the presets test
+
+Passed on your side already: the scroll bar (0.9.1) and the mono Beat warning (0.8.1). Thank you.
+1. **PRESETS**: the **For:** list now lists Full Mix and every track with a Mixology Link. Pick **Lead Vox 1**: the
+   vocal presets come first. Pick another track: the list follows.
+2. **Channels without Mixology Link**: press **Analyze Mix** again. Only channels that really have no Link (here:
+   **Beat**, unless it is marked as your music group) should be listed, never old names from before you renamed tracks.
+3. **Icons from names**: "Keys - Verse", "Bass - Verses" and "Hats - Chorus" show keys, bass and hats, not a mic.
+   A track named only "Verse 1" or "Hook" still shows a mic.
+
+**Report**: any track whose icon is still wrong? Tell me its name and what it is.
+
+## Version 0.9.1 (3 minutes): the Tracks page scroll bar (passed)
 
 You asked for a scroll bar instead of the arrows. Install Mixology 0.9.1, open a song with more than 12 channels, go to
 **Tracks**. The first time, "Reading your channels…" (the strips step through the project and come back). Then:

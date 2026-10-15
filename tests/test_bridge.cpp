@@ -831,6 +831,27 @@ TEST_CASE ("Bridge: reading every channel's fader, then back to the same bank", 
 }
 
 
+TEST_CASE ("Bridge: a channel renamed or deleted is forgotten at the next full read", "[bridge]")
+{
+    Rig r;
+    r.run (0.2);
+    REQUIRE (r.session.scanAllChannels (r.now).ok);
+    r.run (3.0);
+    REQUIRE (r.session.knownFaders().size() == 11);
+    const auto oldInView = r.cubase.channels[1].name, oldAway = r.cubase.channels[9].name;
+    r.cubase.rename (1, "Keys - Verse");     // in view
+    r.cubase.rename (9, "Bass - Chorus");    // on another page
+    r.cubase.channels.pop_back();            // and one deleted
+    r.run (0.3);
+    REQUIRE (r.session.scanAllChannels (r.now).ok);
+    r.run (3.0);
+    CHECK (r.session.knownFaders().size() == 10);
+    CHECK (r.session.knownFaders().count (nameHash (oldInView)) == 0);
+    CHECK (r.session.knownFaders().count (nameHash (oldAway)) == 0);
+    CHECK (r.session.knownFaders().count (nameHash ("Keys - Verse")) == 1);
+    CHECK (r.session.knownFaders().count (nameHash ("Bass - Chorus")) == 1);
+}
+
 TEST_CASE ("Bridge: muted and soloed-out channels aren't in the mix", "[bridge]")
 {
     Rig r;

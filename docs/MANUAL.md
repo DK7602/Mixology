@@ -1,6 +1,6 @@
 # Mixology manual
 
-Manual for version 0.9.1 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
+Manual for version 0.9.2 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -187,13 +187,16 @@ What it looks at:
 - **A mono mix**: left and right of the Stereo Out the same (a mono group or output on the way). Panning then
   changes nothing, so Stereo Architect leaves the pans alone.
 - **Tracks you can hardly hear**, tracks running very hot, and headroom for Masterology.
-- **Channels without Mixology Link**: listed, so you know what the advice leaves out.
+- **Channels without Mixology Link**: listed, so you know what the advice leaves out. The list comes from the channels
+  Analyze Mix reads at the start, so renamed or deleted tracks drop out of it.
 
 **Your tracks** (button under the Mix Assistant) shows what Analyze Mix heard for each track: its role, level
 after the fader, peak and width. **Live view** switches the Mix Assistant back to the live readings.
 
 **Track roles.** Mixology guesses each track's role from its name ("808", "Lead Vox", "Hi Hat"...), and from its
-sound when the name doesn't say. Click a strip's icon on the Tracks page (or the role in Your tracks) to set it
+sound when the name doesn't say. It reads whole words, and what the track is wins over the part of the song:
+"Keys - Verse" is keys, "Hats - Chorus" is hats, "Vox Double" is ad-libs, "Vox Delay" is an FX return. A song part on
+its own ("Verse 1", "Hook") counts as a vocal. Click a strip's icon on the Tracks page (or the role in Your tracks) to set it
 yourself, or to **leave a track out of Analyze Mix** (a reference song, a printed stem). Your choices are saved
 with the project and the advice updates straight away, without listening again.
 

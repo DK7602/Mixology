@@ -1088,7 +1088,9 @@ namespace mixology
             return;
         }
 
-        // Every page seen (not a plan that stopped early): the project's channel order is known.
+        // Every page seen (not a plan that stopped early): the project's channel order is known, and a channel the
+        // read didn't see was renamed or deleted since (else Analyze Mix would list its old name as a channel
+        // without a Link).
         if (last && ! scan.seen.empty())
         {
             order.clear();
@@ -1099,6 +1101,9 @@ namespace mixology
                     order.push_back (hash);
                     orderTitles.push_back (title);
                 }
+            for (auto it = faders.begin(); it != faders.end();)
+                if (std::find (order.begin(), order.end(), it->first) == order.end()) it = faders.erase (it);
+                else ++it;
         }
 
         // Back to where the bank was: reset, whole pages, then single steps (spaced out, one per step).

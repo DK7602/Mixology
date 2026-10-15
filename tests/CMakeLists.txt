@@ -17,6 +17,7 @@ add_executable(mixology_tests
     test_presets.cpp)
 
 target_link_libraries(mixology_tests PRIVATE mixology_dsp Catch2::Catch2WithMain)
+target_compile_definitions(mixology_tests PRIVATE MIXOLOGY_TESTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 set_target_properties(mixology_tests PROPERTIES FOLDER "Mixology")
 
 include(Catch)
@@ -32,6 +33,13 @@ find_program(NODE_EXECUTABLE node)
 if(NODE_EXECUTABLE)
     add_test(NAME bridge_end_to_end
              COMMAND ${NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../tools/bridge-sim/run.js $<TARGET_FILE:bridge_session_cli>)
+endif()
+
+if(NODE_EXECUTABLE)
+    # The interface's copy of the track-name rules must give the same roles as the engine's.
+    add_test(NAME role_names_in_sync
+             COMMAND ${NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../tools/rolecheck/rolecheck.js
+                     ${CMAKE_CURRENT_SOURCE_DIR}/../plugin/ui/roles.js ${CMAKE_CURRENT_SOURCE_DIR}/role_names.txt)
 endif()
 
 # The interface's copy of the processing control table must match the engine's.

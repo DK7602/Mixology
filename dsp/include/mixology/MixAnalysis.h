@@ -25,8 +25,10 @@ namespace mixology::mix
     const char* roleKey (Role);
     std::optional<Role> roleFromKey (const std::string&);
 
-    /** From the channel name ("808", "Lead Vox", "Hi Hat"...); nothing when the name doesn't say. */
+    /** From the channel name ("808", "Lead Vox", "Hi Hat", "Keys - Verse"...); nothing when the name doesn't say. */
     std::optional<Role> roleFromName (const std::string& name);
+    /** A name as the words roleFromName reads: "LeadVox2 (Hook)" -> "lead vox 2 hook". */
+    std::string nameWords (const std::string& name);
 
     /** The six colours of the Overview analyzer: Kick, Bass, Drums, Vocals, Instruments, Other. */
     enum class Group { kick, bass, drums, vocals, instruments, other };

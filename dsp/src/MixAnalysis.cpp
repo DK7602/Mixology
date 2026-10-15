@@ -3,6 +3,7 @@
 #include "mixology/BridgeProtocol.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <numeric>
@@ -184,27 +185,66 @@ namespace mixology::mix
         return std::nullopt;
     }
 
+    std::string nameWords (const std::string& name)
+    {
+        // Letters and digits only, lower case, one space between words. A new word also starts where a lower-case
+        // letter meets a capital ("LeadVox") and where letters meet digits ("Vox2", "808s").
+        std::string out;
+        unsigned char prev = 0;
+        for (const char ch : name)
+        {
+            const auto c = static_cast<unsigned char> (ch);
+            const bool alnum = c < 128 && std::isalnum (c) != 0;
+            if (! alnum)
+            {
+                if (! out.empty() && out.back() != ' ') out += ' ';
+                prev = 0;
+                continue;
+            }
+            const bool split = prev != 0 && ((std::islower (prev) != 0 && std::isupper (c) != 0)
+                                             || ((std::isdigit (prev) != 0) != (std::isdigit (c) != 0)));
+            if (split && out.back() != ' ') out += ' ';
+            out += static_cast<char> (std::tolower (c));
+            prev = c;
+        }
+        while (! out.empty() && out.back() == ' ') out.pop_back();
+        return out;
+    }
+
     std::optional<Role> roleFromName (const std::string& name)
     {
-        // Same rules, same order as guessRole() in the interface (pages_main.js).
-        static const std::vector<std::pair<Role, std::regex>> rules = [] {
-            const auto f = std::regex::ECMAScript | std::regex::icase;
-            return std::vector<std::pair<Role, std::regex>> {
-                { Role::adlibs, std::regex ("ad.?lib|adlib|hype|dub vox|backing|bgv|double", f) },
-                { Role::vox,    std::regex ("vox|vocal|voc\\b|lead v|verse|hook|rap|sing|acap", f) },
-                { Role::kick,   std::regex ("kick|kik|\\bbd\\b|bassdrum", f) },
-                { Role::snare,  std::regex ("snare|snr|clap|\\bsd\\b|rim", f) },
-                { Role::hats,   std::regex ("hat|\\bhh\\b|cymbal|ride|crash|open h", f) },
-                { Role::perc,   std::regex ("perc|shaker|tamb|conga|bongo|tom|cowbell|drum", f) },
-                { Role::bass,   std::regex ("808|bass|sub\\b|subs", f) },
-                { Role::keys,   std::regex ("key|piano|rhodes|organ|\\bep\\b|wurl", f) },
-                { Role::guitar, std::regex ("guitar|gtr|acoustic|strat|electric", f) },
-                { Role::synth,  std::regex ("synth|pad|lead|pluck|arp|string|brass|bell|choir|sample|melod|loop", f) },
-                { Role::fx,     std::regex ("\\bfx\\b|riser|sweep|impact|reverse|noise|verb|delay|transition", f) },
-            };
-        }();
-        for (const auto& [role, re] : rules)
-            if (std::regex_search (name, re)) return role;
+        // Whole words, the same rules as guessRole() in the interface (roles.js), both checked against
+        // tests/role_names.txt. What the track IS wins over the part of the song it plays ("Keys - Verse" = keys,
+        // "Hats - Chorus" = hats); a song part alone ("Verse 1", "Hook") is taken as a vocal.
+        using R = std::regex;
+        static const R fxReturn ("\\b(reverbs?|verbs?|delays?|echo(es)?|plate|hall|fx|sfx|efx|returns?)\\b");
+        static const R adlib ("\\b(ad ?libs?|adlibs?|hypes?|bgvs?|bvs?)\\b");
+        static const R vocal ("\\b(vox|vocals?|voc|vx|lv|voices?|raps?|rapper|rapping|sing|singer|singing|acapella|acappella|a ?cappella|acap|talkbox|vocoder|speech|spoken)\\b");
+        static const R vocalPart ("\\b(backing|background|backups?|doubles?|dbls?|dubs?|harmony|harmonies|harms?|stacks?|layers?|chants?|whispers?|oohs?|ahhs?)\\b");
+        static const std::vector<std::pair<Role, R>> instruments {
+            { Role::kick,   R ("\\b(kicks?|kik|bd|bass ?drums?|kickdrums?)\\b") },
+            { Role::snare,  R ("\\b(snares?|snr|claps?|sd|rims?|rimshots?|snaps?)\\b") },
+            { Role::hats,   R ("\\b(hats?|hi ?hats?|hihats?|hh|cymbals?|rides?|crash(es)?)\\b") },
+            { Role::perc,   R ("\\b(percs?|percussion|shakers?|tamb|tambourines?|tambo|congas?|bongos?|toms?|cowbells?|triangle|claves?|woodblocks?|timbales?|drums?|drm|kits?|drumkits?|breakbeats?|tops?)\\b") },
+            { Role::bass,   R ("\\b(808s?|bass(es)?|basslines?|subs?|reese)\\b") },
+            { Role::keys,   R ("\\b(keys?|keyboards?|pianos?|rhodes|organs?|ep|epiano|wurli|wurlitzer|clavs?|clavinet|harpsichord)\\b") },
+            { Role::guitar, R ("\\b(guitars?|gtrs?|acoustic|strat|tele|electric|ukes?|ukulele|banjo|mandolin)\\b") },
+            { Role::synth,  R ("\\b(synths?|pads?|leads?|plucks?|arps?|arpeggios?|strings?|brass|horns?|trumpets?|sax|flutes?|bells?|choirs?|samples?|melody|melodies|melodic|chords?|stabs?|loops?)\\b") },
+        };
+        static const R fxSound ("\\b(effects?|transitions?|risers?|sweeps?|impacts?|reverse|noise|uplifters?|downlifters?|whoosh(es)?|swells?|sirens?|scratch(es)?|vinyl|foley|atmos|atmosphere|ambience|textures?)\\b");
+        static const R songPart ("\\b(verses?|hooks?|refrains?|prehooks?|pre hooks?)\\b");
+
+        const auto words = nameWords (name);
+        if (words.empty()) return std::nullopt;
+        auto has = [&words] (const R& re) { return std::regex_search (words, re); };
+        if (has (fxReturn)) return Role::fx;                       // "Vox Delay", "Drum Verb": an FX return
+        if (has (adlib)) return Role::adlibs;
+        if (has (vocal)) return has (vocalPart) ? Role::adlibs : Role::vox;   // "Vox Double" = ad-libs
+        for (const auto& [role, re] : instruments)
+            if (has (re)) return role;
+        if (has (vocalPart)) return Role::adlibs;                  // "Doubles", "Harmonies" ("Double Bass" was bass above)
+        if (has (fxSound)) return Role::fx;
+        if (has (songPart)) return Role::vox;
         return std::nullopt;
     }
 

@@ -1,0 +1,81 @@
+# Track names and the role their name gives ("-" = the name doesn't say). Checked against both copies of the rules:
+# roleFromName() in the engine (test_analysis.cpp) and guessRole() in the interface (tools/rolecheck/rolecheck.js).
+# What the track IS wins over the part of the song it plays.
+
+Kick | kick
+808 | bass
+808s | bass
+Lead Vox | vox
+Lead Vox 1.5 | vox
+LeadVox2 | vox
+Main Vocal | vox
+Vocals (Comp) | vox
+LV | vox
+Rap Verse | vox
+Verse 1 | vox
+Hook | vox
+Hook Vox | vox
+Adlibs | adlibs
+Ad-libs | adlibs
+Hype Vox | adlibs
+Vox Double | adlibs
+Backing Vocals | adlibs
+BGVs | adlibs
+Doubles | adlibs
+Harmonies | adlibs
+Hi Hat | hats
+HiHat | hats
+Hats | hats
+Hats - Chorus | hats
+Hats - Verses | hats
+Open Hat | hats
+Ride | hats
+Rhodes | keys
+Rhythm Keys | keys
+Rhythm Keys Verses | keys
+Keys - Verse | keys
+Keys - Chorus 1 | keys
+Keys Chorus - 2 | keys
+Piano Hook | keys
+Electric Piano | keys
+Bass - Verses | bass
+Bass - Chorus | bass
+808 Hook | bass
+Synth Bass | bass
+Double Bass | bass
+Bass Guitar | bass
+Bass Drum | kick
+Kick Drum | kick
+808 Kick | kick
+Snare | snare
+Clap | snare
+Snaps | snare
+Drums | perc
+Drums - Chorus | perc
+Drums - Verses | perc
+Pop Kit 1 | perc
+Modern Hip Hop Kit 2 | perc
+Shaker | perc
+Drum Loop | perc
+Guitar | guitar
+Acoustic Gtr | guitar
+Lead | synth
+Lead Synth | synth
+Pad | synth
+Strings | synth
+Piano Chords | keys
+Transition Effect | fx
+Riser | fx
+FX | fx
+Vox Delay | fx
+Drum Verb | fx
+Vocal Plate | fx
+Analog Lab V 01 | -
+HALion Sonic 02 | -
+Groove Agent SE 01 | -
+Beat | -
+Trap Beat | -
+Rising | -
+Custom | -
+Instrumental | -
+Intro | -

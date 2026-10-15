@@ -23,25 +23,59 @@ export function roleIcon(role, name) {
   return (ROLES[role] || ROLES.other).icon;
 }
 
-export function guessRole(name) {
-  const n = (name || "").toLowerCase();
-  const rules = [
-    ["adlibs", /ad.?lib|adlib|hype|dub vox|backing|bgv|double/],
-    ["vox", /vox|vocal|voc\b|lead v|verse|hook|rap|sing|acap/],
-    ["kick", /kick|kik|\bbd\b|bassdrum/],
-    ["snare", /snare|snr|clap|\bsd\b|rim/],
-    ["hats", /hat|\bhh\b|cymbal|ride|crash|open h/],
-    ["perc", /perc|shaker|tamb|conga|bongo|tom|cowbell|drum/],
-    ["bass", /808|bass|sub\b|subs/],
-    ["keys", /key|piano|rhodes|organ|\bep\b|wurl/],
-    ["guitar", /guitar|gtr|acoustic|strat|electric/],
-    ["synth", /synth|pad|lead|pluck|arp|string|brass|bell|choir|sample|melod|loop/],
-    ["fx", /\bfx\b|riser|sweep|impact|reverse|noise|verb|delay|transition/],
-  ];
-  for (const [role, re] of rules) if (re.test(n)) return role;
-  return "other";
+/** A name as words: letters and digits only, lower case, one space between words; a new word also starts where a
+    lower-case letter meets a capital ("LeadVox") and where letters meet digits ("Vox2", "808s"). */
+export function nameWords(name) {
+  let out = "", prev = "";
+  for (const c of name || "") {
+    if (!/[A-Za-z0-9]/.test(c)) {
+      if (out && !out.endsWith(" ")) out += " ";
+      prev = "";
+      continue;
+    }
+    const split = prev && ((/[a-z]/.test(prev) && /[A-Z]/.test(c)) || (/[0-9]/.test(prev) !== /[0-9]/.test(c)));
+    if (split && !out.endsWith(" ")) out += " ";
+    out += c.toLowerCase();
+    prev = c;
+  }
+  return out.trimEnd();
 }
 
+// Whole words, the same rules as roleFromName() in the engine (MixAnalysis.cpp), both checked against
+// tests/role_names.txt. What the track IS wins over the part of the song it plays ("Keys - Verse" = keys);
+// a song part alone ("Verse 1", "Hook") is taken as a vocal.
+const W = (words) => new RegExp("\\b(" + words + ")\\b");
+const NAME_RULES = {
+  fxReturn: W("reverbs?|verbs?|delays?|echo(es)?|plate|hall|fx|sfx|efx|returns?"),
+  adlib: W("ad ?libs?|adlibs?|hypes?|bgvs?|bvs?"),
+  vocal: W("vox|vocals?|voc|vx|lv|voices?|raps?|rapper|rapping|sing|singer|singing|acapella|acappella|a ?cappella|acap|talkbox|vocoder|speech|spoken"),
+  vocalPart: W("backing|background|backups?|doubles?|dbls?|dubs?|harmony|harmonies|harms?|stacks?|layers?|chants?|whispers?|oohs?|ahhs?"),
+  instruments: [
+    ["kick", W("kicks?|kik|bd|bass ?drums?|kickdrums?")],
+    ["snare", W("snares?|snr|claps?|sd|rims?|rimshots?|snaps?")],
+    ["hats", W("hats?|hi ?hats?|hihats?|hh|cymbals?|rides?|crash(es)?")],
+    ["perc", W("percs?|percussion|shakers?|tamb|tambourines?|tambo|congas?|bongos?|toms?|cowbells?|triangle|claves?|woodblocks?|timbales?|drums?|drm|kits?|drumkits?|breakbeats?|tops?")],
+    ["bass", W("808s?|bass(es)?|basslines?|subs?|reese")],
+    ["keys", W("keys?|keyboards?|pianos?|rhodes|organs?|ep|epiano|wurli|wurlitzer|clavs?|clavinet|harpsichord")],
+    ["guitar", W("guitars?|gtrs?|acoustic|strat|tele|electric|ukes?|ukulele|banjo|mandolin")],
+    ["synth", W("synths?|pads?|leads?|plucks?|arps?|arpeggios?|strings?|brass|horns?|trumpets?|sax|flutes?|bells?|choirs?|samples?|melody|melodies|melodic|chords?|stabs?|loops?")],
+  ],
+  fxSound: W("effects?|transitions?|risers?|sweeps?|impacts?|reverse|noise|uplifters?|downlifters?|whoosh(es)?|swells?|sirens?|scratch(es)?|vinyl|foley|atmos|atmosphere|ambience|textures?"),
+  songPart: W("verses?|hooks?|refrains?|prehooks?|pre hooks?"),
+};
+
+export function guessRole(name) {
+  const w = nameWords(name), R = NAME_RULES;
+  if (!w) return "other";
+  if (R.fxReturn.test(w)) return "fx";
+  if (R.adlib.test(w)) return "adlibs";
+  if (R.vocal.test(w)) return R.vocalPart.test(w) ? "adlibs" : "vox";
+  for (const [role, re] of R.instruments) if (re.test(w)) return role;
+  if (R.vocalPart.test(w)) return "adlibs";
+  if (R.fxSound.test(w)) return "fx";
+  if (R.songPart.test(w)) return "vox";
+  return "other";
+}
 
 export const ROLE_ORDER = ["kick", "snare", "hats", "perc", "bass", "keys", "synth", "guitar", "vox", "adlibs", "fx", "other"];
 

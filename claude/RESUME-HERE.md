@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-15, v0.9.1)
+# Mixology: resume here (updated 2026-10-15, v0.9.2)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,24 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## v0.9.2: fixes from the user's presets test (2026-10-15)
+- User confirmed: scroll bar works; the mono Beat warning (setup check) was detected.
+- Presets "For:" select was EMPTY on Windows: presetList looped over `*makeProcTargets().getArray()`, a pointer into a
+  temporary var destroyed before the loop ran (dangling, UB; worked by luck elsewhere). Now kept in a local. Also
+  `select option { background: var(--well); color: var(--text) }` so the native list is readable.
+- Mix Assistant listed 18 "channels without Mixology Link", mostly OLD names from before the user renamed tracks:
+  BridgeSession's `faders` (knownFaders) map, keyed by name hash, never forgot a name. Now, when a full read sees every
+  page (scanAdvance commits channelOrder), entries the read didn't see are erased. Test: renamed in view, renamed on
+  another page, deleted.
+- Roles from names were substring regexes: "verse"/"hook" -> vocal made "Keys - Verse", "Bass - Verses" mics; "rap"
+  hit "Trap", "sing" hit "Rising", "double" made "Double Bass" ad-libs. Now WHOLE WORDS (nameWords: lower case,
+  non-alphanumerics -> space, split camelCase and letter/digit), priority: FX return words (verb, delay, echo, plate,
+  hall, fx) > ad-lib words > vocal words (+ a vocal-part word like double/backing/harmony -> adlibs) > instruments
+  (kick, snare, hats, perc, bass, keys, guitar, synth, in that order) > vocal-part words alone (adlibs) > FX sound words
+  (transition, riser...) > song parts alone (verse, hook -> vox). Same rules in roleFromName (C++) and guessRole
+  (roles.js), both checked against tests/role_names.txt (77 names; tools/rolecheck/rolecheck.js in ctest when node is
+  there). ADD a line there for any name the user reports.
 
 ## v0.9.1: Tracks page scroll bar (2026-10-15)
 - User (mid-presets): "On the tracks page, when there are multiple tracks and scrolling is needed lets replace the scroll

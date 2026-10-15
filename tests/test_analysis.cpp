@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <fstream>
 #include <random>
 #include <vector>
 
@@ -275,14 +276,23 @@ namespace
 
 TEST_CASE ("Analyze Mix: roles from names (same rules as the interface)", "[analysis]")
 {
-    CHECK (roleFromName ("Kick") == Role::kick);
-    CHECK (roleFromName ("808") == Role::bass);
-    CHECK (roleFromName ("Lead Vox") == Role::vox);
-    CHECK (roleFromName ("Adlibs") == Role::adlibs);
-    CHECK (roleFromName ("Hi Hat") == Role::hats);
-    CHECK (roleFromName ("Vox Double") == Role::adlibs);
-    CHECK (roleFromName ("Rhodes") == Role::keys);
-    CHECK_FALSE (roleFromName ("Analog Lab V 01").has_value());
+    // The table both copies of the rules are checked against (the interface's in tools/rolecheck).
+    std::ifstream file (MIXOLOGY_TESTS_DIR "/role_names.txt");
+    REQUIRE (file.good());
+    int checked = 0;
+    for (std::string line; std::getline (file, line);)
+    {
+        const auto bar = line.find (" | ");
+        if (line.empty() || line[0] == '#' || bar == std::string::npos) continue;
+        const auto name = line.substr (0, bar), want = line.substr (bar + 3);
+        const auto got = roleFromName (name);
+        INFO ("'" << name << "' reads as '" << nameWords (name) << "'");
+        CHECK ((got ? std::string (roleKey (*got)) : std::string ("-")) == want);
+        ++checked;
+    }
+    CHECK (checked > 50);
+    CHECK (nameWords ("LeadVox2 (Hook)") == "lead vox 2 hook");
+    CHECK (nameWords ("  Hi-Hat__808s ") == "hi hat 808 s");
     CHECK (roleFromKey ("synth") == Role::synth);
     CHECK (groupOf (Role::hats) == Group::drums);
 }

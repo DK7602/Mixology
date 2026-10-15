@@ -381,6 +381,7 @@ input.num {
   width: 110px; height: 40px; border-radius: 9px; border: 1.5px solid var(--select-edge); background: var(--well); color: var(--text);
   font: 500 19px var(--font); padding: 0 10px; text-align: right;
 }
+select option { background: var(--well); color: var(--text); }
 
 .manual { font-size: 18px; line-height: 1.5; color: var(--text); user-select: text; }
 .manual h1 { font-size: 30px; color: var(--gold); margin: 0 0 10px; }
