@@ -141,7 +141,12 @@ juce::WebBrowserComponent::Options MixWebEditor::makeEditorOptions()
                                  int slot = -1;
                                  std::uint32_t generation = 0;
                                  const bool link = parseLinkKey (key, slot, generation);
-                                 int applied = 0;
+                                 int applied = 0, first = -1;
+                                 // The undo history: how it was, and how it is after these moves.
+                                 mixology::proc::Values from {};
+                                 const bool known = key == "mix" ? (from = processor.procValues(), true)
+                                                                 : link && mixology::link::processRegistry().readProc (slot, generation, from);
+                                 auto to = from;
                                  if (auto* changes = args.size() > 1 ? args[1].getDynamicObject() : nullptr)
                                      for (const auto& p : changes->getProperties())
                                      {
@@ -151,8 +156,15 @@ juce::WebBrowserComponent::Options MixWebEditor::makeEditorOptions()
                                          if (key == "mix") processor.setProc (index, value);
                                          else if (link) mixology::link::processRegistry().requestProc (slot, generation, index, value);
                                          else continue;
+                                         to[static_cast<std::size_t> (index)] = mixology::proc::sanitise (index, value);
+                                         if (first < 0) first = index;
                                          ++applied;
                                      }
+                                 if (known && first >= 0)
+                                 {
+                                     const std::string page = mixology::history::pageOf (first);
+                                     recordProc (key, from, to, page + " on " + targetWords (key), "proc:" + key.toStdString() + ":" + page);
+                                 }
                                  complete (applied);
                              })
         .withNativeFunction ("spaceDuck", [this] (const juce::Array<juce::var>& args, auto complete)
@@ -168,6 +180,19 @@ juce::WebBrowserComponent::Options MixWebEditor::makeEditorOptions()
                                          if (d.count < mixology::link::kMaxDuckSources)
                                              if (const auto hash = static_cast<std::uint32_t> (static_cast<juce::int64> (h)); hash != 0)
                                                  d.hashes[static_cast<std::size_t> (d.count++)] = hash;
+                                 for (const auto& l : mixology::link::processRegistry().links (mixology::link::nowMs()))
+                                     if (l.slot == slot && l.generation == generation)
+                                     {
+                                         mixology::history::Change c;
+                                         c.what = mixology::history::What::duck;
+                                         c.hash = l.identity.hasName ? l.nameHash : 0u;
+                                         c.track = l.identity.hasName ? l.identity.name : std::string();
+                                         c.slot = slot;
+                                         c.generation = generation;
+                                         for (int i = 0; i < l.duck.count; ++i) c.listBefore.push_back (l.duck.hashes[static_cast<std::size_t> (i)]);
+                                         for (int i = 0; i < d.count; ++i) c.listAfter.push_back (d.hashes[static_cast<std::size_t> (i)]);
+                                         hub.recordHistory ("Space ducking on " + targetWords (key), "duck:" + key.toStdString(), { c });
+                                     }
                                  mixology::link::processRegistry().requestDuck (slot, generation, d);
                                  procListCountdown = 0;   // the list shows it with the next frames
                                  complete (true);
@@ -580,7 +605,58 @@ juce::var MixWebEditor::presetApply (const juce::String& key, const juce::String
     const auto to = forTarget (*p, t.values);
     hub.rememberPresetUndo (key, p->name, t.values);
     writePresetTarget (key, t.values, to);
+    recordProc (key, t.values, to, "Preset '" + p->name + "' on " + targetWords (key), "");
     return result (true, "Loaded " + q (name) + " on " + q (t.name) + ". UNDO puts back what it had.");
+}
+
+std::string MixWebEditor::targetWords (const juce::String& key)
+{
+    if (key == "mix") return "the Full Mix";
+    int slot = -1;
+    std::uint32_t generation = 0;
+    if (parseLinkKey (key, slot, generation))
+        for (const auto& l : mixology::link::processRegistry().links (mixology::link::nowMs()))
+            if (l.slot == slot && l.generation == generation && l.identity.hasName) return "'" + l.identity.name + "'";
+    return "a track";
+}
+
+void MixWebEditor::recordProc (const juce::String& key, const mixology::proc::Values& from, const mixology::proc::Values& to,
+                               const std::string& what, const std::string& group)
+{
+    using namespace mixology;
+    history::Change base;
+    base.what = history::What::proc;
+    if (key == "mix")
+    {
+        base.fullMix = true;
+        base.track = "Full Mix";
+    }
+    else
+    {
+        int slot = -1;
+        std::uint32_t generation = 0;
+        if (! parseLinkKey (key, slot, generation)) return;
+        base.slot = slot;
+        base.generation = generation;
+        for (const auto& l : link::processRegistry().links (link::nowMs()))
+            if (l.slot == slot && l.generation == generation && l.identity.hasName)
+            {
+                base.hash = l.nameHash;
+                base.track = l.identity.name;
+            }
+    }
+    std::vector<history::Change> changes;
+    for (int i = 0; i < proc::count; ++i)
+    {
+        const auto k = static_cast<std::size_t> (i);
+        if (std::abs (to[k] - from[k]) < 1.0e-6f) continue;
+        auto c = base;
+        c.index = i;
+        c.before = from[k];
+        c.after = to[k];
+        changes.push_back (std::move (c));
+    }
+    hub.recordHistory (what, group, std::move (changes));
 }
 
 juce::var MixWebEditor::presetSave (const juce::String& key, const juce::String& rawName)
@@ -604,6 +680,7 @@ juce::var MixWebEditor::presetUndo (const juce::String& key)
     const auto t = readPresetTarget (key);
     if (! t.ok) return result (false, "This track's Mixology Link isn't answering: pick the track again.");
     writePresetTarget (key, t.values, before);
+    recordProc (key, t.values, before, "Undo preset '" + name + "' on " + targetWords (key), "");
     return result (true, "Back to how " + q (t.name) + " was before " + q (juce::String::fromUTF8 (name.c_str())) + ".");
 }
 

@@ -1,10 +1,10 @@
 # Mixology manual
 
-Manual for version 0.9.2 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
+Manual for version 0.10.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
-on your vocals and Masterology after it, the setup check, and presets).
+on your vocals and Masterology after it, the setup check, presets, and the History: undo any change Mixology made).
 
 **Setup check.** While the song plays, Mixology watches for problems in the Cubase project that no mixing move can
 fix, and puts them at the top of the Mix Assistant (Overview), and in the Tracks page's top bar (click it for the
@@ -37,7 +37,9 @@ fix):
 | Polish (and Auto Mix): EQ, compression, vocal reverb / delay and the mix's tone proposed for you | Live |
 | Master page's finishing knobs (Glue, Tilt, Width, Trim on the Full Mix) | Live |
 | Suite link: Voxology on your vocals (VOX tag, no second compressor / reverb / delay), Masterology's goal on the Master page, the hand-off to Masterology | Live (needs Voxology 0.47 and Masterology 0.26 or newer) |
-| Setup check: a mono group or output on the way, vocals without Mixology Link (Mix Assistant, Tracks page) | Live: this is what we're testing now |
+| Setup check: a mono group or output on the way, vocals without Mixology Link (Mix Assistant, Tracks page) | Live |
+| Presets: Mixology's starting points and yours, for tracks, FX channels and the Full Mix | Live |
+| History: every change Mixology makes, step by step; go back to any point and forward again | Live: this is what we're testing now |
 
 Nothing changes your sound until you ask: every processing module starts switched off (the audio passes
 through bit for bit). What can change it: the Cubase faders and pans Mixology moves, the Assist EQ / Trim in
@@ -416,6 +418,33 @@ track with Mixology Link, or the Full Mix.
 - A preset sets every processing control (what it doesn't use is switched off), so a track sounds the same whatever
   it had before. It never touches the fader, the Trim, the Assist EQ or what Space ducks under. A track keeps its own
   routing: an FX channel stays a 100 % wet return.
+
+## History (undo any change Mixology made)
+
+The **clock-arrow button** in the top bar (left of the gear) opens the **History**: every change Mixology makes, newest
+first, with the time. A step is one thing you did in Mixology:
+- a fader drag, a pan, mute or solo, a Trim (on the Tracks page);
+- knobs turned on one page of one track ("EQ on 'Lead Vox 1'"): turning more knobs there within a few seconds adds to
+  the same step, so a drag is one step, not fifty;
+- a preset loaded, Space ducking set;
+- Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect (each one step, with every fader, pan, Assist EQ
+  and control it changed), and their own Undo;
+- Restore (one channel, or Restore all).
+
+Click a step to see each change ("'Kick' fader −3.2 → −5.0 dB"). Then:
+- **GO BACK HERE**: the mix goes back to how it was right after that step. Every later step is undone: faders and pans
+  move back in Cubase, processing and Assist EQ go back in the Links. The undone steps stay, dimmed.
+- **REDO TO HERE** on a dimmed step: forward again, up to that step.
+- **UNDO** / **REDO** at the top: one step at a time. **UNDO EVERYTHING** at the bottom: back to the start.
+- Change something new after going back, and the dimmed steps are gone (as in any editor).
+
+Good to know:
+- A fader or pan you moved in Cubase itself after Mixology moved it stays where you put it (the log says so). Moves
+  you make in Cubase are not Mixology's: Cubase's own Edit > History has those.
+- Faders need the Cubase bridge connected; processing changes don't.
+- A track renamed or removed since: its processing changes are skipped (the message names it).
+- The history lasts while Cubase is open (the last 200 steps), the same for every Mixology window. It isn't saved with
+  the project.
 
 ## How it works with Voxology and Masterology
 

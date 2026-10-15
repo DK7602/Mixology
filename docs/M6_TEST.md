@@ -1,5 +1,17 @@
 # Milestone 6 tests
 
+## Version 0.10.0 (10 minutes): the History
+
+You asked for an undo history. The new **clock-arrow button** in the top bar (left of the gear) opens it.
+1. Make a few changes in Mixology: drag a fader on the Tracks page, turn an EQ knob on a vocal, load a preset, run
+   **Auto Mix** (Apply). Open the History: each is one step, newest first. Click one to see what it changed.
+2. Click **GO BACK HERE** on the first step (the fader drag): the later steps go dim, the faders move back in Cubase,
+   the EQ and the preset go back. Listen.
+3. **REDO** at the top brings back one step; **REDO TO HERE** on the newest brings back everything.
+4. Go back one step, then turn a knob: the dimmed steps are gone (as in any editor).
+
+**Report**: anything that didn't go back (or went back wrong)? Anything missing from the list?
+
 ## Version 0.9.2 (5 minutes): your three bugs from the presets test
 
 Passed on your side already: the scroll bar (0.9.1) and the mono Beat warning (0.8.1). Thank you.

@@ -1,5 +1,7 @@
 #include "BridgeHub.h"
 
+#include <array>
+#include <cmath>
 #include <regex>
 #include <set>
 
@@ -51,6 +53,72 @@ namespace
         so->setProperty ("steps", stringList (sg.steps));
         so->setProperty ("tracks", stringList (sg.tracks));
         return juce::var (so);
+    }
+
+    // ---- the undo history's changes ----
+    using HChange = mixology::history::Change;
+    using HWhat = mixology::history::What;
+
+    HChange channelChange (HWhat what, std::uint32_t hash, const std::string& title)
+    {
+        HChange c;
+        c.what = what;
+        c.hash = hash;
+        c.track = title;
+        return c;
+    }
+
+    HChange linkChange (HWhat what, const mixology::link::LinkInfo& l)
+    {
+        HChange c;
+        c.what = what;
+        c.hash = l.identity.hasName ? l.nameHash : 0u;
+        c.track = l.identity.hasName ? l.identity.name : std::string();
+        c.slot = l.slot;
+        c.generation = l.generation;
+        return c;
+    }
+
+    std::array<float, mixology::history::kAssistValues> assistValues (const mixology::AssistSettings& a)
+    {
+        return { a.lowCutHz, a.mudHz, a.mudDb, a.pocketHz, a.pocketDb };
+    }
+
+    void setAssistValue (mixology::AssistSettings& a, int index, float v)
+    {
+        switch (index)
+        {
+            case mixology::history::assistLowCutHz: a.lowCutHz = v; break;
+            case mixology::history::assistMudHz: a.mudHz = v; break;
+            case mixology::history::assistMudDb: a.mudDb = v; break;
+            case mixology::history::assistPocketHz: a.pocketHz = v; break;
+            default: a.pocketDb = v; break;
+        }
+    }
+
+    /** The Assist EQ values that differ, as history changes on that Link. */
+    std::vector<HChange> assistChanges (const mixology::link::LinkInfo& l, const mixology::AssistSettings& from, const mixology::AssistSettings& to)
+    {
+        std::vector<HChange> out;
+        const auto a = assistValues (from), b = assistValues (to);
+        for (int i = 0; i < mixology::history::kAssistValues; ++i)
+        {
+            const auto k = static_cast<std::size_t> (i);
+            if (std::abs (a[k] - b[k]) < 1.0e-6f) continue;
+            auto c = linkChange (HWhat::assist, l);
+            c.index = i;
+            c.before = a[k];
+            c.after = b[k];
+            out.push_back (std::move (c));
+        }
+        return out;
+    }
+
+    std::vector<std::uint32_t> duckList (const mixology::link::DuckSources& d)
+    {
+        std::vector<std::uint32_t> v;
+        for (int i = 0; i < d.count; ++i) v.push_back (d.hashes[static_cast<std::size_t> (i)]);
+        return v;
     }
 
     juce::String stamp (double seconds)
@@ -235,6 +303,7 @@ void BridgeHub::timerCallback()
             lastApply.waitingForBridge = false;
             lastApply.bridgeUndo = bridge.planProgress().undo;
         }
+        finishPendingPlans();
         ++applyVersion;
     }
 
@@ -589,7 +658,7 @@ void BridgeHub::analysisTick (const mixology::AnalysisFrame& mixFrame, bool play
     if (analysis.secondsHeard() >= 60.0 || analysis.full()) finishAnalysis();
 }
 
-void BridgeHub::restoreAssist (std::uint32_t hash, int& restored, int& kept)
+void BridgeHub::restoreAssist (std::uint32_t hash, int& restored, int& kept, std::vector<mixology::history::Change>* changes)
 {
     auto& registry = mixology::link::processRegistry();
     const auto links = registry.links (mixology::link::nowMs());
@@ -601,7 +670,13 @@ void BridgeHub::restoreAssist (std::uint32_t hash, int& restored, int& kept)
         const auto* l = uniqueLink (links, h);
         if (l == nullptr) continue;             // its Link isn't there right now: keep the point
         const auto d = eqRestore.decide (h, l->assist);
-        if (d.action == mixology::AssistRestore::Action::restore) { registry.requestAssist (l->slot, l->generation, d.to); ++restored; }
+        if (d.action == mixology::AssistRestore::Action::restore)
+        {
+            if (changes != nullptr)
+                for (auto& c : assistChanges (*l, l->assist, d.to)) changes->push_back (std::move (c));
+            registry.requestAssist (l->slot, l->generation, d.to);
+            ++restored;
+        }
         else if (d.action == mixology::AssistRestore::Action::keptYours) ++kept;
         done.push_back (h);
     }
@@ -1082,6 +1157,7 @@ juce::var BridgeHub::getState (bool includeLog)
     juce::Array<juce::var> setupList;   // the setup check: a mono group on the way, vocals without a Link...
     for (const auto& sg : setupNow) setupList.add (suggestionVar (sg));
     o->setProperty ("setup", setupList);
+    o->setProperty ("history", historyState());
     int changedFaders = 0, changedEq = 0;
     o->setProperty ("changedCount", changedTotal (&changedFaders, &changedEq));
     o->setProperty ("changedFaders", changedFaders);
@@ -1137,6 +1213,88 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
     const double number = value.isVoid() ? 0.0 : static_cast<double> (value);
     juce::var planResult;
 
+    // The undo history: what a strip command is about to change, from the strip as it is now (recorded below
+    // once it went through). Moves on one channel within a few seconds join one step (a drag, a pan turned).
+    std::vector<HChange> hist;
+    std::string histWhat, histGroup;
+    const bool stripShown = ref.slot >= 0 && ref.slot < bridge.slotCount() && bridge.slot (ref.slot).present
+                            && bridge.slot (ref.slot).hash == ref.hash;
+    if (stripShown)
+    {
+        const auto& s = bridge.slot (ref.slot);
+        const auto title = "'" + s.title + "'";
+        const auto group = ":" + std::to_string (s.hash);
+        auto add = [&] (HWhat what, double before, double after, const std::string& label, const std::string& key) {
+            auto c = channelChange (what, s.hash, s.title);
+            c.before = before;
+            c.after = after;
+            hist.push_back (c);
+            histWhat = label + " " + title;
+            histGroup = key + group;
+        };
+        if (name == "setDb" || name == "minusInf" || name == "nudge" || name == "fader")
+        {
+            const double db = name == "setDb" ? number : name == "minusInf" ? mixology::FaderLaw::kMinusInf
+                            : name == "nudge" ? s.volumeDb + number : bridge.faderLaw().toDb (number);
+            add (HWhat::fader, s.volumeDb, db, "Fader", "fader");
+            hist.back().beforePos = s.volume;
+            if (name == "fader") hist.back().afterPos = number;
+        }
+        else if (name == "pan" && s.hasPan) add (HWhat::pan, s.pan, number, "Pan", "pan");
+        else if (name == "mute") add (HWhat::mute, s.mute ? 1.0 : 0.0, static_cast<bool> (value) ? 1.0 : 0.0, static_cast<bool> (value) ? "Mute" : "Unmute", "mute");
+        else if (name == "solo") add (HWhat::solo, s.solo ? 1.0 : 0.0, static_cast<bool> (value) ? 1.0 : 0.0, static_cast<bool> (value) ? "Solo" : "Solo off", "solo");
+        else if (name == "trim" && ref.slot < static_cast<int> (stripLinks.size()))
+        {
+            const auto& sl = stripLinks[static_cast<std::size_t> (ref.slot)];
+            add (HWhat::trim, sl.trimDb, juce::jlimit (-24.0, 24.0, number), "Trim", "trim");
+            hist.back().slot = sl.slot;
+            hist.back().generation = sl.generation;
+        }
+        else if (name == "restore")
+        {
+            if (const auto p = bridge.restorePoints().find (s.hash); p != bridge.restorePoints().end())
+            {
+                const auto& rp = p->second;
+                add (HWhat::fader, s.volumeDb, bridge.faderLaw().toDb (rp.volume), "Restore", "");
+                hist.back().beforePos = s.volume;
+                hist.back().afterPos = rp.volume;
+                if (rp.hasPan && s.hasPan) add (HWhat::pan, s.pan, rp.pan, "Restore", "");
+                add (HWhat::mute, s.mute ? 1.0 : 0.0, rp.mute ? 1.0 : 0.0, "Restore", "");
+                add (HWhat::solo, s.solo ? 1.0 : 0.0, rp.solo ? 1.0 : 0.0, "Restore", "");
+            }
+            histWhat = "Restore " + title;
+            histGroup.clear();
+        }
+    }
+    std::vector<HChange> restoreAllHist;
+    if (name == "restoreAll")
+        for (const auto& [hash, p] : bridge.restorePoints())
+        {
+            const auto kf = bridge.knownFaders().find (hash);
+            if (p.ambiguous || bridge.isProtected (hash) || kf == bridge.knownFaders().end() || ! bridge.isChanged (p)) continue;
+            const auto& f = kf->second;
+            auto c = channelChange (HWhat::fader, hash, p.title);
+            c.before = f.db;
+            c.beforePos = f.volume;
+            c.after = bridge.faderLaw().toDb (p.volume);
+            c.afterPos = p.volume;
+            restoreAllHist.push_back (c);
+            if (p.hasPan && f.hasPan)
+            {
+                auto pc = channelChange (HWhat::pan, hash, p.title);
+                pc.before = f.pan;
+                pc.after = p.pan;
+                restoreAllHist.push_back (pc);
+            }
+            for (auto [what, was, to] : { std::tuple { HWhat::mute, f.mute, p.mute }, std::tuple { HWhat::solo, f.solo, p.solo } })
+            {
+                auto mc = channelChange (what, hash, p.title);
+                mc.before = was ? 1.0 : 0.0;
+                mc.after = to ? 1.0 : 0.0;
+                restoreAllHist.push_back (mc);
+            }
+        }
+
     if (name == "setDb")          r = bridge.setVolumeDb (ref, number, t);
     else if (name == "minusInf")  r = bridge.setVolumeDb (ref, mixology::FaderLaw::kMinusInf, t);
     else if (name == "nudge")     r = bridge.nudgeDb (ref, number, t);
@@ -1155,7 +1313,7 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
         // The channel's fader / pan / mute / solo, and the Assist EQ Mixology set on its Link.
         int eqBack = 0, eqKept = 0;
         const bool valid = ref.slot >= 0 && ref.slot < bridge.slotCount() && bridge.slot (ref.slot).present && bridge.slot (ref.slot).hash == ref.hash;
-        if (valid && ! bridge.isProtected (ref.hash)) restoreAssist (ref.hash, eqBack, eqKept);
+        if (valid && ! bridge.isProtected (ref.hash)) restoreAssist (ref.hash, eqBack, eqKept, &hist);
         const bool hadFaderPoint = bridge.restorePoints().count (ref.hash) != 0;
         if (hadFaderPoint || eqBack + eqKept == 0) r = bridge.restoreChannel (ref, t);
         if (eqBack > 0) info = "Assist EQ back to how it was.";
@@ -1167,7 +1325,9 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
     {
         const auto sum = bridge.restoreAll (t);
         int eqBack = 0, eqKept = 0;
-        restoreAssist (0, eqBack, eqKept);
+        if (sum.restored + sum.outsideBank > 0) hist = std::move (restoreAllHist);
+        restoreAssist (0, eqBack, eqKept, &hist);
+        histWhat = "Restore all";
         const bool fadersDidNothing = sum.restored + sum.outsideBank + sum.skipped == 0;
         info = fadersDidNothing && eqBack + eqKept > 0 ? std::string() : sum.message;
         if (eqBack > 0) info += std::string (info.empty() ? "" : " ") + "Assist EQ back to how it was on " + std::to_string (eqBack) + " track" + (eqBack == 1 ? "" : "s") + ".";
@@ -1338,14 +1498,22 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
         openPorts();
     }
     else if (name == "copyLog")   juce::SystemClipboard::copyTextToClipboard (logText());
+    else if (name == "history")   planResult = historyList();
+    else if (name == "historyTo" || name == "historyUndo" || name == "historyRedo")
+    {
+        r = moveHistory (name, static_cast<std::uint64_t> (static_cast<juce::int64> (number)), info);
+        planResult = historyList();
+    }
     else                          r = { false, "Unknown command." };
+
+    if (r.ok && ! hist.empty()) history.record (histWhat, histGroup, std::move (hist), wallClock());
 
     auto* o = new juce::DynamicObject();
     o->setProperty ("ok", r.ok);
     o->setProperty ("message", juce::String::fromUTF8 (r.message.c_str()));
     o->setProperty ("warning", juce::String::fromUTF8 (r.warning.c_str()));
     o->setProperty ("info", juce::String::fromUTF8 (info.c_str()));
-    if (! planResult.isVoid()) o->setProperty (name == "planUndo" ? "undo" : "plan", planResult);
+    if (! planResult.isVoid()) o->setProperty (name == "planUndo" ? "undo" : name.startsWith ("history") ? "history" : "plan", planResult);
     return juce::var (o);
 }
 
@@ -1607,15 +1775,17 @@ mixology::BridgeSession::Result BridgeHub::applyCurrentPlan (const juce::var& pi
     {
         std::vector<PlanStep> v;
         for (auto& [h, st] : steps) v.push_back (st);
+        next.bridgeSerial = bridge.planProgress().serial + 1;
         const auto r = bridge.applyPlan (currentPlan.title, std::move (v), now());
         if (! r.ok) return r;
         next.waitingForBridge = true;
-        next.bridgeSerial = bridge.planProgress().serial + 1;
     }
+    std::vector<HChange> hist;   // the undo history (the faders join once Cubase has moved them)
     for (const auto& [hash, a] : eq)
     {
         const auto* l = uniqueLink (links, hash);
         next.assist.push_back ({ l->slot, l->generation, l->assist, hash });
+        for (auto& c : assistChanges (*l, l->assist, a)) hist.push_back (std::move (c));
         eqRestore.noteSet (hash, l->assist, a);
         registry.requestAssist (l->slot, l->generation, a);
     }
@@ -1626,10 +1796,18 @@ mixology::BridgeSession::Result BridgeHub::applyCurrentPlan (const juce::var& pi
         ProcUndo u;
         u.fullMix = c->fullMix;
         mixology::proc::Values before {};
-        if (c->fullMix) before = mixProc.get();
+        HChange target;
+        target.what = HWhat::proc;
+        if (c->fullMix)
+        {
+            before = mixProc.get();
+            target.fullMix = true;
+            target.track = "Full Mix";
+        }
         else
         {
             const auto* l = uniqueLink (links, c->hash);
+            target = linkChange (HWhat::proc, *l);
             u.slot = l->slot;
             u.generation = l->generation;
             if (! registry.readProc (l->slot, l->generation, before)) before = mixology::proc::defaults();
@@ -1640,18 +1818,29 @@ mixology::BridgeSession::Result BridgeHub::applyCurrentPlan (const juce::var& pi
                 mixology::link::DuckSources d;
                 for (auto h : c->duck)
                     if (d.count < mixology::link::kMaxDuckSources) d.hashes[static_cast<std::size_t> (d.count++)] = h;
+                auto dc = linkChange (HWhat::duck, *l);
+                dc.listBefore = duckList (l->duck);
+                dc.listAfter = duckList (d);
+                hist.push_back (std::move (dc));
                 registry.requestDuck (l->slot, l->generation, d);
             }
         }
         for (const auto& [id, v] : c->proc)
         {
             u.before.push_back ({ id, before[static_cast<std::size_t> (id)] });
+            auto pc = target;
+            pc.index = id;
+            pc.before = before[static_cast<std::size_t> (id)];
+            pc.after = v;
+            hist.push_back (std::move (pc));
             if (c->fullMix) mixProc.set (id, v);
             else registry.requestProc (u.slot, u.generation, id, v);
         }
         procTracks.insert (c->hash);
         next.procs.push_back (std::move (u));
     }
+    if (const auto id = history.record (currentPlan.title, "", std::move (hist), wallClock(), ! steps.empty()); id != 0 && ! steps.empty())
+        pendingPlans.push_back ({ next.bridgeSerial, id, steps });
     lastApply = std::move (next);
     ++applyVersion;
 
@@ -1670,6 +1859,7 @@ mixology::BridgeSession::Result BridgeHub::undoLastApply (std::string& info)
 {
     if (! lastApply.valid) return { false, "Nothing to undo." };
     if (bridge.busy() || lastApply.waitingForBridge) return { false, "Wait until Mixology has finished applying." };
+    const auto serial = bridge.planProgress().serial + 1;
     if (! lastApply.bridgeUndo.empty())
     {
         if (bridge.link() != mixology::BridgeSession::Link::connected) return { false, "Not connected to Cubase: can't put the faders back yet." };
@@ -1677,19 +1867,59 @@ mixology::BridgeSession::Result BridgeHub::undoLastApply (std::string& info)
         if (! r.ok) return r;
     }
     auto& registry = mixology::link::processRegistry();
+    const auto links = registry.links (mixology::link::nowMs());
+    auto linkAt = [&links] (int slot, std::uint32_t generation) -> const mixology::link::LinkInfo* {
+        for (const auto& l : links)
+            if (l.slot == slot && l.generation == generation) return &l;
+        return nullptr;
+    };
+    std::vector<HChange> hist;   // the undo history: this Undo is a step of its own
     for (const auto& a : lastApply.assist)
     {
+        if (const auto* l = linkAt (a.slot, a.generation))
+            for (auto& c : assistChanges (*l, l->assist, a.before)) hist.push_back (std::move (c));
         registry.requestAssist (a.slot, a.generation, a.before);
         eqRestore.noteUndo (a.hash, a.before);
     }
+    const auto mixNowValues = mixProc.get ? mixProc.get() : mixology::proc::defaults();
     for (auto it = lastApply.procs.rbegin(); it != lastApply.procs.rend(); ++it)   // newest first: the oldest value wins
     {
+        const auto* l = it->fullMix ? nullptr : linkAt (it->slot, it->generation);
+        mixology::proc::Values current = mixNowValues;
+        if (! it->fullMix && (l == nullptr || ! registry.readProc (it->slot, it->generation, current))) current = mixology::proc::defaults();
         for (const auto& [id, v] : it->before)
         {
+            if (it->fullMix || l != nullptr)
+            {
+                HChange c;
+                if (l != nullptr) c = linkChange (HWhat::proc, *l);
+                else { c.what = HWhat::proc; c.fullMix = true; c.track = "Full Mix"; }
+                c.index = id;
+                c.before = current[static_cast<std::size_t> (id)];
+                c.after = v;
+                hist.push_back (std::move (c));
+            }
             if (it->fullMix) { if (mixProc.set) mixProc.set (id, v); }
             else registry.requestProc (it->slot, it->generation, id, v);
         }
-        if (it->duckSet) registry.requestDuck (it->slot, it->generation, it->duckBefore);
+        if (it->duckSet)
+        {
+            if (l != nullptr)
+            {
+                auto dc = linkChange (HWhat::duck, *l);
+                dc.listBefore = duckList (l->duck);
+                dc.listAfter = duckList (it->duckBefore);
+                hist.push_back (std::move (dc));
+            }
+            registry.requestDuck (it->slot, it->generation, it->duckBefore);
+        }
+    }
+    const bool viaBridge = ! lastApply.bridgeUndo.empty();
+    if (const auto id = history.record ("Undo " + lastApply.title, "", std::move (hist), wallClock(), viaBridge); id != 0 && viaBridge)
+    {
+        PendingPlan pending { serial, id, {} };
+        for (const auto& st : lastApply.bridgeUndo) pending.targets[st.hash] = st;
+        pendingPlans.push_back (std::move (pending));
     }
     info = "Undoing " + lastApply.title + ": everything it changed goes back.";
     lastApply = {};
@@ -1730,4 +1960,273 @@ mixology::BridgeSession::Result BridgeHub::listenToReference (bool toReference, 
     }
     if (info.empty()) info = toReference ? "Playing '" + ref.name + "' alone." : "Back to your mix ('" + ref.name + "' muted).";
     return { true, {} };
+}
+
+// ---------------------------------------------------------------------------------------------
+// The undo history: every change Mixology makes, step by step. Recorded where each change is made (strip commands,
+// plans, Restore here; the processing pages, presets and ducking from the editor); played back here.
+
+double BridgeHub::wallClock()
+{
+    return static_cast<double> (juce::Time::currentTimeMillis()) * 0.001;
+}
+
+std::uint64_t BridgeHub::recordHistory (const std::string& what, const std::string& group, std::vector<mixology::history::Change> changes)
+{
+    return history.record (what, group, std::move (changes), wallClock());
+}
+
+void BridgeHub::finishPendingPlans()
+{
+    // A plan has finished: its undo says which channels it really changed and how each was; what it asked for is
+    // what they are now.
+    const auto& pr = bridge.planProgress();
+    for (auto it = pendingPlans.begin(); it != pendingPlans.end();)
+    {
+        if (pr.serial < it->serial) { ++it; continue; }
+        std::vector<HChange> changes;
+        if (pr.serial == it->serial)
+            for (const auto& u : pr.undo)
+            {
+                const auto target = it->targets.find (u.hash);
+                if (target == it->targets.end()) continue;
+                const auto& to = target->second;
+                if (u.setVolume)
+                {
+                    auto c = channelChange (HWhat::fader, u.hash, u.title);
+                    c.before = bridge.faderLaw().toDb (u.position);
+                    c.beforePos = u.position;
+                    c.after = to.exactVolume ? bridge.faderLaw().toDb (to.position) : to.db;
+                    c.afterPos = to.exactVolume ? to.position : -1.0;
+                    changes.push_back (std::move (c));
+                }
+                if (u.setPan && to.setPan)
+                {
+                    auto c = channelChange (HWhat::pan, u.hash, u.title);
+                    c.before = u.pan;
+                    c.after = to.pan;
+                    changes.push_back (std::move (c));
+                }
+                for (auto [what, set, was, now] : { std::tuple { HWhat::mute, u.setMute && to.setMute, u.mute, to.mute },
+                                                    std::tuple { HWhat::solo, u.setSolo && to.setSolo, u.solo, to.solo } })
+                    if (set)
+                    {
+                        auto c = channelChange (what, u.hash, u.title);
+                        c.before = was ? 1.0 : 0.0;
+                        c.after = now ? 1.0 : 0.0;
+                        changes.push_back (std::move (c));
+                    }
+            }
+        history.amend (it->step, std::move (changes));
+        it = pendingPlans.erase (it);
+    }
+}
+
+const mixology::link::LinkInfo* BridgeHub::linkOf (const std::vector<mixology::link::LinkInfo>& links, const mixology::history::Change& c) const
+{
+    if (c.hash != 0) return uniqueLink (links, c.hash);
+    for (const auto& l : links)
+        if (l.slot == c.slot && l.generation == c.generation) return &l;
+    return nullptr;
+}
+
+mixology::BridgeSession::Result BridgeHub::playHistory (const std::vector<mixology::history::Change>& changes, const std::string& what, std::string& info)
+{
+    using PlanStep = mixology::BridgeSession::PlanStep;
+    auto& registry = mixology::link::processRegistry();
+    const auto links = registry.links (mixology::link::nowMs());
+    std::map<std::uint32_t, PlanStep> steps;
+    std::map<std::pair<int, std::uint32_t>, std::pair<const mixology::link::LinkInfo*, mixology::AssistSettings>> assist;
+    std::set<std::string> missing;
+    int onLinks = 0;
+    for (const auto& c : changes)
+        switch (c.what)
+        {
+            case HWhat::fader: case HWhat::pan: case HWhat::mute: case HWhat::solo:
+            {
+                // Each only if it is still where Mixology left it: a fader you moved in Cubase since stays yours.
+                auto& st = steps[c.hash];
+                st.hash = c.hash;
+                st.title = c.track;
+                if (c.what == HWhat::fader)
+                {
+                    st.setVolume = true;
+                    st.exactVolume = c.afterPos >= 0.0;
+                    st.position = std::max (0.0, c.afterPos);
+                    st.db = c.after;
+                    st.checkFrom = true;
+                    st.fromDb = c.before;
+                }
+                else if (c.what == HWhat::pan)
+                {
+                    st.setPan = true;
+                    st.pan = c.after;
+                    st.checkPan = true;
+                    st.fromPan = c.before;
+                }
+                else if (c.what == HWhat::mute) { st.setMute = true; st.mute = c.after > 0.5; }
+                else { st.setSolo = true; st.solo = c.after > 0.5; }
+                break;
+            }
+            case HWhat::proc:
+                if (c.fullMix)
+                {
+                    if (mixProc.set) { mixProc.set (c.index, static_cast<float> (c.after)); ++onLinks; }
+                    else missing.insert ("Full Mix");
+                }
+                else if (const auto* l = linkOf (links, c))
+                {
+                    registry.requestProc (l->slot, l->generation, c.index, static_cast<float> (c.after));
+                    ++onLinks;
+                }
+                else missing.insert (c.track);
+                break;
+            case HWhat::assist:
+                if (const auto* l = linkOf (links, c))
+                {
+                    auto it = assist.find ({ l->slot, l->generation });
+                    if (it == assist.end()) it = assist.emplace (std::pair { l->slot, l->generation }, std::pair { l, l->assist }).first;
+                    setAssistValue (it->second.second, c.index, static_cast<float> (c.after));
+                }
+                else missing.insert (c.track);
+                break;
+            case HWhat::trim:
+                if (const auto* l = linkOf (links, c))
+                {
+                    registry.requestTrim (l->slot, l->generation, static_cast<float> (c.after));
+                    ++onLinks;
+                }
+                else missing.insert (c.track);
+                break;
+            case HWhat::duck:
+                if (const auto* l = linkOf (links, c))
+                {
+                    mixology::link::DuckSources d;
+                    for (auto h : c.listAfter)
+                        if (d.count < mixology::link::kMaxDuckSources) d.hashes[static_cast<std::size_t> (d.count++)] = h;
+                    registry.requestDuck (l->slot, l->generation, d);
+                    ++onLinks;
+                }
+                else missing.insert (c.track);
+                break;
+        }
+    for (const auto& [key, la] : assist)
+    {
+        const auto* l = la.first;
+        if (l->identity.hasName) eqRestore.noteSet (l->nameHash, l->assist, la.second);
+        registry.requestAssist (l->slot, l->generation, la.second);
+        ++onLinks;
+    }
+    steps.erase (0);
+    if (! steps.empty())
+    {
+        std::vector<PlanStep> v;
+        for (auto& [h, st] : steps) v.push_back (st);
+        const auto r = bridge.applyPlan (what, std::move (v), now());
+        if (! r.ok) return r;
+    }
+
+    info = what + ".";
+    if (! steps.empty()) info += " Moving " + std::to_string (steps.size()) + " channel" + (steps.size() == 1 ? "" : "s") + " in Cubase.";
+    if (! missing.empty())
+    {
+        std::string names;
+        for (const auto& n : missing) names += (names.empty() ? "'" : ", '") + (n.empty() ? std::string ("a track without a name") : n) + "'";
+        info += " Skipped " + names + ": " + (missing.size() == 1 ? "its" : "their") + " Mixology Link isn't there (renamed or removed?).";
+    }
+    (void) onLinks;
+    return { true, {} };
+}
+
+mixology::BridgeSession::Result BridgeHub::moveHistory (const juce::String& how, std::uint64_t id, std::string& info)
+{
+    if (bridge.busy() || history.busy()) return { false, "Mixology is still moving faders: try again in a moment." };
+    const auto was = history.current();
+    std::string what;
+    std::vector<HChange> changes;
+    if (how == "historyUndo")
+    {
+        if (const auto* s = history.find (was)) what = "Undo: " + s->what;
+        changes = history.undo();
+    }
+    else if (how == "historyRedo")
+    {
+        const auto& all = history.steps();
+        for (const auto& s : all)
+            if (s.undone) { what = "Redo: " + s.what; break; }
+        changes = history.redo();
+    }
+    else
+    {
+        const auto* s = history.find (id);
+        what = id == 0 ? std::string ("Back to the start") : s != nullptr ? (s->undone ? "Forward to: " : "Back to: ") + s->what : std::string();
+        changes = history.moveTo (id);
+    }
+    if (history.current() == was) return { false, "Nothing to undo or redo there." };
+
+    const bool needsCubase = std::any_of (changes.begin(), changes.end(), [] (const HChange& c) {
+        return c.what == HWhat::fader || c.what == HWhat::pan || c.what == HWhat::mute || c.what == HWhat::solo;
+    });
+    if (needsCubase && bridge.link() != mixology::BridgeSession::Link::connected)
+    {
+        history.moveTo (was);   // nothing happened
+        return { false, "Not connected to Cubase, so the faders can't move back (Settings > Cubase Bridge)." };
+    }
+    const auto r = playHistory (changes, what, info);
+    if (! r.ok)
+    {
+        history.moveTo (was);
+        return r;
+    }
+    // The single-step undos elsewhere (a tool's Undo, a preset's UNDO) would now undo something else: the history
+    // takes over.
+    lastApply = {};
+    presetUndo.clear();
+    ++applyVersion;
+    return { true, {} };
+}
+
+juce::var BridgeHub::historyList() const
+{
+    constexpr std::size_t kLines = 40;
+    auto* o = new juce::DynamicObject();
+    juce::Array<juce::var> steps;
+    for (const auto& s : history.steps())
+    {
+        auto* so = new juce::DynamicObject();
+        so->setProperty ("id", static_cast<juce::int64> (s.id));
+        so->setProperty ("time", s.time * 1000.0);   // ms, for the interface's Date
+        so->setProperty ("what", juce::String::fromUTF8 (s.what.c_str()));
+        so->setProperty ("summary", juce::String::fromUTF8 (mixology::history::summary (s).c_str()));
+        juce::Array<juce::var> lines;
+        for (std::size_t i = 0; i < s.changes.size() && i < kLines; ++i)
+            lines.add (juce::String::fromUTF8 (mixology::history::describe (s.changes[i]).c_str()));
+        if (s.changes.size() > kLines) lines.add ("... and " + juce::String (static_cast<int> (s.changes.size() - kLines)) + " more");
+        so->setProperty ("lines", lines);
+        so->setProperty ("undone", s.undone);
+        so->setProperty ("pending", s.pending);
+        steps.add (juce::var (so));
+    }
+    o->setProperty ("steps", steps);
+    o->setProperty ("current", static_cast<juce::int64> (history.current()));
+    o->setProperty ("version", static_cast<juce::int64> (history.version()));
+    o->setProperty ("busy", history.busy() || bridge.busy());
+    return juce::var (o);
+}
+
+juce::var BridgeHub::historyState() const
+{
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("version", static_cast<juce::int64> (history.version()));
+    o->setProperty ("count", static_cast<int> (history.steps().size()));
+    o->setProperty ("canUndo", history.canUndo());
+    o->setProperty ("canRedo", history.canRedo());
+    const auto* cur = history.find (history.current());
+    o->setProperty ("undoWhat", cur != nullptr ? juce::String::fromUTF8 (cur->what.c_str()) : juce::String());
+    juce::String redo;
+    for (const auto& s : history.steps())
+        if (s.undone) { redo = juce::String::fromUTF8 (s.what.c_str()); break; }
+    o->setProperty ("redoWhat", redo);
+    o->setProperty ("busy", history.busy() || bridge.busy());
+    return juce::var (o);
 }

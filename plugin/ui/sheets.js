@@ -4,9 +4,12 @@ import { $, el, icon, fmt, popupMenu } from "./ui.js";
 import { GENRES } from "./mixstyles.js";
 import { ROLES, ROLE_ORDER, roleIcon } from "./roles.js";
 
+let historyRender = null;
+
 export function sheet(title) {
   const pop = $("style-pop");
   if (pop) pop.remove();
+  historyRender = null;
   $("sheet-title").textContent = title;
   const body = $("sheet-body");
   body.innerHTML = "";
@@ -142,7 +145,97 @@ function bridgePanel(app, root) {
 }
 
 export function hookBridge(app) {
-  app.on("bridge", (b) => { if (bridgeRender && $("overlay").classList.contains("shown")) bridgeRender(b); });
+  app.on("bridge", (b) => {
+    if (!$("overlay").classList.contains("shown")) return;
+    if (bridgeRender) bridgeRender(b);
+    if (historyRender) historyRender(b);
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
+// History: every change Mixology makes, step by step. Go back to right after any step, or forward again until
+// something new is changed.
+
+export function openHistory(app) {
+  const body = sheet("HISTORY");
+  body.className = "scroll";
+  const opened = new Set();   // steps showing their details
+  let seen = -1, busy = false;
+  const btn = (parent, text, onClick, extra = {}) => {
+    const b = el("button", "small-btn", parent, extra);
+    b.textContent = text;
+    b.addEventListener("click", (e) => { e.stopPropagation(); onClick(); });
+    return b;
+  };
+  const time = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  async function go(name, id) {
+    if (busy) return;
+    busy = true;
+    await app.command(name, { value: id || 0 });
+    busy = false;
+    render();
+  }
+
+  async function render() {
+    const r = await app.native.bridgeCommand("history", 0);
+    const h = r && r.history;
+    if (!h) { body.textContent = "The history needs the plug-in."; return; }
+    seen = h.version;
+    body.innerHTML = "";
+    const steps = h.steps || [];
+    const undoable = steps.filter((s) => !s.undone), redoable = steps.filter((s) => s.undone);
+
+    const top = el("div", "", body, { display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "10px" });
+    const undo = btn(top, undoable.length ? `UNDO: ${undoable[undoable.length - 1].what}` : "UNDO", () => go("historyUndo"));
+    undo.disabled = !undoable.length || h.busy;
+    const redo = btn(top, redoable.length ? `REDO: ${redoable[0].what}` : "REDO", () => go("historyRedo"));
+    redo.disabled = !redoable.length || h.busy;
+    for (const b of [undo, redo]) Object.assign(b.style, { maxWidth: "520px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+    if (h.busy) el("span", "", top, { fontSize: "17px", color: "var(--amber)" }).textContent = "Moving faders in Cubase...";
+    el("p", "", body, { fontSize: "17px", color: "var(--text-dim)", margin: "0 0 12px", lineHeight: "1.4" }).textContent =
+      "Every change Mixology makes, newest first: faders, pans, mute and solo, Trim, every knob, presets, the smart tools and Restore. " +
+      "GO BACK HERE puts the mix back to how it was right after that step. Undone steps stay (dimmed) until you change something new. " +
+      "Moves you make in Cubase itself aren't here (Cubase's Edit > History has those).";
+
+    if (!steps.length) {
+      el("p", "", body, { fontSize: "19px", margin: "18px 0" }).textContent = "Nothing yet. Every change Mixology makes from now on shows up here.";
+      return;
+    }
+
+    for (const s of steps.slice().reverse()) {
+      const isNow = s.id === h.current;
+      const c = el("div", "card", body, { position: "relative", padding: "10px 16px", marginBottom: "8px", cursor: "pointer",
+        opacity: s.undone ? "0.5" : "1", borderColor: isNow ? "var(--gold)" : "" });
+      const line = el("div", "", c, { display: "flex", alignItems: "center", gap: "14px" });
+      el("div", "", line, { fontSize: "16px", color: "var(--text-dim)", width: "92px", flex: "none" }).textContent = time(s.time);
+      const text = el("div", "", line, { flex: "1", minWidth: "0" });
+      el("div", "", text, { fontSize: "19px", fontWeight: "600" }).textContent = s.what + (s.undone ? "  (undone)" : "");
+      el("div", "", text, { fontSize: "16px", color: "var(--text-dim)", marginTop: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }).textContent = s.summary;
+      if (isNow) el("span", "", line, { fontSize: "16px", fontWeight: "600", color: "var(--gold)", letterSpacing: "0.06em" }).textContent = "NOW";
+      else if (s.pending) el("span", "", line, { fontSize: "16px", color: "var(--amber)" }).textContent = "moving...";
+      else {
+        const b = btn(line, s.undone ? "REDO TO HERE" : "GO BACK HERE", () => go("historyTo", s.id));
+        b.disabled = h.busy;
+      }
+      if (opened.has(s.id) && s.lines && s.lines.length) {
+        const list = el("div", "", c, { margin: "8px 0 2px 106px", fontSize: "16px", lineHeight: "1.45", color: "var(--text)" });
+        for (const l of s.lines) el("div", "", list).textContent = l;
+      }
+      c.addEventListener("click", () => { if (opened.has(s.id)) opened.delete(s.id); else opened.add(s.id); render(); });
+    }
+    const start = el("div", "card", body, { position: "relative", display: "flex", alignItems: "center", gap: "14px", padding: "10px 16px", marginBottom: "8px",
+      borderColor: h.current === 0 ? "var(--gold)" : "" });
+    el("div", "", start, { width: "92px", flex: "none" });
+    const st = el("div", "", start, { flex: "1" });
+    el("div", "", st, { fontSize: "19px", fontWeight: "600" }).textContent = "The start";
+    el("div", "", st, { fontSize: "16px", color: "var(--text-dim)", marginTop: "2px" }).textContent = "How the mix was before the first step above.";
+    if (h.current === 0) el("span", "", start, { fontSize: "16px", fontWeight: "600", color: "var(--gold)", letterSpacing: "0.06em" }).textContent = "NOW";
+    else btn(start, "UNDO EVERYTHING", () => go("historyTo", 0)).disabled = h.busy;
+    el("p", "", body, { fontSize: "16px", color: "var(--text-dim)", margin: "12px 0 0", lineHeight: "1.4" }).textContent =
+      "Click a step to see each change. A fader you moved in Cubase since Mixology moved it stays where you put it. The history lasts while Cubase is open (the last 200 steps).";
+  }
+  historyRender = (b) => { if (b && b.history && b.history.version !== seen && !busy) render(); };
+  render();
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -102,12 +102,40 @@
       analysis: { state: B.an.state, seconds: B.an.seconds, enough: 20, max: 60, playing: B.an.playing, heard: chans.filter((c) => c.link).length, report: B.an.report },
       apply: { ...B.apply },
       linksSeen: chans.filter((c) => c.link).length, linksPaired: slots.filter((s) => s.linkStatus === "matched").length, linksShared: true,
-      setup: SETUP_DEMO ? SETUP : [],
+      setup: SETUP_DEMO ? SETUP : [], history: hState(),
       channelNames: B.channelsRead ? chans.map((c) => c.name) : [], viewOffset: B.channelsRead ? B.offset : -1,
       lastMove: B.lastMove, lawPoints: 37, marks: [6, 0, -6, -12, -24, -36, -48].map((db) => ({ db, pos: toNorm(db) })),
       logVersion: B.log.length, log: withLog ? B.log.slice() : undefined,
     };
   };
+  // The undo history (a few demo steps; going back and forward only flips them here).
+  const H = { version: 1, steps: [] };
+  {
+    const t0 = Date.now() - 9 * 60 * 1000;
+    const demo = [
+      ["Auto Mix", "9 faders, 3 pans and processing on 4 tracks", ["'Kick' fader \u22125.0 \u2192 \u22123.2 dB", "'808' fader \u22126.1 \u2192 \u22124.0 dB", "'Lead Vox' Comp Threshold \u221218.0 dB \u2192 \u221222.0 dB"]],
+      ["Preset 'Kick: Punch' on 'Kick'", "'Kick': 9 controls", ["'Kick' EQ on", "'Kick' EQ 1 Gain 0.0 dB \u2192 +3.0 dB"]],
+      ["EQ on 'Lead Vox'", "'Lead Vox' EQ 3 Gain +1.0 dB \u2192 +2.5 dB", ["'Lead Vox' EQ 3 Gain +1.0 dB \u2192 +2.5 dB"]],
+      ["Fader 'Hats'", "'Hats' fader \u22128.0 \u2192 \u221210.5 dB", ["'Hats' fader \u22128.0 \u2192 \u221210.5 dB"]],
+    ];
+    demo.forEach(([what, summary, lines], i) => H.steps.push({ id: i + 1, time: t0 + i * 130000, what, summary, lines, undone: false, pending: false }));
+  }
+  const hCurrent = () => { const done = H.steps.filter((s) => !s.undone); return done.length ? done[done.length - 1].id : 0; };
+  const hList = () => ({ steps: H.steps.map((s) => ({ ...s })), current: hCurrent(), version: H.version, busy: false });
+  const hState = () => {
+    const done = H.steps.filter((s) => !s.undone), undone = H.steps.filter((s) => s.undone);
+    return { version: H.version, count: H.steps.length, canUndo: done.length > 0, canRedo: undone.length > 0,
+      undoWhat: done.length ? done[done.length - 1].what : "", redoWhat: undone.length ? undone[0].what : "", busy: false };
+  };
+  const hMove = (id) => {
+    const at = id === 0 ? 0 : H.steps.findIndex((s) => s.id === id) + 1;
+    if (at < 0 || (id !== 0 && at === 0)) return { ok: false, message: "That step isn't there any more." };
+    H.steps.forEach((s, i) => { s.undone = i >= at; });
+    H.version++;
+    B.version++;
+    return { ok: true, info: id === 0 ? "Back to the start." : `Back to: ${H.steps[at - 1].what}.`, history: hList() };
+  };
+
   const snap = (c) => { if (!B.restore[c.hash]) { B.restore[c.hash] = { v: c.volume, p: c.pan, m: c.mute, s: c.solo }; log(`Restore point saved for '${c.name}': ${text(c.volume)} dB, pan ${panText(c.pan)}.`); } };
   function command(name, arg) {
     const fail = (message) => ({ ok: false, message });
@@ -117,6 +145,10 @@
       log("Bank: " + ["reset", "previous bank", "next bank", "shift left", "shift right"][value] + ".");
       return { ok: true };
     }
+    if (name === "history") return { ok: true, history: hList() };
+    if (name === "historyTo") return hMove(value || 0);
+    if (name === "historyUndo") { const done = H.steps.filter((s) => !s.undone); return done.length ? hMove(done.length > 1 ? done[done.length - 2].id : 0) : { ok: false, message: "Nothing to undo." }; }
+    if (name === "historyRedo") { const u = H.steps.find((s) => s.undone); return u ? hMove(u.id) : { ok: false, message: "Nothing to redo." }; }
     if (name === "bankTo") { B.offset = Math.max(0, Math.min(Math.max(0, chans.length - 12), Math.round(value))); log(`Bank: showing channel ${B.offset + 1} first.`); return { ok: true }; }
     if (name === "readChannels") { B.channelsRead = true; B.version++; return { ok: true }; }
     if (name === "refresh" || name === "reconnect") { B.version++; return { ok: true }; }

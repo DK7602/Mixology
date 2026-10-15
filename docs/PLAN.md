@@ -150,7 +150,23 @@ Mixology on a mono channel) in the Mix Assistant, the Tracks page and the Stereo
 v0.8.2: the CPU check (48 real Links + Mixology timed on every build): a typical 48-track session about 17 % of one core.
 v0.9.0: presets (PRESETS tab): Mixology's starting points per kind of track, FX returns and the Full Mix; yours, saved
 for every song; one-step UNDO per track.
-Still to come in M6: an undo history (every change Mixology makes, step by step), code signing (later).
+v0.9.2: fixes from the presets test (the Presets track list on Windows, renamed channels listed as unlinked, roles
+from whole words in the name: "Keys - Verse" is keys).
+v0.10.0: the History (clock-arrow button): every change Mixology makes, step by step (faders, pans, mute / solo, Trim,
+every control, presets, ducking, the smart tools and their Undo, Restore); go back to right after any step, forward
+again; one bridge plan moves the faders back, the Links take the rest.
+Proposed next (asked 2026-10-15, waiting for the user's go): Auto Analyze, see below.
+Still to come in M6: code signing (later).
+
+### Proposed - Auto Analyze (asked 2026-10-15: "once an analyze mix has been run should have an auto analyze option")
+- After the first Analyze Mix, a switch "Keep listening": whenever the song plays, Mixology keeps adding what it hears
+  (it already watches the mix five times a second for the setup check) and refreshes the advice every 15 seconds of
+  new playback, only when something changed enough to matter.
+- Cheap by design: the Links analyse anyway (that's how the meters work), so keeping listening costs the hub a few
+  moments a second and one evaluation every 15 s (milliseconds). It never re-reads the faders by stepping the
+  MixConsole (that's the visible part of Analyze Mix): it uses the faders it already knows and its own moves.
+- Pauses by itself: transport stopped, a plan applying, the window closed for long, or the mix not playing.
+- Never changes the mix: advice only. Auto Mix / Polish still ask first.
 
 ### Later - Other DAWs (asked 2026-10-15: "add that to the plan for later")
 Today everything except the Tracks page and Auto Mix's fader / pan moves works in any VST3 host (Studio One, Reaper,

@@ -180,7 +180,7 @@ button { font-family: inherit; }
 
 #tabs {
   position: absolute; left: 342px; top: 146px; width: 1076px; height: 60px;
-  display: grid; grid-template-columns: repeat(8, 1fr) 1.15fr 58px 58px; gap: 8px;
+  display: grid; grid-template-columns: repeat(8, 1fr) 1.15fr 58px 58px 58px; gap: 8px;
 }
 .tab {
   border-radius: 10px; border: 1.5px solid var(--tab-edge); background: var(--tab); color: var(--text);

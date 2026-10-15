@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-15, v0.9.2)
+# Mixology: resume here (updated 2026-10-15, v0.10.0)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,35 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## v0.10.0: the History (undo history, M6) (2026-10-15)
+- User: "please fix these items, then continue with undo history". Also asked about Auto Analyze: answered with a
+  proposal (docs/PLAN.md "Proposed - Auto Analyze"), NOT built: wait for the user's go.
+- dsp History.h/.cpp (tests/test_history.cpp): Change {what fader|pan|mute|solo|trim|proc|assist|duck, hash, fullMix,
+  track, slot/generation (Links without a name), index, before/after, before/afterPos (exact fader positions),
+  listBefore/After (duck)}; Step {id, time (wall clock s), what, group, changes, undone, pending}. record() merges into
+  the newest step with the same group within 2.5 s (first 'before' kept), drops no-op changes and empty steps, drops
+  the undone steps (new branch); pending steps (a bridge plan) get their faders via amend(). moveTo(id) (0 = start):
+  back = later steps reversed newest first, forward = undone steps oldest first, one change per value (first before,
+  last after); undone steps are always a suffix. describe()/summary() plain words (Unicode minus, arrow).
+- Hub (BridgeHub): `history`; recordHistory() for the editor. Recorded: strip commands (setDb, minusInf, nudge, fader
+  drag with exact position, pan, mute, solo, trim; group "<kind>:<hash>"), restore (from the restore point) and
+  restoreAll (restore points that isChanged, before from knownFaders), Assist EQ restore (restoreAssist(..., &changes)),
+  applyCurrentPlan (assist, procs, duck now; faders/pans via PendingPlan {serial, step, targets} -> finishPendingPlans()
+  on the plan's serial, using planProgress().undo as before + targets as after), undoLastApply ("Undo X", same way).
+  Commands: history -> {history}, historyTo (id), historyUndo, historyRedo -> moveHistory: refuses while bridge/plan
+  busy, reverts the history if Cubase isn't connected and faders are needed; playHistory: faders/pans/mute/solo as ONE
+  bridge plan (checkFrom / checkPan: moved-in-Cubase-since stays), procs on Links (by hash, else slot/generation) or
+  mixProc, assist merged per Link (+ eqRestore.noteSet), trim, duck. Clears lastApply and presetUndo (the single-step
+  undos would undo something else). getState.history {version, count, canUndo, canRedo, undoWhat, redoWhat, busy};
+  stateVersion includes history.version().
+- Editor (MixWebEditor): procSet records (group "proc:<key>:<page>", what "<Page> on '<track>'"), presetApply /
+  presetUndo ("Preset 'X' on 'T'" / "Undo preset ..."), spaceDuck ("Space ducking on 'T'"). recordProc() diffs values.
+- UI: header icon tab #tab-history (icon "history"; #tabs grid now 8 x 1fr, 1.15fr, 3 x 58px), sheets.js
+  openHistory: UNDO / REDO with names, newest-first cards (time, what, summary, NOW / GO BACK HERE / REDO TO HERE,
+  click for the change lines), "The start" with UNDO EVERYTHING; re-renders on bridge history.version. mock.js has 4
+  demo steps (H, hList, hMove).
+- Not saved with the project (lasts while Cubase is open, 200 steps); Cubase-side moves aren't recorded.
 
 ## v0.9.2: fixes from the user's presets test (2026-10-15)
 - User confirmed: scroll bar works; the mono Beat warning (setup check) was detected.

@@ -4,6 +4,7 @@
 
 #include "mixology/AssistRestore.h"
 #include "mixology/BridgeSession.h"
+#include "mixology/History.h"
 #include "mixology/LinkRegistry.h"
 #include "mixology/MixAnalysis.h"
 #include "mixology/MixPlanner.h"
@@ -65,7 +66,7 @@ public:
 
     /** Everything the Tracks page and Settings > Cubase Bridge show. */
     juce::var getState (bool includeLog);
-    std::uint64_t stateVersion() const { return bridge.stateVersion() + linkVersion + analysisVersion + applyVersion + suiteVersion + setupVersion; }
+    std::uint64_t stateVersion() const { return bridge.stateVersion() + linkVersion + analysisVersion + applyVersion + suiteVersion + setupVersion + history.version(); }
 
     /** The setup check's issues right now (a mono group, vocals without a Link...), as Mix Assistant suggestions. */
     const std::vector<mixology::mix::Suggestion>& setupIssues() const { return setupNow; }
@@ -86,6 +87,7 @@ public:
         Analyze Mix: analyze, analyzeFinish, analyzeCancel, setRole, setExcluded, setReference.
         Milestone 4: plan(tool) -> { plan }, planApply { id, picked, allowBig, headroom }, planUndo -> { bridge },
         refListen ("ref" / "mix"), vocalTaste ("right" / "quieter" / "louder" / "style"), setMusicBus { hash, value }.
+        Undo history: history -> { history }, historyTo (step id, 0 = the start), historyUndo, historyRedo.
         Returns { ok, message, warning, info }. */
     juce::var command (const juce::String& name, const juce::var& arg);
 
@@ -119,6 +121,11 @@ public:
         const auto* v = voxologyOn (hash);
         return v != nullptr && (v->flags & suite::VocalInfo::processing) != 0 && (v->flags & suite::VocalInfo::compressor) != 0;
     }
+
+    // ---- The undo history: every change Mixology makes, step by step (message thread) -----------------------
+    /** Records a change made outside the hub (the processing pages, presets, Space ducking). Changes with the same
+        group within a few seconds join one step (a knob being turned). Returns the step's id (0: nothing changed). */
+    std::uint64_t recordHistory (const std::string& what, const std::string& group, std::vector<mixology::history::Change>);
 
     /** A track's role (yours, or guessed from its name), for the Space page ("duck under the vocal"). */
     std::optional<mixology::mix::Role> trackRole (std::uint32_t hash, const std::string& name) const { return roleFor (hash, name); }
@@ -172,8 +179,9 @@ private:
         std::uint32_t hash = 0;
     };
     mixology::AssistRestore eqRestore;   // the Assist EQ before Mixology's first change, per track (Restore)
-    /** Puts the Assist EQ back on one track (or all when hash == 0). Counts restored and kept-yours tracks. */
-    void restoreAssist (std::uint32_t hash, int& restored, int& kept);
+    /** Puts the Assist EQ back on one track (or all when hash == 0). Counts restored and kept-yours tracks; adds
+        what it changed to `changes` (the undo history). */
+    void restoreAssist (std::uint32_t hash, int& restored, int& kept, std::vector<mixology::history::Change>* changes = nullptr);
     int changedTotal (int* faders = nullptr, int* eq = nullptr) const;
     struct ProcUndo   // processing a plan changed: the values before, per Link (or the Full Mix)
     {
@@ -195,6 +203,25 @@ private:
         std::vector<ProcUndo> procs;
     };
     LastApply lastApply;
+
+    // The undo history. A plan's faders join their step once Cubase has moved them (the bridge knows then which
+    // channels it really changed, and how each was before).
+    mixology::history::History history;
+    struct PendingPlan
+    {
+        std::uint64_t serial = 0;   // the bridge plan's serial once it has finished
+        std::uint64_t step = 0;
+        std::map<std::uint32_t, mixology::BridgeSession::PlanStep> targets;
+    };
+    std::vector<PendingPlan> pendingPlans;
+    void finishPendingPlans();
+    /** Plays changes from the history back: faders / pans / mute / solo as one bridge plan, the rest on the Links. */
+    mixology::BridgeSession::Result playHistory (const std::vector<mixology::history::Change>&, const std::string& what, std::string& info);
+    mixology::BridgeSession::Result moveHistory (const juce::String& how, std::uint64_t id, std::string& info);
+    juce::var historyList() const;
+    juce::var historyState() const;
+    static double wallClock();   // seconds since 1970: when a step happened
+    const mixology::link::LinkInfo* linkOf (const std::vector<mixology::link::LinkInfo>&, const mixology::history::Change&) const;
     std::uint64_t applyVersion = 0, seenPlanSerial = 0;
     std::uint64_t seenNoPanVersion = 0;   // the bridge's No pan list, as last saved in trackSettings
     void syncNoPan();

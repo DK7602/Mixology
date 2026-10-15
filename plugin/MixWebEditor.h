@@ -59,6 +59,11 @@ private:
         mixology::proc::Values values {};
     };
     PresetTarget readPresetTarget (const juce::String& key);
+    /** The undo history: the controls that differ between `from` and `to` on a target, as one step (or added to the
+        last one when `group` matches within a few seconds: a knob being turned). */
+    void recordProc (const juce::String& key, const mixology::proc::Values& from, const mixology::proc::Values& to,
+                     const std::string& what, const std::string& group);
+    std::string targetWords (const juce::String& key);   // "'Lead Vox 1'", or "the Full Mix"
     void writePresetTarget (const juce::String& key, const mixology::proc::Values& from, const mixology::proc::Values& to);
     juce::var presetList (const juce::String& key);
     juce::var presetApply (const juce::String& key, const juce::String& name, bool factory);
