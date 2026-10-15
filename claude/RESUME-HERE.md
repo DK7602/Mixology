@@ -49,6 +49,9 @@ sends higher-resolution art, re-run it.
   0.9, Clip 0.7, Analog 0.7, Limiter 0.4, Comp 0.2, Transient 0.2, Gate 0.1, Stereo 0.1, EQ / Tone / Loudness / Final ~0.
 - Fix: the idle chain (every module off) 3.6 -> 1.3 us per block: setValues returns early when the values are
   unchanged (lastInput), idle() measures the peak once (in = out), the limiter's feed ring wraps without %.
+- Windows CI (run 38673842830, bbc82d1, green): off 7.2 % (0.14 % per Link), typical 17.0 % (0.34 %), all on 158 %; worst
+  (99.9 %) 11 / 25 % (a calmer machine than the VM). Per module: Space 0.8, Multiband 0.7, Harmonics 0.55, Limiter 0.5,
+  Clip 0.5, Analog 0.47, Comp 0.19, Transient 0.19.
 - Not measured: Mixology's hub / web view with the window open (needs WebView2; headless can't).
 - MANUAL: Performance section (numbers, heaviest modules, buffer / ASIO-Guard / one FX reverb / close the window).
   CI package ships docs/M6_TEST.md now (it still shipped M5_TEST).
