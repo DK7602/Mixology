@@ -103,6 +103,7 @@
       apply: { ...B.apply },
       linksSeen: chans.filter((c) => c.link).length, linksPaired: slots.filter((s) => s.linkStatus === "matched").length, linksShared: true,
       setup: SETUP_DEMO ? SETUP : [],
+      channelNames: B.channelsRead ? chans.map((c) => c.name) : [], viewOffset: B.channelsRead ? B.offset : -1,
       lastMove: B.lastMove, lawPoints: 37, marks: [6, 0, -6, -12, -24, -36, -48].map((db) => ({ db, pos: toNorm(db) })),
       logVersion: B.log.length, log: withLog ? B.log.slice() : undefined,
     };
@@ -116,6 +117,8 @@
       log("Bank: " + ["reset", "previous bank", "next bank", "shift left", "shift right"][value] + ".");
       return { ok: true };
     }
+    if (name === "bankTo") { B.offset = Math.max(0, Math.min(Math.max(0, chans.length - 12), Math.round(value))); log(`Bank: showing channel ${B.offset + 1} first.`); return { ok: true }; }
+    if (name === "readChannels") { B.channelsRead = true; B.version++; return { ok: true }; }
     if (name === "refresh" || name === "reconnect") { B.version++; return { ok: true }; }
     if (name === "copyLog") { try { navigator.clipboard.writeText(B.log.join("\n")); } catch (e) { /* preview */ } return { ok: true }; }
     if (name === "analyze") {

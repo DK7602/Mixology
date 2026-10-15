@@ -243,6 +243,17 @@ namespace mixology
         Result bank (bridge::BankAction, double now);
         void requestDump (double now);
 
+        // ---- the whole project's channels, in MixConsole order (for the Tracks page's scroll bar) ------------
+        /** Learned by a fader scan that went through every page (scanAllChannels, or a plan that did); empty until then. */
+        const std::vector<std::uint32_t>& channelOrder() const { return order; }
+        const std::vector<std::string>& channelTitles() const { return orderTitles; }
+        /** Where the bank is: the position (in channelOrder) of the channel in the first slot; -1 when not known (no
+            scan yet, or the channels in view don't match it: a track was added, moved or renamed since). */
+        int viewOffset() const;
+        /** Moves the bank so the channel at `first` (in channelOrder) is in the first slot: reset, whole pages, then
+            single steps, the fewest that get there. Nothing else moves meanwhile (well under a second). */
+        Result showChannel (int first, double now);
+
         // ---- log -------------------------------------------------------------------------------
         const std::deque<LogLine>& logLines() const { return logBuffer; }
         std::uint64_t logVersion() const { return logCount; }
@@ -291,6 +302,10 @@ namespace mixology
             std::uint32_t originalFirst = 0, lastFirst = 0;
             int foundPage = -1, foundSlot = -1;
             bool restoring = false;
+            bool jump = false;          // only moving the bank (showChannel): no faders read
+            int jumpTarget = -1, jumpChecks = 0;
+            bool jumpSettling = false;
+            std::vector<std::pair<std::uint32_t, std::string>> seen;   // every channel the pages showed, in order
             std::deque<bridge::BankAction> pending;   // the way back, one step at a time
         };
         // A pan move is watched: if Cubase's pan doesn't follow within kPanLandSeconds, that channel has no
@@ -315,6 +330,7 @@ namespace mixology
         void sendBank (bridge::BankAction);
         static constexpr double kScanPageSeconds = 0.5;
         static constexpr double kScanStepSeconds = 0.08;   // between bank steps on the way back
+        static constexpr double kJumpSettleSeconds = 0.25; // showChannel: the bank's channels arrive before it checks
         static constexpr double kPlanPollSeconds = 0.05;
         static constexpr double kPlanSettleSeconds = 3.0;  // longest wait for a page's moves to land
         static constexpr double kPlanFromTolerance = 0.3;  // dB a fader may differ from what the plan saw
@@ -352,6 +368,9 @@ namespace mixology
         std::map<std::uint32_t, bool> readWarned;                 // hash -> warned about R this session
         std::map<std::uint32_t, KnownFader> faders;               // hash -> last fader level seen
         Scan scan;
+        std::vector<std::uint32_t> order;
+        std::vector<std::string> orderTitles;
+        void recordPage();
         std::map<std::uint32_t, PlanStep> planPending;
         PlanProgress plan;
         std::string moveResult;

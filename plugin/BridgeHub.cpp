@@ -1092,6 +1092,9 @@ juce::var BridgeHub::getState (bool includeLog)
     o->setProperty ("linksShared", mixology::link::processRegistryShared());
     o->setProperty ("lastMove", juce::String::fromUTF8 (bridge.lastMoveResult().c_str()));
     o->setProperty ("scanning", bridge.scanning());
+    // The Tracks page's scroll bar: every channel in MixConsole order (from the last fader scan) and where the bank is.
+    o->setProperty ("viewOffset", bridge.viewOffset());
+    o->setProperty ("channelNames", stringList (bridge.channelTitles()));
     o->setProperty ("analysis", analysisState());
     o->setProperty ("apply", applyState());
     o->setProperty ("lawPoints", static_cast<int> (bridge.faderLaw().size()));
@@ -1326,6 +1329,8 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
     }
     else if (name == "bank")      r = bridge.bank (static_cast<mixology::bridge::BankAction> (juce::jlimit (0, 4, static_cast<int> (number))), t);
     else if (name == "refresh")   bridge.requestDump (t);
+    else if (name == "bankTo")    r = bridge.showChannel (static_cast<int> (number), t);   // the Tracks page's scroll bar
+    else if (name == "readChannels") r = bridge.scanAllChannels (t);                      // learns the channels' order
     else if (name == "reconnect")
     {
         closePorts ("Reconnect pressed");

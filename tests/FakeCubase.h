@@ -29,6 +29,7 @@ struct FakeCubase
     int bankOffset = 0;
     int scriptVersion = 1;
     bool echoPanWrites = false;   // script v1 - v3: reports the pan it sent, even where no panner takes it
+    bool fullLastBank = false;    // "next" / shift right stop where the last bank is full (a host that does that)
     double quantum = 1.0 / 16384.0;   // Cubase may quantise positions; pretend it does
     bool alive = true;
     std::vector<std::vector<std::uint8_t>> toPlugin;
@@ -114,6 +115,7 @@ struct FakeCubase
                 if (action == BankAction::next) bankOffset += bankSize;
                 if (action == BankAction::previous) bankOffset = std::max (0, bankOffset - bankSize);
                 if (action == BankAction::shiftRight) bankOffset += 1;
+                if (fullLastBank) bankOffset = std::min (bankOffset, std::max (0, static_cast<int> (channels.size()) - bankSize));
                 if (action == BankAction::shiftLeft) bankOffset = std::max (0, bankOffset - 1);
                 if (action == BankAction::reset) bankOffset = 0;
                 dump();

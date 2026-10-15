@@ -850,3 +850,54 @@ TEST_CASE ("Bridge: muted and soloed-out channels aren't in the mix", "[bridge]"
     r.run (0.2);
     CHECK (r.session.isAudible (nameHash ("Hats")));
 }
+
+TEST_CASE ("Bridge: the project's channel order (from the fader scan), and showing any channel first", "[bridge]")
+{
+    Rig r;
+    r.run (0.2);
+    CHECK (r.session.channelOrder().empty());
+    CHECK (r.session.viewOffset() == -1);   // not known before a scan
+    CHECK_FALSE (r.session.showChannel (2, r.now).ok);
+    r.session.bank (BankAction::shiftRight, r.now);
+    r.run (0.2);
+    REQUIRE (r.session.scanAllChannels (r.now).ok);
+    r.run (3.0);
+    REQUIRE (r.session.channelOrder().size() == 11);
+    for (std::size_t i = 0; i < 11; ++i)
+    {
+        CHECK (r.session.channelOrder()[i] == nameHash (r.cubase.channels[i].name));
+        CHECK (r.session.channelTitles()[i] == r.cubase.channels[i].name);
+    }
+    CHECK (r.session.viewOffset() == 1);    // the user's bank, back after the scan
+
+    REQUIRE (r.session.showChannel (3, r.now).ok);
+    r.run (1.5);
+    CHECK (r.cubase.bankOffset == 3);
+    CHECK (r.session.viewOffset() == 3);
+    CHECK (r.session.slot (0).title == "Perc");
+    REQUIRE (r.session.showChannel (99, r.now).ok);   // past the end: the last full bank (11 - 8)
+    r.run (1.5);
+    CHECK (r.cubase.bankOffset == 3);
+    REQUIRE (r.session.showChannel (0, r.now).ok);
+    r.run (1.5);
+    CHECK (r.cubase.bankOffset == 0);
+    CHECK (r.cubase.setVolumeCount == 0);   // nothing but the bank moved
+}
+
+TEST_CASE ("Bridge: a host whose last bank stops short still lands on the channel asked for", "[bridge]")
+{
+    Rig r;
+    r.cubase.channels.clear();
+    for (int i = 0; i < 30; ++i) r.cubase.channels.push_back ({ "Track " + std::to_string (i + 1) });
+    r.cubase.fullLastBank = true;   // "next" from 16 shows 22 - 29, not 24 - 31
+    r.run (0.2);
+    REQUIRE (r.session.scanAllChannels (r.now).ok);
+    r.run (5.0);
+    REQUIRE (r.session.channelOrder().size() == 30);   // the overlapping last page adds only the new channels
+    CHECK (r.session.channelTitles().back() == "Track 30");
+    REQUIRE (r.session.showChannel (20, r.now).ok);    // reset, 3 x next (stops at 22), 4 x left (18), then 2 x right
+    r.run (3.0);
+    CHECK (r.cubase.bankOffset == 20);
+    CHECK (r.session.viewOffset() == 20);
+    CHECK (r.session.slot (0).title == "Track 21");
+}

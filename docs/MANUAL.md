@@ -1,6 +1,6 @@
 # Mixology manual
 
-Manual for version 0.9.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
+Manual for version 0.9.1 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -109,6 +109,12 @@ Every strip on the Tracks page moves its real MixConsole channel:
   adjusting until Cubase shows exactly that number.
 - **Pan** knob, **S** (solo) and **M** (mute).
 - Moves made in Cubase show up in Mixology right away.
+
+**More than 12 channels: the scroll bar** (top of the Tracks page) shows which 12 you see among all of them
+("13–24 of 41"). Drag it, click where you want to be, or scroll the mouse wheel over it: the strips follow when you let
+go (well under a second). The first time you open the Tracks page, Mixology reads every channel once to learn their
+order ("Reading your channels…": the strips step through your project and come back). After you add, move or
+rename tracks, touching the scroll bar reads them again.
 
 **Padlock = protect.** Click a strip's padlock and it turns gold: Mixology will never move that channel (later
 also Auto Mix won't). It is saved with the project and follows the channel when the bank moves.

@@ -1,5 +1,14 @@
 # Milestone 6 tests
 
+## Version 0.9.1 (3 minutes): the Tracks page scroll bar
+
+You asked for a scroll bar instead of the arrows. Install Mixology 0.9.1, open a song with more than 12 channels, go to
+**Tracks**. The first time, "Reading your channels…" (the strips step through the project and come back). Then:
+1. Drag the gold bar to the right: the text shows "13–24 of 41" and so on; let go and the strips jump there.
+2. Click anywhere on the bar, and scroll the mouse wheel over it (one channel per notch).
+
+**Report**: does it land on the right channels every time, also at the very end of the project?
+
 ## Version 0.9.0 (10 minutes): presets
 
 1. Install Mixology 0.9.0 (both .vst3). Open Mixology, click **PRESETS** (top bar).

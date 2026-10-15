@@ -996,9 +996,29 @@ namespace mixology
                 scan.nextAt = now + kScanStepSeconds;
                 return;
             }
+            if (scan.jump && scan.jumpChecks < 2)
+            {
+                // Did it land? (Cubase may stop a page short at the end of the project.) Finish with single steps.
+                if (! scan.jumpSettling)
+                {
+                    scan.jumpSettling = true;
+                    scan.nextAt = now + kJumpSettleSeconds;
+                    return;
+                }
+                scan.jumpSettling = false;
+                ++scan.jumpChecks;
+                const int at = viewOffset();
+                if (at >= 0 && at != scan.jumpTarget)
+                {
+                    for (int k = 0; k < std::abs (scan.jumpTarget - at); ++k)
+                        scan.pending.push_back (scan.jumpTarget > at ? BankAction::shiftRight : BankAction::shiftLeft);
+                    scan.nextAt = now;
+                    return;
+                }
+            }
             scan.active = false;
             if (scan.plan) finishPlan (now);
-            else addLog (now, "Read " + std::to_string (faders.size()) + " channel fader" + (faders.size() == 1 ? "" : "s") + " for Analyze Mix.");
+            else if (! scan.jump) addLog (now, "Read " + std::to_string (faders.size()) + " channel fader" + (faders.size() == 1 ? "" : "s") + " for Analyze Mix.");
             changed();
             return;
         }
@@ -1015,7 +1035,8 @@ namespace mixology
         }
         else
         {
-            // A new page is in view: remember where the channel that was first in view sits.
+            // A new page is in view: remember where the channel that was first in view sits, and the channels' order.
+            if (! scan.inPlace) recordPage();
             if (! scan.inPlace)
                 for (int i = 0; i < slotCount() && scan.foundPage < 0; ++i)
                     if (slot (i).present && scan.originalFirst != 0 && slot (i).hash == scan.originalFirst)
@@ -1065,6 +1086,19 @@ namespace mixology
             scan.nextAt = now + kScanPageSeconds;
             sendBank (BankAction::next);
             return;
+        }
+
+        // Every page seen (not a plan that stopped early): the project's channel order is known.
+        if (last && ! scan.seen.empty())
+        {
+            order.clear();
+            orderTitles.clear();
+            for (const auto& [hash, title] : scan.seen)
+                if (hash != 0)
+                {
+                    order.push_back (hash);
+                    orderTitles.push_back (title);
+                }
         }
 
         // Back to where the bank was: reset, whole pages, then single steps (spaced out, one per step).
@@ -1240,6 +1274,59 @@ namespace mixology
         for (const auto& n : plan.notes) addLog (now, "  " + n);
         ++plan.serial;
         changed();
+    }
+
+    void BridgeSession::recordPage()
+    {
+        for (int i = 0; i < slotCount(); ++i)
+        {
+            // In slot order, each channel once: a last page Cubase shows overlapping the one before adds only the new ones.
+            const auto& s = slot (i);
+            if (! s.present || s.hash == 0) continue;
+            if (std::none_of (scan.seen.begin(), scan.seen.end(), [&s] (const auto& c) { return c.first == s.hash; }))
+                scan.seen.push_back ({ s.hash, s.title });
+        }
+    }
+
+    int BridgeSession::viewOffset() const
+    {
+        if (order.empty() || slotCount() <= 0 || ! slot (0).present) return -1;
+        const auto it = std::find (order.begin(), order.end(), slot (0).hash);
+        if (it == order.end()) return -1;
+        const auto first = static_cast<std::size_t> (it - order.begin());
+        for (int i = 1; i < slotCount(); ++i)   // the rest in view must follow in the same order
+        {
+            const auto at = first + static_cast<std::size_t> (i);
+            if (! slot (i).present) { if (at < order.size()) return -1; continue; }
+            if (at >= order.size() || order[at] != slot (i).hash) return -1;
+        }
+        return static_cast<int> (first);
+    }
+
+    BridgeSession::Result BridgeSession::showChannel (int first, double now)
+    {
+        if (linkState != Link::connected) return { false, "Not connected to Cubase." };
+        if (scan.active) return { false, scan.plan ? "Mixology is still applying " + plan.what + "." : "Mixology is moving the bank: one moment." };
+        const int n = slotCount();
+        const int total = static_cast<int> (order.size());
+        if (n <= 0 || total == 0) return { false, "Mixology hasn't read your channels yet." };
+        first = std::clamp (first, 0, std::max (0, total - n));   // a full bank at the end
+        if (viewOffset() == first) return { true, {} };
+        cancelMoves ({}, now);
+        scan = {};
+        scan.active = true;
+        scan.restoring = true;
+        scan.jump = true;
+        scan.jumpTarget = first;
+        // From the start: whole pages to the nearest page start (one that exists), then single steps either way.
+        const int page = std::min ((first + n / 2) / n, std::max (0, (total - 1) / n));
+        scan.pending.push_back (BankAction::reset);
+        for (int p = 0; p < page; ++p) scan.pending.push_back (BankAction::next);
+        const int rest = first - page * n;
+        for (int k = 0; k < std::abs (rest); ++k) scan.pending.push_back (rest > 0 ? BankAction::shiftRight : BankAction::shiftLeft);
+        scan.nextAt = now;
+        changed();
+        return { true, {} };
     }
 
     BridgeSession::Result BridgeSession::bank (BankAction action, double now)

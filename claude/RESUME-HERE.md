@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-15, v0.9.0)
+# Mixology: resume here (updated 2026-10-15, v0.9.1)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,20 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## v0.9.1: Tracks page scroll bar (2026-10-15)
+- User (mid-presets): "On the tracks page, when there are multiple tracks and scrolling is needed lets replace the scroll
+  arrows with a scroll bar". The MIDI Remote has no "go to channel N": only reset / next / previous (12) / shift (1).
+- BridgeSession: the fader scan records every page's channels in slot order, each once (recordPage; a last page Cubase
+  might show overlapping adds only the new ones), committed to channelOrder / channelTitles when the scan saw every
+  page. viewOffset(): slot 0's position, -1 when the channels in view don't follow the order (stale). showChannel(first):
+  clamps to [0, total - slots], queues reset + next x round(first / slots) + shifts either way (scan.jump, spaced like
+  the scan's way back), then checks where it landed after 0.25 s and finishes with single shifts (twice at most): a host
+  whose last bank stops short still lands. Tests: order + jumps; FakeCubase.fullLastBank.
+- Hub: commands bankTo (offset) and readChannels (scanAllChannels); state viewOffset, channelNames.
+- UI: the bank arrows are gone; a 360 px gold scroll bar + "13-24 of 41": drag (sends on release), click (centred),
+  wheel (one channel per notch, sent after 250 ms). Reads the channels by itself once (Tracks page shown, never read,
+  at most once a minute); stale order -> read again when touched.
 
 ## v0.9.0: presets (2026-10-15)
 - User: "Go for it" (presets after the CPU check). Decided: processing presets (not whole-mix snapshots; those belong

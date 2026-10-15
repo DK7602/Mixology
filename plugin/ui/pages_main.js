@@ -354,12 +354,91 @@ export function buildTracks(root, app) {
   // Top bar: link status, bank buttons, Restore, hint
   const bar = el("div", "", panel, { position: "absolute", left: "16px", right: "16px", top: "10px", height: "48px", display: "flex", alignItems: "center", gap: "12px", fontSize: "18px" });
   const status = el("div", "", bar, { minWidth: "300px", whiteSpace: "nowrap" });
-  const bankBtns = el("div", "", bar, { display: "flex", gap: "8px" });
-  for (const [label, action, tip] of [["◀◀", 1, "Previous 12 channels"], ["◀", 3, "Shift one channel left"], ["▶", 4, "Shift one channel right"], ["▶▶", 2, "Next 12 channels"]]) {
-    const b = el("button", "small-btn", bankBtns);
-    b.textContent = label;
-    b.title = tip;
-    b.addEventListener("click", () => app.command("bank", action));
+  // Scroll bar: where the 12 strips sit among all your channels (MixConsole order, learned by reading every fader
+  // once). Drag the thumb, click the bar or scroll on it; Cubase's bank follows when you let go.
+  const scroller = el("div", "", bar, { display: "flex", alignItems: "center", gap: "10px" });
+  const SCROLL_W = 360;
+  const track = el("div", "", scroller, { position: "relative", width: SCROLL_W + "px", height: "26px", borderRadius: "13px", background: "var(--well)",
+    boxShadow: "inset 0 0 0 1px var(--panel-edge), inset 0 2px 5px rgba(0,0,0,0.5)", cursor: "pointer", touchAction: "none" });
+  const thumb = el("div", "", track, { position: "absolute", top: "3px", height: "20px", borderRadius: "10px", cursor: "grab",
+    background: "linear-gradient(180deg, var(--gold-hi), var(--gold) 55%, var(--gold-mid))", boxShadow: "0 0 8px rgba(227,178,96,0.45)" });
+  const trackText = el("div", "", track, { position: "absolute", inset: "0", display: "grid", placeItems: "center", fontSize: "15px", color: "var(--text-dim)", pointerEvents: "none" });
+  const where = el("div", "", scroller, { fontSize: "17px", color: "var(--text-dim)", whiteSpace: "nowrap", minWidth: "116px" });
+  const scroll = { total: 0, offset: -1, preview: -1, dragging: false, grab: 0, asked: -1e9, wheel: 0, wheelTimer: null };
+  const stageScale = () => document.getElementById("stage").getBoundingClientRect().width / 1440;
+  const maxOffset = () => Math.max(0, scroll.total - STRIPS);
+  const thumbW = () => (scroll.total > STRIPS ? Math.max(34, SCROLL_W * STRIPS / scroll.total) : SCROLL_W);
+  const xOf = (off) => (maxOffset() > 0 ? (SCROLL_W - thumbW()) * off / maxOffset() : 0);
+  const offAt = (x) => Math.round(clamp(x / Math.max(1, SCROLL_W - thumbW()), 0, 1) * maxOffset());
+  const rangeText = (off) => `${off + 1}–${Math.min(scroll.total, off + STRIPS)} of ${scroll.total}`;
+  function drawScroll() {
+    const shown = scroll.preview >= 0 ? scroll.preview : scroll.offset;
+    thumb.style.display = scroll.total ? "block" : "none";
+    thumb.style.width = thumbW() + "px";
+    thumb.style.left = xOf(Math.max(0, shown)) + "px";
+    thumb.style.opacity = shown >= 0 ? "1" : "0.45";
+    where.textContent = !scroll.total ? "" : shown >= 0 ? rangeText(shown) : `${scroll.total} channels`;
+    const names = (app.bridge && app.bridge.channelNames) || [];
+    thumb.title = shown >= 0 ? names.slice(shown, shown + STRIPS).join(", ") : "";
+    track.style.cursor = maxOffset() > 0 ? "pointer" : "default";
+  }
+  const readChannels = () => { scroll.asked = performance.now(); app.command("readChannels"); };
+  const goTo = (off) => {
+    if (scroll.offset < 0) { readChannels(); return; }   // the order is out of date: read it again first
+    scroll.preview = off;
+    drawScroll();
+    app.command("bankTo", off);
+  };
+  thumb.addEventListener("pointerdown", (e) => {
+    if (maxOffset() === 0 || scroll.offset < 0) return;
+    e.stopPropagation();
+    scroll.dragging = true;
+    scroll.grab = e.clientX / stageScale() - xOf(Math.max(0, scroll.offset));
+    thumb.setPointerCapture(e.pointerId);
+    thumb.style.cursor = "grabbing";
+  });
+  thumb.addEventListener("pointermove", (e) => {
+    if (!scroll.dragging) return;
+    scroll.preview = offAt(e.clientX / stageScale() - scroll.grab);
+    drawScroll();
+  });
+  const endDrag = () => {
+    if (!scroll.dragging) return;
+    scroll.dragging = false;
+    thumb.style.cursor = "grab";
+    if (scroll.preview >= 0 && scroll.preview !== scroll.offset) goTo(scroll.preview); else { scroll.preview = -1; drawScroll(); }
+  };
+  thumb.addEventListener("pointerup", endDrag);
+  thumb.addEventListener("pointercancel", endDrag);
+  track.addEventListener("pointerdown", (e) => {   // a click on the bar: that part of the project, centred
+    if (scroll.total === 0 || scroll.offset < 0) { readChannels(); return; }
+    if (maxOffset() === 0) return;
+    const x = (e.clientX - track.getBoundingClientRect().left) / stageScale();
+    goTo(offAt(x - thumbW() / 2));
+  });
+  track.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    if (maxOffset() === 0 || scroll.offset < 0) return;
+    scroll.wheel += (e.deltaY > 0 || e.deltaX > 0) ? 1 : -1;
+    scroll.preview = clamp(scroll.offset + scroll.wheel, 0, maxOffset());
+    drawScroll();
+    clearTimeout(scroll.wheelTimer);
+    scroll.wheelTimer = setTimeout(() => { scroll.wheel = 0; if (scroll.preview !== scroll.offset) goTo(scroll.preview); }, 250);
+  }, { passive: false });
+  function updateScroll(b) {
+    const connected = b && b.link === "connected";
+    scroller.style.opacity = connected ? "1" : "0.4";
+    scroll.total = connected && b.channelNames ? b.channelNames.length : 0;
+    const off = connected && b.viewOffset !== undefined ? b.viewOffset : -1;
+    if (off !== scroll.offset) { scroll.offset = off; if (!scroll.dragging) scroll.preview = -1; }
+    if (scroll.preview === scroll.offset) scroll.preview = -1;
+    // Never read yet: while the Tracks page is open, Mixology reads every fader once (the bank steps through the pages
+    // and comes back), which also learns the channels' order. A track added or moved later: read again on first touch.
+    const shownNow = root.classList.contains("shown");
+    const canRead = connected && !b.scanning && (b.slots || []).some((s) => s && s.present);
+    trackText.textContent = !connected || scroll.total ? "" : b.scanning ? "Reading your channels…" : "Click to read your channels";
+    if (canRead && shownNow && scroll.total === 0 && performance.now() - scroll.asked > 60000) readChannels();
+    drawScroll();
   }
   const restoreBtn = el("button", "small-btn", bar, { whiteSpace: "nowrap" });
   restoreBtn.title = "Put every channel Mixology changed back the way it was before Mixology's first move";
@@ -579,7 +658,7 @@ export function buildTracks(root, app) {
     status.innerHTML = connected
       ? `<span class="status-dot ok"></span>Cubase connected <span class="dim">(Bridge v${b.script})</span>`
       : `<span class="status-dot ${b && b.link === "waiting" ? "warn" : "bad"}"></span>${b && b.link === "waiting" ? "Waiting for Cubase..." : b && b.link === "lost" ? "Lost contact with Cubase" : "Not connected to Cubase"}`;
-    bankBtns.style.opacity = connected ? "1" : "0.4";
+    updateScroll(b);
     const changed = (b && b.changedCount) || 0;
     restoreBtn.textContent = changed ? `↺ Restore (${changed})` : "↺ Restore";
     const cf = (b && b.changedFaders) || 0, ce = (b && b.changedEq) || 0;
@@ -715,6 +794,7 @@ export function buildTracks(root, app) {
   render(app.bridge);
 
   return {
+    onShow() { render(app.bridge); },   // the scroll bar may want to read the channels now
     onFrame(f) {
       // Per-channel meters come from Mixology Link on each track (null = no Link paired).
       if (f.trackMeters) strips.forEach((st, i) => { const m = f.trackMeters[i]; if (m) { st.mL.set(m[0]); st.mR.set(m[1]); } });
