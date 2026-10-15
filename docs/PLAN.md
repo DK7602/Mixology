@@ -145,5 +145,22 @@ shows a VOX tag on the Tracks page, and Polish / Auto Mix add no second compress
 Mixology publishes its hand-off (style, peaks, loudness, tone against the style, mono mix, its limiter on) for
 Masterology (0.26), which shows it in Learn and offers the matching genre; Masterology publishes its goal (target,
 ceiling, genre), shown on Mixology's Master page.
+v0.8.1: the setup check (a mono group or output on the way, named; vocals with Voxology but no Mixology Link;
+Mixology on a mono channel) in the Mix Assistant, the Tracks page and the Stereo page.
 Still to come in M6: presets (save / load your Mixology settings), an undo history, a CPU check with 40+ tracks,
 code signing (later).
+
+### Later - Other DAWs (asked 2026-10-15: "add that to the plan for later")
+Today everything except the Tracks page and Auto Mix's fader / pan moves works in any VST3 host (Studio One, Reaper,
+FL Studio, Ableton Live, Bitwig...): Mixology on the master, Mixology Link, Analyze Mix, Polish's processing, Voxology,
+Masterology. The fader and pan moves need the Cubase MIDI Remote script (Nuendo has the same system: probably works,
+untested).
+- **Link Mix mode**: a level (gain) and a pan control inside each Mixology Link, so Auto Mix, Balance, Stereo Architect,
+  the headroom move and Restore can work in any DAW without a bridge per DAW. Mixology uses the DAW's faders when the
+  Cubase bridge is connected, and the Links' controls otherwise. Kept with the project (Link state), shown on the Tracks
+  page as "Link levels" when no bridge is there.
+- Check per DAW: does it tell plug-ins their track name (the Links pair by name; without it they'd need a name typed
+  into each Link), and does it run all plug-ins in one process (the registry and the suite link need that: Bitwig's
+  sandbox, Reaper / FL Studio bridging put plug-ins apart).
+- AU (Logic) and AAX (Pro Tools) formats, and a macOS build of Mixology: later still.
+
