@@ -36,6 +36,8 @@ sends higher-resolution art, re-run it.
   Bump kProtocolVersion + PROTOCOL_VERSION together.
 
 ## v0.10.0: the History (undo history, M6) (2026-10-15)
+- CI green: run 38733518002 (e77b6ac; v0.9.2 was 38730406192). Download for the user: that run's Mixology-Windows.
+- The conversation continues in a NEW session titled "Mixology part 2" (the user asked for it after v0.10.0).
 - User: "please fix these items, then continue with undo history". Also asked about Auto Analyze: answered with a
   proposal (docs/PLAN.md "Proposed - Auto Analyze"), NOT built: wait for the user's go.
 - dsp History.h/.cpp (tests/test_history.cpp): Change {what fader|pan|mute|solo|trim|proc|assist|duck, hash, fullMix,
