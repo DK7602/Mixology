@@ -6,6 +6,7 @@
 #include "mixology/BridgeSession.h"
 #include "mixology/History.h"
 #include "mixology/LinkRegistry.h"
+#include "mixology/AutoAnalyze.h"
 #include "mixology/MixAnalysis.h"
 #include "mixology/MixPlanner.h"
 #include "mixology/Presets.h"
@@ -168,7 +169,31 @@ private:
     MixProcessing mixProc;
     mixology::mix::MixNow mixNow() const;
     void reevaluate();         // the report again (after a role / setting change), without listening again
-    void applyMusicBus();      // tells the analysis where the music group's fader was while it listened
+    // tells an analysis where the music group's fader was while it listened
+    void applyMusicBus (mixology::mix::Analysis&, const std::map<std::uint32_t, double>& faders) const;
+    std::vector<std::string> unheardNow() const;   // channels Cubase shows that no Link reports
+
+    // What the mix was while Mixology listened: plans and Polish work from there.
+    struct AtAnalysis
+    {
+        std::map<std::uint32_t, double> faders;
+        std::map<std::uint32_t, mixology::proc::Values> procs;
+        bool mixKnown = false;
+        mixology::proc::Values mix {};
+    };
+    AtAnalysis snapshotNow() const;
+    void useSnapshot (AtAnalysis);
+
+    // Auto Analyze (after the first Analyze Mix): keeps listening while the song plays and refreshes the
+    // advice every 15 s of playback when it changed. Advice only: never moves anything. Saved with the project.
+    bool autoAnalyze = false;
+    mixology::mix::AutoAnalyze autoListen;
+    AtAnalysis autoSnapshot;          // the mix at the start of autoListen's window
+    double autoCheckedMs = 0.0, autoUpdatedMs = 0.0;   // wall clock (ms since 1970)
+    juce::String autoPause;           // why it isn't listening right now ("" = listening)
+    int autoSecondsShown = -1;
+    std::uint64_t autoMixKey() const; // changes whenever any processing changes
+    void autoTick (const mixology::AnalysisFrame& mix, std::vector<mixology::mix::TrackSample> tracks, bool playing);
     mixology::mix::Plan currentPlan;
     std::uint64_t currentPlanId = 0;
     struct AssistUndo

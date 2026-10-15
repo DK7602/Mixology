@@ -37,7 +37,7 @@ def save_rgba(rgb, alpha, name):
 # Composited over a dark background it reproduces the original; the glow stays a soft glow.
 
 def logo():
-    img = load("12_Dynamics_Closeup.jpg")[20:232, 24:408]
+    img = load("12_Dynamics_Closeup.jpg")[20:232, 56:408]   # centred on the beaker (same waveform each side)
     peak = img.max(axis=2)
     floor = 0.13                                 # dark metal behind the logo disappears below this
     a = np.clip((peak - floor) / (1.0 - floor), 0, 1)
@@ -46,7 +46,7 @@ def logo():
     # Soft fade at the left / right ends so the waveforms trail off instead of being cut.
     h, w = a.shape
     x = np.arange(w, dtype=np.float32)
-    fade = np.clip(np.minimum(x / 26.0, (w - 1 - x) / 18.0), 0, 1)
+    fade = np.clip(np.minimum(x / 18.0, (w - 1 - x) / 18.0), 0, 1)
     y = np.arange(h, dtype=np.float32)
     vfade = np.clip(np.minimum(y / 6.0, (h - 1 - y) / 6.0), 0, 1)
     a = a * fade[None, :] * vfade[:, None]

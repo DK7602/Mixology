@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-15, v0.10.0)
+# Mixology: resume here (updated 2026-10-15, v0.11.0)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,27 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## v0.11.0: Auto Analyze + the logo centred (2026-10-15, session "Mixology part 2")
+- User tested v0.10.0: "Everything works" (History, the v0.9.2 fixes). One to watch: a vocal preset sounded like a
+  small change (probably subtle on purpose). Said YES to Auto Analyze, and asked to centre the logo (beaker was right
+  of centre, squashing the right waveform) keeping its size.
+- Logo: plugin/ui/assets/logo.png cropped to x 32..384 of the old 384 px art (mirror-symmetry centre x=208), 18 px
+  fade both ends; shown at the old scale (main 292 px wide, Link 118 px), box unchanged. extract_assets.py matches.
+- dsp AutoAnalyze.h/.cpp (tests in test_analysis.cpp): AutoAnalyze.add(moment, mixKey) -> added / restarted / check.
+  One version of the mix per window: restarts when mixKey changes, a fader moves > 0.25 dB, or the set of playing
+  tracks changes (and when the 120 s window is full). Checks at 20 s, then every 15 s. adviceChanged(shown, fresh):
+  suggestion (id, kind) set, track set, vocal ratio >= 1 dB, mix loudness >= 1 LU, reference heard.
+- Hub: autoAnalyze (prefs "autoAnalyze=1", saved with the project), command autoAnalyze {value: bool},
+  state.analysis.auto {on, pause ""|stopped|quiet|busy|off, seconds, checked, updated (epoch ms)}. analysisTick ->
+  autoTick when analyzeState done. autoMixKey = FNV of history.version, applyVersion, every Link's proc values +
+  Assist EQ, the Full Mix's proc. Snapshot (faders, procs, mix proc) at the window start; on a changed report:
+  report, analysis = the window, useSnapshot (so Polish / plans / role re-evaluation match the new advice). Busy
+  (plan applying, scanning, reference listening) resets the window. finishAnalysis refactored: unheardNow(),
+  snapshotNow(), useSnapshot(), applyMusicBus(Analysis&, faders).
+- UI: AUTO ANALYZE small-btn with lamp (green, pulsing while listening) above Your tracks / Live view, shown once a
+  report exists; subtitle "Auto Analyze, updated 1:02 PM:". mock.js simulates it. Preview: copy JUCE's
+  native/javascript/*.js into plugin/ui/juce/ (gitignored), serve plugin/ui over http.
 
 ## v0.10.0: the History (undo history, M6) (2026-10-15)
 - CI green: run 38733518002 (e77b6ac; v0.9.2 was 38730406192). Download for the user: that run's Mixology-Windows.

@@ -11,6 +11,7 @@ add_library(mixology_dsp STATIC
     src/Fft.cpp
     src/LinkRegistry.cpp
     src/MixAnalysis.cpp
+    src/AutoAnalyze.cpp
     src/MixPlanner.cpp
     src/SharedBlock.cpp
     src/SuiteLink.cpp

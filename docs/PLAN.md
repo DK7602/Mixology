@@ -155,10 +155,12 @@ from whole words in the name: "Keys - Verse" is keys).
 v0.10.0: the History (clock-arrow button): every change Mixology makes, step by step (faders, pans, mute / solo, Trim,
 every control, presets, ducking, the smart tools and their Undo, Restore); go back to right after any step, forward
 again; one bridge plan moves the faders back, the Links take the rest.
-Proposed next (asked 2026-10-15, waiting for the user's go): Auto Analyze, see below.
+v0.11.0: Auto Analyze (the user said yes; switch under the Mix Assistant's advice): keeps listening while the song
+plays, one version of the mix at a time (starts again when a fader or any processing changes), checks at 20 s then
+every 15 s, replaces the advice only when it changed. The logo centred on the beaker (same size).
 Still to come in M6: code signing (later).
 
-### Proposed - Auto Analyze (asked 2026-10-15: "once an analyze mix has been run should have an auto analyze option")
+### Built in v0.11.0 - Auto Analyze (asked 2026-10-15: "once an analyze mix has been run should have an auto analyze option")
 - After the first Analyze Mix, a switch "Keep listening": whenever the song plays, Mixology keeps adding what it hears
   (it already watches the mix five times a second for the setup check) and refreshes the advice every 15 seconds of
   new playback, only when something changed enough to matter.

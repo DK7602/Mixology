@@ -1,6 +1,19 @@
 # Milestone 6 tests
 
-## Version 0.10.0 (10 minutes): the History
+## Version 0.11.0 (10 minutes): Auto Analyze, and the logo centred
+
+1. Look at the logo: the beaker sits in the middle, the same amount of waveform on each side, same size as before.
+2. Press **ANALYZE MIX** and let it finish. Under the advice there is a new switch: **AUTO ANALYZE**. Click it: the
+   light turns green.
+3. Play the song. The switch says "Listening 5 s" and so on. About 20 seconds in, Mixology checks the advice. The cards
+   only change when something really changed: then the line at the top reads "Auto Analyze, updated (time)".
+4. Now change something the advice talks about, for example pull the lead vocal's fader down 6 dB, and keep playing.
+   The count starts again from 0 (a new version of your mix). About 20 seconds later the vocal advice should change.
+5. Stop the song: the switch says "Press play". Click the switch again to turn it off.
+
+**Report**: did the advice follow your change? Did the cards ever jump around while nothing changed?
+
+## Version 0.10.0 (10 minutes): the History (passed)
 
 You asked for an undo history. The new **clock-arrow button** in the top bar (left of the gear) opens it.
 1. Make a few changes in Mixology: drag a fader on the Tracks page, turn an EQ knob on a vocal, load a preset, run

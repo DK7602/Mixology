@@ -15,7 +15,7 @@
 #lstage #logoBtn {
   position: absolute; left: 14px; top: 12px; width: 128px; height: 76px; border-radius: 12px;
 }
-#lstage #logoBtn img { width: 128px; }
+#lstage #logoBtn img { width: 118px; }
 
 #lwordmark {
   position: absolute; left: 150px; top: 12px; width: 236px; pointer-events: none;

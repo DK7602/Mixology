@@ -143,7 +143,7 @@ button { font-family: inherit; }
 :root[data-theme="light"] #logoBtn { box-shadow: inset 0 0 0 1.5px rgba(185, 130, 50, 0.8), 0 4px 12px rgba(20, 30, 50, 0.25); }
 #logoBtn:hover { transform: scale(1.015); }
 #logoBtn:active { transform: scale(0.985); }
-#logoBtn img { width: 318px; height: auto; pointer-events: none; }
+#logoBtn img { width: 292px; height: auto; pointer-events: none; }   /* 352 px art at the old 318/384 scale: beaker centred */
 
 #wordmark {
   position: absolute; left: 352px; top: 12px; width: 590px;
@@ -238,7 +238,9 @@ button { font-family: inherit; }
 :root[data-theme="light"] .power-btn.on { color: #109a2a; border-color: #109a2a; box-shadow: none; }
 .btn .lamp { position: absolute; right: 14px; top: 50%; width: 11px; height: 11px; margin-top: -5.5px; border-radius: 50%; background: var(--text-faint); opacity: 0.6; }
 .btn .lamp.on { background: var(--green); opacity: 1; box-shadow: 0 0 8px var(--green); }
-.btn .lamp.live { animation: lamp-live 1.2s ease-in-out infinite; }
+.btn .lamp.live, .small-btn .lamp.live { animation: lamp-live 1.2s ease-in-out infinite; }
+.small-btn .lamp { position: absolute; left: 15px; top: 50%; width: 11px; height: 11px; margin-top: -5.5px; border-radius: 50%; background: var(--text-faint); opacity: 0.6; }
+.small-btn .lamp.on { background: var(--green); opacity: 1; box-shadow: 0 0 8px var(--green); }
 @keyframes lamp-live { 50% { box-shadow: 0 0 2px var(--green); } }
 .proc-note { position: absolute; font-size: 16px; line-height: 1.35; color: var(--text-dim); }
 .mono-badge {

@@ -239,6 +239,25 @@ export function buildOverview(root, app) {
   let showLive = false;
   liveBtn.addEventListener("click", () => { showLive = !showLive; lastKey = ""; renderAssistant(); });
   const KIND = { warn: "#ff5a3c", info: "#19d3ff", calm: "#39e26b" };
+  // Auto Analyze (after the first Analyze Mix): keeps listening while the song plays, new advice when it changed.
+  const autoBtn = el("button", "small-btn", ma, { position: "absolute", left: "12px", right: "12px", bottom: "68px", height: "44px", display: "none", textAlign: "left", paddingLeft: "38px", fontSize: "17px" });
+  autoBtn.title = "Auto Analyze: whenever the song plays, Mixology keeps listening and refreshes this advice every 15 seconds when something changed (after you move a fader or change an EQ, it listens again from there). Advice only: it never changes your mix.";
+  autoBtn.addEventListener("click", () => { const au = app.bridge && app.bridge.analysis && app.bridge.analysis.auto; app.command("autoAnalyze", { value: !(au && au.on) }); });
+  function renderAuto(b) {
+    const a = b && b.analysis, au = a && a.auto;
+    const show = !!(a && a.report && au);
+    autoBtn.style.display = show ? "block" : "none";
+    list.style.bottom = show ? "124px" : a && a.report ? "70px" : "12px";
+    if (!show) return;
+    const status = !au.on ? "Off"
+      : au.pause === "stopped" ? "Press play"
+      : au.pause === "quiet" ? "Waiting for sound"
+      : au.pause === "busy" ? "Paused" : au.pause ? "Off"
+      : au.seconds < 20 ? `Listening ${au.seconds} s` : "Listening";
+    const html = `<span class="lamp${au.on ? " on" : ""}${au.on && !au.pause ? " live" : ""}"></span>AUTO ANALYZE<span style="float:right;color:var(--text-dim)">${status}</span>`;
+    if (autoBtn.dataset.html !== html) { autoBtn.dataset.html = html; autoBtn.innerHTML = html; }
+  }
+  app.on("bridge", renderAuto);
 
   function card(iconName, colour, title, hint, onClick) {
     const c = el("div", "card", list, { position: "relative", flex: "none", minHeight: "104px", padding: "14px 34px 12px 70px", cursor: onClick ? "pointer" : "default" });
@@ -258,13 +277,13 @@ export function buildOverview(root, app) {
     const report = b.analysis && b.analysis.report;
     const useReport = report && !showLive;
     const setup = b.setup || [];
-    const key = JSON.stringify(setup.map((x) => x.id + x.title)) + "|" + (useReport ? "r|" + JSON.stringify(report.suggestions.map((x) => x.id + x.kind + x.title)) + report.seconds + report.style
+    const key = JSON.stringify(setup.map((x) => x.id + x.title)) + "|" + (useReport ? "r|" + JSON.stringify(report.suggestions.map((x) => x.id + x.kind + x.title)) + report.seconds + report.style + (b.analysis.auto && b.analysis.auto.on ? b.analysis.auto.updated : "")
       : [b.link, (b.slots || []).filter((s) => s.present).length, b.linksPaired, b.linksSeen, Math.round(st), Math.round(tp), !!report].join("|"));
     if (key === lastKey) return;
     lastKey = key;
     list.innerHTML = "";
     maFoot.style.display = report ? "flex" : "none";
-    list.style.bottom = report ? "70px" : "12px";
+    renderAuto(b);
     liveBtn.textContent = showLive ? "Analysis" : "Live view";
     if (report) tracksBtn.textContent = `Your tracks (${report.tracks.length})`;
     // The setup check first: things in the Cubase project no mixing move can fix (a mono group, vocals without a Link).
@@ -273,7 +292,9 @@ export function buildOverview(root, app) {
       : sg.id === "setup-mono-mixology" ? "Put it on the Stereo Out: click for how" : sg.need;
     for (const sg of setup) card(sg.icon, KIND.warn, sg.title, setupHint(sg), () => openSuggestion(app, sg));
     if (useReport) {
-      sub.textContent = `From Analyze Mix (${Math.round(report.seconds)} s heard):`;
+      const au = b.analysis.auto;
+      sub.textContent = au && au.on && au.updated ? `Auto Analyze, updated ${new Date(au.updated).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}:`
+        : `From Analyze Mix (${Math.round(report.seconds)} s heard):`;
       for (const sg of report.suggestions)
         card(sg.icon, KIND[sg.kind] || KIND.info, sg.title, sg.need, () => openSuggestion(app, sg));
       return;

@@ -1,6 +1,6 @@
 # Mixology manual
 
-Manual for version 0.10.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
+Manual for version 0.11.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -191,6 +191,13 @@ What it looks at:
 - **Tracks you can hardly hear**, tracks running very hot, and headroom for Masterology.
 - **Channels without Mixology Link**: listed, so you know what the advice leaves out. The list comes from the channels
   Analyze Mix reads at the start, so renamed or deleted tracks drop out of it.
+
+**Auto Analyze** (the switch under the advice, after your first Analyze Mix): whenever the song plays, Mixology
+keeps listening and checks the advice every 15 seconds; the cards change only when the advice really changed ("Auto
+Analyze, updated 2:14 PM"). When you move a fader or change a track's processing, it listens again from that moment
+(the first check 20 seconds later), so the advice is always about the mix as it is now. It pauses when the song stops,
+while Mixology applies a plan, while you listen to your reference song, and while Mixology's window is closed. It
+only gives advice: it never moves anything. Your choice is saved with the project.
 
 **Your tracks** (button under the Mix Assistant) shows what Analyze Mix heard for each track: its role, level
 after the fader, peak and width. **Live view** switches the Mix Assistant back to the live readings.

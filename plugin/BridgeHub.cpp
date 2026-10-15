@@ -276,6 +276,7 @@ void BridgeHub::timerCallback()
                 kv.set (item.upToFirstOccurrenceOf ("=", false, false).trim(), item.fromFirstOccurrenceOf ("=", false, false).trim());
             vocalOffset = juce::jlimit (-24.0, 24.0, kv["vocalOffset"].getDoubleValue());
             vocalFromYou = kv["vocalFromYou"] == "1";
+            autoAnalyze = kv["autoAnalyze"] == "1";
             analysis.setVocalOffset (vocalOffset, vocalFromYou);
             reevaluate();
             cachePrefs();
@@ -552,7 +553,8 @@ void BridgeHub::setMixPrefsState (const juce::String& text)
 
 void BridgeHub::cachePrefs()
 {
-    const auto text = "vocalOffset=" + juce::String (vocalOffset, 2) + ";vocalFromYou=" + (vocalFromYou ? "1" : "0");
+    const auto text = "vocalOffset=" + juce::String (vocalOffset, 2) + ";vocalFromYou=" + (vocalFromYou ? "1" : "0")
+                    + ";autoAnalyze=" + (autoAnalyze ? "1" : "0");
     const juce::ScopedLock sl (protectedLock);
     prefsCache = text;
 }
@@ -649,6 +651,7 @@ void BridgeHub::analysisTick (const mixology::AnalysisFrame& mixFrame, bool play
     monoWatch.add (heard, setupTracks);
     updateSetup();
 
+    if (analyzeState == Analyze::done) { autoTick (mixFrame, std::move (tracks), playing); return; }
     if (analyzeState != Analyze::listening || ! playing) return;
     mix::Moment m;
     m.mix = mixFrame;
@@ -695,24 +698,24 @@ int BridgeHub::changedTotal (int* faders, int* eq) const
     return static_cast<int> (all.size());
 }
 
-void BridgeHub::applyMusicBus()
+void BridgeHub::applyMusicBus (mixology::mix::Analysis& a, const std::map<std::uint32_t, double>& faders) const
 {
     for (const auto& [hash, ts] : trackSettings)
         if (ts.musicBus)
         {
             double db = 0.0;
-            if (auto it = fadersAtAnalysis.find (hash); it != fadersAtAnalysis.end()) db = it->second;
+            if (auto it = faders.find (hash); it != faders.end()) db = it->second;
             else if (auto kf = bridge.knownFaders().find (hash); kf != bridge.knownFaders().end()) db = kf->second.db;
-            analysis.setMusicBus (true, std::max (db, -120.0));
+            a.setMusicBus (true, std::max (db, -120.0));
             return;
         }
-    analysis.setMusicBus (false, 0.0);
+    a.setMusicBus (false, 0.0);
 }
 
 void BridgeHub::reevaluate()
 {
     if (! report.valid || ! analysis.hasMoments()) return;
-    applyMusicBus();
+    applyMusicBus (analysis, fadersAtAnalysis);
     // The music group isn't a channel of its own music: never "without a Link".
     std::vector<std::string> unheard;
     for (const auto& n : report.unheard)
@@ -889,7 +892,7 @@ std::optional<suite::MasterInfo> BridgeHub::masterology() const
     return suiteMasters.front();
 }
 
-void BridgeHub::finishAnalysis()
+std::vector<std::string> BridgeHub::unheardNow() const
 {
     // Channels Cubase showed that no Link reported: listed, so the advice is honest about what it heard.
     std::vector<std::string> unheard;
@@ -903,27 +906,108 @@ void BridgeHub::finishAnalysis()
             && (ts == trackSettings.end() || (! ts->second.excluded && ! ts->second.musicBus)))
             unheard.push_back (f.title);
     }
+    return unheard;
+}
 
-    fadersAtAnalysis.clear();
-    for (const auto& [hash, f] : bridge.knownFaders()) fadersAtAnalysis[hash] = f.db;
+BridgeHub::AtAnalysis BridgeHub::snapshotNow() const
+{
+    AtAnalysis at;
+    for (const auto& [hash, f] : bridge.knownFaders()) at.faders[hash] = f.db;
     // The processing each Link (and the Full Mix) had while Mixology listened: Polish works from there.
-    procAtAnalysis.clear();
+    auto& registry = mixology::link::processRegistry();
+    const auto links = registry.links (mixology::link::nowMs());
+    for (const auto& l : links)
     {
-        auto& registry = mixology::link::processRegistry();
-        const auto links = registry.links (mixology::link::nowMs());
-        for (const auto& l : links)
-        {
-            mixology::proc::Values v {};
-            if (l.identity.hasName && uniqueLink (links, l.nameHash) != nullptr && registry.readProc (l.slot, l.generation, v))
-                procAtAnalysis[l.nameHash] = v;
-        }
+        mixology::proc::Values v {};
+        if (l.identity.hasName && uniqueLink (links, l.nameHash) != nullptr && registry.readProc (l.slot, l.generation, v))
+            at.procs[l.nameHash] = v;
     }
-    mixProcAtAnalysisKnown = static_cast<bool> (mixProc.get);
-    if (mixProcAtAnalysisKnown) mixProcAtAnalysis = mixProc.get();
-    applyMusicBus();
+    at.mixKnown = static_cast<bool> (mixProc.get);
+    if (at.mixKnown) at.mix = mixProc.get();
+    return at;
+}
+
+void BridgeHub::useSnapshot (AtAnalysis at)
+{
+    fadersAtAnalysis = std::move (at.faders);
+    procAtAnalysis = std::move (at.procs);
+    mixProcAtAnalysisKnown = at.mixKnown;
+    mixProcAtAnalysis = at.mix;
+}
+
+void BridgeHub::finishAnalysis()
+{
+    const auto unheard = unheardNow();
+    useSnapshot (snapshotNow());
+    applyMusicBus (analysis, fadersAtAnalysis);
     report = analysis.evaluate (settingsForAnalysis(), unheard);
     analyzeState = Analyze::done;
+    autoListen.start (report.style);   // Auto Analyze carries on from here (when it's on)
     ++analysisVersion;
+}
+
+std::uint64_t BridgeHub::autoMixKey() const
+{
+    // FNV-1a over everything that changes the sound but isn't a fader: every Link's processing and Assist EQ,
+    // the Full Mix's processing, and Mixology's own changes (the History, plans applied).
+    std::uint64_t h = 1469598103934665603ull;
+    auto add = [&h] (const void* p, std::size_t n) {
+        const auto* b = static_cast<const unsigned char*> (p);
+        for (std::size_t i = 0; i < n; ++i) { h ^= b[i]; h *= 1099511628211ull; }
+    };
+    const auto hv = history.version();
+    add (&hv, sizeof hv);
+    add (&applyVersion, sizeof applyVersion);
+    auto& registry = mixology::link::processRegistry();
+    for (const auto& l : registry.links (mixology::link::nowMs()))
+    {
+        mixology::proc::Values v {};
+        if (registry.readProc (l.slot, l.generation, v)) add (v.data(), v.size() * sizeof (float));
+        const float a[] = { l.assist.lowCutHz, l.assist.mudHz, l.assist.mudDb, l.assist.pocketHz, l.assist.pocketDb };
+        add (a, sizeof a);
+    }
+    if (mixProc.get)
+    {
+        const auto v = mixProc.get();
+        add (v.data(), v.size() * sizeof (float));
+    }
+    return h;
+}
+
+void BridgeHub::autoTick (const mixology::AnalysisFrame& mixFrame, std::vector<mixology::mix::TrackSample> tracks, bool playing)
+{
+    using namespace mixology;
+    juce::String pause;
+    if (! autoAnalyze || ! report.valid) pause = "off";
+    else if (bridge.applying() || bridge.scanning() || hearingReference) { pause = "busy"; autoListen.reset(); }   // the mix is changing
+    else if (! playing) pause = "stopped";
+    else if (mixFrame.silent) pause = "quiet";
+    if (pause != autoPause) { autoPause = pause; ++analysisVersion; }
+    if (pause.isNotEmpty()) return;
+
+    mix::Moment m;
+    m.mix = mixFrame;
+    m.tracks = std::move (tracks);
+    const auto step = autoListen.add (std::move (m), autoMixKey());
+    if (step == mix::AutoAnalyze::Step::restarted) autoSnapshot = snapshotNow();
+    if (step == mix::AutoAnalyze::Step::check)
+    {
+        auto& a = autoListen.analysis();
+        a.setVocalOffset (vocalOffset, vocalFromYou);
+        applyMusicBus (a, autoSnapshot.faders);
+        auto fresh = a.evaluate (settingsForAnalysis(), unheardNow());
+        autoCheckedMs = juce::Time::currentTimeMillis();
+        if (mix::adviceChanged (report, fresh))
+        {
+            report = std::move (fresh);
+            analysis = a;   // role changes re-evaluate the moments behind the advice on screen
+            useSnapshot (autoSnapshot);
+            autoUpdatedMs = autoCheckedMs;
+        }
+        ++analysisVersion;
+    }
+    const int shown = static_cast<int> (autoListen.secondsHeard());
+    if (shown != autoSecondsShown) { autoSecondsShown = shown; ++analysisVersion; }
 }
 
 juce::var BridgeHub::analysisState() const
@@ -936,6 +1020,15 @@ juce::var BridgeHub::analysisState() const
     o->setProperty ("max", 60.0);
     o->setProperty ("playing", transportPlaying);
     o->setProperty ("heard", tracksHeard);
+    {
+        auto* au = new juce::DynamicObject();
+        au->setProperty ("on", autoAnalyze);
+        au->setProperty ("pause", autoPause);   // "" listening, "stopped", "quiet", "busy", "off"
+        au->setProperty ("seconds", autoSecondsShown < 0 ? 0 : autoSecondsShown);
+        au->setProperty ("checked", autoCheckedMs);
+        au->setProperty ("updated", autoUpdatedMs);
+        o->setProperty ("auto", juce::var (au));
+    }
 
     if (report.valid)
     {
@@ -1359,12 +1452,23 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
         {
             analysis.begin (style);
             analysis.setVocalOffset (vocalOffset, vocalFromYou);
+            autoListen.reset();
             if (bridge.link() == mixology::BridgeSession::Link::connected && bridge.scanAllChannels (t).ok)
                 analyzeState = Analyze::reading;   // first every channel's fader, then listen
             else
                 analyzeState = Analyze::listening;
             ++analysisVersion;
         }
+    }
+    else if (name == "autoAnalyze")
+    {
+        autoAnalyze = static_cast<bool> (value);
+        autoListen.reset();
+        autoCheckedMs = autoUpdatedMs = 0.0;
+        autoSecondsShown = -1;
+        cachePrefs();
+        ++analysisVersion;
+        if (autoAnalyze && ! report.valid) info = "Auto Analyze starts after your first Analyze Mix.";
     }
     else if (name == "analyzeFinish")
     {

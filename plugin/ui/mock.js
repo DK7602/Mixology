@@ -18,7 +18,7 @@
     ["Lead Vox", -2, 0.5, "#4fd66b", 1], ["FX", -14, 0.7, "#d6d23a", 0], ["Adlibs", -7.5, 0.6, "#d68a3a", 1], ["Vox Double", -13, 0.3, "#6bd64f", 0],
     ["Pad", -16, 0.5, "#5a7bd6", 0], ["Riser", -18, 0.5, "#c7c7c7", 0], ["FX 1-Vox Verb", -12, 0.5, "#9a6bd6", 1],
   ].map(([name, db, pan, colour, link]) => ({ name, hash: hashOf(name), volume: toNorm(db), pan, mute: false, solo: false, read: name === "FX", write: false, colour, link: !!link, trim: 0, protected: name === "Lead Vox" }));
-  const B = { offset: 0, lastMove: "", log: [], version: 1, restore: {}, an: { state: "idle", seconds: 0, playing: true, report: null }, settings: {},
+  const B = { offset: 0, lastMove: "", log: [], version: 1, restore: {}, an: { state: "idle", seconds: 0, playing: true, report: null, auto: { on: false, pause: "", seconds: 0, checked: 0, updated: 0 } }, settings: {},
     apply: { active: false, what: "", done: 0, total: 0, skipped: 0, message: "", notes: [], serial: 0, canUndo: false, undoWhat: "", hearingReference: false },
     planId: 0, plan: null, undo: null };
   const ROLE_OF = { Kick: "kick", Snare: "snare", Hats: "hats", Perc: "perc", "808": "bass", Keys: "keys", Synth: "synth", Guitar: "guitar", "Lead Vox": "vox", FX: "fx", Adlibs: "adlibs", "Vox Double": "adlibs", Pad: "synth", Riser: "fx" };
@@ -99,7 +99,7 @@
     return {
       enabled: true, link: "connected", portProblem: "", script: 3, toCubase: "Mixology to Cubase", fromCubase: "Cubase to Mixology", slots,
       changedCount: chans.filter(isChanged).length, restorePoints: Object.keys(B.restore).length, scanning: B.an.state === "reading",
-      analysis: { state: B.an.state, seconds: B.an.seconds, enough: 20, max: 60, playing: B.an.playing, heard: chans.filter((c) => c.link).length, report: B.an.report },
+      analysis: { state: B.an.state, seconds: B.an.seconds, enough: 20, max: 60, playing: B.an.playing, heard: chans.filter((c) => c.link).length, report: B.an.report, auto: { ...B.an.auto, seconds: Math.floor(B.an.auto.seconds), pause: !B.an.auto.on ? "off" : B.an.playing ? "" : "stopped" } },
       apply: { ...B.apply },
       linksSeen: chans.filter((c) => c.link).length, linksPaired: slots.filter((s) => s.linkStatus === "matched").length, linksShared: true,
       setup: SETUP_DEMO ? SETUP : [], history: hState(),
@@ -159,6 +159,7 @@
       setTimeout(() => { B.an.state = "listening"; B.version++; }, 1200);
       return { ok: true };
     }
+    if (name === "autoAnalyze") { B.an.auto = { on: !!value, pause: "", seconds: 0, checked: 0, updated: 0 }; B.version++; return { ok: true, info: value && !B.an.report ? "Auto Analyze starts after your first Analyze Mix." : undefined }; }
     if (name === "analyzeFinish") { if (B.an.seconds < 1) return fail("Nothing heard yet: press play in Cubase."); B.an.state = "done"; B.an.report = fakeReport(); B.version++; return { ok: true }; }
     if (name === "analyzeCancel") { B.an.state = B.an.report ? "done" : "idle"; B.version++; return { ok: true }; }
     if (name === "plan") {
@@ -490,6 +491,15 @@
       }
       frame.scope = dots;
       frame.corr = +(0.62 + 0.15 * Math.sin(t / 3)).toFixed(2);
+    }
+    if (B.an.state === "done" && B.an.auto.on && B.an.playing) {   // Auto Analyze: checks at 20 s, then every 15 s
+      const was = Math.floor(B.an.auto.seconds);
+      B.an.auto.seconds += 1 / 30;
+      const s = Math.floor(B.an.auto.seconds);
+      if (s !== was) {
+        B.version++;
+        if (s >= 20 && (s - 20) % 15 === 0) { B.an.auto.checked = Date.now(); if (s === 20) { B.an.auto.updated = Date.now(); B.an.report = fakeReport(); } }
+      }
     }
     if (B.an.state === "listening" && B.an.playing) {
       B.an.seconds += 1 / 30;

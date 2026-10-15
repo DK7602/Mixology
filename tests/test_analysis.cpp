@@ -1,3 +1,4 @@
+#include "mixology/AutoAnalyze.h"
 #include "mixology/TrackAnalyzer.h"
 
 #include <catch2/catch_approx.hpp>
@@ -1212,4 +1213,73 @@ TEST_CASE ("Analysis: Voxology on a track makes it a vocal; your choice still wi
         if (t.name == "Audio 08") { CHECK (t.role == Role::adlibs); CHECK (t.roleFrom == "you"); ++checked; }
     }
     CHECK (checked == 2);
+}
+
+TEST_CASE ("Auto Analyze: checks after 20 s, then every 15 s, and starts again when the mix changes", "[analysis]")
+{
+    AutoAnalyze live;
+    live.start (Style {});
+    auto moment = [] (double vocalFader, bool withHats = false) {
+        Moment m;
+        m.tracks = { sample ("Kick", kickFrame()), sample ("808", bassFrame()), sample ("Lead Vox", vocalFrame(), vocalFader) };
+        if (withHats) m.tracks.push_back (sample ("Hats", hatsFrame()));
+        m.mix = mixOf (m.tracks);
+        return m;
+    };
+    auto run = [&] (int moments, double fader, std::uint64_t key, bool hats = false) {
+        std::vector<double> checks;
+        for (int i = 0; i < moments; ++i)
+        {
+            const auto step = live.add (moment (fader, hats), key);
+            if (step == AutoAnalyze::Step::check) checks.push_back (live.secondsHeard());
+            if (step == AutoAnalyze::Step::restarted) checks.push_back (-live.secondsHeard());
+        }
+        return checks;
+    };
+
+    // 60 s of the same mix: restarted at the first moment, checks at 20, 35, 50 s.
+    auto c = run (300, 0.0, 1);
+    REQUIRE (c.size() == 4);
+    CHECK (c[0] == Catch::Approx (-0.2));
+    CHECK (c[1] == Catch::Approx (20.0));
+    CHECK (c[2] == Catch::Approx (35.0));
+    CHECK (c[3] == Catch::Approx (50.0));
+
+    // A fader nudge smaller than 0.25 dB is the same mix; a real move starts again.
+    CHECK (run (1, 0.2, 1).empty());
+    c = run (1, -3.0, 1);
+    REQUIRE (c.size() == 1);
+    CHECK (c[0] < 0.0);
+    CHECK (live.secondsHeard() == Catch::Approx (0.2));
+
+    // Processing changed (the key), or another track started playing: again from that moment.
+    run (50, -3.0, 1);
+    CHECK (run (1, -3.0, 2).size() == 1);
+    run (50, -3.0, 2);
+    CHECK (run (1, -3.0, 2, true).size() == 1);
+    CHECK (live.secondsHeard() == Catch::Approx (0.2));
+
+    // reset(): the next moment starts a new window even when nothing changed.
+    live.reset();
+    CHECK (run (1, -3.0, 2, true).size() == 1);
+}
+
+TEST_CASE ("Auto Analyze: only a real change in the advice replaces the report", "[analysis]")
+{
+    auto beat = [] (double vocalFader) {
+        return [=] (int) { return std::vector<TrackSample> {
+            sample ("Kick", kickFrame()), sample ("808", bassFrame()), sample ("Hats", hatsFrame()), sample ("Lead Vox", vocalFrame(), vocalFader) }; };
+    };
+    const auto shown = listen (beat (0.0)).evaluate ({});
+    REQUIRE (shown.valid);
+    CHECK_FALSE (adviceChanged (shown, listen (beat (0.0)).evaluate ({})));
+    CHECK_FALSE (adviceChanged (shown, listen (beat (-0.4)).evaluate ({})));   // a hair: cards stay still
+    CHECK (adviceChanged (shown, listen (beat (-8.0)).evaluate ({})));         // the vocal dropped: new advice
+    CHECK_FALSE (adviceChanged (shown, Report {}));                           // nothing new heard: keep it
+    CHECK (adviceChanged (Report {}, shown));
+
+    // Another track joined the mix.
+    const auto more = listen ([] (int) { return std::vector<TrackSample> {
+        sample ("Kick", kickFrame()), sample ("808", bassFrame()), sample ("Hats", hatsFrame()), sample ("Lead Vox", vocalFrame()), sample ("Pad", padFrame()) }; }).evaluate ({});
+    CHECK (adviceChanged (shown, more));
 }
