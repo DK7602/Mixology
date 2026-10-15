@@ -39,6 +39,9 @@ sends higher-resolution art, re-run it.
 - User: "add bandlab to the DAWs list". BandLab's web studio can't host VST3 (said so); added key "cakewalk" (Cakewalk by
   BandLab, Sonar): daws.js DAWS + words for every phrase that has per-DAW words, dawFromHostPath ("cakewalk" in the path
   or a file starting "sonar"), dawName, test. No layout change (a key: older builds show it as Other DAW).
+- CI green: Mixology run 38806344079 (a179c15; v0.13.0 was 38802526718), Voxology run 38806349818 (832610a; 0.50.0's
+  run was cancelled by it), Masterology run 38806354435 (6c75144; 0.29.0 was 38802562687). Download for the user: those
+  runs' Windows artifacts, install all three together.
 
 ## v0.13.0: your DAW for the trio + "fix this first" (2026-10-15) + Voxology 0.50.0 + Masterology 0.29.0
 - User sent Voxology's TOO HOT / CLIPPED RECORDING cards next to Auto Mix (+2.1 dB on the vocal): "are these reports
