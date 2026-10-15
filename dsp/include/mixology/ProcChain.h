@@ -115,6 +115,7 @@ namespace mixology::proc
         int channels = 2;
         std::atomic<int> limiterLatency { 0 };
         Values target {}, cur {};
+        Values lastInput {};   // the values setValues last saw (unchanged: nothing to redo, the usual case per block)
         bool fresh = true;
         std::array<double, kModules> w {};
         Buffer work {}, dry {};

@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-15, v0.8.1)
+# Mixology: resume here (updated 2026-10-15, v0.8.2)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,24 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## v0.8.2: the CPU check (2026-10-15)
+- User: "can we go ahead with the CPU check?" (hasn't tried the setup check's mono Beat test yet; will).
+- tools/cpucheck (built with MIX_BUILD_LINKCHECK, runs in CI with --strict --modules): N real Link VST3s + Mixology,
+  music-like audio per track, a playing PlayHead. Audio cost measured as fast as possible on one thread (mean and the
+  99.9th percentile per block, per Link, Mixology), three setups (off / typical: EQ + comp everywhere, Space on 2 /
+  everything on), then real-time on an audio thread while the message loop runs: message-thread and other-thread CPU
+  (process CPU minus both). Budgets on the mean only (off <= 15 %, typical <= 35 % of one core; message <= 15 %, other
+  <= 25 %): the worst blocks were random clusters (VM preemption), not periodic. CPU_DUMP=<file> writes per-block times.
+- Local (4-core cloud VM, 48 kHz, 256): off 6.9 % (0.13 % per Link), typical 18 % (0.37 %), all on 210 % (4.4 %);
+  Mixology 0.4 - 0.6 %; message thread 2.7 %, analysis thread 3.5 %. At 64-sample blocks: off 0.26 % per Link (about
+  2.4 us fixed per block per Link, mostly the VST3 wrapper). Per module per Link: Multiband 1.0, Space 1.0, Harmonics
+  0.9, Clip 0.7, Analog 0.7, Limiter 0.4, Comp 0.2, Transient 0.2, Gate 0.1, Stereo 0.1, EQ / Tone / Loudness / Final ~0.
+- Fix: the idle chain (every module off) 3.6 -> 1.3 us per block: setValues returns early when the values are
+  unchanged (lastInput), idle() measures the peak once (in = out), the limiter's feed ring wraps without %.
+- Not measured: Mixology's hub / web view with the window open (needs WebView2; headless can't).
+- MANUAL: Performance section (numbers, heaviest modules, buffer / ASIO-Guard / one FX reverb / close the window).
+  CI package ships docs/M6_TEST.md now (it still shipped M5_TEST).
 
 ## v0.8.1: the setup check (2026-10-15)
 - User's round 1 so far: "yes Vox tag worked" (VOX tags OK in Cubase). While testing, they hit by hand: (1) "New Lilly 2025"

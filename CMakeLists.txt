@@ -6,7 +6,7 @@ if(APPLE)
     set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "macOS architectures")
 endif()
 
-project(Mixology VERSION 0.8.1 LANGUAGES C CXX)
+project(Mixology VERSION 0.8.2 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -34,6 +34,7 @@ if(MIX_BUILD_PLUGIN)
     add_subdirectory(link)
     if(MIX_BUILD_LINKCHECK)
         add_subdirectory(tools/linkcheck)
+        add_subdirectory(tools/cpucheck)   # the CPU check (48 Links), same switch
     endif()
 endif()
 

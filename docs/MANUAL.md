@@ -1,6 +1,6 @@
 # Mixology manual
 
-Manual for version 0.8.1 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
+Manual for version 0.8.2 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -418,6 +418,30 @@ Voxology 0.47, Mixology 0.8 and Masterology 0.26 (or newer).
 
 The link only works inside one program: Voxology, Mixology and Masterology must run in the same Cubase (they do,
 unless you mix in one project and master in another; then Masterology simply works on its own as before).
+
+## Performance (big sessions)
+
+Mixology is built for 40+ tracks. Measured with 48 tracks, each with Mixology Link, and Mixology on the Stereo Out
+(the CPU check, run on every build; one core of a cloud machine, 48 kHz, 256-sample buffer):
+
+| Setup | All 48 tracks + Mixology | Per track |
+| --- | --- | --- |
+| As inserted (every module off) | about 7 % of one core | 0.13 % |
+| Typical after Auto Mix (EQ + compressor on every track, two reverbs) | about 17 % of one core | 0.34 % |
+| Every module on every track (no real mix does this) | about 2 cores | 4.3 % |
+
+Cubase spreads the tracks over all your CPU's cores, so a typical session uses a small part of one. The Links'
+analysis (Analyze Mix's ears) adds about 3 % of a core in the background.
+
+What costs the most, per track: Multiband, Space (reverb / delay), Harmonics, Clip Control and Analog Touch (up to
+about 1 % of a core each). EQ, Tone Balance, Loudness, Final Touch and Stereo are nearly free.
+
+If Cubase crackles or the performance meter peaks:
+- While mixing, use a bigger buffer (Studio > Studio Setup > your audio device > Control Panel: 256 or 512 samples). Small buffers (64)
+  are for recording.
+- Keep ASIO-Guard on (Studio > Studio Setup > VST Audio System): it lets Cubase process tracks ahead on all cores.
+- One reverb on an FX channel (with Sends) instead of Space on every track.
+- Mixology's window draws moving meters and pictures: close it when you don't need it.
 
 ## Troubleshooting
 

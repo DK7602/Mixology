@@ -153,6 +153,8 @@ namespace mixology::proc
 
     void Chain::setValues (const Values& v)
     {
+        if (! fresh && v == lastInput) return;   // called every block; the values rarely change
+        lastInput = v;
         for (int i = 0; i < count; ++i) target[ix (i)] = sanitise (i, v[ix (i)]);
         if (fresh)
         {
@@ -200,8 +202,12 @@ namespace mixology::proc
 
     void Chain::idle (int nch, int n)
     {
-        peakInto (meters.inL, meters.inR, nch, n);
-        peakInto (meters.outL, meters.outR, nch, n);
+        float l = -200.0f, r = -200.0f;   // nothing runs: what goes out is what came in (measured once)
+        peakInto (l, r, nch, n);
+        meters.inL = std::max (meters.inL, l);
+        meters.inR = std::max (meters.inR, r);
+        meters.outL = std::max (meters.outL, l);
+        meters.outR = std::max (meters.outR, r);
         const double* rows[2] = { work[0].data(), work[1].data() };
         limiter.feed (rows, nch, n);
     }

@@ -442,7 +442,7 @@ namespace mixology::dsp
         {
             for (int c = 0; c < nch; ++c) audio[static_cast<std::size_t> (c)][static_cast<std::size_t> (pos)] = x[c][i];
             if (nch == 1 && channels == 2) audio[1][static_cast<std::size_t> (pos)] = x[0][i];
-            pos = (pos + 1) % ringSize;
+            if (++pos == ringSize) pos = 0;
         }
         needFresh = true;
     }
