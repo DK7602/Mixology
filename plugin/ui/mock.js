@@ -18,7 +18,7 @@
     ["Lead Vox", -2, 0.5, "#4fd66b", 1], ["FX", -14, 0.7, "#d6d23a", 0], ["Adlibs", -7.5, 0.6, "#d68a3a", 1], ["Vox Double", -13, 0.3, "#6bd64f", 0],
     ["Pad", -16, 0.5, "#5a7bd6", 0], ["Riser", -18, 0.5, "#c7c7c7", 0], ["FX 1-Vox Verb", -12, 0.5, "#9a6bd6", 1],
   ].map(([name, db, pan, colour, link]) => ({ name, hash: hashOf(name), volume: toNorm(db), pan, mute: false, solo: false, read: name === "FX", write: false, colour, link: !!link, trim: 0, protected: name === "Lead Vox" }));
-  const MOCK_DAW = { key: location.hash === "#studioone" ? "studioone" : "cubase", picked: location.hash === "#studioone", from: 3, detected: "cubase" };
+  const MOCK_DAW = { key: location.hash.slice(1) || "cubase", picked: !!location.hash, from: 3, detected: "cubase" };   // #fl, #ableton, #studioone...
   const B = { vocalOwn: {}, offset: 0, lastMove: "", log: [], version: 1, restore: {}, an: { state: "idle", seconds: 0, playing: true, report: null, auto: { on: false, pause: "", seconds: 0, checked: 0, updated: 0 } }, settings: {},
     apply: { active: false, what: "", done: 0, total: 0, skipped: 0, message: "", notes: [], serial: 0, canUndo: false, undoWhat: "", hearingReference: false },
     planId: 0, plan: null, undo: null };

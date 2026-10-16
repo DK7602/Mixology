@@ -1,13 +1,13 @@
 # Mixology
 
-Intelligent multitrack mixing engineer for Cubase (VST3), the missing link between **Voxology** (vocals) and
+Intelligent multitrack mixing engineer for Cubase, FL Studio and Ableton Live (VST3; AU too on a Mac), the missing link between **Voxology** (vocals) and
 **Masterology** (mastering). Same template as both: JUCE 8, framework-free C++20 engine with Catch2 tests,
 HTML / CSS / JS interface in the platform web view, GitHub Actions builds on every push.
 
 The plan and milestones: [docs/PLAN.md](docs/PLAN.md). User manual (also built into the plug-in): [docs/MANUAL.md](docs/MANUAL.md).
 Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_TEST.md) (passed), [docs/M3_TEST.md](docs/M3_TEST.md), [docs/M4_TEST.md](docs/M4_TEST.md), [docs/M5_TEST.md](docs/M5_TEST.md), [docs/M6_TEST.md](docs/M6_TEST.md) (current).
 
-## Status: v0.17.0
+## Status: v0.18.0
 
 | Piece | State |
 | --- | --- |
@@ -34,6 +34,8 @@ Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_T
 | Opens as you left it (v0.14.0): the History, the advice (what Analyze Mix heard) and the restore points are saved with the project | Passed in Cubase |
 | Your ears per vocal track (v0.15.0): pick a lead vocal track on the vocal point, Too quiet / Sounds right / Too loud for it; Balance and Auto Mix move each to its own level | Built, waiting for the test |
 | The Mix Assistant knows what's fixed (v0.16.0): Done points (a tool fixed it since Mixology listened), OPEN <TOOL> on each point; Vocal Pocket dips inside 1.6 - 4 kHz and deepens a dip it heard | Built, waiting for the test |
+| Sonicology (v0.17.0, with Voxology 0.50.3 and Masterology 0.29.2): the company name in all three, a macOS build (VST3 + AU; Mixology makes its own MIDI ports), one installer per platform for the whole suite (`installer/`, `.github/workflows/sonicology.yml`) | Built; the installers are being tried by the beta testers |
+| Faders in FL Studio and Ableton Live (v0.18.0): one Python bridge core (`bridge/common/mixology_bridge_core.py`, the Cubase script's protocol) with an adapter per DAW (`bridge/flstudio`, `bridge/ableton`); the setup steps per DAW in Settings > Bridge | Passed the simulator (`tools/bridge-sim/run_py.py`, 214 checks, in ctest); waiting for FL Studio and Live |
 | CPU check (v0.8.2): 48 real Links + Mixology timed on every build (tools/cpucheck); the idle chain made cheaper | Done: typical 48-track session about 17 % of one core |
 
 ## Layout

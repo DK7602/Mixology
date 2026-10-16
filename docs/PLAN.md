@@ -181,6 +181,18 @@ from each point to its tool): Vocal Pocket's dip stays inside 1.6 - 4 kHz (it ch
 range the advice measures), knows the Assist EQ Mixology heard (assistAtAnalysis: a dip heard but not enough goes
 deeper, max 6 dB; one made since counts as done); points a tool fixed since Mixology listened are Done (ticked, last);
 OPEN <TOOL> on each point a tool fixes.
+v0.17.0 (user: "the installer and a production suite package with mac version, faders in other daws, Sonicology
+company name in all three", for a few producer friends to try): the company is Sonicology in all three (and the Link);
+a macOS build (VST3 + AU, Mixology makes its own CoreMIDI ports "Mixology to Cubase" / "Cubase to Mixology"; an IAC
+bus with those names is used when there is one); the suite installers (installer/: Inno Setup for Windows, a .pkg for
+macOS, built by .github/workflows/sonicology.yml from the three repos).
+v0.18.0: faders in FL Studio and Ableton Live. bridge/common/mixology_bridge_core.py speaks the Cubase script's
+protocol (the hub needs no change), with a small adapter per DAW: bridge/flstudio (a MIDI controller script: the
+inserts in use, input and output on the same Port number) and bridge/ableton (a Remote Script: tracks, then return
+tracks). Each DAW's folder keeps a copy of the core (ctest checks they're identical). tools/bridge-sim/run_py.py runs
+the real scripts against simulated FL Studio and Live mixers and the real Mixology session (214 checks, in ctest).
+To check with the testers: does FL / Live tell Mixology Link its track name (pairing), FL's dB readout, Live's fader
+curve (Mixology learns it), and on a Mac whether the DAW needs a MIDI refresh after Mixology makes its ports.
 Still to come in M6: code signing (later).
 
 ### Built in v0.11.0 - Auto Analyze (asked 2026-10-15: "once an analyze mix has been run should have an auto analyze option")
@@ -204,8 +216,10 @@ Still to come in M6: code signing (later).
   keep it and map the 75 styles onto it, never rename its choices.
 - Needs push access to the Voxology and Masterology repositories from this session (or their own threads).
 
-### Later - Other DAWs (asked 2026-10-15: "add that to the plan for later")
-Today everything except the Tracks page and Auto Mix's fader / pan moves works in any VST3 host (Studio One, Reaper,
+### Other DAWs (asked 2026-10-15: "add that to the plan for later"; FL Studio and Ableton built in v0.18.0)
+Next: Logic Pro and Cakewalk Sonar, through Mackie Control (both take a Mackie Control surface on the two ports:
+Mixology would speak it itself, 8 channels a bank, fader positions without dB text, so the fader law has to be learned).
+Before v0.18.0 everything except the Tracks page and Auto Mix's fader / pan moves works in any VST3 host (Studio One, Reaper,
 FL Studio, Ableton Live, Bitwig...): Mixology on the master, Mixology Link, Analyze Mix, Polish's processing, Voxology,
 Masterology. The fader and pan moves need the Cubase MIDI Remote script (Nuendo has the same system: probably works,
 untested).
@@ -216,5 +230,5 @@ untested).
 - Check per DAW: does it tell plug-ins their track name (the Links pair by name; without it they'd need a name typed
   into each Link), and does it run all plug-ins in one process (the registry and the suite link need that: Bitwig's
   sandbox, Reaper / FL Studio bridging put plug-ins apart).
-- AU (Logic) and AAX (Pro Tools) formats, and a macOS build of Mixology: later still.
+- AU (Logic) and the macOS build: done in v0.17.0. AAX (Pro Tools): later still.
 

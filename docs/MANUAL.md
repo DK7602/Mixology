@@ -3,7 +3,7 @@
 Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list all three are under Sonicology.
 
-Manual for version 0.17.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
+Manual for version 0.18.0 (the interface, live meters, the faders in Cubase, FL Studio and Ableton Live, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -31,6 +31,7 @@ fix):
 | Stereo page: vectorscope and correlation | Live |
 | Master page: loudness history, hand-off check for Masterology | Live |
 | Tracks page: your real Cubase channels (names, faders, pan, mute, solo), 12 at a time | Live, both ways, through the Cubase bridge |
+| The same in FL Studio (mixer inserts) and Ableton Live (tracks and return tracks) | New: built and tested against a simulator, not yet in the real programs |
 | Mixology Link on a track: its level on the Tracks page, a Trim, the Assist EQ | Live |
 | Analyze Mix and the Mix Assistant's advice; track roles; the analyzer's track colours | Live |
 | Auto Mix, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match | Live |
@@ -54,7 +55,8 @@ each Mixology Link, and the modules you switch on (see "Processing" below).
 ## Where to put it
 
 Insert **Mixology** on the **Stereo Out** (after your mix, before Masterology). It measures the whole mix
-there. The Tracks page shows your channels through the Cubase bridge.
+there (FL Studio: the Master insert; Ableton Live: the Main track). The Tracks page shows your channels through the
+DAW bridge.
 
 Insert **Mixology Link** on the tracks you want Mixology to hear one by one, after the track's other plug-ins.
 It is light (no latency, very little CPU) and passes the sound through, apart from its Trim and the processing
@@ -69,8 +71,9 @@ another if it got it wrong. Voxology and Masterology share it: pick it in any of
 newest choice wins, also after you reopen the project). BandLab: pick **Cakewalk** (BandLab's desktop DAW for
 Windows). BandLab's web studio (in the browser or the app) can't load plug-ins, so the three can't run there.
 
-**Moving faders needs Cubase (for now).** Mixology moves faders through Cubase's MIDI Remote (the Cubase Bridge). In
-another DAW, Analyze Mix, the Mix Assistant, Mixology Link and every tool's EQ, compression, space and the mix's tone
+**Moving faders works in Cubase, FL Studio and Ableton Live.** Mixology moves their faders through a small bridge
+script in the DAW (see "The DAW bridge" below); the Bridge tab in Settings is named after your DAW. In
+another DAW (Logic Pro and Cakewalk are next), Analyze Mix, the Mix Assistant, Mixology Link and every tool's EQ, compression, space and the mix's tone
 work as usual; the Tracks page and the fader and pan moves don't: Auto Mix and Balance list those moves for you to set
 by hand (untick their rows to apply the rest). A level and pan control inside each Mixology Link, so this works in any
 DAW, is planned (docs/PLAN.md, "Link Mix mode").
@@ -106,35 +109,67 @@ Mixology remembers your choice.
 
 Knobs: drag up / down (hold Shift for fine steps), scroll, or use the arrow keys. Double-click resets.
 
-## The Cubase bridge (one-time setup, about 5 minutes)
+## The DAW bridge (one-time setup, about 5 minutes)
 
-Mixology moves the real MixConsole faders through Cubase's own MIDI Remote system and two virtual MIDI
-ports. Nothing is installed inside Cubase except a small script.
+Mixology moves the real mixer faders through a small script inside your DAW (Cubase's MIDI Remote, an FL Studio
+controller script, an Ableton Live control surface) and two virtual MIDI ports. The Sonicology installer puts the
+script for each DAW in place. Settings (gear) > **Bridge** (named after your DAW: "Cubase Bridge", "FL Studio
+Bridge", "Ableton Live Bridge") shows these steps for the DAW you picked.
 
-1. **Windows:** install **loopMIDI** (free, by Tobias Erichsen). Click **+** twice and name the ports exactly
-   `Mixology to Cubase` and `Cubase to Mixology`. Tick "Autostart" in loopMIDI's tray menu.
-   **Mac:** nothing to install: Mixology makes these two ports itself once its window has been open (start
-   Cubase, open Mixology once, then do step 3).
-2. The Sonicology installer puts the script in place. Without it: copy the `Mixology` folder from the download's
+**The two ports (every DAW).**
+- **Windows:** install **loopMIDI** (free, by Tobias Erichsen). Click **+** twice and name the ports exactly
+  `Mixology to Cubase` and `Cubase to Mixology` (the names say Cubase; they work for every DAW). Tick "Autostart" in
+  loopMIDI's tray menu.
+- **Mac:** nothing to install: Mixology makes these two ports itself once its window has been open. If your DAW was
+  already running, restart it (or refresh its MIDI devices) so it sees them.
+
+### Cubase
+
+1. The Sonicology installer puts the script in place. Without it: copy the `Mixology` folder from the download's
    `Cubase MIDI Remote` folder into `Documents\Steinberg\Cubase\MIDI Remote\Driver Scripts\Local\` (Mac:
    `~/Documents/Steinberg/Cubase/MIDI Remote/Driver Scripts/Local/`).
-3. Start Cubase. Open **Studio > Studio Setup > MIDI Port Setup** and untick **In 'All MIDI Inputs'**
+2. Start Cubase. Open **Studio > Studio Setup > MIDI Port Setup** and untick **In 'All MIDI Inputs'**
    for both Mixology ports.
-4. Open the **MIDI Remote** tab (lower zone). "Mixology Bridge" should appear on its own. If it doesn't,
+3. Open the **MIDI Remote** tab (lower zone). "Mixology Bridge" should appear on its own. If it doesn't,
    click **+** (Add MIDI Controller Surface), pick vendor **Mixology**, model **Bridge**, input
    `Mixology to Cubase`, output `Cubase to Mixology`.
-5. Open Mixology. **Settings (gear) > Cubase Bridge** turns green, and the Tracks page shows your channels.
+4. Open Mixology (on the Stereo Out). **Settings > Cubase Bridge** turns green, and the Tracks page shows your
+   channels.
+
+### FL Studio
+
+1. The installer puts the script in `Documents\Image-Line\FL Studio\Settings\Hardware\Mixology Bridge` (Mac:
+   `~/Documents/Image-Line/FL Studio/Settings/Hardware/Mixology Bridge`).
+2. In FL Studio: **Options > MIDI settings**. In the **Input** list pick `Mixology to Cubase`, tick **Enable**, set
+   **Controller type** to **Mixology Bridge** and **Port** to **200**. In the **Output** list pick
+   `Cubase to Mixology` and set its **Port** to **200** too (the same number: that is how FL knows where the script's
+   answers go).
+3. Open Mixology (on the Master insert). **Settings > FL Studio Bridge** turns green.
+
+Mixology's strips are the mixer inserts in use: ones you renamed, or ones with an effect on them (Mixology Link
+counts). Unused "Insert 37"s are left out, and the Master is never moved.
+
+### Ableton Live
+
+1. The installer puts the script in `Documents\Ableton\User Library\Remote Scripts\MixologyBridge` (Mac:
+   `~/Music/Ableton/User Library/Remote Scripts/MixologyBridge`). Restart Live after installing.
+2. In Live: **Settings > Link, Tempo & MIDI**. In the first free **Control Surface** row pick **MixologyBridge**,
+   Input `Mixology to Cubase`, Output `Cubase to Mixology`.
+3. Open Mixology (on the Main track). **Settings > Ableton Live Bridge** turns green.
+
+Mixology's strips are Live's tracks, then its return tracks, in mixer order; the Main track is never moved. Live
+shows dB with one decimal, so an exact value you type lands within 0.05 dB.
 
 ## Moving faders
 
-Every strip on the Tracks page moves its real MixConsole channel:
+Every strip on the Tracks page moves its real mixer channel (Cubase's MixConsole, FL Studio's mixer, Live's tracks):
 
 - **Drag** the fader. **Double-click** the fader cap for 0 dB.
 - **Mouse wheel** over a fader: 0.5 dB per notch (hold Shift for 0.1 dB).
 - **Click the level** under the fader and type an exact value (`-6`, `0`, `-inf`), then Enter. Mixology keeps
-  adjusting until Cubase shows exactly that number.
+  adjusting until your DAW shows exactly that number.
 - **Pan** knob, **S** (solo) and **M** (mute).
-- Moves made in Cubase show up in Mixology right away.
+- Moves made in your DAW show up in Mixology right away.
 
 **More than 12 channels: the scroll bar** (top of the Tracks page) shows which 12 you see among all of them
 ("13–24 of 41"). Drag it, click where you want to be, or scroll the mouse wheel over it: the strips follow when you let
@@ -147,18 +182,18 @@ also Auto Mix won't). It is saved with the project and follows the channel when 
 
 **Restore.** Before Mixology changes a channel the first time, it remembers how it was. A small **↺** on a strip
 puts that channel back; **↺ Restore** on the top bar puts back every channel Mixology changed (channels outside the
-12 in view: move the bank to them and press Restore again). Settings > Cubase Bridge > **Keep the mix as it is
+12 in view: move the bank to them and press Restore again). Settings > Bridge > **Keep the mix as it is
 now** makes the current mix the new starting point. The restore points are saved with the project: Restore still
 goes back to how the song was before Mixology's first change after you open it again.
 
 Safety rules (always on):
 
 - Every move names the channel you were looking at. If the bank moved or tracks were reordered or renamed in
-  between, the move is refused (in Mixology, and again by the Cubase script) instead of landing on another channel.
+  between, the move is refused (in Mixology, and again by the bridge script) instead of landing on another channel.
 - A channel with automation **Write (W)** on is never moved (red **W** on the strip), so no automation gets
-  recorded by accident. With **Read (R)** on (green **R**) you get a warning: if that channel has volume
+  recorded by accident (Cubase; FL Studio and Live don't tell the script). With **Read (R)** on (green **R**) you get a warning: if that channel has volume
   automation, playback moves the fader back.
-- The Stereo Out is never part of the bank.
+- The Stereo Out (FL Studio's Master, Live's Main) is never part of the bank.
 - Two channels with the same name: both can be moved, but Restore and Mixology Link can't tell them apart
   (the name shows in amber). Give one a different name.
 
@@ -514,11 +549,11 @@ Click a step to see each change ("'Kick' fader −3.2 → −5.0 dB"). Then:
 Good to know:
 - A fader or pan you moved in Cubase itself after Mixology moved it stays where you put it (the log says so). Moves
   you make in Cubase are not Mixology's: Cubase's own Edit > History has those.
-- Faders need the Cubase bridge connected; processing changes don't.
+- Faders need the DAW bridge connected; processing changes don't.
 - A track renamed or removed since: its processing changes are skipped (the message names it).
 - The history is saved with the project (the last 200 steps), the same for every Mixology window. Open the song again
   and the steps are still there, under **EARLIER SESSIONS (SAVED WITH THE PROJECT)**, with their date: GO BACK HERE and
-  UNDO work on them too (faders need the Cubase bridge connected). A very long history keeps its newest steps. With the
+  UNDO work on them too (faders need the DAW bridge connected). A very long history keeps its newest steps. With the
   advice, Mixology adds about 1 MB to the project file (up to about 2 MB after a two-minute Auto Analyze on 30 tracks).
 
 ## How it works with Voxology and Masterology
@@ -588,7 +623,18 @@ If Cubase crackles or the performance meter peaks:
   Manager.
 - **The script disappears after restarting Cubase**: a known Cubase issue with some script surfaces. Add it
   again with **+** in the MIDI Remote tab.
-- **Connected, but no channels on the Tracks page**: press **Refresh** in Settings > Cubase Bridge. If
+- **FL Studio: "Waiting for the Mixology Bridge script"**: in Options > MIDI settings, check that the Input
+  `Mixology to Cubase` is enabled with Controller type **Mixology Bridge**, and that it and the Output
+  `Cubase to Mixology` have the **same Port number** (200). "Mixology Bridge" missing from the Controller type list:
+  the script isn't in `Settings\Hardware\Mixology Bridge` (run the installer again), then restart FL Studio.
+- **FL Studio: an insert is missing from the Tracks page**: Mixology only shows inserts in use. Rename it or put an
+  effect on it (Mixology Link counts), then press Refresh.
+- **Ableton Live: MixologyBridge isn't in the Control Surface list**: the folder must be
+  `User Library/Remote Scripts/MixologyBridge` (run the installer again), then restart Live.
+- **Mac: the two Mixology ports aren't in your DAW's MIDI list**: Mixology makes them when its window first opens.
+  Open Mixology, then restart the DAW (or refresh its MIDI devices). Prefer fixed ports? Make two IAC Driver buses
+  (Audio MIDI Setup > IAC Driver) named exactly `Mixology to Cubase` and `Cubase to Mixology`: Mixology uses those.
+- **Connected, but no channels on the Tracks page**: press **Refresh** in Settings > Bridge. If
   the slots stay empty, check that the script says v3 or later, then **Copy log** and send it.
 - **"That strip now shows ..."**: the bank or the track order changed between your click and the move. Nothing
   was moved; just try again on the strip as it is now.
@@ -634,4 +680,4 @@ If Cubase crackles or the performance meter peaks:
   Voxology and the Tracks page must see the same name (rename the track in Cubase if two tracks share one).
 - **The Master page doesn't show Masterology**: update Masterology to 0.26 or newer, and put it in the same project
   (after Mixology on the Stereo Out). It appears a moment after Masterology is inserted.
-- **Send us the log**: Settings > Cubase Bridge > **Copy log**, then paste it into the chat.
+- **Send us the log**: Settings > Bridge > **Copy log**, then paste it into the chat.

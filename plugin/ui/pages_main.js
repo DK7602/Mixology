@@ -4,7 +4,7 @@ import { el, box, icon, fmt, clamp, Knob, Meter, select, graph, freqToX, preview
 import { ROLES, ROLE_ORDER, GROUPS, guessRole, roleIcon } from "./roles.js";
 import { openSuggestion, openTracksSheet } from "./sheets.js";
 import { openToolSheet, openReferenceSheet } from "./tools.js";
-import { dawName, say } from "./daws.js";
+import { dawName, say, hasBridge } from "./daws.js";
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
@@ -314,13 +314,13 @@ export function buildOverview(root, app) {
     sub.textContent = "What Mixology hears right now:";
     const n = (b.slots || []).filter((s) => s.present).length;
     if (b.link === "connected")
-      card("check", "#39e26b", `Cubase connected: ${n} channel${n === 1 ? "" : "s"} in view`, b.linksPaired
+      card("check", "#39e26b", `${hasBridge(app.daw) ? dawName(app.daw) : "DAW"} connected: ${n} channel${n === 1 ? "" : "s"} in view`, b.linksPaired
         ? `${b.linksPaired} with Mixology Link · move any fader on the Tracks page`
         : "Move any fader on the Tracks page. Add Mixology Link to tracks to see their levels", () => app.showPage("tracks"));
-    else if (app.daw !== "cubase")
-      card("sliders", "#19d3ff", `${dawName(app.daw)}: you set the faders`, "Mixology moves faders in Cubase only (for now). Auto Mix and Balance list the moves for you", () => app.openSettings("bridge"));
+    else if (!hasBridge(app.daw))
+      card("sliders", "#19d3ff", `${dawName(app.daw)}: you set the faders`, "Mixology moves faders in Cubase, FL Studio and Ableton Live (for now). Auto Mix and Balance list the moves for you", () => app.openSettings("bridge"));
     else
-      card("link", "#ffc04a", "Not connected to Cubase", b.portProblem ? "Ports missing: open the setup steps" : "Open Settings > Cubase Bridge for the setup", () => app.openSettings("bridge"));
+      card("link", "#ffc04a", `Not connected to ${dawName(app.daw)}`, b.portProblem ? "Ports missing: open the setup steps" : `Open Settings > ${dawName(app.daw)} Bridge for the setup`, () => app.openSettings("bridge"));
     if (st > -70)
       card("speaker", "#19d3ff", `Mix loudness ${fmt.lufs(st)} LUFS (short-term)`, "Information only: Masterology sets the final loudness");
     else
@@ -716,13 +716,13 @@ export function buildTracks(root, app) {
       : paired === 0 ? "Drag, scroll or click a level to move it. Meters: add Mixology Link to your tracks."
       : `Drag, scroll or click a level to move it. <span style="color:var(--green)">${paired}</span> with Mixology Link.`;
     cover.style.display = connected ? "none" : "grid";
-    const notCubase = app.daw !== "cubase";
-    coverBtn.textContent = notCubase ? "Settings: your DAW" : "Open the Cubase Bridge setup";
-    coverText.innerHTML = notCubase
-      ? `<b>This page moves Cubase's faders.</b><br>You work in ${esc(dawName(app.daw))}: Mixology can't move its faders yet, so set levels with ${esc(say(app.daw, "mixer"))}. Analyze Mix, the Mix Assistant, Mixology Link and every tool's EQ, compression and space work as usual; Auto Mix lists the fader moves for you to make.`
+    const noBridge = !hasBridge(app.daw), dn = dawName(app.daw);
+    coverBtn.textContent = noBridge ? "Settings: your DAW" : `Open the ${dn} Bridge setup`;
+    coverText.innerHTML = noBridge
+      ? `<b>This page moves your DAW's faders.</b><br>You work in ${esc(dn)}: Mixology can't move its faders yet (Cubase, FL Studio and Ableton Live for now), so set levels with ${esc(say(app.daw, "mixer"))}. Analyze Mix, the Mix Assistant, Mixology Link and every tool's EQ, compression and space work as usual; Auto Mix lists the fader moves for you to make.`
       : b && b.portProblem
-      ? `<b>Mixology can't reach Cubase yet.</b><br>${b.portProblem}`
-      : `<b>Waiting for Cubase.</b><br>Mixology talks to the real MixConsole through a small Cubase MIDI Remote script and two virtual MIDI ports. It takes about five minutes to set up once.`;
+      ? `<b>Mixology can't reach ${esc(dn)} yet.</b><br>${b.portProblem}`
+      : `<b>Waiting for ${esc(dn)}.</b><br>Mixology talks to ${esc(say(app.daw, "mixer"))} through a small script and two virtual MIDI ports. It takes about five minutes to set up once.`;
 
     const marks = (b && b.marks) || [];
     const light = document.documentElement.dataset.theme === "light";

@@ -30,6 +30,22 @@ add_executable(bridge_session_cli ../tools/bridge-sim/session_cli.cpp)
 target_link_libraries(bridge_session_cli PRIVATE mixology_dsp)
 set_target_properties(bridge_session_cli PROPERTIES FOLDER "Mixology")
 
+# The FL Studio and Ableton Live bridges (Python): the real scripts against fake DAWs and the same session, and
+# the bridge core is the same file in bridge/common and in each script's folder.
+find_package(Python3 COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME python_bridges_end_to_end
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../tools/bridge-sim/run_py.py $<TARGET_FILE:bridge_session_cli>)
+    add_test(NAME bridge_core_copies_in_sync
+             COMMAND ${CMAKE_COMMAND} -E compare_files
+                     ${CMAKE_CURRENT_SOURCE_DIR}/../bridge/common/mixology_bridge_core.py
+                     "${CMAKE_CURRENT_SOURCE_DIR}/../bridge/flstudio/Mixology Bridge/mixology_bridge_core.py")
+    add_test(NAME bridge_core_copies_in_sync_live
+             COMMAND ${CMAKE_COMMAND} -E compare_files
+                     ${CMAKE_CURRENT_SOURCE_DIR}/../bridge/common/mixology_bridge_core.py
+                     ${CMAKE_CURRENT_SOURCE_DIR}/../bridge/ableton/MixologyBridge/mixology_bridge_core.py)
+endif()
+
 find_program(NODE_EXECUTABLE node)
 if(NODE_EXECUTABLE)
     add_test(NAME bridge_end_to_end

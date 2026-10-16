@@ -10,10 +10,16 @@ Thanks for trying the beta. Nothing here is finished: tell us what's confusing, 
 
 WHAT THE INSTALLER PUTS WHERE
   Windows   the plug-ins (VST3) in C:\Program Files\Common Files\VST3
-            the Cubase script in Documents\Steinberg\Cubase\MIDI Remote\Driver Scripts\Local\Mixology
+            the bridge scripts (they let Mixology move your DAW's faders) in your Documents folder:
+              Cubase      Documents\Steinberg\Cubase\MIDI Remote\Driver Scripts\Local\Mixology
+              FL Studio   Documents\Image-Line\FL Studio\Settings\Hardware\Mixology Bridge
+              Ableton     Documents\Ableton\User Library\Remote Scripts\MixologyBridge
             this Read Me and the manuals in C:\Program Files\Sonicology
   Mac       the plug-ins in /Library/Audio/Plug-Ins/VST3 (VST3) and /Library/Audio/Plug-Ins/Components (AU)
-            the Cubase script in ~/Documents/Steinberg/Cubase/MIDI Remote/Driver Scripts/Local/Mixology
+            the bridge scripts:
+              Cubase      ~/Documents/Steinberg/Cubase/MIDI Remote/Driver Scripts/Local/Mixology
+              FL Studio   ~/Documents/Image-Line/FL Studio/Settings/Hardware/Mixology Bridge
+              Ableton     ~/Music/Ableton/User Library/Remote Scripts/MixologyBridge
             this Read Me and the manuals in /Applications/Sonicology
   All three are listed under "Sonicology" in your DAW's plug-in list. Each plug-in also has its full manual
   inside (the ? button).
@@ -41,12 +47,28 @@ FIRST TIME IN YOUR DAW
 
 
 MOVING FADERS
-  Cubase    Mixology moves the MixConsole faders itself (Settings > Cubase Bridge, steps inside).
+  In Cubase, FL Studio and Ableton Live, Mixology moves the mixer faders itself (volume, pan, mute, solo).
+  Mixology's Settings (the gear) has a Bridge tab named after your DAW with the steps; in short:
+
+  The two MIDI ports (every DAW)
             Windows: install loopMIDI (free, tobias-erichsen.de) and add two ports named exactly
-            "Mixology to Cubase" and "Cubase to Mixology". Mac: nothing extra, Mixology makes the ports itself.
-  FL Studio, Ableton Live, Logic Pro, Cakewalk Sonar, others
+            "Mixology to Cubase" and "Cubase to Mixology" (the names say Cubase; they work for every DAW).
+            Mac: nothing to do, Mixology makes the two ports itself once its window has been open. If your DAW
+            started before that, restart the DAW (or refresh its MIDI devices) so it sees them.
+  Cubase    Usually finds "Mixology Bridge" on its own (Studio > MIDI Remote). In Studio Setup > MIDI Port Setup,
+            untick "In 'All MIDI Inputs'" for both Mixology ports.
+  FL Studio Options > MIDI settings. Input: pick "Mixology to Cubase", tick Enable, Controller type
+            "Mixology Bridge", Port 200. Output: pick "Cubase to Mixology", Port 200 (the same number).
+  Ableton   Restart Live after installing. Settings > Link, Tempo & MIDI: in a free Control Surface row pick
+            "MixologyBridge", Input "Mixology to Cubase", Output "Cubase to Mixology".
+  Then open Mixology: its Bridge tab turns green ("Connected to ...").
+
+  Logic Pro, Cakewalk Sonar, others
             For now Mixology tells you every fader move (Auto Mix and Balance list them with the exact dB) and
-            you set the faders. Fader control for FL Studio, Ableton Live, Logic Pro and Cakewalk is on the way.
+            you set the faders. Fader control for Logic Pro and Cakewalk is next.
+
+  New in this beta: the FL Studio and Ableton bridges. If yours doesn't connect, open Mixology's Bridge tab,
+  press Copy log and send us what it says.
 
 
 WHAT WE'D LOVE TO HEAR

@@ -81,8 +81,10 @@ jobs:
           cp "src/$manual" "$P/Manual.md"
           grep -oE 'VERSION [0-9]+\.[0-9]+\.[0-9]+' src/CMakeLists.txt | head -1 | cut -d' ' -f2 > "$P/version.txt"
           if [ "${{ matrix.plugin }}" = "Mixology" ]; then
-            mkdir -p "$P/Cubase MIDI Remote"
+            mkdir -p "$P/Cubase MIDI Remote" "$P/FL Studio" "$P/Ableton"
             cp -R src/bridge/cubase/Mixology "$P/Cubase MIDI Remote/"
+            cp -R "src/bridge/flstudio/Mixology Bridge" "$P/FL Studio/"
+            cp -R src/bridge/ableton/MixologyBridge "$P/Ableton/"
           fi
           find part -maxdepth 3 | sort
           echo "${{ matrix.plugin }} $(cat "$P/version.txt")"

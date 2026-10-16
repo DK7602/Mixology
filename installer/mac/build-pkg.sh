@@ -47,23 +47,30 @@ plugins Voxology voxology
 plugins Mixology mixology
 plugins Masterology masterology
 
-# The Cubase bridge script: kept in /Library/Application Support/Sonicology, copied into the user's Cubase folder.
-CUB="$WORK/root-cubase/Library/Application Support/Sonicology/Cubase MIDI Remote"
-mkdir -p "$CUB" "$WORK/scripts-cubase"
-cp -R "$STAGE/Mixology/Cubase MIDI Remote/Mixology" "$CUB/"
-cat > "$WORK/scripts-cubase/postinstall" <<'EOF'
+# The bridge scripts: kept in /Library/Application Support/Sonicology, copied into the user's DAW folders
+# (they live in the user's own Documents / Music folder, which an installer running as root only reaches this way).
+userscript () {   # <id> <source folder in the stage> <folder name> <destination, relative to the user's home>
+  local id="$1" src="$2" name="$3" dest="$4"
+  local keep="$WORK/root-$id/Library/Application Support/Sonicology/$id"
+  mkdir -p "$keep" "$WORK/scripts-$id"
+  cp -R "$src" "$keep/"
+  cat > "$WORK/scripts-$id/postinstall" <<SCRIPT
 #!/bin/sh
-U=$(stat -f%Su /dev/console)
-[ -z "$U" ] || [ "$U" = "root" ] && exit 0
-H=$(dscl . -read "/Users/$U" NFSHomeDirectory | awk '{print $2}')
-D="$H/Documents/Steinberg/Cubase/MIDI Remote/Driver Scripts/Local"
-sudo -u "$U" mkdir -p "$D"
-rm -rf "$D/Mixology"
-sudo -u "$U" cp -R "/Library/Application Support/Sonicology/Cubase MIDI Remote/Mixology" "$D/"
+U=\$(stat -f%Su /dev/console)
+[ -z "\$U" ] || [ "\$U" = "root" ] && exit 0
+H=\$(dscl . -read "/Users/\$U" NFSHomeDirectory | awk '{print \$2}')
+D="\$H/$dest"
+sudo -u "\$U" mkdir -p "\$D"
+rm -rf "\$D/$name"
+sudo -u "\$U" cp -R "/Library/Application Support/Sonicology/$id/$name" "\$D/"
 exit 0
-EOF
-chmod +x "$WORK/scripts-cubase/postinstall"
-component cubase "$WORK/root-cubase" "$WORK/scripts-cubase"
+SCRIPT
+  chmod +x "$WORK/scripts-$id/postinstall"
+  component "$id" "$WORK/root-$id" "$WORK/scripts-$id"
+}
+userscript cubase "$STAGE/Mixology/Cubase MIDI Remote/Mixology" "Mixology" "Documents/Steinberg/Cubase/MIDI Remote/Driver Scripts/Local"
+userscript flstudio "$STAGE/Mixology/FL Studio/Mixology Bridge" "Mixology Bridge" "Documents/Image-Line/FL Studio/Settings/Hardware"
+userscript ableton "$STAGE/Mixology/Ableton/MixologyBridge" "MixologyBridge" "Music/Ableton/User Library/Remote Scripts"
 
 # The Read Me and the manuals, in /Applications/Sonicology.
 DOCS="$WORK/root-docs/Applications/Sonicology"

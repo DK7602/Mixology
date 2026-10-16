@@ -2,7 +2,7 @@
 
 import { $, el, icon, fmt, popupMenu } from "./ui.js";
 import { GENRES } from "./mixstyles.js";
-import { DAWS, dawOf, dawName, say } from "./daws.js";
+import { DAWS, dawOf, dawName, say, hasBridge } from "./daws.js";
 import { ROLES, ROLE_ORDER, roleIcon } from "./roles.js";
 import { openToolSheet } from "./tools.js";
 
@@ -34,7 +34,7 @@ export function openSettings(app, tab = "bridge") {
   dawRow(app, body);
   const tabs = el("div", "", body, { display: "flex", gap: "10px", marginBottom: "18px" });
   const content = el("div", "", body);
-  const names = [["bridge", "Cubase Bridge"], ["display", "Display"], ["about", "About"]];
+  const names = [["bridge", `${hasBridge(app.daw) ? dawName(app.daw) : "DAW"} Bridge`], ["display", "Display"], ["about", "About"]];
   const chips = names.map(([id, label]) => {
     const c = el("div", "chip", tabs);
     c.textContent = label;
@@ -71,7 +71,7 @@ function dawRow(app, root) {
   sel.value = app.dawPicked ? app.daw : "";
   const note = el("span", "", row, { flex: "1", fontSize: "16px", color: "var(--text-dim)", lineHeight: "1.3" });
   const explain = () => {
-    note.textContent = (app.daw === "cubase" ? "Tips and fixes are written for Cubase. " : `Tips and fixes are written for ${dawOf(app.daw).name}. Moving faders (the Tracks page, Auto Mix's fader moves) needs Cubase for now. `)
+    note.textContent = (hasBridge(app.daw) ? `Tips and fixes are written for ${dawOf(app.daw).name}; Mixology moves its faders through the bridge below. ` : `Tips and fixes are written for ${dawOf(app.daw).name}. Moving faders (the Tracks page, Auto Mix's fader moves) works in Cubase, FL Studio and Ableton Live for now. `)
       + "Voxology and Masterology follow your pick.";
   };
   explain();
@@ -99,19 +99,33 @@ function aboutPanel(app, root) {
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent || "");
 
+// The bridge's one-time setup in each DAW that has one (the Sonicology installer puts every script in place).
+function setupSteps(daw) {
+  const ports = isMac
+    ? `<li>The two MIDI ports: nothing to do. On a Mac, Mixology makes <code>Mixology to Cubase</code> and <code>Cubase to Mixology</code> itself once its window has been open (the names say Cubase; they work for every DAW).</li>`
+    : `<li>Install <b>loopMIDI</b> (free, by Tobias Erichsen). Add two ports named exactly <code>Mixology to Cubase</code> and <code>Cubase to Mixology</code> (the names say Cubase; they work for every DAW). Keep loopMIDI running (it can start with Windows).</li>`;
+  const ol = (items) => `<ol style="margin:10px 0 4px 0;padding-left:24px">${ports}${items}</ol>`;
+  if (daw === "fl") return ol(`
+      <li>The Sonicology installer puts the script in ${isMac ? "<code>~/Documents/Image-Line/FL Studio/Settings/Hardware/Mixology Bridge</code>" : "<code>Documents\\Image-Line\\FL Studio\\Settings\\Hardware\\Mixology Bridge</code>"}.</li>
+      <li>In FL Studio: <b>Options &gt; MIDI settings</b>. In the Input list pick <code>Mixology to Cubase</code>, tick <b>Enable</b>, set <b>Controller type</b> to <b>Mixology Bridge</b> and <b>Port</b> to <b>200</b>. In the Output list pick <code>Cubase to Mixology</code> and set its <b>Port</b> to <b>200</b> too (the same number: FL sends the script's answers there).</li>
+      <li>Open Mixology (on the Master). This panel turns green. Mixology's strips are FL's mixer inserts in use (renamed ones, or ones with an effect such as Mixology Link).</li>`);
+  if (daw === "ableton") return ol(`
+      <li>The Sonicology installer puts the script in ${isMac ? "<code>~/Music/Ableton/User Library/Remote Scripts/MixologyBridge</code>" : "<code>Documents\\Ableton\\User Library\\Remote Scripts\\MixologyBridge</code>"}. Restart Live after installing.</li>
+      <li>In Live: <b>Settings &gt; Link, Tempo &amp; MIDI</b>. In the first free <b>Control Surface</b> row pick <b>MixologyBridge</b>, Input <code>Mixology to Cubase</code>, Output <code>Cubase to Mixology</code>.</li>
+      <li>Open Mixology (on the Main track). This panel turns green. Mixology's strips are Live's tracks and return tracks.</li>`);
+  if (daw === "cubase") return ol(`
+      <li>The Sonicology installer puts the Cubase script in place. Without it: copy the <code>Mixology</code> folder from the download's <code>Cubase MIDI Remote</code> folder into ${isMac ? "<code>~/Documents/Steinberg/Cubase/MIDI Remote/Driver Scripts/Local/</code>" : "<code>Documents\\Steinberg\\Cubase\\MIDI Remote\\Driver Scripts\\Local\\</code>"}.</li>
+      <li>Start Cubase. In <b>Studio &gt; Studio Setup &gt; MIDI Port Setup</b>, untick <b>In 'All MIDI Inputs'</b> for both Mixology ports (so bridge messages never reach your instruments).</li>
+      <li>Cubase should find "Mixology Bridge" on its own (MIDI Remote tab). If not: MIDI Remote tab &gt; <b>+</b> (Add MIDI Controller Surface) &gt; vendor Mixology, model Bridge, input <i>Mixology to Cubase</i>, output <i>Cubase to Mixology</i>.</li>
+      <li>Open Mixology (on the Stereo Out). This panel turns green when it hears the script.</li>`);
+  return `<p style="margin:10px 0 4px">Mixology moves faders in Cubase, FL Studio and Ableton Live for now (Logic Pro and Cakewalk are next). In ${dawName(daw)} it lists every fader move for you (Auto Mix, Balance) with the exact dB; everything else works as usual.</p>`;
+}
+
 function bridgePanel(app, root) {
   root.style.fontSize = "19px";
   const status = el("div", "card", root, { position: "relative", padding: "16px 20px", marginBottom: "14px", lineHeight: "1.5" });
   const setup = el("details", "card", root, { position: "relative", padding: "12px 20px", marginBottom: "14px", lineHeight: "1.5" });
-  setup.innerHTML = `<summary style="cursor:pointer;font-weight:600;color:var(--gold)">One-time setup (about 5 minutes)</summary>
-    <ol style="margin:10px 0 4px 0;padding-left:24px">
-      ${isMac ? `<li>The two MIDI ports: nothing to do. On a Mac, Mixology makes <code>Mixology to Cubase</code> and <code>Cubase to Mixology</code> itself once its window has been open.</li>`
-        : `<li>Install <b>loopMIDI</b> (free, by Tobias Erichsen). Add two ports named exactly <code>Mixology to Cubase</code> and <code>Cubase to Mixology</code>. Keep loopMIDI running (it can start with Windows).</li>`}
-      <li>The Sonicology installer puts the Cubase script in place. Without it: copy the <code>Mixology</code> folder from the download's <code>Cubase MIDI Remote</code> folder into ${isMac ? "<code>~/Documents/Steinberg/Cubase/MIDI Remote/Driver Scripts/Local/</code>" : "<code>Documents\\Steinberg\\Cubase\\MIDI Remote\\Driver Scripts\\Local\\</code>"}.</li>
-      <li>Start Cubase. In <b>Studio &gt; Studio Setup &gt; MIDI Port Setup</b>, untick <b>In 'All MIDI Inputs'</b> for both Mixology ports (so bridge messages never reach your instruments).</li>
-      <li>Cubase should find "Mixology Bridge" on its own (MIDI Remote tab). If not: MIDI Remote tab &gt; <b>+</b> (Add MIDI Controller Surface) &gt; vendor Mixology, model Bridge, input <i>Mixology to Cubase</i>, output <i>Cubase to Mixology</i>.</li>
-      <li>Open Mixology (on the Stereo Out). This panel turns green when it hears the script.</li>
-    </ol>`;
+  setup.innerHTML = `<summary style="cursor:pointer;font-weight:600;color:var(--gold)">One-time setup (about 5 minutes)</summary>` + setupSteps(app.daw);
 
   const changesCard = el("div", "card", root, { position: "relative", padding: "16px 20px", marginBottom: "14px", lineHeight: "1.45" });
   el("div", "", changesCard, { fontWeight: "600", marginBottom: "6px", color: "var(--gold)" }).textContent = "Mixology's changes";
@@ -149,9 +163,10 @@ function bridgePanel(app, root) {
     if (!b) return;
     const ok = b.link === "connected";
     const dot = ok ? "ok" : b.link === "waiting" ? "warn" : "bad";
-    const linkText = { connected: "Connected to Cubase", waiting: "Ports open, waiting for the Mixology Bridge script in Cubase", lost: "Lost contact with Cubase: retrying", offline: "Not connected" }[b.link] || b.link;
+    const dn = hasBridge(app.daw) ? dawName(app.daw) : "your DAW";
+    const linkText = { connected: `Connected to ${dn}`, waiting: `Ports open, waiting for the Mixology Bridge script in ${dn}`, lost: `Lost contact with ${dn}: retrying`, offline: "Not connected" }[b.link] || b.link;
     status.innerHTML = `<div><span class="status-dot ${dot}"></span><b>${linkText}</b>${ok ? ` <span class="dim">(script v${b.script})</span>` : ""}</div>
-      <div class="dim" style="font-size:17px">Ports: <code>${b.toCubase}</code> (Mixology → Cubase), <code>${b.fromCubase}</code> (Cubase → Mixology)</div>
+      <div class="dim" style="font-size:17px">Ports: <code>${b.toCubase}</code> (Mixology → ${dn}), <code>${b.fromCubase}</code> (${dn} → Mixology)</div>
       ${b.portProblem ? `<div style="color:var(--amber);font-size:17px">${b.portProblem}</div>` : ""}`;
     if (!ok) setup.open = true;
 

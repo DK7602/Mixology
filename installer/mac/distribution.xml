@@ -14,6 +14,8 @@
         <line choice="mixology"/>
         <line choice="masterology"/>
         <line choice="cubase"/>
+        <line choice="flstudio"/>
+        <line choice="ableton"/>
         <line choice="docs"/>
     </choices-outline>
     <choice id="voxology" title="Voxology + Honey Tune" description="Vocals: Auto-Edit, tuning, cleanup, de-essing, compression and space (VST3 and Audio Unit).">
@@ -28,6 +30,12 @@
     <choice id="cubase" title="Cubase bridge script" description="Lets Mixology move Cubase's faders (copied into your Cubase MIDI Remote folder).">
         <pkg-ref id="com.sonicology.cubase"/>
     </choice>
+    <choice id="flstudio" title="FL Studio bridge script" description="Lets Mixology move FL Studio's faders (copied into FL Studio's Hardware folder).">
+        <pkg-ref id="com.sonicology.flstudio"/>
+    </choice>
+    <choice id="ableton" title="Ableton Live bridge script" description="Lets Mixology move Live's faders (copied into your User Library's Remote Scripts).">
+        <pkg-ref id="com.sonicology.ableton"/>
+    </choice>
     <choice id="docs" title="Read Me and manuals" description="In /Applications/Sonicology.">
         <pkg-ref id="com.sonicology.docs"/>
     </choice>
@@ -35,5 +43,7 @@
     <pkg-ref id="com.sonicology.mixology" version="@VERSION@">mixology.pkg</pkg-ref>
     <pkg-ref id="com.sonicology.masterology" version="@VERSION@">masterology.pkg</pkg-ref>
     <pkg-ref id="com.sonicology.cubase" version="@VERSION@">cubase.pkg</pkg-ref>
+    <pkg-ref id="com.sonicology.flstudio" version="@VERSION@">flstudio.pkg</pkg-ref>
+    <pkg-ref id="com.sonicology.ableton" version="@VERSION@">ableton.pkg</pkg-ref>
     <pkg-ref id="com.sonicology.docs" version="@VERSION@">docs.pkg</pkg-ref>
 </installer-gui-script>
