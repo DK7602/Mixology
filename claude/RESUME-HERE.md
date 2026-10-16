@@ -45,6 +45,7 @@ sends higher-resolution art, re-run it.
   assistAtAnalysis from the Links when such advice loads (assistGuessed, guessAssistAtAnalysis also in the 2 Hz
   timer for late Links), so a dip made after opening counts as new. Tests: older-advice sections; the test helper
   channel() now says Mixology heard it with no Assist EQ (assistAtAnalysisKnown = link).
+- CI green: run 38912851645 (e481646). Download for the user: that run's Mixology-Windows.
 
 ## v0.16.0: the Mix Assistant knows what's fixed (2026-10-16)
 - User (screenshots: point "Instruments cover the vocal's words" on 'Hats - Verse', Vocal Pocket "Nothing to change:
