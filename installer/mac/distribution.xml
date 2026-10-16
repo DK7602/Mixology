@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+    <title>Sonicology @LABEL@</title>
+    <organization>com.sonicology</organization>
+    <background file="background.png" alignment="bottomleft" scaling="proportional"/>
+    <background-darkAqua file="background.png" alignment="bottomleft" scaling="proportional"/>
+    <welcome file="welcome.html" mime-type="text/html"/>
+    <readme file="readme.txt" mime-type="text/plain"/>
+    <options customize="allow" require-scripts="false" hostArchitectures="arm64,x86_64"/>
+    <domains enable_localSystem="true"/>
+    <os-version min="11.0"/>
+    <choices-outline>
+        <line choice="voxology"/>
+        <line choice="mixology"/>
+        <line choice="masterology"/>
+        <line choice="cubase"/>
+        <line choice="docs"/>
+    </choices-outline>
+    <choice id="voxology" title="Voxology + Honey Tune" description="Vocals: Auto-Edit, tuning, cleanup, de-essing, compression and space (VST3 and Audio Unit).">
+        <pkg-ref id="com.sonicology.voxology"/>
+    </choice>
+    <choice id="mixology" title="Mixology + Mixology Link" description="The mix: Analyze Mix, Auto Mix and the processing on every track (VST3 and Audio Unit).">
+        <pkg-ref id="com.sonicology.mixology"/>
+    </choice>
+    <choice id="masterology" title="Masterology" description="Mastering: Auto-Master, EQ, glue, imaging and the maximizer (VST3 and Audio Unit).">
+        <pkg-ref id="com.sonicology.masterology"/>
+    </choice>
+    <choice id="cubase" title="Cubase bridge script" description="Lets Mixology move Cubase's faders (copied into your Cubase MIDI Remote folder).">
+        <pkg-ref id="com.sonicology.cubase"/>
+    </choice>
+    <choice id="docs" title="Read Me and manuals" description="In /Applications/Sonicology.">
+        <pkg-ref id="com.sonicology.docs"/>
+    </choice>
+    <pkg-ref id="com.sonicology.voxology" version="@VERSION@">voxology.pkg</pkg-ref>
+    <pkg-ref id="com.sonicology.mixology" version="@VERSION@">mixology.pkg</pkg-ref>
+    <pkg-ref id="com.sonicology.masterology" version="@VERSION@">masterology.pkg</pkg-ref>
+    <pkg-ref id="com.sonicology.cubase" version="@VERSION@">cubase.pkg</pkg-ref>
+    <pkg-ref id="com.sonicology.docs" version="@VERSION@">docs.pkg</pkg-ref>
+</installer-gui-script>

@@ -1,0 +1,160 @@
+name: Sonicology suite
+
+# The whole suite in one installer per platform: Voxology (+ Honey Tune), Mixology (+ Mixology Link) and
+# Masterology, each built from its own repository (all three are public), for Windows and macOS (universal:
+# Apple Silicon and Intel). Run it from Actions -> Sonicology suite -> Run workflow. The installers are the run's
+# artifacts: Sonicology-Windows (Sonicology-Setup-Windows.exe) and Sonicology-macOS (Sonicology-Installer-macOS.pkg).
+# Each repository's own CI runs the tests and validators; this only builds and packs.
+on:
+  workflow_dispatch:
+    inputs:
+      label:
+        description: "Name of this release (shown in the installers)"
+        default: "Beta 1"
+      version:
+        description: "Suite version (installer version number)"
+        default: "0.1.0"
+      voxology_ref:
+        description: "Voxology branch"
+        default: "claude/upbeat-faraday-iyzicv"
+      masterology_ref:
+        description: "Masterology branch"
+        default: "claude/eloquent-einstein-sscadx"
+
+jobs:
+  build:
+    name: ${{ matrix.plugin }} (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { plugin: Voxology, repo: DK7602/Voxology, ref: voxology, name: Windows, os: windows-latest, options: "-DVOX_BUILD_TESTS=OFF" }
+          - { plugin: Voxology, repo: DK7602/Voxology, ref: voxology, name: macOS, os: macos-14, options: "-DVOX_BUILD_TESTS=OFF" }
+          - { plugin: Mixology, repo: DK7602/Mixology, ref: mixology, name: Windows, os: windows-latest, options: "-DMIX_BUILD_TESTS=OFF" }
+          - { plugin: Mixology, repo: DK7602/Mixology, ref: mixology, name: macOS, os: macos-14, options: "-DMIX_BUILD_TESTS=OFF" }
+          - { plugin: Masterology, repo: DK7602/polisher, ref: masterology, name: Windows, os: windows-latest, options: "-DPOLISHER_BUILD_TESTS=OFF" }
+          - { plugin: Masterology, repo: DK7602/polisher, ref: masterology, name: macOS, os: macos-14, options: "-DPOLISHER_BUILD_TESTS=OFF" }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.repo }}
+          ref: ${{ matrix.ref == 'voxology' && inputs.voxology_ref || matrix.ref == 'masterology' && inputs.masterology_ref || github.sha }}
+          path: src
+
+      - name: Cache fetched dependencies (JUCE, ARA, Catch2)
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: suite-deps-${{ matrix.plugin }}-${{ runner.os }}-${{ hashFiles('src/CMakeLists.txt') }}
+
+      - name: Fetch WebView2 SDK (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $v = "1.0.3485.44"
+          $root = ("$env:RUNNER_TEMP/nuget") -replace '\\','/'
+          Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/$v" -OutFile webview2.zip
+          Expand-Archive webview2.zip -DestinationPath "$root/Microsoft.Web.WebView2.$v"
+          "WEBVIEW2_DIR=$root" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Configure
+        run: cmake -S src -B build -DCMAKE_BUILD_TYPE=Release ${{ matrix.options }} ${{ runner.os == 'Windows' && format('-DJUCE_WEBVIEW2_PACKAGE_LOCATION={0}', env.WEBVIEW2_DIR) || '' }}
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4
+
+      - name: Stage
+        shell: bash
+        run: |
+          P="part/${{ matrix.plugin }}"
+          mkdir -p "$P/VST3" "$P/AU"
+          case "${{ matrix.plugin }}" in
+            Voxology)    bundles=("plugin/Voxology_artefacts" "honeytune/HoneyTune_artefacts"); manual="docs/MANUAL.md" ;;
+            Mixology)    bundles=("plugin/Mixology_artefacts" "link/MixologyLink_artefacts"); manual="docs/MANUAL.md" ;;
+            Masterology) bundles=("plugin/Polisher_artefacts"); manual="docs/manual/polisher-manual.md" ;;
+          esac
+          for b in "${bundles[@]}"; do
+            cp -R build/$b/Release/VST3/*.vst3 "$P/VST3/"
+            if ls build/$b/Release/AU/*.component >/dev/null 2>&1; then cp -R build/$b/Release/AU/*.component "$P/AU/"; fi
+          done
+          cp "src/$manual" "$P/Manual.md"
+          grep -oE 'VERSION [0-9]+\.[0-9]+\.[0-9]+' src/CMakeLists.txt | head -1 | cut -d' ' -f2 > "$P/version.txt"
+          if [ "${{ matrix.plugin }}" = "Mixology" ]; then
+            mkdir -p "$P/Cubase MIDI Remote"
+            cp -R src/bridge/cubase/Mixology "$P/Cubase MIDI Remote/"
+          fi
+          find part -maxdepth 3 | sort
+          echo "${{ matrix.plugin }} $(cat "$P/version.txt")"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: part-${{ matrix.plugin }}-${{ matrix.name }}
+          path: part
+          if-no-files-found: error
+
+  windows:
+    name: Windows installer
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: part-*-Windows
+          path: stage
+          merge-multiple: true
+      - name: Read Me and manuals
+        shell: bash
+        run: |
+          v() { cat "stage/$1/version.txt" | tr -d '\r\n'; }
+          sed -e "s|@LABEL@|${{ inputs.label }}|" -e "s|@VOXOLOGY@|$(v Voxology)|" -e "s|@MIXOLOGY@|$(v Mixology)|" \
+              -e "s|@MASTEROLOGY@|$(v Masterology)|" "installer/Read Me First.txt" > "stage/Read Me First.txt"
+          mkdir -p stage/Manuals
+          for p in Voxology Mixology Masterology; do cp "stage/$p/Manual.md" "stage/Manuals/$p Manual.txt"; done
+          cat "stage/Read Me First.txt" | head -8
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          & $iscc /Qp "/DStage=$PWD\stage" "/DSuiteVersion=${{ inputs.version }}" "/DLabel=${{ inputs.label }}" installer\windows\Sonicology.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item "stage\Read Me First.txt" out\
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sonicology-Windows
+          path: out
+          if-no-files-found: error
+
+  macos:
+    name: macOS installer
+    needs: build
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: part-*-macOS
+          path: stage
+          merge-multiple: true
+      - name: Read Me and manuals
+        run: |
+          v() { tr -d '\r\n' < "stage/$1/version.txt"; }
+          sed -e "s|@LABEL@|${{ inputs.label }}|" -e "s|@VOXOLOGY@|$(v Voxology)|" -e "s|@MIXOLOGY@|$(v Mixology)|" \
+              -e "s|@MASTEROLOGY@|$(v Masterology)|" "installer/Read Me First.txt" > "stage/Read Me First.txt"
+          mkdir -p stage/Manuals
+          for p in Voxology Mixology Masterology; do cp "stage/$p/Manual.md" "stage/Manuals/$p Manual.txt"; done
+      - name: Build the package
+        run: |
+          chmod +x installer/mac/build-pkg.sh
+          installer/mac/build-pkg.sh "$PWD/stage" "${{ inputs.version }}" "${{ inputs.label }}" "$PWD/out"
+          cp "stage/Read Me First.txt" out/
+          pkgutil --expand-full out/Sonicology-Installer-macOS.pkg "$RUNNER_TEMP/expanded"
+          find "$RUNNER_TEMP/expanded" -maxdepth 8 \( -name "*.vst3" -o -name "*.component" \) -prune | sed "s|$RUNNER_TEMP/expanded/||" | sort
+          ls -la out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sonicology-macOS
+          path: out
+          if-no-files-found: error

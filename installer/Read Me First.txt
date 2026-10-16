@@ -1,0 +1,55 @@
+SONICOLOGY  @LABEL@
+The complete vocal, mixing and mastering suite
+
+  Voxology @VOXOLOGY@     vocals: Auto-Edit, tuning (Honey Tune), cleanup, de-essing, compression, space
+  Mixology @MIXOLOGY@     the mix: Analyze Mix, Auto Mix, Balance, Polish, Vocal Pocket, every track's processing
+  Masterology @MASTEROLOGY@  mastering: Auto-Master, EQ, glue, imaging, loudness, the maximizer
+
+Thanks for trying the beta. Nothing here is finished: tell us what's confusing, what breaks and what you'd change.
+
+
+WHAT THE INSTALLER PUTS WHERE
+  Windows   the plug-ins (VST3) in C:\Program Files\Common Files\VST3
+            the Cubase script in Documents\Steinberg\Cubase\MIDI Remote\Driver Scripts\Local\Mixology
+            this Read Me and the manuals in C:\Program Files\Sonicology
+  Mac       the plug-ins in /Library/Audio/Plug-Ins/VST3 (VST3) and /Library/Audio/Plug-Ins/Components (AU)
+            the Cubase script in ~/Documents/Steinberg/Cubase/MIDI Remote/Driver Scripts/Local/Mixology
+            this Read Me and the manuals in /Applications/Sonicology
+  All three are listed under "Sonicology" in your DAW's plug-in list. Each plug-in also has its full manual
+  inside (the ? button).
+
+
+THE INSTALLER ISN'T SIGNED YET (BETA)
+  Windows   "Windows protected your PC": click More info, then Run anyway.
+  Mac       "can't be opened because Apple cannot check it": open System Settings > Privacy & Security, scroll
+            down to the Sonicology message and click Open Anyway (on older macOS: right-click the installer > Open).
+
+
+FIRST TIME IN YOUR DAW
+  1. Rescan plug-ins (Cubase: Studio > VST Plug-in Manager; FL Studio: Options > Manage plugins > Find plugins;
+     Ableton Live: Settings > Plug-Ins > Rescan; Logic Pro checks Audio Units when it starts).
+  2. Where they go:
+       Voxology         on each vocal track (first)
+       Mixology Link    on every track you want Mixology to hear (the last plug-in on the track)
+       Mixology         on the master / Stereo Out
+       Masterology      on the master, after Mixology
+  3. In Mixology's Settings (the gear) pick your DAW and the song's style. All three plug-ins share them: pick
+     once, the others follow. Every tip is then written in your DAW's own words.
+  4. In Mixology press ANALYZE MIX and play the busiest part of the song (20 seconds is enough). Then try AUTO MIX.
+     Every change is listed first; nothing happens until you press Apply, and the History (clock button) undoes
+     any of it.
+
+
+MOVING FADERS
+  Cubase    Mixology moves the MixConsole faders itself (Settings > Cubase Bridge, steps inside).
+            Windows: install loopMIDI (free, tobias-erichsen.de) and add two ports named exactly
+            "Mixology to Cubase" and "Cubase to Mixology". Mac: nothing extra, Mixology makes the ports itself.
+  FL Studio, Ableton Live, Logic Pro, Cakewalk Sonar, others
+            For now Mixology tells you every fader move (Auto Mix and Balance list them with the exact dB) and
+            you set the faders. Fader control for FL Studio, Ableton Live, Logic Pro and Cakewalk is on the way.
+
+
+WHAT WE'D LOVE TO HEAR
+  - Your DAW and version, Windows or Mac.
+  - What you tried and what happened. A screenshot or a short screen recording helps the most.
+  - Anything that sounded worse after Auto-Edit, Auto Mix or Auto-Master, and what you expected instead.
