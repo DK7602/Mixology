@@ -4,6 +4,10 @@ import { $, el, icon, fmt, popupMenu } from "./ui.js";
 import { GENRES } from "./mixstyles.js";
 import { DAWS, dawOf, dawName, say } from "./daws.js";
 import { ROLES, ROLE_ORDER, roleIcon } from "./roles.js";
+import { openToolSheet } from "./tools.js";
+
+// The smart tools by the interface's id (the Mix Assistant's points link to the one that fixes them).
+const TOOL_NAMES = { auto: "Auto Mix", polish: "Polish", balance: "Balance", clean: "Clean Up", pocket: "Vocal Pocket", stereo: "Stereo Architect" };
 
 let historyRender = null;
 
@@ -501,18 +505,34 @@ const KIND = { warn: ["#ff5a3c", "Worth fixing"], info: ["#19d3ff", "Have a look
 export function openSuggestion(app, sg, opts = {}) {
   const body = sheet("MIX ASSISTANT");
   body.className = "scroll";
-  const [colour, kindLabel] = KIND[sg.kind] || KIND.info;
+  const [colour, kindLabel] = sg.done ? [KIND.calm[0], "Done: play the song to check"] : KIND[sg.kind] || KIND.info;
   const head = el("div", "", body, { display: "flex", alignItems: "center", gap: "16px", marginBottom: "12px" });
   head.innerHTML = `<span style="width:54px;height:54px;flex:none;color:${colour};filter:drop-shadow(0 0 6px ${colour})">${icon(sg.icon)}</span>
     <span><span style="display:block;font-size:30px;font-weight:600">${sg.title}</span>
     <span style="font-size:16px;letter-spacing:0.12em;text-transform:uppercase;color:${colour}">${kindLabel}</span></span>`;
   el("p", "", body, { fontSize: "21px", lineHeight: "1.5", margin: "0 0 16px" }).textContent = sg.text;
+  const toolName = TOOL_NAMES[sg.tool];
+  if (sg.done) {
+    // A smart tool (or you) already changed it since Mixology listened: the point is about the mix before that.
+    const done = el("div", "card", body, { position: "relative", padding: "14px 18px 14px 58px", marginBottom: "16px", fontSize: "19px", lineHeight: "1.45", borderColor: KIND.calm[0] });
+    done.innerHTML = `<div style="position:absolute;left:16px;top:14px;width:28px;height:28px;color:${KIND.calm[0]}">${icon("check")}</div>
+      <b style="color:${KIND.calm[0]}">Done since Mixology listened.</b> Changed: ${sg.doneWhat}. This point is about the mix as it was before: Mixology checks it again when it hears the song (Auto Analyze while it plays, or Analyze Mix), and it goes when it's fixed.`;
+  }
   const need = el("div", "card", body, { position: "relative", padding: "14px 18px", marginBottom: "16px", fontSize: "20px", lineHeight: "1.45", borderColor: colour });
   need.innerHTML = `<b style="color:var(--gold)">Do I need to fix it?</b> ${sg.need}`;
   if (sg.steps && sg.steps.length) {
     el("div", "", body, { fontSize: "18px", fontWeight: "600", color: "var(--gold)", margin: "4px 0 6px", letterSpacing: "0.06em" }).textContent = "HOW";
     const ol = el("ol", "", body, { fontSize: "20px", lineHeight: "1.5", margin: "0 0 16px", paddingLeft: "28px" });
     for (const st of sg.steps) el("li", "", ol, { marginBottom: "6px" }).textContent = st;
+  }
+  if (toolName) {
+    // The smart tool that makes this fix: its changes, to look at and apply.
+    const row = el("div", "", body, { display: "flex", alignItems: "center", gap: "12px", margin: "0 0 16px" });
+    const go = el("button", "small-btn", row, { height: "46px", fontSize: "19px", fontWeight: "600", padding: "0 20px", borderColor: "var(--gold)", color: "var(--gold)" });
+    go.textContent = `OPEN ${toolName.toUpperCase()} ›`;
+    go.addEventListener("click", () => openToolSheet(app, sg.tool));
+    el("span", "", row, { fontSize: "16px", color: "var(--text-dim)" }).textContent = sg.done
+      ? `${toolName} has nothing more to do here.` : `${toolName} works out these changes for you: see each one, then Apply.`;
   }
   const isVocal = sg.id && sg.id.startsWith("vocal-") && sg.id !== "vocal-pocket";
   // Your ears, for the whole vocal or one vocal track (a verse and a hook on their own tracks can want different levels).

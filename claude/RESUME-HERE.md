@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-16, v0.15.0)
+# Mixology: resume here (updated 2026-10-16, v0.16.0)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,27 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## v0.16.0: the Mix Assistant knows what's fixed (2026-10-16)
+- User (screenshots: point "Instruments cover the vocal's words" on 'Hats - Verse', Vocal Pocket "Nothing to change:
+  nothing covers the vocal", the Link's Assist EQ "Pocket -2.0 dB at 5.0 kHz"): "if the fix is made and there are no
+  auto edit options shouldn't the notification disappear?" + (1) every suggested edit links to its tool page.
+- Cause: planPocket picked the dip band in 18..24 (1.25 - 5 kHz) by the biggest vocal / track overlap: bright hats got
+  5 kHz, outside the advice's 1.6 - 4 kHz (kPresFrom 19..kPresTo 23), so the masking stayed; and its "already
+  there" check (pocketDb <= -d) then said nothing to do. Fix: kPocketFrom 19..kPocketTo 23; ChannelNow
+  assistAtAnalysis(Known) (hub AtAnalysis.assist / assistAtAnalysis from snapshotNow, saved at the END of the advice
+  block, older blocks end before it); heardDip (dip Mixology heard within half an octave) -> wanted = heardDip - d
+  (max kMaxPocketDb 6, else a note "still covers the vocal with a 6 dB pocket dip"); already there = current <=
+  wanted + 0.25 at a near frequency (summary "the dips are in since Mixology listened ..."). Test "Vocal Pocket and
+  the dip it heard".
+- Done points: hub toolForPoint(id) (vocal-low / -high / kick-quiet / headroom -> balance, vocal-pocket -> pocket, mud /
+  highpass -> clean, harsh / low-wide -> polish); updateDonePoints() in the timer at 2 Hz: makePlan per tool, a point
+  is done when its tool's plan has no changes (headroom: no headroom offer) and changedSinceAnalysis(tracks, any fader
+  for Balance) says something changed (fader > 0.3 dB, Assist EQ, processing); doneVersion in stateVersion. State:
+  suggestions[].tool, .done, .doneWhat. UI: done points last with a tick ("Done since Mixology listened: play the song
+  to check it"); the point's sheet: header "Done: play the song to check", green box with what changed, and OPEN
+  <TOOL> › (openToolSheet) under HOW for every point with a tool. mock.js: vocal-pocket / highpass have tools,
+  applying pocket dips marks it done.
 
 ## v0.15.0: your ears per vocal track (2026-10-16)
 - User tested v0.14.0: "worked" (sent the vocal point after reopening). Asked: on the vocal point, click one of its

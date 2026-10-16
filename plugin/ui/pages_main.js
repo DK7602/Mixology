@@ -280,7 +280,7 @@ export function buildOverview(root, app) {
     const report = b.analysis && b.analysis.report;
     const useReport = report && !showLive;
     const setup = b.setup || [];
-    const key = JSON.stringify(setup.map((x) => x.id + x.title)) + "|" + (useReport ? "r|" + JSON.stringify(report.suggestions.map((x) => x.id + x.kind + x.title)) + report.seconds + report.style + (b.analysis.auto && b.analysis.auto.on ? b.analysis.auto.updated : "") + (b.analysis.fromProject ? "|p" : "")
+    const key = JSON.stringify(setup.map((x) => x.id + x.title)) + "|" + (useReport ? "r|" + JSON.stringify(report.suggestions.map((x) => x.id + x.kind + x.title + (x.done ? "|done" : ""))) + report.seconds + report.style + (b.analysis.auto && b.analysis.auto.on ? b.analysis.auto.updated : "") + (b.analysis.fromProject ? "|p" : "")
       : [b.link, (b.slots || []).filter((s) => s.present).length, b.linksPaired, b.linksSeen, Math.round(st), Math.round(tp), !!report, !!(b.analysis && b.analysis.auto && b.analysis.auto.on), app.daw].join("|"));
     if (key === lastKey) return;
     lastKey = key;
@@ -303,8 +303,12 @@ export function buildOverview(root, app) {
       sub.textContent = b.analysis.fromProject && b.analysis.analyzed ? `Last session (${day(b.analysis.analyzed)}):`
         : au && au.on && au.updated ? `Auto Analyze, updated ${at(au.updated)}:`
         : `From Analyze Mix (${Math.round(report.seconds)} s heard):`;
-      for (const sg of report.suggestions)
+      // Points a smart tool already fixed since Mixology listened go last, ticked, until it hears the mix again.
+      const open = report.suggestions.filter((x) => !x.done), done = report.suggestions.filter((x) => x.done);
+      for (const sg of open)
         card(sg.icon, KIND[sg.kind] || KIND.info, sg.title, sg.need, () => openSuggestion(app, sg));
+      for (const sg of done)
+        card("check", KIND.calm, sg.title, "Done since Mixology listened: play the song to check it", () => openSuggestion(app, sg)).style.opacity = "0.75";
       return;
     }
     sub.textContent = "What Mixology hears right now:";

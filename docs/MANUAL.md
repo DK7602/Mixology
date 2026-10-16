@@ -1,6 +1,6 @@
 # Mixology manual
 
-Manual for version 0.15.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
+Manual for version 0.16.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -41,7 +41,8 @@ fix):
 | Presets: Mixology's starting points and yours, for tracks, FX channels and the Full Mix | Live |
 | History: every change Mixology makes, step by step; go back to any point and forward again | Live |
 | Mixology opens as you left it: the History, the advice and the restore points come back with the project | Live (passed in Cubase) |
-| Your ears per vocal track: Too quiet / Sounds right / Too loud for one lead vocal track | Live: this is what we're testing now |
+| Your ears per vocal track: Too quiet / Sounds right / Too loud for one lead vocal track | Live |
+| The Mix Assistant knows what's fixed (Done points) and opens the tool that fixes a point | Live: this is what we're testing now |
 
 Nothing changes your sound until you ask: every processing module starts switched off (the audio passes
 through bit for bit). What can change it: the Cubase faders and pans Mixology moves, the Assist EQ / Trim in
@@ -190,6 +191,12 @@ Mix Assistant tells you, in plain words, what stands out, with **Do I need to fi
 3. Press play in Cubase. Play the busiest part (the hook or the drop): **20 seconds is enough**, up to 60.
    Press **Finish now**, or it finishes by itself at 60 seconds.
 4. The Mix Assistant lists what it found, the things worth fixing first. Click a point to read it in full.
+   A point a smart tool can fix has a button for it (**OPEN VOCAL POCKET ›**, **OPEN BALANCE ›**, **OPEN CLEAN UP ›**,
+   **OPEN POLISH ›**): it opens that tool with its changes, to look at and apply.
+5. Once a tool (or you) fixed a point, it moves to the end with a green tick: **Done since Mixology listened: play
+   the song to check it**. The point is still about the mix as Mixology heard it before the fix; when it hears the
+   song again (Auto Analyze while it plays, or Analyze Mix) the point goes, or comes back if the fix wasn't enough
+   (then the tool offers a little more).
 
 What it looks at:
 
@@ -278,7 +285,9 @@ list: every change it wants to make, **now → new**, and why, in plain words. U
 - **Clean Up**: Assist EQ. Low cuts on tracks with rumble they don't need (and on vocals: about 90 Hz), and mud
   dips (200 - 500 Hz) on the tracks carrying it when the mix is muddier than your style.
 - **Vocal Pocket**: Assist EQ. Gentle dips (2 - 4 dB) at 1.6 - 4 kHz in the instruments that cover the vocal's
-  words, each where it overlaps the vocal most.
+  words, each where it overlaps the vocal most (always inside 1.6 - 4 kHz, the range the advice measures). When
+  Mixology heard a track with its dip already in and it still covers the words, the dip goes a little deeper (at
+  most 6 dB; past that, turn the track down or pan it instead). A dip made since Mixology listened counts as done.
 - **Polish**: processing in each track's Mixology Link, worked out from what Analyze Mix heard:
   - **EQ**: a dull lead vocal gets a little presence (around 3.5 kHz) and, if it has little air, a gentle high
     shelf; a harsh one a narrow dip; a boxy kick a dip around 300 - 500 Hz. Gentle moves (at most 3 dB), in an EQ

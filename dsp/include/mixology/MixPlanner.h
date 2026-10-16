@@ -51,6 +51,8 @@ namespace mixology::mix
         bool locked = false;       // protected (padlock)
         bool hasLink = false;      // a Mixology Link sits on it (its Assist EQ can be set)
         AssistSettings assist;     // that Link's Assist EQ now
+        bool assistAtAnalysisKnown = false;   // ... and when Analyze Mix listened (the advice heard the mix with it)
+        AssistSettings assistAtAnalysis;
         bool hasProc = false;      // ... and its processing (M5): now, and when Analyze Mix listened
         proc::Values proc {};
         bool procAtAnalysisKnown = false;

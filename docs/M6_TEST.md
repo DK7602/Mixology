@@ -1,5 +1,19 @@
 # Milestone 6 tests
 
+## Version 0.16.0 (5 minutes): the Mix Assistant knows what's fixed
+
+Mixology 0.16.0 only.
+1. Open a point like **Instruments cover the vocal's words**: under HOW there is **OPEN VOCAL POCKET ›**. It opens Vocal
+   Pocket with its dips (Balance, Clean Up and Polish points have theirs).
+2. Apply the dips. Close the window: the point moves to the end of the list with a green tick, "Done since Mixology
+   listened: play the song to check it". Open it: it says what changed.
+3. With Auto Analyze on, play the song about 20 seconds: the point goes (or comes back if the dip wasn't enough;
+   then Vocal Pocket offers a slightly deeper one).
+4. On your song with 'Hats - Verse' (Pocket -2 dB at 5 kHz from the old Vocal Pocket): Vocal Pocket now moves it to
+   where the words are (1.6 - 4 kHz) instead of saying "nothing covers the vocal".
+
+**Report**: any point that stays after its fix, or a tool button that opens the wrong tool?
+
 ## Version 0.15.0 (5 minutes): your ears per vocal track
 
 Mixology 0.15.0 only.

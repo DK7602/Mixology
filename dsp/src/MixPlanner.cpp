@@ -882,6 +882,9 @@ namespace mixology::mix
         // ---------------------------------------------------------------------------------------------
         // Vocal Pocket: dips where instruments cover the vocal's words (Assist EQ)
 
+        constexpr int kPocketFrom = 19, kPocketTo = 23;   // 1.6 - 4 kHz, as Analyze Mix measures it
+        constexpr double kMaxPocketDb = 6.0;              // deeper takes the instrument's own presence away
+
         std::string planPocket (const Report& r, const Lookup& look, Plan& plan)
         {
             std::vector<double> vocal (kBands, -120.0);
@@ -901,36 +904,52 @@ namespace mixology::mix
             double vocalMoved = 0.0;
             for (const auto& t : r.tracks)
                 if (counts (t) && t.role == Role::vox) { vocalMoved = movedSince (look.of (t)); break; }
-            int dips = 0;
+            int dips = 0, inPlace = 0;
             for (const auto& t : r.tracks)
             {
                 const double mask = t.maskDb + movedSince (look.of (t)) - vocalMoved;
                 if (! counts (t) || t.role == Role::vox || t.role == Role::adlibs || t.maskDb <= -100.0 || mask <= -6.0 || t.bands.size() != kBands) continue;
                 const double d = mask >= 0.0 ? 4.0 : mask >= -3.0 ? 3.0 : 2.0;
-                // Where it covers the vocal most: the band (1.25 - 5 kHz) with the biggest overlap.
+                // Where it covers the vocal most: the band with the biggest overlap, within 1.6 - 4 kHz (the range the
+                // advice measures: a dip outside it hardly uncovers the words).
                 int best = 21;
                 double bestOverlap = -1.0e9;
-                for (int b = 18; b <= 24; ++b)
+                for (int b = kPocketFrom; b <= kPocketTo; ++b)
                 {
                     const double o = std::min (vocal[static_cast<std::size_t> (b)], t.bands[static_cast<std::size_t> (b)]);
                     if (o > bestOverlap) { bestOverlap = o; best = b; }
                 }
                 const auto* ch = eqChannel (t, look, plan, "vocal pocket");
                 if (ch == nullptr) continue;
-                if (ch->assist.pocketDb <= -d + 0.25) continue;
+                const double hz = bandHz (best);
+                auto near = [&] (double a) { return std::abs (std::log2 (std::max (a, 1.0) / hz)) <= 0.5; };   // within half an octave
+                // The dip Mixology heard it with (Analyze Mix measured the track with it): what's still covered needs
+                // more on top. A dip made since Mixology listened (a plan applied) already counts.
+                const auto& heard = ch->assistAtAnalysis;
+                const double heardDip = ch->assistAtAnalysisKnown && heard.pocketDb < -0.05 && near (heard.pocketHz) ? heard.pocketDb : 0.0;
+                const double wanted = std::max (-kMaxPocketDb, heardDip - d);
+                if (heardDip <= -kMaxPocketDb + 0.25)
+                {
+                    plan.notes.push_back (quoted (t.name) + " still covers the vocal with a " + fmt0 (kMaxPocketDb)
+                                          + " dB pocket dip: turn it down a little or pan it off-centre instead.");
+                    continue;
+                }
+                if (ch->assist.pocketDb <= wanted + 0.25 && near (ch->assist.pocketHz)) { ++inPlace; continue; }   // already there
                 Change c;
                 c.hash = ch->hash;
                 c.name = t.name;
                 c.role = t.role;
                 c.kind = "pocket";
                 c.from = ch->assist.pocketDb;
-                c.to = c.wanted = -d;
-                c.hz = bandHz (best);
+                c.to = c.wanted = wanted;
+                c.hz = hz;
                 c.why = "at 1.6 - 4 kHz it is " + (mask >= 0.0 ? fmt1 (mask) + " dB louder than" : fmt1 (-mask) + " dB under")
-                        + " the vocal while it sings, covering its words";
+                        + " the vocal while it sings, covering its words"
+                        + (heardDip < 0.0 ? " (with the " + fmt1 (-heardDip) + " dB dip it already has: a deeper one)" : "");
                 plan.changes.push_back (c);
                 ++dips;
             }
+            if (dips == 0 && inPlace > 0) return "the dips are in since Mixology listened (it hears them when the song plays again)";
             if (dips == 0) return "nothing covers the vocal";
             return std::to_string (dips) + " pocket dip" + (dips == 1 ? "" : "s");
         }

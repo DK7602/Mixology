@@ -146,6 +146,16 @@ namespace
         return std::string (static_cast<const char*> (out.getData()), out.getDataSize());
     }
 
+    // The smart tool that fixes a Mix Assistant point (the interface's tool ids): "" = none does (advice only).
+    const char* toolForPoint (const std::string& id)
+    {
+        if (id == "vocal-low" || id == "vocal-high" || id == "kick-quiet" || id == "headroom") return "balance";
+        if (id == "vocal-pocket") return "pocket";
+        if (id == "mud" || id == "highpass") return "clean";
+        if (id == "harsh" || id == "low-wide") return "polish";
+        return "";
+    }
+
     constexpr const char* kSessionMagic = "MXS1";
     constexpr std::uint32_t kAdviceMagic = 0x3150584du;   // "MXP1"
 
@@ -318,6 +328,11 @@ void BridgeHub::timerCallback()
     {
         lastSessionCache = t;
         updateSessionCache();
+    }
+    if (t - doneCheckedAt >= 0.5)
+    {
+        doneCheckedAt = t;
+        updateDonePoints();
     }
 
     if (toCubase == nullptr && t - lastOpenAttempt > kReopenInterval)
@@ -689,6 +704,80 @@ void BridgeHub::applyPendingSession()
     ++analysisVersion;
 }
 
+std::string BridgeHub::changedSinceAnalysis (const std::vector<std::string>& names, bool anyFader) const
+{
+    // What changed on these tracks (or on any fader) since Mixology listened: the advice doesn't know it yet.
+    std::vector<std::string> parts;
+    auto faderMove = [&] (std::uint32_t hash) {
+        const auto now = bridge.knownFaders().find (hash);
+        const auto then = fadersAtAnalysis.find (hash);
+        if (now == bridge.knownFaders().end() || then == fadersAtAnalysis.end()) return 0.0;
+        if (now->second.db <= -100.0 || then->second <= -100.0) return 0.0;
+        const double d = now->second.db - then->second;
+        return std::abs (d) > 0.3 ? d : 0.0;
+    };
+    auto db = [] (double v) { return (v > 0.0 ? "+" : "") + juce::String (v, 1).toStdString() + " dB"; };
+    if (anyFader)
+        for (const auto& [hash, f] : bridge.knownFaders())
+            if (const double d = faderMove (hash); d != 0.0) parts.push_back ("'" + f.title + "' fader " + db (d));
+    auto& registry = mixology::link::processRegistry();
+    const auto links = registry.links (mixology::link::nowMs());
+    for (const auto& n : names)
+    {
+        const auto hash = mixology::bridge::nameHash (n);
+        if (! anyFader)
+            if (const double d = faderMove (hash); d != 0.0) parts.push_back ("'" + n + "' fader " + db (d));
+        const auto* l = uniqueLink (links, hash);
+        if (l == nullptr) continue;
+        if (auto it = assistAtAnalysis.find (hash); it != assistAtAnalysis.end() && ! mixology::AssistRestore::same (it->second, l->assist))
+            parts.push_back ("'" + n + "' Assist EQ");
+        mixology::proc::Values v {};
+        if (auto it = procAtAnalysis.find (hash); it != procAtAnalysis.end() && registry.readProc (l->slot, l->generation, v))
+            for (std::size_t i = 0; i < v.size(); ++i)
+                if (std::abs (v[i] - it->second[i]) > 1.0e-3) { parts.push_back ("'" + n + "' processing"); break; }
+    }
+    std::string out;
+    for (std::size_t i = 0; i < parts.size() && i < 3; ++i) out += (i == 0 ? "" : ", ") + parts[i];
+    if (parts.size() > 3) out += " and " + std::to_string (parts.size() - 3) + " more";
+    return out;
+}
+
+void BridgeHub::updateDonePoints()
+{
+    // A point is done when the tool that fixes it has nothing left to do and its tracks changed since Mixology
+    // listened (a plan applied, or you moved it yourself). Hearing the mix again (Auto Analyze, Analyze Mix)
+    // confirms it: the point goes, or comes back as it sounds now.
+    std::map<std::string, DonePoint> found;
+    if (report.valid && analyzeState == Analyze::done)
+    {
+        const auto chans = channelsNow();
+        const auto mix = mixNow();
+        std::map<std::string, mixology::mix::Plan> plans;
+        for (const auto& sg : report.suggestions)
+        {
+            const std::string tool = toolForPoint (sg.id);
+            const auto t = mixology::mix::toolFromKey (tool);
+            if (tool.empty() || ! t) continue;
+            if (plans.count (tool) == 0) plans[tool] = mixology::mix::makePlan (*t, report, chans, mix);
+            const auto& p = plans[tool];
+            const bool nothingLeft = p.valid && (sg.id == "headroom" ? p.headroomDb == 0.0 : p.changes.empty());
+            if (! nothingLeft) continue;
+            DonePoint d;
+            d.what = changedSinceAnalysis (sg.tracks, tool == "balance");
+            d.done = ! d.what.empty();
+            if (d.done) found[sg.id] = d;
+        }
+    }
+    std::string key;
+    for (const auto& [id, d] : found) key += id + ":" + d.what + ";";
+    donePoints = std::move (found);
+    if (key != doneShown)
+    {
+        doneShown = key;
+        ++doneVersion;
+    }
+}
+
 std::string BridgeHub::adviceBlock() const
 {
     mixology::pack::Writer w;
@@ -709,6 +798,13 @@ std::string BridgeHub::adviceBlock() const
     }
     w.flag (mixProcAtAnalysisKnown);
     for (float x : mixProcAtAnalysis) w.f32 (x);
+    // Since 0.16: every Link's Assist EQ when Mixology listened (a project from 0.14 / 0.15 ends before this).
+    w.u32 (static_cast<std::uint32_t> (assistAtAnalysis.size()));
+    for (const auto& [hash, a] : assistAtAnalysis)
+    {
+        w.u32 (hash);
+        for (float x : { a.lowCutHz, a.mudHz, a.mudDb, a.pocketHz, a.pocketDb }) w.f32 (x);
+    }
     return w.take();
 }
 
@@ -739,6 +835,13 @@ bool BridgeHub::loadAdvice (const std::string& bytes)
     }
     snap.mixKnown = r.flag();
     for (float& x : snap.mix) x = r.f32();
+    if (! r.atEnd())
+        for (std::uint32_t i = 0, n = r.count (24); i < n && r.ok(); ++i)
+        {
+            const auto hash = r.u32();
+            auto& a = snap.assist[hash];
+            a.lowCutHz = r.f32(); a.mudHz = r.f32(); a.mudDb = r.f32(); a.pocketHz = r.f32(); a.pocketDb = r.f32();
+        }
     if (! r.ok()) return false;
 
     analysis = std::move (heard);
@@ -1121,6 +1224,7 @@ BridgeHub::AtAnalysis BridgeHub::snapshotNow() const
         mixology::proc::Values v {};
         if (l.identity.hasName && uniqueLink (links, l.nameHash) != nullptr && registry.readProc (l.slot, l.generation, v))
             at.procs[l.nameHash] = v;
+        if (l.identity.hasName && uniqueLink (links, l.nameHash) != nullptr) at.assist[l.nameHash] = l.assist;
     }
     at.mixKnown = static_cast<bool> (mixProc.get);
     if (at.mixKnown) at.mix = mixProc.get();
@@ -1131,6 +1235,7 @@ void BridgeHub::useSnapshot (AtAnalysis at)
 {
     fadersAtAnalysis = std::move (at.faders);
     procAtAnalysis = std::move (at.procs);
+    assistAtAnalysis = std::move (at.assist);
     mixProcAtAnalysisKnown = at.mixKnown;
     mixProcAtAnalysis = at.mix;
 }
@@ -1345,7 +1450,20 @@ juce::var BridgeHub::analysisState() const
         r->setProperty ("reference", juce::var (ro));
 
         juce::Array<juce::var> sugs;
-        for (const auto& sg : report.suggestions) sugs.add (suggestionVar (sg));
+        for (const auto& sg : report.suggestions)
+        {
+            auto v = suggestionVar (sg);
+            if (auto* so = v.getDynamicObject())
+            {
+                so->setProperty ("tool", juce::String (toolForPoint (sg.id)));   // the smart tool that fixes it
+                if (auto it = donePoints.find (sg.id); it != donePoints.end())
+                {
+                    so->setProperty ("done", true);   // ... and it did, since Mixology listened
+                    so->setProperty ("doneWhat", juce::String::fromUTF8 (it->second.what.c_str()));
+                }
+            }
+            sugs.add (v);
+        }
         r->setProperty ("suggestions", sugs);
         o->setProperty ("report", juce::var (r));
     }
@@ -2000,6 +2118,7 @@ std::vector<mixology::mix::ChannelNow> BridgeHub::channelsNow() const
         {
             c.hasLink = true;
             c.assist = l->assist;
+            if (auto it = assistAtAnalysis.find (hash); it != assistAtAnalysis.end()) { c.assistAtAnalysisKnown = true; c.assistAtAnalysis = it->second; }
             c.channels = l->channels;
             c.panUnknown = l->channels == 2 && f.hasPan && f.pan <= 0.0005;   // Stereo Combined Panner (see getState)
             fillProc (c, *l);
@@ -2017,6 +2136,7 @@ std::vector<mixology::mix::ChannelNow> BridgeHub::channelsNow() const
         c.locked = bridge.isProtected (l.nameHash);
         c.hasLink = uniqueLink (links, l.nameHash) != nullptr;
         c.assist = l.assist;
+        if (auto it = assistAtAnalysis.find (l.nameHash); it != assistAtAnalysis.end()) { c.assistAtAnalysisKnown = true; c.assistAtAnalysis = it->second; }
         c.channels = l.channels;
         if (c.hasLink) fillProc (c, l);
         fillVoxology (c);

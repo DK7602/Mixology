@@ -7,7 +7,7 @@ HTML / CSS / JS interface in the platform web view, GitHub Actions builds on eve
 The plan and milestones: [docs/PLAN.md](docs/PLAN.md). User manual (also built into the plug-in): [docs/MANUAL.md](docs/MANUAL.md).
 Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_TEST.md) (passed), [docs/M3_TEST.md](docs/M3_TEST.md), [docs/M4_TEST.md](docs/M4_TEST.md), [docs/M5_TEST.md](docs/M5_TEST.md), [docs/M6_TEST.md](docs/M6_TEST.md) (current).
 
-## Status: v0.15.0
+## Status: v0.16.0
 
 | Piece | State |
 | --- | --- |
@@ -33,6 +33,7 @@ Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_T
 | Your DAW for the trio (v0.13.0, with Voxology 0.50 and Masterology 0.29): found from the host or picked, shared; every tip in that DAW's words (`plugin/ui/daws.js`); FIX THIS FIRST when Voxology heard a vocal recorded too hot | Built, waiting for the test |
 | Opens as you left it (v0.14.0): the History, the advice (what Analyze Mix heard) and the restore points are saved with the project | Passed in Cubase |
 | Your ears per vocal track (v0.15.0): pick a lead vocal track on the vocal point, Too quiet / Sounds right / Too loud for it; Balance and Auto Mix move each to its own level | Built, waiting for the test |
+| The Mix Assistant knows what's fixed (v0.16.0): Done points (a tool fixed it since Mixology listened), OPEN <TOOL> on each point; Vocal Pocket dips inside 1.6 - 4 kHz and deepens a dip it heard | Built, waiting for the test |
 | CPU check (v0.8.2): 48 real Links + Mixology timed on every build (tools/cpucheck); the idle chain made cheaper | Done: typical 48-track session about 17 % of one core |
 
 ## Layout

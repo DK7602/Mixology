@@ -963,8 +963,8 @@ TEST_CASE ("Plans: Vocal Pocket dips what covers the vocal's words", "[plan]")
     const auto* d = change (p, "Synth Lead", "pocket");
     REQUIRE (d != nullptr);
     CHECK (d->to <= -2.0);
-    CHECK (d->hz >= 1200.0);
-    CHECK (d->hz <= 5100.0);
+    CHECK (d->hz >= 1550.0);   // inside 1.6 - 4 kHz, where the advice measures it
+    CHECK (d->hz <= 4100.0);
     CHECK (change (p, "Lead Vox", "pocket") == nullptr);
     CHECK (change (p, "Kick", "pocket") == nullptr);
 
@@ -972,6 +972,69 @@ TEST_CASE ("Plans: Vocal Pocket dips what covers the vocal's words", "[plan]")
     const auto p2 = makePlan (Tool::pocket, r, chans);
     CHECK (change (p2, "Synth Lead", "pocket") == nullptr);
     CHECK (noted (p2, "protected"));
+}
+
+TEST_CASE ("Plans: Vocal Pocket and the dip it heard (the advice and the tool agree)", "[plan]")
+{
+    // Bright hats over the vocal: their energy rises above 4 kHz, but the dip goes where the words are.
+    auto bright = [] (int) { return shaped ([] (int b) { return bump (b, 24, 4.0, -15.0); }, 12.0, 0.2); };
+    auto tracks = [&] (int i) { return std::vector<TrackSample> {
+        sample ("Kick", kickFrame()), sample ("Lead Vox", vocalFrame (-16.0)), sample ("Hats - Verse", bright (i)) }; };
+    const auto r = listen (tracks).evaluate ({});
+    REQUIRE (find (r, "vocal-pocket") != nullptr);
+    REQUIRE (mentions (find (r, "vocal-pocket"), "Hats - Verse"));
+    auto chans = channelsOf (tracks (0));
+    auto& hats = *std::find_if (chans.begin(), chans.end(), [] (const ChannelNow& c) { return c.name == "Hats - Verse"; });
+    const auto p = makePlan (Tool::pocket, r, chans);
+    const auto* d = change (p, "Hats - Verse", "pocket");
+    REQUIRE (d != nullptr);
+    CHECK (d->hz <= 4100.0);
+    const double depth = d->to;
+
+    SECTION ("made since Mixology listened: nothing more to do")
+    {
+        hats.assistAtAnalysisKnown = true;   // heard without a dip
+        hats.assist.pocketDb = static_cast<float> (depth);
+        hats.assist.pocketHz = static_cast<float> (d->hz);
+        const auto again = makePlan (Tool::pocket, r, chans);
+        CHECK (change (again, "Hats - Verse", "pocket") == nullptr);
+        CHECK (again.changes.empty());
+        CHECK (again.summary.find ("the dips are in since Mixology listened") != std::string::npos);
+    }
+    SECTION ("heard with that dip and still covering: a deeper one")
+    {
+        hats.assistAtAnalysisKnown = true;
+        hats.assistAtAnalysis.pocketDb = -2.0f;
+        hats.assistAtAnalysis.pocketHz = static_cast<float> (d->hz);
+        hats.assist = hats.assistAtAnalysis;
+        const auto again = makePlan (Tool::pocket, r, chans);
+        const auto* deeper = change (again, "Hats - Verse", "pocket");
+        REQUIRE (deeper != nullptr);
+        CHECK (deeper->to < -2.5);
+        CHECK (deeper->to >= -6.0);
+        CHECK (deeper->why.find ("already has") != std::string::npos);
+    }
+    SECTION ("heard with a dip above 4 kHz (older Mixology): moved to where the words are")
+    {
+        hats.assistAtAnalysisKnown = true;
+        hats.assistAtAnalysis.pocketDb = -2.0f;
+        hats.assistAtAnalysis.pocketHz = 5000.0f;
+        hats.assist = hats.assistAtAnalysis;
+        const auto again = makePlan (Tool::pocket, r, chans);
+        const auto* moved = change (again, "Hats - Verse", "pocket");
+        REQUIRE (moved != nullptr);
+        CHECK (moved->hz <= 4100.0);
+    }
+    SECTION ("heard with the deepest dip already: a note instead")
+    {
+        hats.assistAtAnalysisKnown = true;
+        hats.assistAtAnalysis.pocketDb = -6.0f;
+        hats.assistAtAnalysis.pocketHz = static_cast<float> (d->hz);
+        hats.assist = hats.assistAtAnalysis;
+        const auto again = makePlan (Tool::pocket, r, chans);
+        CHECK (change (again, "Hats - Verse", "pocket") == nullptr);
+        CHECK (noted (again, "still covers the vocal"));
+    }
 }
 
 TEST_CASE ("Plans: Auto Mix puts all four together", "[plan]")

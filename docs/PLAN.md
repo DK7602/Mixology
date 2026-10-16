@@ -176,6 +176,11 @@ v0.14.0 passed in Cubase ("worked"). v0.15.0: your ears per vocal track (user: c
 it highlights, Too quiet / Sounds right / Too loud for that track): each lead vocal track measured on its own while it
 sings; TrackSettings.vocalOffset (saved with the track settings); per-track advice once a track has its own setting;
 Balance moves each vocal track to its own aim (the band makes room for the average).
+v0.16.0 (user: "if the fix is made and there are no auto edit options shouldn't the notification disappear?" + a link
+from each point to its tool): Vocal Pocket's dip stays inside 1.6 - 4 kHz (it chose 5 kHz for bright hats, outside the
+range the advice measures), knows the Assist EQ Mixology heard (assistAtAnalysis: a dip heard but not enough goes
+deeper, max 6 dB; one made since counts as done); points a tool fixed since Mixology listened are Done (ticked, last);
+OPEN <TOOL> on each point a tool fixes.
 Still to come in M6: code signing (later).
 
 ### Built in v0.11.0 - Auto Analyze (asked 2026-10-15: "once an analyze mix has been run should have an auto analyze option")

@@ -67,7 +67,7 @@ public:
 
     /** Everything the Tracks page and Settings > Cubase Bridge show. */
     juce::var getState (bool includeLog);
-    std::uint64_t stateVersion() const { return bridge.stateVersion() + linkVersion + analysisVersion + applyVersion + suiteVersion + setupVersion + history.version(); }
+    std::uint64_t stateVersion() const { return bridge.stateVersion() + linkVersion + analysisVersion + applyVersion + suiteVersion + setupVersion + history.version() + doneVersion; }
 
     /** The setup check's issues right now (a mono group, vocals without a Link...), as Mix Assistant suggestions. */
     const std::vector<mixology::mix::Suggestion>& setupIssues() const { return setupNow; }
@@ -169,6 +169,16 @@ private:
 
     std::map<std::uint32_t, double> fadersAtAnalysis;   // every fader when Analyze Mix finished listening
     std::map<std::uint32_t, mixology::proc::Values> procAtAnalysis;   // every Link's processing then (Polish)
+    std::map<std::uint32_t, mixology::AssistSettings> assistAtAnalysis;   // ... and its Assist EQ (Vocal Pocket, Clean Up)
+    // The Mix Assistant's points the smart tools already fixed since Mixology listened (their tool has nothing
+    // left to do and their tracks changed): worked out at most twice a second.
+    struct DonePoint { bool done = false; std::string what; };
+    std::map<std::string, DonePoint> donePoints;
+    std::string doneShown;              // what the interface was told last
+    std::uint64_t doneVersion = 0;
+    double doneCheckedAt = -1.0;
+    void updateDonePoints();
+    std::string changedSinceAnalysis (const std::vector<std::string>& names, bool anyFader) const;
     bool mixProcAtAnalysisKnown = false;
     mixology::proc::Values mixProcAtAnalysis {};
     const void* mixOwner = nullptr;
@@ -186,6 +196,7 @@ private:
         std::map<std::uint32_t, mixology::proc::Values> procs;
         bool mixKnown = false;
         mixology::proc::Values mix {};
+        std::map<std::uint32_t, mixology::AssistSettings> assist;   // every Link's Assist EQ then
     };
     AtAnalysis snapshotNow() const;
     void useSnapshot (AtAnalysis);
