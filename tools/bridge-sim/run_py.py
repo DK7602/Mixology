@@ -23,7 +23,9 @@ LIVE_DIR = os.path.join(ROOT, 'bridge', 'ableton')
 
 class Session(object):
     def __init__(self, exe):
-        self.proc = subprocess.Popen([exe], stdin=subprocess.PIPE, stdout=subprocess.PIPE, universal_newlines=True, bufsize=1)
+        # session_cli speaks UTF-8 (track names like "Vocal été ✓"); Windows would read it as its code page
+        self.proc = subprocess.Popen([exe], stdin=subprocess.PIPE, stdout=subprocess.PIPE, universal_newlines=True, bufsize=1,
+                                     encoding='utf-8')
 
     def push(self, line):
         self.proc.stdin.write(line + '\n')
