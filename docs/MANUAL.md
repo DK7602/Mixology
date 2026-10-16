@@ -1,6 +1,9 @@
 # Mixology manual
 
-Manual for version 0.16.1 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
+Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
+together. In your DAW's plug-in list all three are under Sonicology.
+
+Manual for version 0.17.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -108,10 +111,13 @@ Knobs: drag up / down (hold Shift for fine steps), scroll, or use the arrow keys
 Mixology moves the real MixConsole faders through Cubase's own MIDI Remote system and two virtual MIDI
 ports. Nothing is installed inside Cubase except a small script.
 
-1. Install **loopMIDI** (free, by Tobias Erichsen). Click **+** twice and name the ports exactly
+1. **Windows:** install **loopMIDI** (free, by Tobias Erichsen). Click **+** twice and name the ports exactly
    `Mixology to Cubase` and `Cubase to Mixology`. Tick "Autostart" in loopMIDI's tray menu.
-2. Copy the `Mixology` folder from the download's `Cubase MIDI Remote` folder into
-   `Documents\Steinberg\Cubase\MIDI Remote\Driver Scripts\Local\`.
+   **Mac:** nothing to install: Mixology makes these two ports itself once its window has been open (start
+   Cubase, open Mixology once, then do step 3).
+2. The Sonicology installer puts the script in place. Without it: copy the `Mixology` folder from the download's
+   `Cubase MIDI Remote` folder into `Documents\Steinberg\Cubase\MIDI Remote\Driver Scripts\Local\` (Mac:
+   `~/Documents/Steinberg/Cubase/MIDI Remote/Driver Scripts/Local/`).
 3. Start Cubase. Open **Studio > Studio Setup > MIDI Port Setup** and untick **In 'All MIDI Inputs'**
    for both Mixology ports.
 4. Open the **MIDI Remote** tab (lower zone). "Mixology Bridge" should appear on its own. If it doesn't,

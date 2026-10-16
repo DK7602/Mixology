@@ -97,14 +97,17 @@ function aboutPanel(app, root) {
     <span class="dim">Fonts: Barlow Semi Condensed (SIL Open Font License).</span>`;
 }
 
+const isMac = /Mac/i.test(navigator.platform || navigator.userAgent || "");
+
 function bridgePanel(app, root) {
   root.style.fontSize = "19px";
   const status = el("div", "card", root, { position: "relative", padding: "16px 20px", marginBottom: "14px", lineHeight: "1.5" });
   const setup = el("details", "card", root, { position: "relative", padding: "12px 20px", marginBottom: "14px", lineHeight: "1.5" });
   setup.innerHTML = `<summary style="cursor:pointer;font-weight:600;color:var(--gold)">One-time setup (about 5 minutes)</summary>
     <ol style="margin:10px 0 4px 0;padding-left:24px">
-      <li>Install <b>loopMIDI</b> (free, by Tobias Erichsen). Add two ports named exactly <code>Mixology to Cubase</code> and <code>Cubase to Mixology</code>. Keep loopMIDI running (it can start with Windows).</li>
-      <li>Copy the <code>Mixology</code> folder from the download's <code>Cubase MIDI Remote</code> folder into <code>Documents\\Steinberg\\Cubase\\MIDI Remote\\Driver Scripts\\Local\\</code>.</li>
+      ${isMac ? `<li>The two MIDI ports: nothing to do. On a Mac, Mixology makes <code>Mixology to Cubase</code> and <code>Cubase to Mixology</code> itself once its window has been open.</li>`
+        : `<li>Install <b>loopMIDI</b> (free, by Tobias Erichsen). Add two ports named exactly <code>Mixology to Cubase</code> and <code>Cubase to Mixology</code>. Keep loopMIDI running (it can start with Windows).</li>`}
+      <li>The Sonicology installer puts the Cubase script in place. Without it: copy the <code>Mixology</code> folder from the download's <code>Cubase MIDI Remote</code> folder into ${isMac ? "<code>~/Documents/Steinberg/Cubase/MIDI Remote/Driver Scripts/Local/</code>" : "<code>Documents\\Steinberg\\Cubase\\MIDI Remote\\Driver Scripts\\Local\\</code>"}.</li>
       <li>Start Cubase. In <b>Studio &gt; Studio Setup &gt; MIDI Port Setup</b>, untick <b>In 'All MIDI Inputs'</b> for both Mixology ports (so bridge messages never reach your instruments).</li>
       <li>Cubase should find "Mixology Bridge" on its own (MIDI Remote tab). If not: MIDI Remote tab &gt; <b>+</b> (Add MIDI Controller Surface) &gt; vendor Mixology, model Bridge, input <i>Mixology to Cubase</i>, output <i>Cubase to Mixology</i>.</li>
       <li>Open Mixology (on the Stereo Out). This panel turns green when it hears the script.</li>

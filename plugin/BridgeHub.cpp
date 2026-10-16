@@ -206,6 +206,24 @@ void BridgeHub::openPorts()
     const auto inInfo = findDevice (juce::MidiInput::getAvailableDevices(), kFromCubase);
 
     juce::String problem;
+#if JUCE_MAC
+    // On a Mac, Mixology makes the two ports itself (CoreMIDI virtual ports): nothing to install. An IAC bus (or
+    // another driver) with the same names is used instead when there is one.
+    if (outInfo.identifier.isEmpty() || inInfo.identifier.isEmpty())
+    {
+        toCubase = juce::MidiOutput::createNewDevice (kToCubase);
+        fromCubase = juce::MidiInput::createNewDevice (kFromCubase, this);
+        if (toCubase != nullptr && fromCubase != nullptr)
+        {
+            fromCubase->start();
+            portProblem.clear();
+            bridge.setPortsOpen (true, now(), "Mixology's own ports (macOS)");
+            return;
+        }
+        toCubase.reset();
+        fromCubase.reset();
+    }
+#endif
     if (outInfo.identifier.isEmpty() || inInfo.identifier.isEmpty())
     {
         problem = "Can't find the virtual MIDI port";
@@ -213,7 +231,11 @@ void BridgeHub::openPorts()
             problem << "s '" << kToCubase << "' and '" << kFromCubase << "'";
         else
             problem << " '" << (outInfo.identifier.isEmpty() ? kToCubase : kFromCubase) << "'";
+#if JUCE_MAC
+        problem << ". Mixology couldn't make them: restart the DAW, or add them as IAC buses in Audio MIDI Setup, then press Reconnect.";
+#else
         problem << ". Create them in loopMIDI (see Setup), then press Reconnect.";
+#endif
     }
     else
     {
