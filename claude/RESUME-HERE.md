@@ -54,6 +54,7 @@ sends higher-resolution art, re-run it.
   vocals | each track" (chips, .on = cyan glow), a line for the picked track, the taste buttons for it, "Follow the whole
   vocal" when it has its own; after a press the point opens again (fresh report, same track). tools.js names tracks
   with their own setting. mock.js: Lead Vox and Adlibs measured, B.vocalOwn.
+- CI green: run 38897680771 (37dd13b). Download for the user: that run's Mixology-Windows. Waiting for the Cubase test.
 
 ## v0.14.0: Mixology opens as you left it (2026-10-16)
 - PASSED in Cubase (user: "worked").
