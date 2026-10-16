@@ -63,6 +63,8 @@ sends higher-resolution art, re-run it.
   PROJECT), footer says it's saved. mock.js: ?reopened (yesterday's advice), the first two demo steps from yesterday.
 - Size: ~100 bytes per track per moment before zlib (noisy data barely compresses): ~0.9 MB base64 for 60 s on 30
   tracks, ~1.8 MB for a 2-minute Auto Analyze window. Manual says about 1 MB (up to about 2).
+- CI green: run 38848023906 (137d5ab; Windows build, tests, pluginval 10 + VST3 validator, ASan). Download for the
+  user: that run's Mixology-Windows (Voxology 0.50.1 / Masterology 0.29.1 unchanged). Waiting for the Cubase test.
 
 ## v0.13.1 + Voxology 0.50.1 + Masterology 0.29.1: Cakewalk (BandLab) in the DAW list (2026-10-15)
 - User: "add bandlab to the DAWs list". BandLab's web studio can't host VST3 (said so); added key "cakewalk" (Cakewalk by
