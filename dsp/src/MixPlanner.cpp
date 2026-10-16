@@ -151,7 +151,15 @@ namespace mixology::mix
 
         std::string planBalance (const Report& r, const Lookup& look, Plan& plan)
         {
-            struct Member { std::string name; const ChannelNow* ch = nullptr; };
+            struct Member
+            {
+                std::string name;
+                const ChannelNow* ch = nullptr;
+                double e = 0.0;                   // its loudness energy (as it is now)
+                const TrackReport* track = nullptr;
+                double extra = 0.0;               // its own move on top of the group's (a vocal track with your setting)
+                std::string why;
+            };
             struct Group
             {
                 Role role = Role::other;
@@ -163,6 +171,15 @@ namespace mixology::mix
                 std::vector<std::string> why;
                 bool anyMovable() const { return std::any_of (members.begin(), members.end(), [] (const Member& m) { return movable (m.ch); }); }
                 double level() const { return toDb (e); }
+                bool anyExtra() const { return std::any_of (members.begin(), members.end(), [] (const Member& m) { return m.extra != 0.0; }); }
+                // Its energy after moving `by` dB, each member's own move on top.
+                double eAfter (double by) const
+                {
+                    if (! anyExtra()) return e * toE (by);
+                    double sum = 0.0;
+                    for (const auto& m : members) sum += m.e * toE (by + m.extra);
+                    return sum;
+                }
             };
             std::map<int, Group> groups;   // by role; 100 = channels without a Link
             std::map<int, double> heardE;  // each group's energy as Analyze Mix heard it (before later fader moves)
@@ -185,7 +202,7 @@ namespace mixology::mix
                 if (std::abs (since) > 0.05) ++movedChannels;
                 g.e += toE (t.loudness + since);
                 heardE[static_cast<int> (t.role)] += toE (t.loudness);
-                g.members.push_back ({ t.name, ch });
+                g.members.push_back ({ t.name, ch, toE (t.loudness + since), &t });
             }
             if (r.unheardLoudness > -100.0 && ! r.unheard.empty())
             {
@@ -289,9 +306,31 @@ namespace mixology::mix
                         restMovable = restMovable || g.anyMovable();
                     }
                 const double ratio = vocalRatio - (toDb (restNew) - toDb (restOld));
-                const double fullErr = r.vocalTarget - ratio;
+                double fullErr = r.vocalTarget - ratio;
+
+                // Your ears per vocal track (a verse and a hook on their own tracks): each one moves to its own aim,
+                // the band makes room for the average.
+                std::vector<std::pair<Member*, double>> each;   // a vocal track and how far it is from its aim
+                bool perTrack = false;
+                for (auto& m : vocal->members) perTrack = perTrack || (m.track != nullptr && m.track->vocalOwn);
+                double worst = 0.0;
+                if (perTrack)
+                {
+                    const double restShift = (toDb (restNow) - toDb (restHeard)) + (toDb (restNew) - toDb (restOld));
+                    double sum = 0.0;
+                    for (auto& m : vocal->members)
+                        if (m.track != nullptr && m.track->hasVocalRatio)
+                        {
+                            const double now = m.track->vocalRatio + movedSince (m.ch) - restShift;
+                            each.push_back ({ &m, m.track->vocalTarget - now });
+                            sum += each.back().second;
+                            worst = std::max (worst, std::abs (each.back().second));
+                        }
+                    if (each.empty()) perTrack = false;
+                    else fullErr = sum / static_cast<double> (each.size());
+                }
                 const double err = fullErr;
-                if (std::abs (fullErr) > 1.5)
+                if (perTrack ? worst > 1.5 : std::abs (fullErr) > 1.5)
                 {
                     const bool vocalMovable = vocal->anyMovable();
                     double vm = 0.0, rm = 0.0;
@@ -319,11 +358,25 @@ namespace mixology::mix
                     if (std::abs (fullErr) > 6.0 && ! r.style.vocalFromYou)
                         plan.notes.push_back ("The vocal is " + fmt1 (std::abs (fullErr)) + " dB from " + r.style.name
                                               + "'s usual level. If it sounds right to you, press 'Right' above instead: Mixology keeps it where it is.");
-                    if (vm != 0.0)
+                    if (perTrack && vocalMovable)
+                    {
+                        // Each track's own part of the move: from the average to its own aim.
+                        for (auto& [m, e] : each)
+                        {
+                            m->extra = e - err;
+                            const double now = m->track->vocalTarget - e;
+                            m->why = (std::abs (e) <= 1.5 ? "'" + m->name + "' is where you like it: " + signedDb (now)
+                                      : "'" + m->name + (e > 0.0 ? "' sits low: " : "' sits high: ") + signedDb (now))
+                                     + " against the rest while it sings, " + (m->track->vocalOwn ? "you set about " + signedDb (m->track->vocalTarget) + " for it"
+                                                                              : r.style.vocalFromYou ? "you set about " + signedDb (m->track->vocalTarget)
+                                                                              : r.style.name + " usually has about " + signedDb (m->track->vocalTarget));
+                        }
+                    }
+                    if (vm != 0.0 || (perTrack && vocalMovable))
                     {
                         vocal->move += vm;
-                        vocal->why.push_back ("the vocal " + where);
-                        if (adlibs != nullptr) { adlibs->move += vm; adlibs->why.push_back ("follows the lead vocal"); }
+                        if (! perTrack) vocal->why.push_back ("the vocal " + where);
+                        if (adlibs != nullptr && vm != 0.0) { adlibs->move += vm; adlibs->why.push_back ("follows the lead vocal"); }
                     }
                     if (rm != 0.0)
                     {
@@ -358,7 +411,7 @@ namespace mixology::mix
                 for (auto& [k, g] : groups)
                 {
                     total += g.e;
-                    after += g.e * toE (eff (g));
+                    after += g.eAfter (eff (g));
                     if (! g.viaBus) anyLocked = anyLocked || ! g.anyMovable();
                 }
                 double c = std::clamp (toDb (total) - toDb (after), -6.0, 6.0);
@@ -367,7 +420,7 @@ namespace mixology::mix
                     for (auto& [k, g] : groups)
                         if (! g.viaBus)
                             for (const auto& m : g.members)
-                                if (movable (m.ch)) c = std::min (c, std::max (0.0, kMaxFaderDb - m.ch->faderDb - g.move));
+                                if (movable (m.ch)) c = std::min (c, std::max (0.0, kMaxFaderDb - m.ch->faderDb - g.move - m.extra));
                     if (busActive) c = std::min (c, std::max (0.0, kMaxFaderDb - bus->faderDb - busMove));
                 }
                 if (! anyLocked && std::abs (c) >= 1.0)
@@ -381,7 +434,7 @@ namespace mixology::mix
             //    balance stays; the mix gets quieter and Masterology brings the level back at the end.
             {
                 double before = 0.0, after = 0.0;
-                for (auto& [k, g] : groups) { before += g.e; after += g.e * toE (eff (g)); }
+                for (auto& [k, g] : groups) { before += g.e; after += g.eAfter (eff (g)); }
                 const double peak = mixPeak + (toDb (after) - toDb (before));
                 if (r.mixPeak > -100.0 && peak > -5.0)
                 {
@@ -396,7 +449,7 @@ namespace mixology::mix
                         for (const auto& m : g.members)
                         {
                             if (! movable (m.ch)) { stuck.push_back (m.name); continue; }
-                            plan.headroom.push_back ({ m.ch->hash, m.name, m.ch->faderDb, std::min (m.ch->faderDb + g.move, kMaxFaderDb) });
+                            plan.headroom.push_back ({ m.ch->hash, m.name, m.ch->faderDb, std::min (m.ch->faderDb + g.move + m.extra, kMaxFaderDb) });
                         }
                     }
                     if (! stuck.empty())
@@ -408,15 +461,18 @@ namespace mixology::mix
             std::vector<std::pair<double, std::string>> moved;
             for (auto& [k, g] : groups)
             {
-                if (std::abs (g.move) < 0.5) continue;
-                moved.push_back ({ g.move, kindWords (g) });
+                if (std::abs (g.move) < 0.5 && ! g.anyExtra()) continue;
+                if (! g.anyExtra()) moved.push_back ({ g.move, kindWords (g) });
                 for (const auto& m : g.members)
                 {
+                    const double move = g.move + m.extra;
+                    if (std::abs (move) < 0.5) continue;
+                    if (g.anyExtra()) moved.push_back ({ move, quoted (m.name) });
                     if (! movable (m.ch))
                     {
                         plan.notes.push_back (quoted (m.name) + (m.ch == nullptr ? ": Cubase hasn't shown its fader (press Analyze Mix again)"
                                                                  : m.ch->locked ? ": protected (padlock)" : ": its fader wasn't read")
-                                              + ", so it stays where it is (it would have moved " + signedDb (g.move) + ").");
+                                              + ", so it stays where it is (it would have moved " + signedDb (move) + ").");
                         continue;
                     }
                     Change c;
@@ -425,10 +481,12 @@ namespace mixology::mix
                     c.role = g.role;
                     c.kind = "level";
                     c.from = m.ch->faderDb;
-                    c.wanted = std::min (c.from + g.move, kMaxFaderDb);
-                    c.to = std::min (c.from + std::clamp (g.move, -kMaxMoveDb, kMaxMoveDb), kMaxFaderDb);
-                    c.big = std::abs (g.move) > kMaxMoveDb + 0.05;
-                    c.why = joinWords (g.why);
+                    c.wanted = std::min (c.from + move, kMaxFaderDb);
+                    c.to = std::min (c.from + std::clamp (move, -kMaxMoveDb, kMaxMoveDb), kMaxFaderDb);
+                    c.big = std::abs (move) > kMaxMoveDb + 0.05;
+                    auto whys = g.why;
+                    if (! m.why.empty()) whys.insert (whys.begin(), m.why);
+                    c.why = joinWords (whys);
                     if (c.why.empty()) c.why = "keeps the mix as loud as before";
                     if (std::abs (c.to - c.from) < 0.05)
                     {

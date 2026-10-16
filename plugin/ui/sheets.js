@@ -498,7 +498,7 @@ function openGenre(app, genre) {
 
 const KIND = { warn: ["#ff5a3c", "Worth fixing"], info: ["#19d3ff", "Have a look"], calm: ["#39e26b", "Fine"] };
 
-export function openSuggestion(app, sg) {
+export function openSuggestion(app, sg, opts = {}) {
   const body = sheet("MIX ASSISTANT");
   body.className = "scroll";
   const [colour, kindLabel] = KIND[sg.kind] || KIND.info;
@@ -514,15 +514,62 @@ export function openSuggestion(app, sg) {
     const ol = el("ol", "", body, { fontSize: "20px", lineHeight: "1.5", margin: "0 0 16px", paddingLeft: "28px" });
     for (const st of sg.steps) el("li", "", ol, { marginBottom: "6px" }).textContent = st;
   }
-  if (sg.id && sg.id.startsWith("vocal-") && sg.id !== "vocal-pocket") {
-    const taste = el("div", "", body, { display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center", margin: "0 0 16px" });
-    el("span", "", taste, { fontSize: "19px", color: "var(--gold)" }).textContent = "To your ears, the vocal sounds:";
-    for (const [value, label] of [["louder", "Too quiet"], ["right", "Sounds right"], ["quieter", "Too loud"]]) {
-      const b = el("button", "small-btn", taste, { height: "44px", fontSize: "19px" });
-      b.textContent = label;
-      b.addEventListener("click", async () => { const r = await app.command("vocalTaste", { value }); if (r && r.ok) $("overlay").classList.remove("shown"); });
-    }
-    el("div", "", taste, { width: "100%", fontSize: "16px", color: "var(--text-dim)" }).textContent = "Mixology remembers it for this song: the advice, Balance and Auto Mix follow your ears.";
+  const isVocal = sg.id && sg.id.startsWith("vocal-") && sg.id !== "vocal-pocket";
+  // Your ears, for the whole vocal or one vocal track (a verse and a hook on their own tracks can want different levels).
+  const report = app.bridge && app.bridge.analysis && app.bridge.analysis.report;
+  const vocalTracks = isVocal && report ? (sg.tracks || []).map((n) => report.tracks.find((t) => t.name === n)).filter((t) => t && t.vocalRatio !== undefined) : [];
+  if (isVocal) {
+    let picked = vocalTracks.find((t) => t.hash === opts.track) || null;
+    const box = el("div", "", body, { margin: "0 0 16px" });
+    const send = async (value) => {
+      const r = await app.command("vocalTaste", picked ? { value, hash: picked.hash } : { value });
+      if (!r || !r.ok) return;
+      if (vocalTracks.length < 2) { $("overlay").classList.remove("shown"); return; }
+      // Stay here (set the next track too): the card again, as the advice now reads.
+      const hash = picked && picked.hash;
+      setTimeout(() => {
+        const rep = app.bridge && app.bridge.analysis && app.bridge.analysis.report;
+        const fresh = rep && rep.suggestions.find((x) => x.id && x.id.startsWith("vocal-") && x.id !== "vocal-pocket");
+        if (fresh) openSuggestion(app, fresh, { track: hash });
+        else $("overlay").classList.remove("shown");
+      }, 250);
+    };
+    const render = () => {
+      box.innerHTML = "";
+      if (vocalTracks.length >= 2) {
+        const row = el("div", "", box, { display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", marginBottom: "10px" });
+        el("span", "", row, { fontSize: "18px", color: "var(--text-dim)", marginRight: "4px" }).textContent = "Set it for:";
+        const chip = (label, on, onClick) => {
+          const c = el("button", "chip", row);
+          c.textContent = label;
+          c.classList.toggle("on", on);
+          c.addEventListener("click", onClick);
+        };
+        chip("All vocals", !picked, () => { picked = null; render(); });
+        for (const t of vocalTracks) chip(t.name, picked === t, () => { picked = picked === t ? null : t; render(); });
+        if (picked) {
+          el("div", "", box, { fontSize: "18px", lineHeight: "1.45", margin: "0 0 10px" }).textContent =
+            `'${picked.name}' sits ${fmt.db(picked.vocalRatio)} against the rest of the mix while it sings. ` +
+            (picked.vocalOwn ? `You like it about ${fmt.db(picked.vocalTarget)} (this track's setting).` : `It follows the whole vocal's aim (${fmt.db(picked.vocalTarget)}).`);
+        }
+      }
+      const taste = el("div", "", box, { display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" });
+      el("span", "", taste, { fontSize: "19px", color: "var(--gold)" }).textContent = picked ? `To your ears, '${picked.name}' sounds:` : "To your ears, the vocal sounds:";
+      for (const [value, label] of [["louder", "Too quiet"], ["right", "Sounds right"], ["quieter", "Too loud"]]) {
+        const b = el("button", "small-btn", taste, { height: "44px", fontSize: "19px" });
+        b.textContent = label;
+        b.addEventListener("click", () => send(value));
+      }
+      if (picked && picked.vocalOwn) {
+        const back = el("button", "small-btn", taste, { height: "44px", fontSize: "17px" });
+        back.textContent = "Follow the whole vocal";
+        back.addEventListener("click", () => send("style"));
+      }
+      el("div", "", taste, { width: "100%", fontSize: "16px", color: "var(--text-dim)" }).textContent = picked
+        ? "Mixology remembers it for this track and this song: the advice, Balance and Auto Mix follow your ears."
+        : "Mixology remembers it for this song: the advice, Balance and Auto Mix follow your ears." + (vocalTracks.length >= 2 ? " Pick a track above to set it for that track only." : "");
+    };
+    render();
   }
   if (sg.id === "group-hint") {
     const row = el("div", "", body, { display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center", margin: "0 0 16px" });
@@ -534,8 +581,10 @@ export function openSuggestion(app, sg) {
   }
   if (sg.tracks && sg.tracks.length) {
     const row = el("div", "", body, { display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" });
-    el("span", "", row, { fontSize: "18px", color: "var(--text-dim)", marginRight: "4px" }).textContent = "Tracks:";
-    for (const t of sg.tracks) el("span", "chip", row).textContent = t;
+    if (vocalTracks.length < 2) {   // (the vocal tracks are picked above)
+      el("span", "", row, { fontSize: "18px", color: "var(--text-dim)", marginRight: "4px" }).textContent = "Tracks:";
+      for (const t of sg.tracks) el("span", "chip", row).textContent = t;
+    }
     const go = el("button", "small-btn", row, { marginLeft: "auto" });
     go.textContent = "Show the Tracks page";
     go.addEventListener("click", () => { $("overlay").classList.remove("shown"); app.showPage("tracks"); });

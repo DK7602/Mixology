@@ -1,6 +1,21 @@
 # Milestone 6 tests
 
-## Version 0.14.0 (10 minutes): Mixology opens as you left it
+## Version 0.15.0 (5 minutes): your ears per vocal track
+
+Mixology 0.15.0 only.
+1. Analyze Mix on a song with two or more lead vocal tracks (e.g. Lead Vox 1 - Verse, Lead Vox 2 - Chorus). Open the
+   Mix Assistant's vocal point.
+2. **Set it for:** shows **All vocals** and each vocal track. Click one: it lights up, and the line under it says where
+   that track sits while it sings.
+3. Press **Too quiet** (or Sounds right / Too loud): the window stays open with that track still picked; its line now
+   says "this track's setting". Set another track the same way.
+4. Open **BALANCE**: the track you called too quiet comes up against the band, the ones that sound right stay where
+   they are against it.
+5. **Follow the whole vocal** on a track takes its own setting away. Close and reopen the project: the settings stay.
+
+**Report**: does each track end up where your ears want it?
+
+## Version 0.14.0 (10 minutes): Mixology opens as you left it (passed)
 
 Mixology 0.14.0 only (Voxology 0.50.1 and Masterology 0.29.1 stay).
 1. In a song: Analyze Mix (or let Auto Analyze give advice), then change a few things in Mixology (a fader on the Tracks

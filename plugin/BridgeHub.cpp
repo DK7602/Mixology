@@ -278,6 +278,7 @@ void BridgeHub::timerCallback()
                 ts.reference = f[3] == "1";
                 ts.musicBus = f[4] == "1";
                 ts.noPan = f[5] == "1";
+                if (f.size() > 6 && f[6].isNotEmpty()) ts.vocalOffset = juce::jlimit (-24.0, 24.0, f[6].getDoubleValue());
             }
             std::vector<std::uint32_t> noPan;   // the channels Cubase doesn't pan, as this project learned them
             for (const auto& [hash, ts] : trackSettings)
@@ -772,9 +773,10 @@ void BridgeHub::cacheTrackSettings()
 {
     juce::StringArray lines;
     for (const auto& [hash, ts] : trackSettings)
-        if (ts.role || ts.excluded || ts.reference || ts.musicBus || ts.noPan)
+        if (ts.role || ts.excluded || ts.reference || ts.musicBus || ts.noPan || ts.vocalOffset)
             lines.add (juce::String (static_cast<juce::int64> (hash)) + "\t" + (ts.role ? mixology::mix::roleKey (*ts.role) : "") + "\t" + (ts.excluded ? "1" : "0")
-                       + "\t" + (ts.reference ? "1" : "0") + "\t" + (ts.musicBus ? "1" : "0") + "\t" + (ts.noPan ? "1" : "0"));
+                       + "\t" + (ts.reference ? "1" : "0") + "\t" + (ts.musicBus ? "1" : "0") + "\t" + (ts.noPan ? "1" : "0")
+                       + "\t" + (ts.vocalOffset ? juce::String (*ts.vocalOffset, 2) : juce::String()));
     const juce::ScopedLock sl (protectedLock);
     trackSettingsCache = lines.joinIntoString ("\n");
 }
@@ -1301,6 +1303,12 @@ juce::var BridgeHub::analysisState() const
             to->setProperty ("width", std::round (t.width * 100.0) / 100.0);
             to->setProperty ("balance", std::round (t.balance * 10.0) / 10.0);
             to->setProperty ("reference", t.reference);
+            if (t.hasVocalRatio)   // a lead vocal track on its own: where it sits while it sings, where you like it
+            {
+                to->setProperty ("vocalRatio", std::round (t.vocalRatio * 10.0) / 10.0);
+                to->setProperty ("vocalTarget", std::round (t.vocalTarget * 10.0) / 10.0);
+                to->setProperty ("vocalOwn", t.vocalOwn);
+            }
             tracks.add (juce::var (to));
         }
         r->setProperty ("tracks", tracks);
@@ -1770,6 +1778,36 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
             ++analysisVersion;
             info = on ? "Got it: the music plays through this group. Mixology moves the music on its fader, and never counts it as extra music."
                       : "This channel is no longer the music group.";
+        }
+    }
+    else if (name == "vocalTaste" && static_cast<juce::int64> (arg.getProperty ("hash", 0)) != 0)
+    {
+        // Your ears for one vocal track: its own aim (a verse and a hook on their own tracks can want different levels).
+        const auto hash = static_cast<std::uint32_t> (static_cast<juce::int64> (arg.getProperty ("hash", 0)));
+        const auto taste = value.toString();
+        const mixology::mix::TrackReport* t = nullptr;
+        for (const auto& x : report.tracks)
+            if (x.hash == hash) t = &x;
+        const std::string quotedName = t != nullptr ? "'" + t->name + "'" : std::string ("That track");
+        if (taste == "style")
+        {
+            trackSettings[hash].vocalOffset.reset();
+            info = quotedName + " follows the whole vocal's setting again.";
+        }
+        else if (t == nullptr || ! t->hasVocalRatio)
+            r = { false, quotedName + " didn't sing while Mixology listened: play a part where it sings, then Analyze Mix again." };
+        else
+        {
+            const double step = taste == "quieter" ? -2.5 : taste == "louder" ? 2.5 : 0.0;
+            trackSettings[hash].vocalOffset = juce::jlimit (-24.0, 24.0, t->vocalRatio + step - report.styleVocalTarget);
+            info = taste == "right" ? "Got it: Mixology keeps " + quotedName + " where it is (saved with the project)."
+                 : "Got it: Balance and Auto Mix now aim for " + quotedName + " 2.5 dB " + (step < 0 ? "lower" : "higher") + " than now (saved with the project).";
+        }
+        if (r.ok)
+        {
+            cacheTrackSettings();
+            reevaluate();
+            ++analysisVersion;
         }
     }
     else if (name == "vocalTaste")

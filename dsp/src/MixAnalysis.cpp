@@ -797,27 +797,48 @@ namespace mixology::mix
         if (! vocals.empty())
         {
             std::vector<double> ratios;
+            std::map<std::uint32_t, std::vector<double>> each;   // every vocal track on its own, while it sings
             for (const auto& m : moments)
             {
                 double vE = 0.0, aE = 0.0, bE = 0.0;
+                std::vector<std::pair<std::uint32_t, double>> singing;
                 for (const auto& t : m.tracks)
                 {
                     const auto key = keyOf (t);
                     const auto& a = acc.at (key);
                     if (! activeIn (t, a.maxLoud)) continue;
                     const double e = toE (t.frame.loudness + t.faderDb + busOf (key));
-                    if (std::find (vocals.begin(), vocals.end(), key) != vocals.end()) vE += e;
+                    if (std::find (vocals.begin(), vocals.end(), key) != vocals.end()) { vE += e; singing.push_back ({ key, e }); }
                     else if (std::find (adlibs.begin(), adlibs.end(), key) != adlibs.end()) aE += e;
                     else if (std::find (others.begin(), others.end(), key) != others.end()) bE += e;
                 }
                 if (! m.mix.silent) bE = std::max (bE, toE (m.mix.loudness) - vE - aE);
                 if (vE > 0.0 && bE > 1.0e-12) ratios.push_back (toDb (vE) - toDb (bE));
+                if (bE > 1.0e-12)
+                    for (const auto& [key, e] : singing) each[key].push_back (toDb (e) - toDb (bE));
+            }
+            auto median = [] (std::vector<double> v) {
+                std::nth_element (v.begin(), v.begin() + static_cast<long> (v.size() / 2), v.end());
+                return v[v.size() / 2];
+            };
+            const double styleTarget = vocalTarget (style.key);
+            // Each vocal track on its own (a verse and a hook on their own tracks sit differently): where it sits while
+            // it sings, and where you like it (its own setting, else the whole vocal's).
+            bool anyOwn = false;
+            for (auto& t : r.tracks)
+            {
+                const auto it = each.find (t.hash);
+                if (it == each.end() || it->second.size() < 5) continue;
+                const auto s = settings.find (t.hash);
+                t.hasVocalRatio = true;
+                t.vocalRatio = median (it->second);
+                t.vocalOwn = s != settings.end() && s->second.vocalOffset.has_value();
+                t.vocalTarget = styleTarget + (t.vocalOwn ? *s->second.vocalOffset : style.vocalOffset);
+                anyOwn = anyOwn || t.vocalOwn;
             }
             if (ratios.size() >= 5)
             {
-                std::nth_element (ratios.begin(), ratios.begin() + static_cast<long> (ratios.size() / 2), ratios.end());
-                const double ratio = ratios[ratios.size() / 2];
-                const double styleTarget = vocalTarget (style.key);
+                const double ratio = median (ratios);
                 const double target = styleTarget + style.vocalOffset;
                 r.hasVocalRatio = true;
                 r.vocalRatio = ratio;
@@ -829,7 +850,54 @@ namespace mixology::mix
                 const std::string aim = style.vocalFromYou ? "You like it about " + where + " it (your setting)."
                                                            : "For " + style.name + " it usually sits about " + where + " it.";
                 const std::string yourEars = "If it already sounds right to you, press 'Sounds right' below: Mixology remembers how you like your vocal.";
-                if (ratio < target - kVocalTolerance)
+                if (anyOwn)
+                {
+                    // A vocal track has a setting of its own: each one against its own aim.
+                    std::vector<const TrackReport*> lines, low, high;
+                    for (auto k : vocals)
+                        if (const auto& t = trackOf (k); t.hasVocalRatio) lines.push_back (&t);
+                    for (const auto* t : lines)
+                    {
+                        if (t->vocalRatio < t->vocalTarget - kVocalTolerance) low.push_back (t);
+                        else if (t->vocalRatio > t->vocalTarget + kVocalTolerance + 1.0) high.push_back (t);
+                    }
+                    auto dbText = [] (double v) { return v >= 0 ? fmt1 (v) + " dB above" : fmt1 (-v) + " dB under"; };
+                    auto sits = [&] (const TrackReport& t) {
+                        const std::string aimT = t.vocalOwn ? "you like it about " + dbText (t.vocalTarget) + " it (this track's setting)"
+                                               : style.vocalFromYou ? "you like it about " + dbText (t.vocalTarget) + " it (your setting)"
+                                               : style.name + " usually has it about " + dbText (t.vocalTarget) + " it";
+                        return "'" + t.name + "' sits " + dbText (t.vocalRatio) + " the rest of the mix while it sings; " + aimT + ".";
+                    };
+                    auto namesOf = [] (const std::vector<const TrackReport*>& v) {
+                        std::vector<std::string> n;
+                        for (const auto* t : v) n.push_back (t->name);
+                        return n;
+                    };
+                    auto textOf = [&] (const std::vector<const TrackReport*>& v) {
+                        std::string s;
+                        for (const auto* t : v) s += (s.empty() ? "" : " ") + sits (*t);
+                        return s;
+                    };
+                    const std::string yourEarsEach = "If one already sounds right to you, pick it below and press 'Sounds right': Mixology remembers it for that track.";
+                    if (! low.empty())
+                    {
+                        const bool yours = std::any_of (low.begin(), low.end(), [&] (const TrackReport* t) { return t->vocalOwn || style.vocalFromYou; });
+                        out.push_back ({ "vocal-low", yours ? "warn" : "info", "vox",
+                                         low.size() == lines.size() ? std::string ("The vocal may be buried")
+                                         : low.size() == 1 ? "'" + low.front()->name + "' may be buried" : std::string ("Some vocals may be buried"),
+                                         textOf (low), "Only if the words are hard to follow there. Your ears decide.",
+                                         { "Raise " + joinNames (namesOf (low)) + " 2 - 3 dB, then listen.", yourEarsEach }, names });
+                    }
+                    else if (! high.empty())
+                        out.push_back ({ "vocal-high", "info", "vox",
+                                         high.size() == lines.size() ? std::string ("The vocal sits far on top")
+                                         : high.size() == 1 ? "'" + high.front()->name + "' sits far on top" : std::string ("Some vocals sit far on top"),
+                                         textOf (high), "Only if the band sounds weak behind it. Your ears decide.",
+                                         { "Try " + joinNames (namesOf (high)) + " 2 - 3 dB lower and listen again.", yourEarsEach }, names });
+                    else
+                        out.push_back ({ "vocal-ok", "calm", "vox", "Vocal levels fit your settings", textOf (lines), "No.", {}, names });
+                }
+                else if (ratio < target - kVocalTolerance)
                     out.push_back ({ "vocal-low", style.vocalFromYou ? "warn" : "info", "vox", "The vocal may be buried",
                                      "While it sings, the vocal sits " + fmt1 (-ratio) + " dB under the rest of the mix. " + aim,
                                      "Only if the words are hard to follow. Your ears decide: some songs want the vocal inside the band.",

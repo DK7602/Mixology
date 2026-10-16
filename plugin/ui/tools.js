@@ -82,8 +82,10 @@ export async function openToolSheet(app, tool) {
       b.addEventListener("click", async () => { const res = await app.command("vocalTaste", { value }); if (res && res.ok) setTimeout(reopen, 150); });
     }
     const st = el("span", "", taste, { color: "var(--text-dim)", fontSize: "16px" });
-    st.textContent = report.vocalFromYou ? `Aiming for your setting (${fmt.db(report.vocalTarget)} against the band).`
-      : `Aiming for ${report.style}'s usual level (${fmt.db(report.vocalTarget)}). Your ears decide: tell Mixology.`;
+    const own = report.tracks.filter((t) => t.vocalOwn).map((t) => `'${t.name}'`);
+    st.textContent = (report.vocalFromYou ? `Aiming for your setting (${fmt.db(report.vocalTarget)} against the band).`
+      : `Aiming for ${report.style}'s usual level (${fmt.db(report.vocalTarget)}). Your ears decide: tell Mixology.`)
+      + (own.length ? ` ${own.join(", ")} ${own.length === 1 ? "has its" : "have their"} own setting (Mix Assistant, the vocal card).` : "");
     if (report.vocalFromYou) {
       const back = el("button", "small-btn", taste, { fontSize: "15px", height: "34px" });
       back.textContent = "Use the style's level";

@@ -1,6 +1,6 @@
 # Mixology manual
 
-Manual for version 0.14.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
+Manual for version 0.15.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -40,7 +40,8 @@ fix):
 | Setup check: a mono group or output on the way, vocals without Mixology Link (Mix Assistant, Tracks page) | Live |
 | Presets: Mixology's starting points and yours, for tracks, FX channels and the Full Mix | Live |
 | History: every change Mixology makes, step by step; go back to any point and forward again | Live |
-| Mixology opens as you left it: the History, the advice and the restore points come back with the project | Live: this is what we're testing now |
+| Mixology opens as you left it: the History, the advice and the restore points come back with the project | Live (passed in Cubase) |
+| Your ears per vocal track: Too quiet / Sounds right / Too loud for one lead vocal track | Live: this is what we're testing now |
 
 Nothing changes your sound until you ask: every processing module starts switched off (the audio passes
 through bit for bit). What can change it: the Cubase faders and pans Mixology moves, the Assist EQ / Trim in
@@ -194,7 +195,8 @@ What it looks at:
 
 - **Vocal level**: how loud the lead vocal sits against the rest of the mix while it sings, compared with your
   style (country, pop, R&B and folk sit the vocal more forward than rock). The rest of the mix is what Mixology
-  hears on the Stereo Out, so a beat without a Link still counts.
+  hears on the Stereo Out, so a beat without a Link still counts. Each lead vocal track is also measured on its own
+  (while it sings), so you can set your ears for one track (see "One vocal track at a time" below).
 - **Kick and 808 / bass**: whether they fight over the same low frequencies when they hit together.
 - **Words covered**: instruments as loud as the vocal at 1.6 - 4 kHz (where words are understood).
 - **Tone against your style**: muddy low mids, harsh upper mids, too much or too little low end, dull or very
@@ -258,6 +260,12 @@ list: every change it wants to make, **now → new**, and why, in plain words. U
   measures where your vocal sits; your answer sets where it should sit, saved with the song. The advice, Balance
   and Auto Mix follow it from then on ("Use the style's level" goes back to the genre's usual level). The same
   buttons are on the Mix Assistant's vocal points.
+  **One vocal track at a time.** A verse and a hook on their own tracks can want different levels. On the Mix
+  Assistant's vocal point, **Set it for:** lists your lead vocal tracks: click one (it lights up), and Mixology says
+  where that track sits while it sings; then **Too quiet / Sounds right / Too loud** set it for that track only (the
+  window stays open for the next one). **All vocals** sets the whole vocal again; **Follow the whole vocal** takes a
+  track's own setting away. Balance and Auto Mix then move each vocal track to its own level (the band makes room for
+  the average), and the advice checks each one. Saved with the song.
   **Room for Masterology** is a separate line at the bottom, unticked: every fader that plays goes down together
   (e.g. -12.8 dB when the mix peaks at +6.8 dBTP). The balance stays the same, the mix gets quieter, Masterology
   brings the level back. Tick it last, once the balance sounds right.

@@ -710,6 +710,74 @@ TEST_CASE ("Plans: Balance lifts a buried vocal and makes room for it", "[plan]"
     }
 }
 
+TEST_CASE ("Analyze Mix: your ears per vocal track (a verse and a hook on their own tracks)", "[analysis][plan]")
+{
+    // The verse sings first, the hook after it, each on its own track; the hook sits about 6 dB higher.
+    auto tracks = [] (int i) { return std::vector<TrackSample> {
+        sample ("Kick", kickFrame()), sample ("808", bassFrame()), sample ("Hats", hatsFrame()),
+        sample ("Verse Vox", i < 75 ? vocalFrame (-20.0) : silentFrame()), sample ("Hook Vox", i >= 75 ? vocalFrame (-14.0) : silentFrame()) }; };
+    Analysis a = listen (tracks);
+    const auto r0 = a.evaluate ({});
+    const auto* verse = track (r0, "Verse Vox");
+    const auto* hook = track (r0, "Hook Vox");
+    REQUIRE (verse != nullptr);
+    REQUIRE (hook != nullptr);
+    REQUIRE (verse->hasVocalRatio);
+    REQUIRE (hook->hasVocalRatio);
+    CHECK (hook->vocalRatio - verse->vocalRatio == Catch::Approx (6.0).margin (0.5));
+    CHECK_FALSE (verse->vocalOwn);
+    CHECK (verse->vocalTarget == Catch::Approx (r0.vocalTarget));
+    CHECK (track (r0, "Kick")->hasVocalRatio == false);
+
+    const auto verseHash = mixology::bridge::nameHash ("Verse Vox");
+    const auto hookHash = mixology::bridge::nameHash ("Hook Vox");
+    std::map<std::uint32_t, TrackSettings> settings;
+
+    SECTION ("both sound right to you: the advice says so, nothing moves")
+    {
+        settings[verseHash].vocalOffset = verse->vocalRatio - r0.styleVocalTarget;
+        settings[hookHash].vocalOffset = hook->vocalRatio - r0.styleVocalTarget;
+        const auto r = a.evaluate (settings);
+        const auto* s = find (r, "vocal-ok");
+        REQUIRE (s != nullptr);
+        CHECK (s->title == "Vocal levels fit your settings");
+        CHECK (s->text.find ("'Verse Vox' sits") != std::string::npos);
+        CHECK (s->text.find ("this track's setting") != std::string::npos);
+        CHECK (mentions (s, "Hook Vox"));
+        const auto p = makePlan (Tool::balance, r, channelsOf (tracks (0)));
+        CHECK (change (p, "Verse Vox", "level") == nullptr);
+        CHECK (change (p, "Hook Vox", "level") == nullptr);
+    }
+    SECTION ("the verse is too quiet to you, the hook is right: only the verse comes up against the band")
+    {
+        settings[verseHash].vocalOffset = verse->vocalRatio + 2.5 - r0.styleVocalTarget;
+        settings[hookHash].vocalOffset = hook->vocalRatio - r0.styleVocalTarget;
+        const auto r = a.evaluate (settings);
+        CHECK (track (r, "Verse Vox")->vocalOwn);
+        auto move = [] (const mixology::mix::Change* c) { return c == nullptr ? 0.0 : c->wanted - c->from; };
+        const auto p = makePlan (Tool::balance, r, channelsOf (tracks (0)));
+        const double band = move (change (p, "Kick", "level"));
+        CHECK (move (change (p, "Verse Vox", "level")) - band == Catch::Approx (2.5).margin (0.3));
+        CHECK (move (change (p, "Hook Vox", "level")) - band == Catch::Approx (0.0).margin (0.3));
+        REQUIRE (change (p, "Verse Vox", "level") != nullptr);
+        CHECK (change (p, "Verse Vox", "level")->why.find ("'Verse Vox' sits low") != std::string::npos);
+        CHECK (change (p, "Verse Vox", "level")->why.find ("for it") != std::string::npos);
+    }
+    SECTION ("a track far from its own aim gets its own card")
+    {
+        settings[verseHash].vocalOffset = verse->vocalRatio + 6.0 - r0.styleVocalTarget;
+        settings[hookHash].vocalOffset = hook->vocalRatio - r0.styleVocalTarget;   // the hook: right where it is
+        const auto r = a.evaluate (settings);
+        const auto* s = find (r, "vocal-low");
+        REQUIRE (s != nullptr);
+        CHECK (s->title == "'Verse Vox' may be buried");
+        CHECK (s->kind == "warn");
+        CHECK (s->steps.front().find ("Raise 'Verse Vox'") != std::string::npos);
+        CHECK (s->steps.front().find ("Hook Vox") == std::string::npos);
+        CHECK (mentions (s, "Hook Vox"));   // every vocal is listed: pick one to set it
+    }
+}
+
 TEST_CASE ("Plans: Balance brings an outlier back, leaves a fitting beat alone", "[plan]")
 {
     auto tracks = [] (double hats) { return [=] (int) { return std::vector<TrackSample> {

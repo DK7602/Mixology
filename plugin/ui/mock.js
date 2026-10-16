@@ -19,7 +19,7 @@
     ["Pad", -16, 0.5, "#5a7bd6", 0], ["Riser", -18, 0.5, "#c7c7c7", 0], ["FX 1-Vox Verb", -12, 0.5, "#9a6bd6", 1],
   ].map(([name, db, pan, colour, link]) => ({ name, hash: hashOf(name), volume: toNorm(db), pan, mute: false, solo: false, read: name === "FX", write: false, colour, link: !!link, trim: 0, protected: name === "Lead Vox" }));
   const MOCK_DAW = { key: location.hash === "#studioone" ? "studioone" : "cubase", picked: location.hash === "#studioone", from: 3, detected: "cubase" };
-  const B = { offset: 0, lastMove: "", log: [], version: 1, restore: {}, an: { state: "idle", seconds: 0, playing: true, report: null, auto: { on: false, pause: "", seconds: 0, checked: 0, updated: 0 } }, settings: {},
+  const B = { vocalOwn: {}, offset: 0, lastMove: "", log: [], version: 1, restore: {}, an: { state: "idle", seconds: 0, playing: true, report: null, auto: { on: false, pause: "", seconds: 0, checked: 0, updated: 0 } }, settings: {},
     apply: { active: false, what: "", done: 0, total: 0, skipped: 0, message: "", notes: [], serial: 0, canUndo: false, undoWhat: "", hearingReference: false },
     planId: 0, plan: null, undo: null };
   const ROLE_OF = { Kick: "kick", Snare: "snare", Hats: "hats", Perc: "perc", "808": "bass", Keys: "keys", Synth: "synth", Guitar: "guitar", "Lead Vox": "vox", FX: "fx", Adlibs: "adlibs", "Vox Double": "adlibs", Pad: "synth", Riser: "fx" };
@@ -52,6 +52,13 @@
     const refHash = Object.keys(B.settings).find((h) => B.settings[h].reference);
     const refTrack = refHash && tracks.find((t) => String(t.hash) === String(refHash));
     if (refTrack) { refTrack.excluded = true; refTrack.reference = true; }
+    // Two vocal tracks heard on their own (the preview uses Lead Vox and Adlibs), with your ears per track.
+    for (const [name, ratio] of [["Lead Vox", -8.2], ["Adlibs", -11.4]]) {
+      const t = tracks.find((x) => x.name === name);
+      if (!t) continue;
+      const own = B.vocalOwn[t.hash];
+      Object.assign(t, { vocalRatio: ratio, vocalOwn: own !== undefined, vocalTarget: own !== undefined ? ratio + own : B.vocal != null ? -8.2 + B.vocal : -1 });
+    }
     const bandsOf = (tilt) => Array.from({ length: 31 }, (_, b) => +(tilt(b)).toFixed(1));
     const mixBands = bandsOf((b) => 2.5 * Math.exp(-((b - 5) ** 2) / 6) + 1.8 * Math.exp(-((b - 12) ** 2) / 5) - 0.12 * (b - 15) - (b > 26 ? (b - 26) * 1.2 : 0));
     const reference = !refTrack ? { chosen: false } : {
@@ -78,7 +85,9 @@
           "Usually yes: it's free headroom and a cleaner low end.", ["Put a low cut (high-pass) on it: about 80 - 100 Hz for vocals, 60 - 80 Hz for keys, guitars and synths."], ["Adlibs"]),
         sg("unheard", "info", "link", "5 channels without Mixology Link", "'Perc', 'Synth', 'Guitar' and 'FX' and 1 more play in your mix, but Mixology can't hear them one by one, so the advice below leaves them out.",
           "Only if those tracks matter for the balance (they usually do).", ["Insert Mixology Link on each of them, after their other plug-ins, then Analyze Mix again."], ["Perc", "Synth", "Guitar", "FX"]),
-        sg("vocal-ok", "calm", "vox", "Vocal level fits Hip Hop - Modern Clean", "While it sings, the vocal sits +1.4 dB against the rest of the mix.", "No.", [], ["Lead Vox"]),
+        Object.keys(B.vocalOwn).length
+          ? sg("vocal-ok", "calm", "vox", "Vocal levels fit your settings", tracks.filter((t) => t.vocalRatio !== undefined).map((t) => `'${t.name}' sits ${Math.abs(t.vocalRatio).toFixed(1)} dB under the rest of the mix while it sings; you like it about ${Math.abs(t.vocalTarget).toFixed(1)} dB under it${t.vocalOwn ? " (this track's setting)" : ""}.`).join(" "), "No.", [], ["Lead Vox", "Adlibs"])
+          : sg("vocal-ok", "calm", "vox", "Vocal level fits Hip Hop - Modern Clean", "While it sings, the vocal sits +1.4 dB against the rest of the mix.", "No.", [], ["Lead Vox", "Adlibs"]),
       ],
     };
   }
@@ -205,6 +214,14 @@
       const busSet = Object.values(B.settings).some((x) => x && x.musicBus);
       B.plan = { ...hd, groupHints: (value === "auto" || value === "balance") && !busSet ? ["Pad"] : [], id: B.planId, tool: value, title, valid: true, summary: `${changes.length} changes for ${window.__mixStyle || "Hip Hop - Modern Clean"}: levels: the hats -3.4 dB, the kick -1.5 dB; pans: 2 tracks; 1 low cut, 1 mud dip; 2 pocket dips.`, notes, first, changes };
       return { ok: true, plan: B.plan };
+    }
+    if (name === "vocalTaste" && arg && arg.hash) {
+      if (!B.an.report) return fail("Analyze Mix first (with the vocal singing): then Mixology knows where your vocal sits now.");
+      const t = B.an.report.tracks.find((x) => x.hash === arg.hash);
+      if (value === "style") delete B.vocalOwn[arg.hash]; else B.vocalOwn[arg.hash] = { right: 0, louder: 2.5, quieter: -2.5 }[value];
+      B.an.report = fakeReport();
+      B.version++;
+      return { ok: true, info: value === "style" ? `'${t.name}' follows the whole vocal's setting again.` : value === "right" ? `Got it: Mixology keeps '${t.name}' where it is (saved with the project).` : `Got it: Balance and Auto Mix now aim for '${t.name}' 2.5 dB ${value === "louder" ? "higher" : "lower"} than now (saved with the project).` };
     }
     if (name === "vocalTaste") {
       if (!B.an.report) return fail("Analyze Mix first (with the vocal singing): then Mixology knows where your vocal sits now.");

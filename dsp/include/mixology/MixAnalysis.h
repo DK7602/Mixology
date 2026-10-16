@@ -71,6 +71,7 @@ namespace mixology::mix
         bool reference = false;    // your reference song (Reference Match); always left out of the mix advice
         bool musicBus = false;     // a group channel the music plays through (not the vocals), e.g. Voxology's "Beat"
         bool noPan = false;        // Cubase doesn't pan it (mono track into a mono group): learned by the bridge, kept here
+        std::optional<double> vocalOffset;   // your ears for this vocal track: dB on top of the style's level (else the whole vocal's)
         std::optional<Role> fromVoxology;   // Voxology sits on it (a vocal, or ad-libs): live, never saved
     };
 
@@ -99,6 +100,10 @@ namespace mixology::mix
         double balance = 0.0;      // left minus right (dB) after the fader: + leans left
         std::vector<double> bands; // average spectrum after the fader (dB per 1/3 octave)
         double maskDb = -120.0;    // its 1.6 - 4 kHz level against the lead vocal's while it sings (> -6: covers it)
+        bool hasVocalRatio = false; // a lead vocal track: it against the rest of the mix while it sings (dB),
+        double vocalRatio = 0.0;
+        double vocalTarget = 0.0;   // ... and where it should sit: the style's level plus your setting
+        bool vocalOwn = false;      // ... this track's own setting (else the whole vocal's)
         bool rumble = false;       // a lot of energy below 100 Hz it doesn't need
         bool reference = false;    // your reference song
     };

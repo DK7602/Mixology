@@ -172,6 +172,10 @@ v0.14.0: Mixology opens as you left it (user: the History's edits were gone afte
 advice on screen (the moments Analyze Mix heard, compact, so a role change still re-evaluates) and the restore points
 (faders and Assist EQ) are saved with the project; "Last session (date)" over advice that came back; the History marks
 EARLIER SESSIONS. Cancel on a new Analyze Mix keeps the moments behind the advice on screen.
+v0.14.0 passed in Cubase ("worked"). v0.15.0: your ears per vocal track (user: click one of the vocal point's tracks,
+it highlights, Too quiet / Sounds right / Too loud for that track): each lead vocal track measured on its own while it
+sings; TrackSettings.vocalOffset (saved with the track settings); per-track advice once a track has its own setting;
+Balance moves each vocal track to its own aim (the band makes room for the average).
 Still to come in M6: code signing (later).
 
 ### Built in v0.11.0 - Auto Analyze (asked 2026-10-15: "once an analyze mix has been run should have an auto analyze option")

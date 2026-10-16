@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-16, v0.14.0)
+# Mixology: resume here (updated 2026-10-16, v0.15.0)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -35,7 +35,28 @@ sends higher-resolution art, re-run it.
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
 
+## v0.15.0: your ears per vocal track (2026-10-16)
+- User tested v0.14.0: "worked" (sent the vocal point after reopening). Asked: on the vocal point, click one of its
+  tracks (it highlights) and use Too quiet / Sounds right / Too loud per track, not just for the whole vocal.
+- Engine: MixAnalysis measures each lead vocal track on its own (moments where it is active, its energy vs the same
+  beat estimate as the whole vocal, median, >= 5 moments): TrackReport.hasVocalRatio / vocalRatio / vocalTarget /
+  vocalOwn. TrackSettings.vocalOffset (dB on top of the style's level, like the global offset). With any own setting
+  the vocal point is per track (vocal-low "'X' may be buried" / "Some vocals..." / "The vocal..."; vocal-high the same;
+  vocal-ok "Vocal levels fit your settings"; text per track; tracks = every vocal); without one it is unchanged.
+  Balance (planBalance): Member {e, track, extra, why}; per track err = its aim - (its ratio + moved since - rest
+  shift); the vocal group moves by the average split with the band as before, each member's extra = err - average;
+  Group::eAfter() for the loudness / headroom sums; changes per member (move = group + extra). Test: "your ears per
+  vocal track" (both right: nothing moves; verse +2.5: verse +2.5 against the band, hook 0; a far track gets its card).
+- Hub: vocalTaste {value, hash} (hash != 0): trackSettings[hash].vocalOffset = its ratio + step - style target
+  ("style" resets it); saved as the 7th field of the track settings lines. analysisState tracks[]: vocalRatio,
+  vocalTarget, vocalOwn.
+- UI (sheets.js openSuggestion(app, sg, {track})): vocal points with 2+ measured vocal tracks show "Set it for: All
+  vocals | each track" (chips, .on = cyan glow), a line for the picked track, the taste buttons for it, "Follow the whole
+  vocal" when it has its own; after a press the point opens again (fresh report, same track). tools.js names tracks
+  with their own setting. mock.js: Lead Vox and Adlibs measured, B.vocalOwn.
+
 ## v0.14.0: Mixology opens as you left it (2026-10-16)
+- PASSED in Cubase (user: "worked").
 - User: "the record edits for a track disappear in mixology once closed and re opened ... is there any way for project
   edits to save in history and mixology opens the same as it closed?" (The page / style / module tabs already came back
   via the ui state; lost were the hub's in-memory History, the advice and the restore points.) Also asked (answered, no
