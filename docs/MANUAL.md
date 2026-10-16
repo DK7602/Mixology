@@ -1,6 +1,6 @@
 # Mixology manual
 
-Manual for version 0.16.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
+Manual for version 0.16.1 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -287,7 +287,8 @@ list: every change it wants to make, **now → new**, and why, in plain words. U
 - **Vocal Pocket**: Assist EQ. Gentle dips (2 - 4 dB) at 1.6 - 4 kHz in the instruments that cover the vocal's
   words, each where it overlaps the vocal most (always inside 1.6 - 4 kHz, the range the advice measures). When
   Mixology heard a track with its dip already in and it still covers the words, the dip goes a little deeper (at
-  most 6 dB; past that, turn the track down or pan it instead). A dip made since Mixology listened counts as done.
+  most 6 dB; past that, turn the track down or pan it instead). A dip made since Mixology listened counts as done; a
+dip outside 1.6 - 4 kHz (e.g. at 5 kHz, from Mixology before 0.16) doesn't count: Vocal Pocket moves it.
 - **Polish**: processing in each track's Mixology Link, worked out from what Analyze Mix heard:
   - **EQ**: a dull lead vocal gets a little presence (around 3.5 kHz) and, if it has little air, a gentle high
     shelf; a harsh one a narrow dip; a boxy kick a dip around 300 - 500 Hz. Gentle moves (at most 3 dB), in an EQ

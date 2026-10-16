@@ -2,7 +2,7 @@
 
 ## Version 0.16.0 (5 minutes): the Mix Assistant knows what's fixed
 
-Mixology 0.16.0 only.
+Mixology 0.16.1 (0.16.0 said "the dips are in" for the old 5 kHz dip when the advice came from a 0.15 project).
 1. Open a point like **Instruments cover the vocal's words**: under HOW there is **OPEN VOCAL POCKET ›**. It opens Vocal
    Pocket with its dips (Balance, Clean Up and Polish points have theirs).
 2. Apply the dips. Close the window: the point moves to the end of the list with a green tick, "Done since Mixology

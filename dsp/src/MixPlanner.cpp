@@ -922,11 +922,16 @@ namespace mixology::mix
                 const auto* ch = eqChannel (t, look, plan, "vocal pocket");
                 if (ch == nullptr) continue;
                 const double hz = bandHz (best);
-                auto near = [&] (double a) { return std::abs (std::log2 (std::max (a, 1.0) / hz)) <= 0.5; };   // within half an octave
+                // A dip counts when it sits where the words are (1.6 - 4 kHz) and within half an octave of this one.
+                auto dipCounts = [&] (const AssistSettings& a) {
+                    return a.pocketDb < -0.05 && a.pocketHz >= 1500.0f && a.pocketHz <= 4300.0f
+                           && std::abs (std::log2 (std::max (static_cast<double> (a.pocketHz), 1.0) / hz)) <= 0.5;
+                };
                 // The dip Mixology heard it with (Analyze Mix measured the track with it): what's still covered needs
-                // more on top. A dip made since Mixology listened (a plan applied) already counts.
-                const auto& heard = ch->assistAtAnalysis;
-                const double heardDip = ch->assistAtAnalysisKnown && heard.pocketDb < -0.05 && near (heard.pocketHz) ? heard.pocketDb : 0.0;
+                // more on top. A dip made since Mixology listened (a plan applied) already counts. Advice from before
+                // 0.16 didn't keep the Assist EQ it heard: then it heard the one there now.
+                const auto& heard = ch->assistAtAnalysisKnown ? ch->assistAtAnalysis : ch->assist;
+                const double heardDip = dipCounts (heard) ? heard.pocketDb : 0.0;
                 const double wanted = std::max (-kMaxPocketDb, heardDip - d);
                 if (heardDip <= -kMaxPocketDb + 0.25)
                 {
@@ -934,7 +939,7 @@ namespace mixology::mix
                                           + " dB pocket dip: turn it down a little or pan it off-centre instead.");
                     continue;
                 }
-                if (ch->assist.pocketDb <= wanted + 0.25 && near (ch->assist.pocketHz)) { ++inPlace; continue; }   // already there
+                if (ch->assist.pocketDb <= wanted + 0.25 && dipCounts (ch->assist)) { ++inPlace; continue; }   // already there
                 Change c;
                 c.hash = ch->hash;
                 c.name = t.name;

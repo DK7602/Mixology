@@ -170,6 +170,8 @@ private:
     std::map<std::uint32_t, double> fadersAtAnalysis;   // every fader when Analyze Mix finished listening
     std::map<std::uint32_t, mixology::proc::Values> procAtAnalysis;   // every Link's processing then (Polish)
     std::map<std::uint32_t, mixology::AssistSettings> assistAtAnalysis;   // ... and its Assist EQ (Vocal Pocket, Clean Up)
+    bool assistGuessed = false;   // advice saved before 0.16 didn't keep it: the Assist EQ when the project opened
+    void guessAssistAtAnalysis();
     // The Mix Assistant's points the smart tools already fixed since Mixology listened (their tool has nothing
     // left to do and their tracks changed): worked out at most twice a second.
     struct DonePoint { bool done = false; std::string what; };

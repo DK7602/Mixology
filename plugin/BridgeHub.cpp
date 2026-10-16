@@ -332,6 +332,7 @@ void BridgeHub::timerCallback()
     if (t - doneCheckedAt >= 0.5)
     {
         doneCheckedAt = t;
+        if (assistGuessed) guessAssistAtAnalysis();   // Links that registered after the project's advice came back
         updateDonePoints();
     }
 
@@ -704,6 +705,14 @@ void BridgeHub::applyPendingSession()
     ++analysisVersion;
 }
 
+void BridgeHub::guessAssistAtAnalysis()
+{
+    const auto links = mixology::link::processRegistry().links (mixology::link::nowMs());
+    for (const auto& l : links)
+        if (l.identity.hasName && uniqueLink (links, l.nameHash) != nullptr && assistAtAnalysis.count (l.nameHash) == 0)
+            assistAtAnalysis[l.nameHash] = l.assist;
+}
+
 std::string BridgeHub::changedSinceAnalysis (const std::vector<std::string>& names, bool anyFader) const
 {
     // What changed on these tracks (or on any fader) since Mixology listened: the advice doesn't know it yet.
@@ -835,7 +844,8 @@ bool BridgeHub::loadAdvice (const std::string& bytes)
     }
     snap.mixKnown = r.flag();
     for (float& x : snap.mix) x = r.f32();
-    if (! r.atEnd())
+    const bool assistKept = ! r.atEnd();
+    if (assistKept)
         for (std::uint32_t i = 0, n = r.count (24); i < n && r.ok(); ++i)
         {
             const auto hash = r.u32();
@@ -847,6 +857,13 @@ bool BridgeHub::loadAdvice (const std::string& bytes)
     analysis = std::move (heard);
     analysis.setVocalOffset (vocalOffset, vocalFromYou);
     useSnapshot (std::move (snap));
+    if (! assistKept)
+    {
+        // Saved by Mixology 0.14 / 0.15: the Assist EQ it heard wasn't kept. The project opened as it was saved,
+        // so what each Link has now is the best guess (a dip you make from here on counts as new).
+        assistGuessed = true;
+        guessAssistAtAnalysis();
+    }
     applyMusicBus (analysis, fadersAtAnalysis);
     report = analysis.evaluate (settingsForAnalysis(), unheard);
     if (! report.valid) { report = {}; analysis.clear(); return false; }
@@ -1236,6 +1253,7 @@ void BridgeHub::useSnapshot (AtAnalysis at)
     fadersAtAnalysis = std::move (at.faders);
     procAtAnalysis = std::move (at.procs);
     assistAtAnalysis = std::move (at.assist);
+    assistGuessed = false;
     mixProcAtAnalysisKnown = at.mixKnown;
     mixProcAtAnalysis = at.mix;
 }

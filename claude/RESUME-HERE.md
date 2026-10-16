@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-16, v0.16.0)
+# Mixology: resume here (updated 2026-10-16, v0.16.1)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,17 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## v0.16.1: Vocal Pocket and advice from an older project (2026-10-16)
+- User on 0.16.0: OPEN VOCAL POCKET from "Instruments cover the vocal's words" ('Hats - Verse') opened Vocal Pocket
+  with "the dips are in since Mixology listened" and no changes. Then: "that may have been from previous load, i re
+  ran auto edit and the vocal suggestion disappeared" (a fresh listen heard the hats with their dip: point gone).
+- Cause: the advice came back from a 0.15 project (no Assist EQ in the advice block): assistAtAnalysisKnown false ->
+  heardDip 0 -> the old -2 dB @ 5 kHz dip counted as "made since". Fix: a dip counts only inside 1.5 - 4.3 kHz and
+  within half an octave of the band (dipCounts); unknown = heard with the Assist EQ there now; the hub guesses
+  assistAtAnalysis from the Links when such advice loads (assistGuessed, guessAssistAtAnalysis also in the 2 Hz
+  timer for late Links), so a dip made after opening counts as new. Tests: older-advice sections; the test helper
+  channel() now says Mixology heard it with no Assist EQ (assistAtAnalysisKnown = link).
 
 ## v0.16.0: the Mix Assistant knows what's fixed (2026-10-16)
 - User (screenshots: point "Instruments cover the vocal's words" on 'Hats - Verse', Vocal Pocket "Nothing to change:

@@ -606,6 +606,7 @@ namespace
         c.hasLink = link;
         c.channels = link ? 1 : 0;   // mono tracks (the ones Stereo Architect may pan)
         c.locked = locked;
+        c.assistAtAnalysisKnown = link;   // Mixology heard it with no Assist EQ
         return c;
     }
 
@@ -1020,6 +1021,27 @@ TEST_CASE ("Plans: Vocal Pocket and the dip it heard (the advice and the tool ag
         hats.assistAtAnalysis.pocketDb = -2.0f;
         hats.assistAtAnalysis.pocketHz = 5000.0f;
         hats.assist = hats.assistAtAnalysis;
+        const auto again = makePlan (Tool::pocket, r, chans);
+        const auto* moved = change (again, "Hats - Verse", "pocket");
+        REQUIRE (moved != nullptr);
+        CHECK (moved->hz <= 4100.0);
+    }
+    SECTION ("advice from an older Mixology (the Assist EQ it heard isn't known): the dip there now was heard")
+    {
+        hats.assistAtAnalysisKnown = false;
+        hats.assist.pocketDb = -2.0f;
+        hats.assist.pocketHz = static_cast<float> (d->hz);
+        const auto again = makePlan (Tool::pocket, r, chans);
+        const auto* deeper = change (again, "Hats - Verse", "pocket");
+        REQUIRE (deeper != nullptr);
+        CHECK (deeper->to < -2.5);
+        CHECK (again.summary.find ("dips are in") == std::string::npos);
+    }
+    SECTION ("... and its dip above 4 kHz doesn't count: moved to where the words are")
+    {
+        hats.assistAtAnalysisKnown = false;
+        hats.assist.pocketDb = -2.0f;
+        hats.assist.pocketHz = 5000.0f;
         const auto again = makePlan (Tool::pocket, r, chans);
         const auto* moved = change (again, "Hats - Verse", "pocket");
         REQUIRE (moved != nullptr);
