@@ -20,10 +20,18 @@ on:
       masterology_ref:
         description: "Masterology branch"
         default: "claude/eloquent-einstein-sscadx"
+      reuse_run:
+        description: "Only repack: the run ID whose built plug-ins to use (empty: build them)"
+        default: ""
+
+permissions:
+  contents: read
+  actions: read   # reuse_run: read another run's artifacts
 
 jobs:
   build:
     name: ${{ matrix.plugin }} (${{ matrix.name }})
+    if: inputs.reuse_run == ''
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -98,6 +106,7 @@ jobs:
   windows:
     name: Windows installer
     needs: build
+    if: ${{ !cancelled() && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -106,6 +115,8 @@ jobs:
           pattern: part-*-Windows
           path: stage
           merge-multiple: true
+          run-id: ${{ inputs.reuse_run || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Read Me and manuals
         shell: bash
         run: |
@@ -132,6 +143,7 @@ jobs:
   macos:
     name: macOS installer
     needs: build
+    if: ${{ !cancelled() && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -140,6 +152,8 @@ jobs:
           pattern: part-*-macOS
           path: stage
           merge-multiple: true
+          run-id: ${{ inputs.reuse_run || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Read Me and manuals
         run: |
           v() { tr -d '\r\n' < "stage/$1/version.txt"; }
