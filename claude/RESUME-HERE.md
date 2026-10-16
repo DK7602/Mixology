@@ -55,6 +55,8 @@ sends higher-resolution art, re-run it.
   to check it"); the point's sheet: header "Done: play the song to check", green box with what changed, and OPEN
   <TOOL> › (openToolSheet) under HOW for every point with a tool. mock.js: vocal-pocket / highpass have tools,
   applying pocket dips marks it done.
+- CI green: run 38908149286 (555c12a). Download for the user: that run's Mixology-Windows. Waiting for the Cubase test
+  (0.15.0's per-track vocal test is in the same build).
 
 ## v0.15.0: your ears per vocal track (2026-10-16)
 - User tested v0.14.0: "worked" (sent the vocal point after reopening). Asked: on the vocal point, click one of its
