@@ -59,6 +59,11 @@ Source: "{#Stage}\Mixology\FL Studio\Mixology Bridge\*"; DestDir: "{userdocs}\Im
 Source: "{#Stage}\Mixology\Ableton\MixologyBridge\*"; DestDir: "{userdocs}\Ableton\User Library\Remote Scripts\MixologyBridge"; Flags: recursesubdirs createallsubdirs ignoreversion; Components: ableton
 Source: "{#Stage}\Read Me First.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Stage}\Manuals\*"; DestDir: "{app}\Manuals"; Flags: recursesubdirs ignoreversion
+; The header's Sonicology title, in a few sizes for the screen's scaling (used by the [Code] below, not installed)
+Source: "..\art\header-100.bmp"; Flags: dontcopy
+Source: "..\art\header-150.bmp"; Flags: dontcopy
+Source: "..\art\header-200.bmp"; Flags: dontcopy
+Source: "..\art\header-270.bmp"; Flags: dontcopy
 
 [Icons]
 Name: "{autoprograms}\Sonicology\Read Me First"; Filename: "{app}\Read Me First.txt"
@@ -68,3 +73,51 @@ Name: "{autoprograms}\Sonicology\Uninstall Sonicology"; Filename: "{uninstallexe
 [Run]
 Filename: "{app}\Read Me First.txt"; Description: "Open the Read Me"; Flags: postinstall shellexec skipifsilent
 Filename: "https://www.tobias-erichsen.de/software/loopmidi.html"; Description: "Get loopMIDI (free): Mixology needs it to move Cubase's faders"; Flags: postinstall shellexec skipifsilent unchecked
+
+[Code]
+// The header of the inner pages: dark and a little taller, with the whole Sonicology title on the right
+// (Inno's own header only has room for a small square picture). The page's name and description stay on the left.
+procedure InitializeWizard;
+var
+  Logo: TBitmapImage;
+  Grow, H, W, Room: Integer;
+  Name: String;
+begin
+  Grow := ScaleY(40);
+  WizardForm.MainPanel.Height := WizardForm.MainPanel.Height + Grow;
+  WizardForm.Bevel1.Top := WizardForm.Bevel1.Top + Grow;
+  WizardForm.InnerNotebook.Top := WizardForm.InnerNotebook.Top + Grow;
+  WizardForm.InnerNotebook.Height := WizardForm.InnerNotebook.Height - Grow;
+
+  WizardForm.MainPanel.Color := clBlack;
+  WizardForm.WizardSmallBitmapImage.Visible := False;
+  WizardForm.PageNameLabel.Font.Color := clWhite;
+  WizardForm.PageDescriptionLabel.Font.Color := $C8C8C8;
+  WizardForm.PageNameLabel.Top := WizardForm.PageNameLabel.Top + Grow div 2;
+  WizardForm.PageDescriptionLabel.Top := WizardForm.PageDescriptionLabel.Top + Grow div 2;
+
+  // The title fills the header's height, but never more than about half its width.
+  H := WizardForm.MainPanel.Height - ScaleY(6);
+  W := H * 214 div 100;
+  Room := WizardForm.MainPanel.ClientWidth * 55 div 100;
+  if W > Room then
+  begin
+    W := Room;
+    H := W * 100 div 214;
+  end;
+  if H <= 100 then Name := 'header-100.bmp'
+  else if H <= 150 then Name := 'header-150.bmp'
+  else if H <= 200 then Name := 'header-200.bmp'
+  else Name := 'header-270.bmp';
+  ExtractTemporaryFile(Name);
+
+  Logo := TBitmapImage.Create(WizardForm);
+  Logo.Parent := WizardForm.MainPanel;
+  Logo.Stretch := True;
+  Logo.Bitmap.LoadFromFile(ExpandConstant('{tmp}\') + Name);
+  Logo.SetBounds(WizardForm.MainPanel.ClientWidth - W - ScaleX(6), (WizardForm.MainPanel.Height - H) div 2, W, H);
+  Logo.Anchors := [akTop, akRight];
+
+  WizardForm.PageNameLabel.Width := Logo.Left - WizardForm.PageNameLabel.Left - ScaleX(10);
+  WizardForm.PageDescriptionLabel.Width := Logo.Left - WizardForm.PageDescriptionLabel.Left - ScaleX(10);
+end;

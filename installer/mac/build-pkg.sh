@@ -89,6 +89,7 @@ component docs "$WORK/root-docs"
 
 # The installer's pages.
 cp "$HERE/../art/mac-background.png" "$WORK/resources/background.png"
+cp "$HERE/../art/title.png" "$WORK/resources/title.png"   # the Sonicology title on the welcome page
 sed -e "s|@LABEL@|$LABEL|g" "$HERE/welcome.html" > "$WORK/resources/welcome.html"
 cp "$STAGE/Read Me First.txt" "$WORK/resources/readme.txt"
 sed -e "s|@VERSION@|$VERSION|g" -e "s|@LABEL@|$LABEL|g" "$HERE/distribution.xml" > "$WORK/distribution.xml"
