@@ -30,6 +30,7 @@
   };
   // The setup check (open the preview with ?setup to see it): what the hub reports for the user's song with a mono 'Beat'.
   const SETUP_DEMO = /[?&]setup\b/.test(location.search);
+  const REOPENED_DEMO = /[?&]reopened\b/.test(location.search);   // the project opened again: yesterday's advice
   const SETUP = [
     { id: "setup-mono-group", kind: "warn", icon: "mono", title: "Your mix arrives in mono",
       text: "Your tracks play in stereo (for example 'Pop Kit 1' and 'HALion Sonic 01'), but at the Stereo Out left and right are exactly the same: every pan and every stereo sound is folded to the middle on the way. Most likely 'Beat' is a mono group: everything that plays through it comes out in the middle.",
@@ -100,7 +101,7 @@
     return {
       enabled: true, link: "connected", portProblem: "", script: 3, toCubase: "Mixology to Cubase", fromCubase: "Cubase to Mixology", slots,
       changedCount: chans.filter(isChanged).length, restorePoints: Object.keys(B.restore).length, scanning: B.an.state === "reading",
-      analysis: { state: B.an.state, seconds: B.an.seconds, enough: 20, max: 60, playing: B.an.playing, heard: chans.filter((c) => c.link).length, report: B.an.report, auto: { ...B.an.auto, seconds: Math.floor(B.an.auto.seconds), pause: !B.an.auto.on ? "off" : B.an.playing ? "" : "stopped" } },
+      analysis: { state: B.an.state, seconds: B.an.seconds, enough: 20, max: 60, playing: B.an.playing, heard: chans.filter((c) => c.link).length, report: B.an.report, analyzed: B.an.analyzed || 0, fromProject: !!B.an.fromProject, auto: { ...B.an.auto, seconds: Math.floor(B.an.auto.seconds), pause: !B.an.auto.on ? "off" : B.an.playing ? "" : "stopped" } },
       apply: { ...B.apply },
       linksSeen: chans.filter((c) => c.link).length, linksPaired: slots.filter((s) => s.linkStatus === "matched").length, linksShared: true,
       setup: SETUP_DEMO ? SETUP : [], history: hState(),
@@ -110,6 +111,7 @@
     };
   };
   // The undo history (a few demo steps; going back and forward only flips them here).
+  if (REOPENED_DEMO) Object.assign(B.an, { state: "done", report: fakeReport(), analyzed: Date.now() - 26 * 3600 * 1000, fromProject: true });
   const H = { version: 1, steps: [] };
   {
     const t0 = Date.now() - 9 * 60 * 1000;
@@ -119,10 +121,11 @@
       ["EQ on 'Lead Vox'", "'Lead Vox' EQ 3 Gain +1.0 dB \u2192 +2.5 dB", ["'Lead Vox' EQ 3 Gain +1.0 dB \u2192 +2.5 dB"]],
       ["Fader 'Hats'", "'Hats' fader \u22128.0 \u2192 \u221210.5 dB", ["'Hats' fader \u22128.0 \u2192 \u221210.5 dB"]],
     ];
-    demo.forEach(([what, summary, lines], i) => H.steps.push({ id: i + 1, time: t0 + i * 130000, what, summary, lines, undone: false, pending: false }));
+    // The first two came back with the project (yesterday's session).
+    demo.forEach(([what, summary, lines], i) => H.steps.push({ id: i + 1, time: i < 2 ? t0 - 26 * 3600 * 1000 + i * 130000 : t0 + i * 130000, what, summary, lines, undone: false, pending: false }));
   }
   const hCurrent = () => { const done = H.steps.filter((s) => !s.undone); return done.length ? done[done.length - 1].id : 0; };
-  const hList = () => ({ steps: H.steps.map((s) => ({ ...s })), current: hCurrent(), version: H.version, busy: false });
+  const hList = () => ({ steps: H.steps.map((s) => ({ ...s })), current: hCurrent(), version: H.version, busy: false, fromProject: 2 });
   const hState = () => {
     const done = H.steps.filter((s) => !s.undone), undone = H.steps.filter((s) => s.undone);
     return { version: H.version, count: H.steps.length, canUndo: done.length > 0, canRedo: undone.length > 0,

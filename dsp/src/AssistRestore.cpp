@@ -1,5 +1,7 @@
 #include "mixology/AssistRestore.h"
 
+#include "mixology/Pack.h"
+
 #include <cmath>
 
 namespace mixology
@@ -40,5 +42,53 @@ namespace mixology
         if (same (current, it->second.before)) return {};                        // already back
         if (! same (current, it->second.set)) return { Action::keptYours, {} };  // changed since: yours
         return { Action::restore, it->second.before };
+    }
+
+    namespace
+    {
+        constexpr std::uint32_t kAssistMagic = 0x3145584du;   // "MXE1"
+        void writeAssist (pack::Writer& w, const AssistSettings& a)
+        {
+            for (float v : { a.lowCutHz, a.mudHz, a.mudDb, a.pocketHz, a.pocketDb }) w.f32 (v);
+        }
+        AssistSettings readAssist (pack::Reader& r)
+        {
+            AssistSettings a;
+            a.lowCutHz = r.f32(); a.mudHz = r.f32(); a.mudDb = r.f32(); a.pocketHz = r.f32(); a.pocketDb = r.f32();
+            return a;
+        }
+    }
+
+    std::string AssistRestore::save() const
+    {
+        pack::Writer w;
+        w.u32 (kAssistMagic);
+        w.u32 (static_cast<std::uint32_t> (points.size()));
+        for (const auto& [hash, p] : points)
+        {
+            w.u32 (hash);
+            writeAssist (w, p.before);
+            writeAssist (w, p.set);
+        }
+        return w.take();
+    }
+
+    bool AssistRestore::load (const std::string& block)
+    {
+        pack::Reader r (block);
+        if (r.u32() != kAssistMagic) return false;
+        std::map<std::uint32_t, Point> loaded;
+        const auto n = r.count (44);
+        for (std::uint32_t i = 0; i < n; ++i)
+        {
+            const auto hash = r.u32();
+            Point p;
+            p.before = readAssist (r);
+            p.set = readAssist (r);
+            if (hash != 0) loaded[hash] = p;
+        }
+        if (! r.ok()) return false;
+        points = std::move (loaded);
+        return true;
     }
 }

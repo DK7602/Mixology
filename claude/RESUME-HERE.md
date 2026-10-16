@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-15, v0.13.1)
+# Mixology: resume here (updated 2026-10-16, v0.14.0)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,35 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## v0.14.0: Mixology opens as you left it (2026-10-16)
+- User: "the record edits for a track disappear in mixology once closed and re opened ... is there any way for project
+  edits to save in history and mixology opens the same as it closed?" (The page / style / module tabs already came back
+  via the ui state; lost were the hub's in-memory History, the advice and the restore points.) Also asked (answered, no
+  change): do the three bog down the system? (numbers from the CPU check; REC mode, Masterology off while recording,
+  bigger buffer, close windows).
+- dsp Pack.h (Writer / Reader, little-endian, bounds-checked; centi / deci / unit / unit8 quantizers). History::save
+  (newest steps up to kMaxSavedChanges 20000 changes) / load (slot -1 + generation 0 on every change: unnamed Links were
+  that session's; ids must grow, undone steps a suffix). Analysis::save / load ("MXA1": style, music bus, track table,
+  moments; frame = silent flag + rms / peak / correlation / balance, then bands to 0.1 dB and side shares to 1/255,
+  loudness, width). BridgeSession::saveRestorePoints / loadRestorePoints (only into an empty list, logs "Restore points
+  from the project"), note() (public log line). AssistRestore::save / load. Tests: History round trip + cap + damaged
+  blocks, Analysis round trip gives the same suggestions (levels within 0.06 dB), restore points come back and Restore
+  works, Assist restore round trip.
+- Hub: sessionState() / setSessionState() (processor attribute "session"): "MXS1;h:<b64 zlib History>;a:<advice>;r:
+  <restore points + Assist>"; each part re-packed only when its key changes (history.version, adviceSerial, hash of the
+  restore bytes), every 0.5 s in the timer, and on the message thread at save. The advice part (adviceBlock: analysis,
+  analyzedMs, report.unheard, fadersAtAnalysis, procAtAnalysis, mixProcAtAnalysis) isn't re-packed while Analyze Mix
+  listens again. Load (applyPendingSession, timer after the track settings and prefs): each part only into an empty
+  hub (another open project may share it); loadAdvice re-evaluates with today's roles (Voxology's arrive later:
+  updateSuite re-evaluates), analyzeState done, autoListen.start(autoStyle or the report's), adviceFromProject. Auto
+  Analyze's first check clears it (autoUpdatedMs = checked when the advice still held). Track settings apply now also
+  re-evaluates. Fixed: Cancel on a new Analyze Mix kept its partial moments behind the old advice (adviceAnalysis).
+- State: analysis.analyzed / fromProject; history.fromProject (newest step id that came back). UI: Mix Assistant "Last
+  session (Oct 15, 9:12 PM):"; History: dates for other days (two lines), divider EARLIER SESSIONS (SAVED WITH THE
+  PROJECT), footer says it's saved. mock.js: ?reopened (yesterday's advice), the first two demo steps from yesterday.
+- Size: ~100 bytes per track per moment before zlib (noisy data barely compresses): ~0.9 MB base64 for 60 s on 30
+  tracks, ~1.8 MB for a 2-minute Auto Analyze window. Manual says about 1 MB (up to about 2).
 
 ## v0.13.1 + Voxology 0.50.1 + Masterology 0.29.1: Cakewalk (BandLab) in the DAW list (2026-10-15)
 - User: "add bandlab to the DAWs list". BandLab's web studio can't host VST3 (said so); added key "cakewalk" (Cakewalk by

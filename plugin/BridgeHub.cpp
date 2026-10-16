@@ -1,5 +1,7 @@
 #include "BridgeHub.h"
 
+#include "mixology/Pack.h"
+
 #include <array>
 #include <cmath>
 #include <regex>
@@ -120,6 +122,32 @@ namespace
         for (int i = 0; i < d.count; ++i) v.push_back (d.hashes[static_cast<std::size_t> (i)]);
         return v;
     }
+
+    // The project's copy of what Mixology knows (sessionState): packed, compressed, base64 for the XML.
+    juce::String packText (const std::string& bytes)
+    {
+        juce::MemoryOutputStream out;
+        {
+            juce::GZIPCompressorOutputStream gz (out, 6);
+            gz.write (bytes.data(), bytes.size());
+            gz.flush();
+        }
+        return juce::Base64::toBase64 (out.getData(), out.getDataSize());
+    }
+
+    std::string unpackText (const juce::String& text)
+    {
+        juce::MemoryOutputStream decoded;
+        if (text.isEmpty() || ! juce::Base64::convertFromBase64 (decoded, text)) return {};
+        juce::MemoryInputStream in (decoded.getData(), decoded.getDataSize(), false);
+        juce::GZIPDecompressorInputStream gz (in);
+        juce::MemoryOutputStream out;
+        out.writeFromInputStream (gz, 64 * 1024 * 1024);
+        return std::string (static_cast<const char*> (out.getData()), out.getDataSize());
+    }
+
+    constexpr const char* kSessionMagic = "MXS1";
+    constexpr std::uint32_t kAdviceMagic = 0x3150584du;   // "MXP1"
 
     juce::String stamp (double seconds)
     {
@@ -257,6 +285,7 @@ void BridgeHub::timerCallback()
             bridge.setNoPanList (noPan);
             seenNoPanVersion = bridge.noPanVersion();
             cacheTrackSettings();
+            reevaluate();
             ++analysisVersion;
         }
     }
@@ -282,6 +311,12 @@ void BridgeHub::timerCallback()
             cachePrefs();
             ++analysisVersion;
         }
+    }
+    applyPendingSession();   // after the track settings and prefs: the advice is evaluated with your roles
+    if (t - lastSessionCache >= 0.5)
+    {
+        lastSessionCache = t;
+        updateSessionCache();
     }
 
     if (toCubase == nullptr && t - lastOpenAttempt > kReopenInterval)
@@ -559,6 +594,165 @@ void BridgeHub::cachePrefs()
     prefsCache = text;
 }
 
+juce::String BridgeHub::sessionState()
+{
+    if (juce::MessageManager::existsAndIsCurrentThread()) updateSessionCache();
+    const juce::ScopedLock sl (protectedLock);
+    return hasPendingSession ? sessionPending : sessionCache;
+}
+
+void BridgeHub::setSessionState (const juce::String& text)
+{
+    const juce::ScopedLock sl (protectedLock);
+    sessionPending = text;
+    hasPendingSession = true;   // applied on the message thread (next timer tick), after the track settings
+}
+
+void BridgeHub::updateSessionCache()
+{
+    {
+        const juce::ScopedLock sl (protectedLock);
+        if (hasPendingSession) return;   // the project's copy isn't read yet: saving keeps it as it is
+    }
+    bool changed = false;
+    if (savedHistory.key != history.version())
+    {
+        savedHistory = { history.version(), history.steps().empty() ? juce::String() : packText (history.save()) };
+        changed = true;
+    }
+    // While Analyze Mix listens again, the moments aren't the advice's: the advice saved stays the one on screen.
+    const bool adviceSteady = analyzeState == Analyze::done || analyzeState == Analyze::idle;
+    if (savedAdvice.key != adviceSerial && adviceSteady)
+    {
+        savedAdvice = { adviceSerial, report.valid && analysis.hasMoments() ? packText (adviceBlock()) : juce::String() };
+        changed = true;
+    }
+    {
+        mixology::pack::Writer w;
+        w.str (bridge.saveRestorePoints());
+        w.str (eqRestore.save());
+        const bool none = bridge.restorePoints().empty() && eqRestore.size() == 0;
+        const auto key = none ? 0ull : static_cast<std::uint64_t> (std::hash<std::string>{} (w.bytes())) | 1ull;
+        if (savedRestore.key != key)
+        {
+            savedRestore = { key, none ? juce::String() : packText (w.bytes()) };
+            changed = true;
+        }
+    }
+    if (! changed) return;
+    juce::String text (kSessionMagic);
+    if (savedHistory.text.isNotEmpty()) text << ";h:" << savedHistory.text;
+    if (savedAdvice.text.isNotEmpty()) text << ";a:" << savedAdvice.text;
+    if (savedRestore.text.isNotEmpty()) text << ";r:" << savedRestore.text;
+    const juce::ScopedLock sl (protectedLock);
+    sessionCache = text;
+}
+
+void BridgeHub::applyPendingSession()
+{
+    juce::String text;
+    {
+        const juce::ScopedLock sl (protectedLock);
+        if (! hasPendingSession) return;
+        text = sessionPending;
+        hasPendingSession = false;
+    }
+    if (! text.startsWith (kSessionMagic)) return;
+    // Each part only fills what this Cubase doesn't know yet (another open project may share this Mixology).
+    for (const auto& part : juce::StringArray::fromTokens (text.fromFirstOccurrenceOf (";", false, false), ";", ""))
+    {
+        const auto kind = part.substring (0, 2);
+        const auto bytes = unpackText (part.substring (2));
+        if (bytes.empty()) continue;
+        if (kind == "h:" && history.steps().empty() && history.load (bytes))
+        {
+            projectHistoryUpTo = history.steps().empty() ? 0 : history.steps().back().id;
+            if (! history.steps().empty())
+                bridge.note (now(), "History from the project: " + std::to_string (history.steps().size()) + " steps.");
+        }
+        else if (kind == "a:" && ! report.valid && analyzeState == Analyze::idle && loadAdvice (bytes))
+            savedAdvice = { adviceSerial, part.substring (2) };   // the same as the project's: no need to pack it again
+        else if (kind == "r:")
+        {
+            mixology::pack::Reader r (bytes);
+            const auto faders = r.str();
+            const auto eq = r.str();
+            if (r.ok())
+            {
+                bridge.loadRestorePoints (faders, now());
+                if (eqRestore.size() == 0) eqRestore.load (eq);
+                ++applyVersion;
+            }
+        }
+    }
+    ++analysisVersion;
+}
+
+std::string BridgeHub::adviceBlock() const
+{
+    mixology::pack::Writer w;
+    w.u32 (kAdviceMagic);
+    w.str (analysis.save());
+    w.f64 (analyzedMs);
+    w.u32 (static_cast<std::uint32_t> (report.unheard.size()));
+    for (const auto& n : report.unheard) w.str (n);
+    // What the mix was while Mixology listened: plans and Polish work from there.
+    w.u32 (static_cast<std::uint32_t> (fadersAtAnalysis.size()));
+    for (const auto& [hash, db] : fadersAtAnalysis) { w.u32 (hash); w.f64 (db); }
+    w.u32 (static_cast<std::uint32_t> (procAtAnalysis.size()));
+    w.u32 (static_cast<std::uint32_t> (std::tuple_size<mixology::proc::Values>::value));
+    for (const auto& [hash, v] : procAtAnalysis)
+    {
+        w.u32 (hash);
+        for (float x : v) w.f32 (x);
+    }
+    w.flag (mixProcAtAnalysisKnown);
+    for (float x : mixProcAtAnalysis) w.f32 (x);
+    return w.take();
+}
+
+bool BridgeHub::loadAdvice (const std::string& bytes)
+{
+    mixology::pack::Reader r (bytes);
+    if (r.u32() != kAdviceMagic) return false;
+    mixology::mix::Analysis heard;
+    if (! heard.load (r.str()) || ! heard.hasMoments()) return false;
+    const double at = r.f64();
+    std::vector<std::string> unheard (r.count (4));
+    for (auto& n : unheard) n = r.str();
+    AtAnalysis snap;
+    for (std::uint32_t i = 0, n = r.count (12); i < n; ++i)
+    {
+        const auto hash = r.u32();
+        snap.faders[hash] = r.f64();
+    }
+    const auto procs = r.count (4);
+    const auto size = r.u32();
+    constexpr auto kValues = std::tuple_size<mixology::proc::Values>::value;
+    if (size != kValues) return false;   // saved by a Mixology with other controls: don't guess
+    for (std::uint32_t i = 0; i < procs && r.ok(); ++i)
+    {
+        const auto hash = r.u32();
+        auto& v = snap.procs[hash];
+        for (float& x : v) x = r.f32();
+    }
+    snap.mixKnown = r.flag();
+    for (float& x : snap.mix) x = r.f32();
+    if (! r.ok()) return false;
+
+    analysis = std::move (heard);
+    analysis.setVocalOffset (vocalOffset, vocalFromYou);
+    useSnapshot (std::move (snap));
+    applyMusicBus (analysis, fadersAtAnalysis);
+    report = analysis.evaluate (settingsForAnalysis(), unheard);
+    if (! report.valid) { report = {}; analysis.clear(); return false; }
+    analyzeState = Analyze::done;
+    autoListen.start (autoStyleKnown ? autoStyle : report.style);   // Auto Analyze carries on from it (when it's on)
+    analyzedMs = at;
+    adviceFromProject = true;
+    return true;
+}
+
 bool BridgeHub::audibleNow (std::uint32_t hash) const
 {
     return hash == 0 || bridge.isAudible (hash);
@@ -714,8 +908,12 @@ void BridgeHub::applyMusicBus (mixology::mix::Analysis& a, const std::map<std::u
 
 void BridgeHub::reevaluate()
 {
-    if (! report.valid || ! analysis.hasMoments()) return;
-    applyMusicBus (analysis, fadersAtAnalysis);
+    // While Analyze Mix listens again, the advice on screen still comes from the moments behind it.
+    const bool listeningAgain = (analyzeState == Analyze::reading || analyzeState == Analyze::listening) && adviceAnalysis.hasMoments();
+    auto& heard = listeningAgain ? adviceAnalysis : analysis;
+    if (! report.valid || ! heard.hasMoments()) return;
+    heard.setVocalOffset (vocalOffset, vocalFromYou);
+    applyMusicBus (heard, fadersAtAnalysis);
     // The music group isn't a channel of its own music: never "without a Link".
     std::vector<std::string> unheard;
     for (const auto& n : report.unheard)
@@ -723,7 +921,7 @@ void BridgeHub::reevaluate()
         const auto ts = trackSettings.find (mixology::bridge::nameHash (n));
         if (ts == trackSettings.end() || (! ts->second.musicBus && ! ts->second.excluded)) unheard.push_back (n);
     }
-    report = analysis.evaluate (settingsForAnalysis(), unheard);
+    report = heard.evaluate (settingsForAnalysis(), unheard);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -943,6 +1141,10 @@ void BridgeHub::finishAnalysis()
     report = analysis.evaluate (settingsForAnalysis(), unheard);
     analyzeState = Analyze::done;
     autoListen.start (report.style);   // Auto Analyze carries on from here (when it's on)
+    adviceAnalysis = {};
+    analyzedMs = static_cast<double> (juce::Time::currentTimeMillis());
+    adviceFromProject = false;
+    ++adviceSerial;
     ++analysisVersion;
 }
 
@@ -1022,6 +1224,15 @@ void BridgeHub::autoTick (const mixology::AnalysisFrame& mixFrame, std::vector<m
             useSnapshot (autoSnapshot);
             autoUpdatedMs = autoCheckedMs;
             analyzeState = Analyze::done;   // the first advice, when Auto Analyze started from scratch
+            analyzedMs = autoCheckedMs;
+            adviceFromProject = false;
+            ++adviceSerial;
+        }
+        else if (adviceFromProject)
+        {
+            // The advice from the project still holds for the mix as it sounds now: it's today's advice.
+            adviceFromProject = false;
+            autoUpdatedMs = autoCheckedMs;
         }
         ++analysisVersion;
     }
@@ -1048,6 +1259,8 @@ juce::var BridgeHub::analysisState() const
         au->setProperty ("updated", autoUpdatedMs);
         o->setProperty ("auto", juce::var (au));
     }
+    o->setProperty ("analyzed", analyzedMs);          // when the advice on screen was made
+    o->setProperty ("fromProject", adviceFromProject); // ... and it came back with the project
 
     if (report.valid)
     {
@@ -1463,6 +1676,7 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
             r = { false, "No Mixology Link found. Insert Mixology Link on your tracks (after their other plug-ins), then press Analyze Mix." };
         else
         {
+            if (report.valid && analyzeState == Analyze::done) adviceAnalysis = analysis;   // Cancel goes back to it
             analysis.begin (style);
             analysis.setVocalOffset (vocalOffset, vocalFromYou);
             autoListen.reset();
@@ -1506,6 +1720,9 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
     }
     else if (name == "analyzeCancel")
     {
+        // The advice on screen stays, and so do the moments behind it (a role change re-evaluates those).
+        if (report.valid && adviceAnalysis.hasMoments()) analysis = std::move (adviceAnalysis);
+        adviceAnalysis = {};
         analyzeState = report.valid ? Analyze::done : Analyze::idle;
         ++analysisVersion;
     }
@@ -2353,6 +2570,7 @@ juce::var BridgeHub::historyList() const
     o->setProperty ("current", static_cast<juce::int64> (history.current()));
     o->setProperty ("version", static_cast<juce::int64> (history.version()));
     o->setProperty ("busy", history.busy() || bridge.busy());
+    o->setProperty ("fromProject", static_cast<juce::int64> (projectHistoryUpTo));   // steps up to this one: earlier sessions
     return juce::var (o);
 }
 

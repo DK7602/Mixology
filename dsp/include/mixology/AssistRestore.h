@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <map>
+#include <string>
 
 /** Restore points for the Assist EQ Mixology sets in each track's Mixology Link (Clean Up, Vocal Pocket, Auto Mix).
 
@@ -37,6 +38,11 @@ namespace mixology
 
         /** Equal as far as the Link's parameters can tell (their steps: 1 Hz, 0.1 dB). */
         static bool same (const AssistSettings&, const AssistSettings&);
+
+        /** Kept with the project, so Restore still knows how each track's Assist EQ was before Mixology. load()
+            replaces the points; false when the block isn't saved points (nothing changes then). */
+        std::string save() const;
+        bool load (const std::string&);
 
     private:
         struct Point

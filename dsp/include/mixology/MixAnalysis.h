@@ -210,6 +210,12 @@ namespace mixology::mix
         /** The style's tonal target at a frequency (same curve as the Tone page; relative dB). */
         static double targetDb (const Style&, double hz);
 
+        /** Kept with the project: the style and every moment heard, compact (levels to 0.01 dB), so the advice
+            comes back when the project opens and a role change can still re-evaluate it. */
+        std::string save() const;
+        /** False when the block isn't a saved analysis: nothing changes then. */
+        bool load (const std::string&);
+
     private:
         Style style;
         std::vector<Moment> moments;

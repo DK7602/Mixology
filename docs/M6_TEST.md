@@ -1,5 +1,21 @@
 # Milestone 6 tests
 
+## Version 0.14.0 (10 minutes): Mixology opens as you left it
+
+Mixology 0.14.0 only (Voxology 0.50.1 and Masterology 0.29.1 stay).
+1. In a song: Analyze Mix (or let Auto Analyze give advice), then change a few things in Mixology (a fader on the Tracks
+   page, a knob on the EQ page, a preset, Auto Mix). Open the **History** (clock-arrow button): the steps are there.
+2. Save the project, close it (or quit Cubase), open it again and open Mixology.
+3. **History**: the same steps, under **EARLIER SESSIONS (SAVED WITH THE PROJECT)**, with their date. Press **GO BACK
+   HERE** on one of them: the faders and knobs go back, as before.
+4. **Advice**: the Mix Assistant shows the same cards, with **Last session (date, time)** over them. Open AUTO MIX: it
+   works straight away, no Analyze Mix needed. With Auto Analyze on, press play: after about 20 seconds the line
+   changes to "Auto Analyze, updated ..." (and the cards, if the mix sounds different now).
+5. **Restore**: a fader Mixology moved before you closed still shows its ↺ on the Tracks page, and ↺ puts it back to how
+   it was before Mixology's first change.
+
+**Report**: anything that didn't come back, or came back wrong?
+
 ## Version 0.13.0 (10 minutes): your DAW, and "fix this first"
 
 Install all three together: Mixology 0.13.0, Voxology 0.50.0 and Masterology 0.29.0 (older ones don't see the new link).

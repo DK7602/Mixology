@@ -195,6 +195,9 @@ export function openHistory(app) {
     return b;
   };
   const time = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  // A step from another day (the history is saved with the project): its date over its time.
+  const when = (ms) => new Date(ms).toDateString() === new Date().toDateString() ? time(ms)
+    : new Date(ms).toLocaleDateString([], { month: "short", day: "numeric" }) + "\n" + new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   async function go(name, id) {
     if (busy) return;
     busy = true;
@@ -229,12 +232,19 @@ export function openHistory(app) {
       return;
     }
 
+    let earlier = false;
     for (const s of steps.slice().reverse()) {
+      if (!earlier && h.fromProject && s.id <= h.fromProject) {
+        // The steps that came back with the project: made before it was last opened.
+        earlier = true;
+        el("div", "", body, { fontSize: "16px", fontWeight: "600", color: "var(--text-dim)", letterSpacing: "0.06em", margin: "14px 0 8px" }).textContent =
+          "EARLIER SESSIONS (SAVED WITH THE PROJECT)";
+      }
       const isNow = s.id === h.current;
       const c = el("div", "card", body, { position: "relative", padding: "10px 16px", marginBottom: "8px", cursor: "pointer",
         opacity: s.undone ? "0.5" : "1", borderColor: isNow ? "var(--gold)" : "" });
       const line = el("div", "", c, { display: "flex", alignItems: "center", gap: "14px" });
-      el("div", "", line, { fontSize: "16px", color: "var(--text-dim)", width: "92px", flex: "none" }).textContent = time(s.time);
+      el("div", "", line, { fontSize: "16px", color: "var(--text-dim)", width: "92px", flex: "none", whiteSpace: "pre-line", lineHeight: "1.25" }).textContent = when(s.time);
       const text = el("div", "", line, { flex: "1", minWidth: "0" });
       el("div", "", text, { fontSize: "19px", fontWeight: "600" }).textContent = s.what + (s.undone ? "  (undone)" : "");
       el("div", "", text, { fontSize: "16px", color: "var(--text-dim)", marginTop: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }).textContent = s.summary;
@@ -259,7 +269,7 @@ export function openHistory(app) {
     if (h.current === 0) el("span", "", start, { fontSize: "16px", fontWeight: "600", color: "var(--gold)", letterSpacing: "0.06em" }).textContent = "NOW";
     else btn(start, "UNDO EVERYTHING", () => go("historyTo", 0)).disabled = h.busy;
     el("p", "", body, { fontSize: "16px", color: "var(--text-dim)", margin: "12px 0 0", lineHeight: "1.4" }).textContent =
-      `Click a step to see each change. A fader you moved in Cubase since Mixology moved it stays where you put it. The history lasts while ${dawName(app.daw)} is open (the last 200 steps).`;
+      `Click a step to see each change. A fader you moved in ${dawName(app.daw)} since Mixology moved it stays where you put it. The history is saved with the project (the last 200 steps), so it's still here when you open the song again.`;
   }
   historyRender = (b) => { if (b && b.history && b.history.version !== seen && !busy) render(); };
   render();

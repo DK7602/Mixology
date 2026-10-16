@@ -168,6 +168,10 @@ v0.13.0 (with Voxology 0.50, Masterology 0.29): your DAW, shared (suite link lay
 every tip in that DAW's words (plugin/ui/daws.js, the same file in all three; {daw:...} tokens in engine text); Auto Mix,
 Balance, Polish and Vocal Pocket show FIX THIS FIRST when Voxology heard a vocal recorded too hot or clipped. Fixed:
 the headroom advice said to use the Stereo Out fader, which comes after Mixology and Masterology.
+v0.14.0: Mixology opens as you left it (user: the History's edits were gone after reopening): the History, the
+advice on screen (the moments Analyze Mix heard, compact, so a role change still re-evaluates) and the restore points
+(faders and Assist EQ) are saved with the project; "Last session (date)" over advice that came back; the History marks
+EARLIER SESSIONS. Cancel on a new Analyze Mix keeps the moments behind the advice on screen.
 Still to come in M6: code signing (later).
 
 ### Built in v0.11.0 - Auto Analyze (asked 2026-10-15: "once an analyze mix has been run should have an auto analyze option")

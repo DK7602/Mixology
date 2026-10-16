@@ -68,6 +68,15 @@ namespace mixology::history
         bool amend (std::uint64_t id, std::vector<Change>);
         void clear();
 
+        /** Kept with the project: the steps as a block for load(). When they hold more than maxChanges changes,
+            the oldest steps are left out (the project file stays small). Pending steps are kept as done. */
+        static constexpr std::size_t kMaxSavedChanges = 20000;
+        std::string save (std::size_t maxChanges = kMaxSavedChanges) const;
+        /** The steps a project saved, in place of these. Their Links are found by name only (a Link without a name
+            was only known to the session that saved it). False when the block isn't a saved history: nothing
+            changes then. */
+        bool load (const std::string&);
+
         const std::deque<Step>& steps() const { return list; }
         const Step* find (std::uint64_t id) const;
         std::uint64_t version() const { return changeCount; }

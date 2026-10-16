@@ -243,6 +243,8 @@ void MixologyAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     xml.setAttribute ("protected", bridgeHub->protectedState());   // the padlocks on the Tracks page
     xml.setAttribute ("tracks", bridgeHub->trackSettingsState());  // your track roles, tracks left out of Analyze Mix
     xml.setAttribute ("prefs", bridgeHub->mixPrefsState());         // how you like your vocal
+    xml.setAttribute ("session", bridgeHub->sessionState());        // the History, the advice, the restore points
+    xml.setAttribute ("session", bridgeHub->sessionState());        // the History, the advice, the restore points
     {
         const juce::ScopedLock sl (stateLock);
         xml.setAttribute ("songStyle", juce::String::fromUTF8 (songStyle.save().c_str()));   // + when you picked it
@@ -279,6 +281,8 @@ void MixologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
             bridgeHub->setProtectedState (xml->getStringAttribute ("protected"));
             bridgeHub->setTrackSettingsState (xml->getStringAttribute ("tracks"));
             bridgeHub->setMixPrefsState (xml->getStringAttribute ("prefs"));
+            bridgeHub->setSessionState (xml->getStringAttribute ("session"));
+            bridgeHub->setSessionState (xml->getStringAttribute ("session"));
             if (auto* params = xml->getChildByName (parameters.state.getType()))
                 parameters.replaceState (juce::ValueTree::fromXml (*params));
         }

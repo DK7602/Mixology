@@ -1,11 +1,13 @@
 #include "mixology/MixAnalysis.h"
 
 #include "mixology/BridgeProtocol.h"
+#include "mixology/Pack.h"
 
 #include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <map>
 #include <numeric>
 #include <regex>
 #include <set>
@@ -281,6 +283,133 @@ namespace mixology::mix
     {
         if (full()) return;
         moments.push_back (std::move (m));
+    }
+
+    namespace
+    {
+        constexpr std::uint32_t kAnalysisMagic = 0x3141584du;   // "MXA1"
+
+        // A frame in about 100 bytes: band levels to 0.1 dB, side shares to 1/255 (the advice works in whole dB and
+        // percent), the levels to 0.01 dB. A silent frame has no bands (the analyzer leaves them at silence).
+        void writeFrame (pack::Writer& w, const AnalysisFrame& f)
+        {
+            w.flag (f.silent);
+            w.centi (f.rmsDb);
+            w.centi (f.peakDb);
+            w.signedUnit (f.correlation);
+            w.centi (f.balanceDb);
+            if (f.silent) return;
+            for (float v : f.bandDb) w.deci (v);
+            for (float v : f.sideShare) w.unit8 (v);
+            w.centi (f.loudness);
+            w.unit (f.width);
+        }
+
+        AnalysisFrame readFrame (pack::Reader& r)
+        {
+            AnalysisFrame f;
+            f.silent = r.flag();
+            f.rmsDb = static_cast<float> (r.centi());
+            f.peakDb = static_cast<float> (r.centi());
+            f.correlation = static_cast<float> (r.signedUnit());
+            f.balanceDb = static_cast<float> (r.centi());
+            if (f.silent) return f;
+            for (float& v : f.bandDb) v = static_cast<float> (r.deci());
+            for (float& v : f.sideShare) v = static_cast<float> (r.unit8());
+            f.loudness = static_cast<float> (r.centi());
+            f.width = static_cast<float> (r.unit());
+            return f;
+        }
+    }
+
+    std::string Analysis::save() const
+    {
+        pack::Writer w;
+        w.u32 (kAnalysisMagic);
+        w.u16 (static_cast<std::uint16_t> (kBands));
+        w.str (style.key);
+        w.str (style.name);
+        w.f64 (style.bass);
+        w.f64 (style.scoop);
+        w.f64 (style.air);
+        w.f64 (style.vocalOffset);
+        w.flag (style.vocalFromYou);
+        w.flag (hasMusicBus);
+        w.f64 (musicBusDb);
+
+        // The tracks once (name and hash), then each moment points at them.
+        std::vector<std::pair<std::uint32_t, std::string>> names;
+        std::map<std::pair<std::uint32_t, std::string>, std::uint16_t> index;
+        for (const auto& m : moments)
+            for (const auto& t : m.tracks)
+                if (index.emplace (std::make_pair (t.hash, t.name), static_cast<std::uint16_t> (names.size())).second)
+                    names.emplace_back (t.hash, t.name);
+        w.u32 (static_cast<std::uint32_t> (names.size()));
+        for (const auto& [hash, name] : names) { w.u32 (hash); w.str (name); }
+
+        w.u32 (static_cast<std::uint32_t> (moments.size()));
+        for (const auto& m : moments)
+        {
+            writeFrame (w, m.mix);
+            w.u16 (static_cast<std::uint16_t> (m.tracks.size()));
+            for (const auto& t : m.tracks)
+            {
+                w.u16 (index[std::make_pair (t.hash, t.name)]);
+                w.flag (t.faderKnown);
+                w.f32 (static_cast<float> (t.faderDb));
+                writeFrame (w, t.frame);
+            }
+        }
+        return w.take();
+    }
+
+    bool Analysis::load (const std::string& block)
+    {
+        pack::Reader r (block);
+        if (r.u32() != kAnalysisMagic || r.u16() != kBands) return false;
+        Style st;
+        st.key = r.str();
+        st.name = r.str();
+        st.bass = r.f64();
+        st.scoop = r.f64();
+        st.air = r.f64();
+        st.vocalOffset = r.f64();
+        st.vocalFromYou = r.flag();
+        const bool bus = r.flag();
+        const double busDb = r.f64();
+
+        std::vector<std::pair<std::uint32_t, std::string>> names (r.count (8));
+        for (auto& [hash, name] : names) { hash = r.u32(); name = r.str(); }
+
+        const auto n = r.count (64);
+        if (! r.ok() || n > static_cast<std::uint32_t> (kMaxMoments)) return false;
+        std::vector<Moment> heard;
+        heard.reserve (n);
+        for (std::uint32_t i = 0; i < n && r.ok(); ++i)
+        {
+            Moment m;
+            m.mix = readFrame (r);
+            const auto tracks = r.u16();
+            for (std::uint16_t k = 0; k < tracks && r.ok(); ++k)
+            {
+                TrackSample t;
+                const auto at = r.u16();
+                if (at >= names.size()) return false;
+                t.hash = names[at].first;
+                t.name = names[at].second;
+                t.faderKnown = r.flag();
+                t.faderDb = r.f32();
+                t.frame = readFrame (r);
+                m.tracks.push_back (std::move (t));
+            }
+            heard.push_back (std::move (m));
+        }
+        if (! r.ok()) return false;
+        style = st;
+        hasMusicBus = bus;
+        musicBusDb = busDb;
+        moments = std::move (heard);
+        return true;
     }
 
     double Analysis::targetDb (const Style& s, double hz)

@@ -1,6 +1,7 @@
 #include "mixology/History.h"
 
 #include "mixology/FaderLaw.h"
+#include "mixology/Pack.h"
 #include "mixology/ProcParams.h"
 
 #include <algorithm>
@@ -181,6 +182,119 @@ namespace mixology::history
     {
         list.clear();
         ++changeCount;
+    }
+
+    namespace
+    {
+        constexpr std::uint32_t kSavedMagic = 0x3148584du;   // "MXH1"
+
+        void writeChange (pack::Writer& w, const Change& c)
+        {
+            w.u8 (static_cast<std::uint8_t> (c.what));
+            w.u32 (c.hash);
+            w.flag (c.fullMix);
+            w.str (c.track);
+            w.i32 (c.index);
+            w.f64 (c.before);
+            w.f64 (c.after);
+            w.f64 (c.beforePos);
+            w.f64 (c.afterPos);
+            for (const auto* list : { &c.listBefore, &c.listAfter })
+            {
+                w.u32 (static_cast<std::uint32_t> (list->size()));
+                for (auto h : *list) w.u32 (h);
+            }
+        }
+
+        bool readChange (pack::Reader& r, Change& c)
+        {
+            const auto what = r.u8();
+            if (what > static_cast<std::uint8_t> (What::duck)) return false;
+            c.what = static_cast<What> (what);
+            c.hash = r.u32();
+            c.fullMix = r.flag();
+            c.track = r.str();
+            c.index = r.i32();
+            c.before = r.f64();
+            c.after = r.f64();
+            c.beforePos = r.f64();
+            c.afterPos = r.f64();
+            for (auto* list : { &c.listBefore, &c.listAfter })
+            {
+                const auto n = r.count (4);
+                list->clear();
+                for (std::uint32_t i = 0; i < n; ++i) list->push_back (r.u32());
+            }
+            // A Link without a name was found by its slot in that session's registry: never here.
+            c.slot = -1;
+            c.generation = 0;
+            return r.ok();
+        }
+    }
+
+    std::string History::save (std::size_t maxChanges) const
+    {
+        // The newest steps that fit: the oldest ones go first when there are too many changes.
+        std::size_t first = list.size(), total = 0;
+        while (first > 0 && total + list[first - 1].changes.size() <= maxChanges)
+            total += list[--first].changes.size();
+
+        pack::Writer w;
+        w.u32 (kSavedMagic);
+        w.u64 (nextId);
+        w.u32 (static_cast<std::uint32_t> (list.size() - first));
+        for (std::size_t i = first; i < list.size(); ++i)
+        {
+            const auto& s = list[i];
+            w.u64 (s.id);
+            w.f64 (s.time);
+            w.f64 (s.lastAt);
+            w.str (s.what);
+            w.str (s.group);
+            w.flag (s.undone);
+            w.u32 (static_cast<std::uint32_t> (s.changes.size()));
+            for (const auto& c : s.changes) writeChange (w, c);
+        }
+        return w.take();
+    }
+
+    bool History::load (const std::string& block)
+    {
+        pack::Reader r (block);
+        if (r.u32() != kSavedMagic) return false;
+        const auto savedNext = r.u64();
+        const auto n = r.count (16);
+        std::deque<Step> steps;
+        std::uint64_t lastId = 0;
+        bool undoneSeen = false;
+        for (std::uint32_t i = 0; i < n && r.ok(); ++i)
+        {
+            Step s;
+            s.id = r.u64();
+            s.time = r.f64();
+            s.lastAt = r.f64();
+            s.what = r.str();
+            s.group = r.str();
+            s.undone = r.flag();
+            const auto changes = r.count (16);
+            for (std::uint32_t k = 0; k < changes; ++k)
+            {
+                Change c;
+                if (! readChange (r, c)) return false;
+                s.changes.push_back (std::move (c));
+            }
+            // Ids only grow, and undone steps are always the newest ones: anything else isn't a saved history.
+            if (s.id <= lastId || (undoneSeen && ! s.undone)) return false;
+            lastId = s.id;
+            undoneSeen = undoneSeen || s.undone;
+            if (! s.changes.empty()) steps.push_back (std::move (s));
+        }
+        if (! r.ok()) return false;
+        while (steps.size() > kMaxSteps) steps.pop_front();
+        list = std::move (steps);
+        nextId = std::max (savedNext, lastId + 1);
+        ++changeCount;
+        return true;
     }
 
     const Step* History::find (std::uint64_t id) const

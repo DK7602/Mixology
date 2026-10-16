@@ -1,5 +1,7 @@
 #include "mixology/BridgeSession.h"
 
+#include "mixology/Pack.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -962,6 +964,58 @@ namespace mixology
         restore.clear();
         addLog (now, "Restore points cleared: the mix as it is now is the new starting point.");
         changed();
+    }
+
+    namespace { constexpr std::uint32_t kRestoreMagic = 0x3152584du; }   // "MXR1"
+
+    std::string BridgeSession::saveRestorePoints() const
+    {
+        pack::Writer w;
+        w.u32 (kRestoreMagic);
+        w.u32 (static_cast<std::uint32_t> (restore.size()));
+        for (const auto& [hash, p] : restore)
+        {
+            w.u32 (hash);
+            w.str (p.title);
+            w.flag (p.ambiguous);
+            w.f64 (p.volume);
+            w.str (p.volumeText);
+            w.flag (p.hasPan);
+            w.f64 (p.pan);
+            w.str (p.panText);
+            w.flag (p.mute);
+            w.flag (p.solo);
+        }
+        return w.take();
+    }
+
+    bool BridgeSession::loadRestorePoints (const std::string& block, double now)
+    {
+        if (! restore.empty()) return false;
+        pack::Reader r (block);
+        if (r.u32() != kRestoreMagic) return false;
+        std::map<std::uint32_t, RestorePoint> loaded;
+        const auto n = r.count (36);
+        for (std::uint32_t i = 0; i < n; ++i)
+        {
+            RestorePoint p;
+            p.hash = r.u32();
+            p.title = r.str();
+            p.ambiguous = r.flag();
+            p.volume = r.f64();
+            p.volumeText = r.str();
+            p.hasPan = r.flag();
+            p.pan = r.f64();
+            p.panText = r.str();
+            p.mute = r.flag();
+            p.solo = r.flag();
+            if (p.hash != 0) loaded[p.hash] = std::move (p);
+        }
+        if (! r.ok() || loaded.empty()) return false;
+        restore = std::move (loaded);
+        addLog (now, "Restore points from the project: " + std::to_string (restore.size()) + (restore.size() == 1 ? " channel." : " channels."));
+        changed();
+        return true;
     }
 
     // ---------------------------------------------------------------------------------------------

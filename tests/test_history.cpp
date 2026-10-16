@@ -167,3 +167,83 @@ TEST_CASE ("History: plain words for each change and step", "[history]")
     CHECK (std::string (pageOf (proc::compThr)) == "Dynamics");
     CHECK (std::string (pageOf (proc::spLevel)) == "Space");
 }
+
+TEST_CASE ("History: saved with the project and back, the same steps, undone ones too", "[history]")
+{
+    History h;
+    h.record ("Fader 'Kick'", "fader:1", { fader (1, "Kick", -5.0, -3.0) }, 100.0);
+    auto auto1 = control (2, "Lead Vox", proc::eq1Gain, 0.0, 2.5);
+    auto unnamed = control (0, "Unnamed track 3", proc::eq1Gain, 0.0, -1.0);
+    unnamed.slot = 2;
+    unnamed.generation = 7;
+    Change duck;
+    duck.what = What::duck;
+    duck.hash = 3;
+    duck.track = "FX";
+    duck.listBefore = { 1 };
+    duck.listAfter = { 1, 2 };
+    h.record ("Auto Mix", "", { fader (2, "Lead Vox", -8.0, -6.5), auto1, unnamed, duck }, 200.0);
+    h.record ("Fader 'Snare'", "fader:4", { fader (4, "Snare", 0.0, -2.0) }, 300.0);
+    h.undo();   // the Snare step is undone: it comes back dimmed
+
+    History back;
+    REQUIRE (back.load (h.save()));
+    REQUIRE (back.steps().size() == 3);
+    for (std::size_t i = 0; i < 3; ++i)
+    {
+        const auto& a = h.steps()[i];
+        const auto& b = back.steps()[i];
+        CHECK (a.id == b.id);
+        CHECK (a.time == b.time);
+        CHECK (a.what == b.what);
+        CHECK (a.undone == b.undone);
+        REQUIRE (a.changes.size() == b.changes.size());
+    }
+    const auto& am = back.steps()[1].changes;
+    CHECK (am[0].before == -8.0);
+    CHECK (am[0].after == -6.5);
+    CHECK (am[1].index == proc::eq1Gain);
+    CHECK (am[1].after == 2.5);
+    CHECK (am[2].slot == -1);          // a Link without a name belonged to that session's registry
+    CHECK (am[2].generation == 0);
+    CHECK (am[3].listAfter == std::vector<std::uint32_t> { 1, 2 });
+    CHECK (back.current() == h.current());
+    CHECK (back.canRedo());
+
+    // Going back works the same, and new steps get new ids (the redo is dropped as usual).
+    auto moves = back.moveTo (0);
+    CHECK (findChange (moves, What::fader, 1) != nullptr);
+    CHECK (findChange (moves, What::fader, 1)->after == -5.0);
+    const auto id = back.record ("Fader 'Hats'", "fader:5", { fader (5, "Hats", 0.0, -1.0) }, 400.0);
+    CHECK (id > h.steps().back().id);
+    CHECK (back.steps().size() == 1);
+}
+
+TEST_CASE ("History: a huge history keeps its newest steps; damaged blocks change nothing", "[history]")
+{
+    History h;
+    for (int i = 0; i < 10; ++i)
+    {
+        std::vector<Change> many;
+        for (std::uint32_t k = 1; k <= 5; ++k) many.push_back (fader (k, "T" + std::to_string (k), -10.0, -10.0 + i + 1));
+        h.record ("Step " + std::to_string (i), "", many, 100.0 * i);
+    }
+    History back;
+    REQUIRE (back.load (h.save (12)));   // room for 12 changes: the two newest steps
+    REQUIRE (back.steps().size() == 2);
+    CHECK (back.steps().front().what == "Step 8");
+    CHECK (back.steps().back().what == "Step 9");
+
+    const auto block = h.save();
+    History kept;
+    kept.record ("Mine", "", { fader (9, "Keys", 0.0, 1.0) }, 50.0);
+    CHECK_FALSE (kept.load ("not a history"));
+    CHECK_FALSE (kept.load (block.substr (0, block.size() / 2)));   // cut short
+    CHECK (kept.steps().size() == 1);
+    CHECK (kept.steps().front().what == "Mine");
+
+    History empty;
+    REQUIRE (empty.load (History().save()));
+    CHECK (empty.steps().empty());
+    CHECK (empty.record ("First", "", { fader (1, "Kick", 0.0, 1.0) }, 1.0) == 1);
+}

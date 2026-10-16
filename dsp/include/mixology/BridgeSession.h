@@ -158,6 +158,11 @@ namespace mixology
         Result restoreChannel (ChannelRef, double now);
         RestoreSummary restoreAll (double now);
         void forgetRestorePoints (double now);
+        /** Kept with the project: how each channel was before Mixology first changed it, so Restore still goes
+            back there after the project opens again. load() only fills an empty list (this Cubase may already
+            have changed channels); false when there was nothing to load. */
+        std::string saveRestorePoints() const;
+        bool loadRestorePoints (const std::string&, double now);
 
         // ---- every channel's fader (Analyze Mix needs them, not just the 12 in view) -------------
         struct KnownFader
@@ -260,6 +265,8 @@ namespace mixology
         // ---- log -------------------------------------------------------------------------------
         const std::deque<LogLine>& logLines() const { return logBuffer; }
         std::uint64_t logVersion() const { return logCount; }
+        /** A line in the log from the hub (what came back with the project...). */
+        void note (double now, std::string text) { addLog (now, std::move (text)); }
         /** Bumps whenever anything the UI shows has changed. */
         std::uint64_t stateVersion() const { return version; }
 

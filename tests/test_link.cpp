@@ -587,6 +587,17 @@ TEST_CASE ("Assist EQ restore points: back to how it was, your own changes kept"
     rp.noteSet (3, off, cut);
     rp.noteUndo (3, off);
     CHECK_FALSE (rp.has (3));
+    // Kept with the project: the same decisions after it opens again.
+    rp.noteSet (4, off, cutAndPocket);
+    AssistRestore back;
+    REQUIRE (back.load (rp.save()));
+    CHECK (back.size() == rp.size());
+    CHECK (back.decide (1, cutAndPocket).action == AssistRestore::Action::restore);
+    CHECK (AssistRestore::same (back.decide (4, cutAndPocket).to, off));
+    CHECK (back.decide (1, yours).action == AssistRestore::Action::keptYours);
+    CHECK_FALSE (back.load ("nonsense"));
+    CHECK (back.size() == rp.size());
+
     rp.clear();
     CHECK (rp.size() == 0);
 }

@@ -516,6 +516,55 @@ TEST_CASE ("Analyze Mix: a mix that follows the style gets a calm word", "[analy
     CHECK (find (r, "headroom") == nullptr);
 }
 
+TEST_CASE ("Analyze Mix: the moments saved with the project give the same advice", "[analysis]")
+{
+    auto a = listen ([] (int i) {
+        std::vector<TrackSample> t { sample ("Kick", kickFrame(), -2.0), sample ("808", bassFrame (5.0), -1.5),
+                                     sample ("Hats", panned (hatsFrame(), 4.0), -6.0), sample ("Pad", padFrame (-20.0), -3.0) };
+        t.push_back (sample ("Lead Vox", i % 3 == 0 ? silentFrame() : vocalFrame (-22.0 + (i % 7)), 1.0));
+        t.push_back (sample ("Adlibs", i % 5 == 0 ? vocalFrame (-26.0) : silentFrame(), -4.0));
+        return t; }, 180, -3.5);
+    a.setMusicBus (true, -2.0);
+    a.setVocalOffset (1.5, true);
+    std::map<std::uint32_t, TrackSettings> settings;
+    settings[mixology::bridge::nameHash ("Pad")].role = Role::keys;
+    const auto before = a.evaluate (settings, { "Strings" });
+
+    Analysis back;
+    REQUIRE (back.load (a.save()));
+    CHECK (back.secondsHeard() == a.secondsHeard());
+    const auto after = back.evaluate (settings, { "Strings" });
+    REQUIRE (after.valid);
+    CHECK (after.style.key == before.style.key);
+    CHECK (after.style.vocalFromYou);
+    REQUIRE (after.suggestions.size() == before.suggestions.size());
+    for (std::size_t i = 0; i < before.suggestions.size(); ++i)
+    {
+        CHECK (after.suggestions[i].id == before.suggestions[i].id);
+        CHECK (after.suggestions[i].kind == before.suggestions[i].kind);
+    }
+    REQUIRE (after.tracks.size() == before.tracks.size());
+    for (std::size_t i = 0; i < before.tracks.size(); ++i)
+    {
+        CHECK (after.tracks[i].name == before.tracks[i].name);
+        CHECK (after.tracks[i].role == before.tracks[i].role);
+        CHECK (after.tracks[i].loudness == Catch::Approx (before.tracks[i].loudness).margin (0.06));
+        CHECK (after.tracks[i].width == Catch::Approx (before.tracks[i].width).margin (0.005));
+    }
+    CHECK (after.vocalRatio == Catch::Approx (before.vocalRatio).margin (0.06));
+    CHECK (after.mixLoudness == Catch::Approx (before.mixLoudness).margin (0.06));
+    CHECK (after.musicPathDb == Catch::Approx (before.musicPathDb).margin (0.06));
+    CHECK (after.unheard == before.unheard);
+
+    // A damaged block changes nothing.
+    const auto block = a.save();
+    CHECK_FALSE (back.load (block.substr (0, block.size() - 100)));
+    CHECK_FALSE (back.load (""));
+    CHECK (back.secondsHeard() == a.secondsHeard());
+    // And it is small: about 100 bytes per track per moment (fewer when it's silent) before the project compresses it.
+    CHECK (block.size() < static_cast<std::size_t> (180 * 7 * 110));
+}
+
 TEST_CASE ("Analyze Mix: print a report (manual check)", "[analysis][.print]")
 {
     const auto lead = shaped ([] (int b) { return bump (b, 21, 3.0, -16.0); }, 6.0, 0.3);

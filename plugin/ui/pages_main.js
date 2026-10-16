@@ -280,7 +280,7 @@ export function buildOverview(root, app) {
     const report = b.analysis && b.analysis.report;
     const useReport = report && !showLive;
     const setup = b.setup || [];
-    const key = JSON.stringify(setup.map((x) => x.id + x.title)) + "|" + (useReport ? "r|" + JSON.stringify(report.suggestions.map((x) => x.id + x.kind + x.title)) + report.seconds + report.style + (b.analysis.auto && b.analysis.auto.on ? b.analysis.auto.updated : "")
+    const key = JSON.stringify(setup.map((x) => x.id + x.title)) + "|" + (useReport ? "r|" + JSON.stringify(report.suggestions.map((x) => x.id + x.kind + x.title)) + report.seconds + report.style + (b.analysis.auto && b.analysis.auto.on ? b.analysis.auto.updated : "") + (b.analysis.fromProject ? "|p" : "")
       : [b.link, (b.slots || []).filter((s) => s.present).length, b.linksPaired, b.linksSeen, Math.round(st), Math.round(tp), !!report, !!(b.analysis && b.analysis.auto && b.analysis.auto.on), app.daw].join("|"));
     if (key === lastKey) return;
     lastKey = key;
@@ -296,7 +296,12 @@ export function buildOverview(root, app) {
     for (const sg of setup) card(sg.icon, KIND.warn, sg.title, setupHint(sg), () => openSuggestion(app, sg));
     if (useReport) {
       const au = b.analysis.auto;
-      sub.textContent = au && au.on && au.updated ? `Auto Analyze, updated ${new Date(au.updated).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}:`
+      const at = (ms) => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      const day = (ms) => new Date(ms).toDateString() === new Date().toDateString() ? at(ms)
+        : `${new Date(ms).toLocaleDateString([], { month: "short", day: "numeric" })}, ${at(ms)}`;
+      // Advice that came back with the project says so, until Mixology hears the mix again.
+      sub.textContent = b.analysis.fromProject && b.analysis.analyzed ? `Last session (${day(b.analysis.analyzed)}):`
+        : au && au.on && au.updated ? `Auto Analyze, updated ${at(au.updated)}:`
         : `From Analyze Mix (${Math.round(report.seconds)} s heard):`;
       for (const sg of report.suggestions)
         card(sg.icon, KIND[sg.kind] || KIND.info, sg.title, sg.need, () => openSuggestion(app, sg));

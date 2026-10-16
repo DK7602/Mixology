@@ -1,6 +1,6 @@
 # Mixology manual
 
-Manual for version 0.13.1 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
+Manual for version 0.14.0 (the interface, live meters, every Cubase fader, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -39,7 +39,8 @@ fix):
 | Suite link: Voxology on your vocals (VOX tag, no second compressor / reverb / delay), Masterology's goal on the Master page, the hand-off to Masterology | Live (needs Voxology 0.47 and Masterology 0.26 or newer) |
 | Setup check: a mono group or output on the way, vocals without Mixology Link (Mix Assistant, Tracks page) | Live |
 | Presets: Mixology's starting points and yours, for tracks, FX channels and the Full Mix | Live |
-| History: every change Mixology makes, step by step; go back to any point and forward again | Live: this is what we're testing now |
+| History: every change Mixology makes, step by step; go back to any point and forward again | Live |
+| Mixology opens as you left it: the History, the advice and the restore points come back with the project | Live: this is what we're testing now |
 
 Nothing changes your sound until you ask: every processing module starts switched off (the audio passes
 through bit for bit). What can change it: the Cubase faders and pans Mixology moves, the Assist EQ / Trim in
@@ -139,7 +140,8 @@ also Auto Mix won't). It is saved with the project and follows the channel when 
 **Restore.** Before Mixology changes a channel the first time, it remembers how it was. A small **↺** on a strip
 puts that channel back; **↺ Restore** on the top bar puts back every channel Mixology changed (channels outside the
 12 in view: move the bank to them and press Restore again). Settings > Cubase Bridge > **Keep the mix as it is
-now** makes the current mix the new starting point.
+now** makes the current mix the new starting point. The restore points are saved with the project: Restore still
+goes back to how the song was before Mixology's first change after you open it again.
 
 Safety rules (always on):
 
@@ -213,9 +215,14 @@ Analyze, updated 2:14 PM"). When you move a fader or change a track's processing
 (the first check 20 seconds later), so the advice is always about the mix as it is now. It pauses when the song stops,
 while Mixology applies a plan, while you listen to your reference song, and while Mixology's window is closed. It
 only gives advice: it never moves anything. Your choice is saved with the project: open the project again and Auto
-Analyze is still on, with no need to press Analyze Mix. When you press play it reads the faders once (as Analyze Mix
-does) and the first advice comes about 20 seconds in. Pick another style in the header and the next check gives
-advice for that style.
+Analyze is still on and carries on from the advice you had. (A project saved before Mixology 0.14 has no advice
+saved: there it reads the faders once when you press play, as Analyze Mix does, and the first advice comes about
+20 seconds in.) Pick another style in the header and the next check gives advice for that style.
+
+**Open the project again** and the advice is still there: the Mix Assistant says **Last session (Oct 15, 9:12 PM)**
+over it. Mixology keeps what Analyze Mix heard with the project, so the smart tools work straight away and a role
+you change still updates the advice. With Auto Analyze on, it listens again when you press play and the cards (and
+the line above them) change when the mix sounds different now. Press **Analyze Mix** any time to start fresh.
 
 **Recorded too hot?** When Voxology's Auto-Edit finds a vocal clipped or over the top of the meter in the recording
 itself, Auto Mix, Balance, Polish and Vocal Pocket show **FIX THIS FIRST** above their changes: lower that vocal's clip
@@ -485,8 +492,10 @@ Good to know:
   you make in Cubase are not Mixology's: Cubase's own Edit > History has those.
 - Faders need the Cubase bridge connected; processing changes don't.
 - A track renamed or removed since: its processing changes are skipped (the message names it).
-- The history lasts while Cubase is open (the last 200 steps), the same for every Mixology window. It isn't saved with
-  the project.
+- The history is saved with the project (the last 200 steps), the same for every Mixology window. Open the song again
+  and the steps are still there, under **EARLIER SESSIONS (SAVED WITH THE PROJECT)**, with their date: GO BACK HERE and
+  UNDO work on them too (faders need the Cubase bridge connected). A very long history keeps its newest steps. With the
+  advice, Mixology adds about 1 MB to the project file (up to about 2 MB after a two-minute Auto Analyze on 30 tracks).
 
 ## How it works with Voxology and Masterology
 

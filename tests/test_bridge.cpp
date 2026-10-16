@@ -443,6 +443,41 @@ TEST_CASE ("Bridge: Restore puts back volume, pan, mute and solo", "[bridge]")
     CHECK (r.session.lastMoveResult().find ("Restored 'Kick'") != std::string::npos);
 }
 
+TEST_CASE ("Bridge: restore points come back with the project", "[bridge]")
+{
+    Rig r;
+    r.cubase.channels[0].volume = 0.6123;
+    r.cubase.channels[0].pan = 0.3;
+    r.run (0.2);
+    const auto kick = r.ref ("Kick");
+    REQUIRE (r.session.setVolumeDb (kick, 2.0, r.now).ok);
+    REQUIRE (r.session.setPan (kick, 0.8, r.now).ok);
+    REQUIRE (r.session.setMute (kick, true, r.now).ok);
+    r.run (0.4);
+    const auto saved = r.session.saveRestorePoints();
+
+    // The project opens again: Cubase has the faders where Mixology left them.
+    Rig again;
+    again.cubase.channels[0] = r.cubase.channels[0];
+    again.run (0.2);
+    CHECK (again.session.changedCount() == 0);
+    REQUIRE (again.session.loadRestorePoints (saved, again.now));
+    CHECK (again.session.changedCount() == 1);
+    CHECK (again.logHas ("Restore points from the project: 1 channel."));
+    CHECK_FALSE (again.session.loadRestorePoints (saved, again.now));   // only into an empty list
+
+    REQUIRE (again.session.restoreChannel (again.ref ("Kick"), again.now).ok);
+    again.run (0.3);
+    CHECK (again.cubase.channels[0].volume == Catch::Approx (0.6123).margin (1.0 / 16384.0));
+    CHECK (again.cubase.channels[0].pan == Catch::Approx (0.3).margin (1.0e-6));
+    CHECK_FALSE (again.cubase.channels[0].mute);
+
+    Rig other;
+    CHECK_FALSE (other.session.loadRestorePoints ("garbage", other.now));
+    CHECK_FALSE (other.session.loadRestorePoints (saved.substr (0, saved.size() - 3), other.now));
+    CHECK (other.session.restorePoints().empty());
+}
+
 TEST_CASE ("Bridge: a channel whose pan Cubase ignores (mono group) is learned and left alone", "[bridge]")
 {
     Rig r;

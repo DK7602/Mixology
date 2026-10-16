@@ -102,6 +102,12 @@ public:
     /** How you like your vocal ("Sounds right / too loud / too quiet"), saved with the project the same way. */
     juce::String mixPrefsState() const;
     void setMixPrefsState (const juce::String&);
+    /** What Mixology knows about this project beyond the plug-ins' own settings, saved with it so Mixology opens
+        as you left it: the History, the advice on screen (the moments Analyze Mix heard, so a role change can
+        still re-evaluate them) and the restore points. Packed and compressed, as text for the project. On the
+        message thread it is brought up to date first; elsewhere it is the copy made at most half a second ago. */
+    juce::String sessionState();
+    void setSessionState (const juce::String&);
 
     juce::String logText() const;
 
@@ -246,6 +252,26 @@ private:
     };
     std::vector<PendingPlan> pendingPlans;
     void finishPendingPlans();
+    std::uint64_t projectHistoryUpTo = 0;   // the newest step that came back with the project (0 = none)
+
+    // ---- Kept with the project (sessionState): each part packed again only when it changed --------------------
+    struct SavedPart
+    {
+        std::uint64_t key = ~0ull;
+        juce::String text;   // compressed, base64; empty = nothing to keep
+    };
+    SavedPart savedHistory, savedAdvice, savedRestore;
+    juce::String sessionCache, sessionPending;
+    bool hasPendingSession = false;
+    double lastSessionCache = 0.0;
+    std::uint64_t adviceSerial = 0;     // the advice's moments changed (Analyze Mix finished, Auto Analyze updated it)
+    double analyzedMs = 0.0;            // when the advice on screen was made (ms since 1970)
+    bool adviceFromProject = false;     // it came back with the project (until Mixology hears the mix again)
+    mixology::mix::Analysis adviceAnalysis;   // the moments behind the advice while a new Analyze Mix listens
+    void updateSessionCache();
+    void applyPendingSession();
+    std::string adviceBlock() const;
+    bool loadAdvice (const std::string&);
     /** Plays changes from the history back: faders / pans / mute / solo as one bridge plan, the rest on the Links. */
     mixology::BridgeSession::Result playHistory (const std::vector<mixology::history::Change>&, const std::string& what, std::string& info);
     mixology::BridgeSession::Result moveHistory (const juce::String& how, std::uint64_t id, std::string& info);

@@ -7,7 +7,7 @@ HTML / CSS / JS interface in the platform web view, GitHub Actions builds on eve
 The plan and milestones: [docs/PLAN.md](docs/PLAN.md). User manual (also built into the plug-in): [docs/MANUAL.md](docs/MANUAL.md).
 Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_TEST.md) (passed), [docs/M3_TEST.md](docs/M3_TEST.md), [docs/M4_TEST.md](docs/M4_TEST.md), [docs/M5_TEST.md](docs/M5_TEST.md), [docs/M6_TEST.md](docs/M6_TEST.md) (current).
 
-## Status: v0.13.1
+## Status: v0.14.0
 
 | Piece | State |
 | --- | --- |
@@ -31,6 +31,7 @@ Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_T
 | v0.11.1: Auto Analyze stays on when the project opens again (listens by itself, first advice ~20 s in) and follows the style | Built, waiting for the Cubase test |
 | One song style for the trio (v0.12.0, with Voxology 0.49 and Masterology 0.28): pick it in any, all three follow | Built, waiting for the Cubase test |
 | Your DAW for the trio (v0.13.0, with Voxology 0.50 and Masterology 0.29): found from the host or picked, shared; every tip in that DAW's words (`plugin/ui/daws.js`); FIX THIS FIRST when Voxology heard a vocal recorded too hot | Built, waiting for the test |
+| Opens as you left it (v0.14.0): the History, the advice (what Analyze Mix heard) and the restore points are saved with the project | Built, waiting for the test |
 | CPU check (v0.8.2): 48 real Links + Mixology timed on every build (tools/cpucheck); the idle chain made cheaper | Done: typical 48-track session about 17 % of one core |
 
 ## Layout
