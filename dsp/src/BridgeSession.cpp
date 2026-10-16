@@ -54,7 +54,8 @@ namespace mixology
             linkState = Link::waiting;
             lastHelloSent = -1.0e9;
             addLog (now, "MIDI ports open" + (detail.empty() ? std::string() : " (" + detail + ")")
-                             + ". Waiting for the Mixology Bridge script in Cubase...");
+                             + (dawSurface ? ". Waiting for " + dawLabel + " to talk to its Mackie Control (Mixology)..."
+                                           : ". Waiting for the Mixology Bridge script in " + dawLabel + "..."));
         }
         else
         {
@@ -93,7 +94,7 @@ namespace mixology
             const auto& s = slots[static_cast<std::size_t> (w.slot)];
             if (! s.present || s.hash != w.hash || std::abs (s.pan - w.to) < 0.01) { it = panWatches.erase (it); continue; }   // gone, or it landed
             if (now - w.sentAt < kPanLandSeconds) { ++it; continue; }
-            if (std::abs (s.pan - w.from) < 0.003) markNoPan (s, "Cubase didn't follow the pan move (it stays at " + s.panText + ")", now);
+            if (std::abs (s.pan - w.from) < 0.003) markNoPan (s, (dawLabel + " didn't follow the pan move (it stays at ") + s.panText + ")", now);
             it = panWatches.erase (it);
         }
     }
@@ -119,7 +120,7 @@ namespace mixology
             {
                 noPan.erase (s.hash);
                 ++noPanChanges;
-                addLog (now, quoted (s.title) + ": Cubase now reports a real pan (" + s.panText + "), so Mixology pans it again.");
+                addLog (now, quoted (s.title) + (": " + dawLabel + " now reports a real pan (") + s.panText + "), so Mixology pans it again.");
             }
             return;
         }
@@ -127,7 +128,7 @@ namespace mixology
         if (it == panWrites.end()) return;
         const double since = now - it->second.at;
         if (s.pan <= kHardLeft && it->second.value > 0.005 && since >= kPanLandSeconds)
-            markNoPan (s, "Cubase took Mixology's pan move, then reported it back at hard left (" + s.panText + ")", now);
+            markNoPan (s, (dawLabel + " took Mixology's pan move, then reported it back at hard left (") + s.panText + ")", now);
         else if (std::abs (s.pan - it->second.value) > 0.01 && since >= kPanLandSeconds)
             panWrites.erase (it);   // moved somewhere else in Cubase: a real panner
     }
@@ -171,7 +172,7 @@ namespace mixology
             if (now - lastHeard > kLostAfter)
             {
                 linkState = Link::lost;
-                addLog (now, "Lost contact with Cubase (no reply for " + std::to_string (static_cast<int> (kLostAfter)) + " s). Trying again...");
+                addLog (now, ("Lost contact with " + dawLabel + " (no reply for ") + std::to_string (static_cast<int> (kLostAfter)) + " s). Trying again...");
                 cancelMoves ({}, now);
                 changed();
             }
@@ -195,7 +196,7 @@ namespace mixology
                 }
                 else
                 {
-                    moveResult = "No reply from Cubase for " + quoted (s.title) + ": the move may not have happened.";
+                    moveResult = ("No reply from " + dawLabel + " for ") + quoted (s.title) + ": the move may not have happened.";
                     addLog (now, moveResult);
                 }
                 changed();
@@ -212,7 +213,7 @@ namespace mixology
                 mt.cubaseMovedAt = -1.0;
                 const auto& s = slot (i);
                 if (s.present && s.volumeText != mt.loggedText && ! s.automationRead)
-                    addLog (now, "Fader moved in Cubase: " + quoted (s.title) + " now shows " + s.volumeText + " dB");
+                    addLog (now, ("Fader moved in " + dawLabel + ": ") + quoted (s.title) + " now shows " + s.volumeText + " dB");
                 mt.loggedText = s.volumeText;
             }
         }
@@ -363,7 +364,7 @@ namespace mixology
                         what = quoted (slot (i).title) + ": ";
                     }
                 }
-                moveResult = what + "Cubase " + ackStatusText (status) + ". Nothing was changed.";
+                moveResult = what + (dawLabel + " ") + ackStatusText (status) + ". Nothing was changed.";
                 addLog (now, moveResult);
                 if (status == AckStatus::nameMismatch || status == AckStatus::emptySlot)
                     requestDump (now);   // our picture of the bank is out of date
@@ -372,7 +373,7 @@ namespace mixology
             }
 
             case Cmd::log:
-                addLog (now, "Cubase: " + m.text);
+                addLog (now, (dawLabel + ": ") + m.text);
                 return;
 
             case Cmd::pong:
@@ -392,9 +393,13 @@ namespace mixology
         const auto n = static_cast<std::size_t> (std::clamp (count, 1, kMaxSlots));
         slots.assign (n, BridgeSlot {});
         meta.assign (n, SlotMeta {});
-        addLog (now, std::string (wasConnected ? "Cubase script restarted" : "Connected to Cubase")
-                         + " (Mixology Bridge script v" + std::to_string (scriptVer) + ", "
-                         + std::to_string (slotCount()) + " channels per bank).");
+        if (dawSurface)
+            addLog (now, std::string (wasConnected ? "Mackie Control restarted in " : "Connected to ") + dawLabel
+                             + " (Mixology is its Mackie Control surface, " + std::to_string (slotCount()) + " channels per bank).");
+        else
+            addLog (now, std::string (wasConnected ? "Bridge script restarted in " : "Connected to ") + dawLabel
+                             + " (Mixology Bridge script v" + std::to_string (scriptVer) + ", "
+                             + std::to_string (slotCount()) + " channels per bank).");
         if (scriptVer < bridge::kLatestScriptVersion)
             addLog (now, "A newer Cubase script (v" + std::to_string (bridge::kLatestScriptVersion) + ") came with this Mixology: copy the "
                          "'Mixology' folder from the download's 'Cubase MIDI Remote' folder again (manual, Cubase bridge step 2).");
@@ -475,7 +480,7 @@ namespace mixology
                 mt.loggedText = s.volumeText;
                 if (mv.kind == MoveKind::restore)
                 {
-                    moveResult = "Restored " + quoted (s.title) + ": Cubase shows " + s.volumeText + " dB";
+                    moveResult = "Restored " + quoted (s.title) + (": " + dawLabel + " shows ") + s.volumeText + " dB";
                     addLog (now, moveResult);
                 }
                 else if (mv.logResult)
@@ -492,7 +497,7 @@ namespace mixology
             {
                 mv.active = false;
                 mt.loggedText = s.volumeText;
-                moveResult = "Set " + quoted (s.title) + " to " + formatDb (got) + " (Cubase shows " + s.volumeText + ")"
+                moveResult = "Set " + quoted (s.title) + " to " + formatDb (got) + (" (" + dawLabel + " shows ") + s.volumeText + ")"
                              + (mv.step > 1 ? ", " + std::to_string (mv.step) + " steps" : std::string());
                 addLog (now, moveResult);
                 return;
@@ -518,9 +523,9 @@ namespace mixology
                 mv.active = false;
                 mt.loggedText = s.volumeText;
                 if (! wantInf && std::abs (got - mv.targetDb) <= kDbTolerance)
-                    moveResult = "Set " + quoted (s.title) + " to " + formatDb (got) + " (Cubase shows " + s.volumeText + ")";
+                    moveResult = "Set " + quoted (s.title) + " to " + formatDb (got) + (" (" + dawLabel + " shows ") + s.volumeText + ")";
                 else
-                    moveResult = "Closest Cubase allows for " + quoted (s.title) + ": " + formatDb (got) + " (asked for " + formatDb (mv.targetDb) + ")";
+                    moveResult = ("Closest " + dawLabel + " allows for ") + quoted (s.title) + ": " + formatDb (got) + " (asked for " + formatDb (mv.targetDb) + ")";
                 addLog (now, moveResult);
                 return;
             }
@@ -542,7 +547,7 @@ namespace mixology
     {
         if (scan.active && scan.plan)
         {
-            plan.notes.push_back ("Stopped: " + (why.empty() ? std::string ("contact with Cubase was lost") : why));
+            plan.notes.push_back ("Stopped: " + (why.empty() ? std::string (("contact with " + dawLabel + " was lost")) : why));
             finishPlan (now);
         }
         scan.active = false;
@@ -557,7 +562,7 @@ namespace mixology
 
     BridgeSession::Result BridgeSession::checkWritable (ChannelRef ref, Field field) const
     {
-        if (linkState != Link::connected) return { false, "Not connected to Cubase." };
+        if (linkState != Link::connected) return { false, ("Not connected to " + dawLabel + ".") };
         if (scan.active && scan.plan) return { false, "Mixology is applying " + plan.what + " (a few seconds)." };
         if (scan.active) return { false, "Mixology is reading your faders for Analyze Mix (a second or two)." };
         if (ref.slot < 0 || ref.slot >= slotCount()) return { false, "No such channel." };
@@ -567,10 +572,10 @@ namespace mixology
             return { false, "That strip now shows " + quoted (s.title) + " (the bank or the track order changed). Nothing was moved." };
         if (isProtected (s.hash)) return { false, quoted (s.title) + " is protected (padlock). Click the padlock to let Mixology move it." };
         if (s.automationWrite) return { false, quoted (s.title) + " is writing automation (W is on). Switch W off first." };
-        if (field == Field::volume && ! s.hasVolume) return { false, "Waiting for Cubase to report " + quoted (s.title) + "'s fader." };
+        if (field == Field::volume && ! s.hasVolume) return { false, ("Waiting for " + dawLabel + " to report ") + quoted (s.title) + "'s fader." };
         if (field == Field::pan && ! s.hasPan) return { false, quoted (s.title) + " has no pan control." };
         if (field == Field::pan && panIgnored (s.hash))
-            return { false, quoted (s.title) + " doesn't pan in Cubase: its output is mono (a mono group or output), so it plays in the middle. Mixology leaves its pan alone." };
+            return { false, quoted (s.title) + (" doesn't pan in " + dawLabel + ": its output is mono (a mono group or output), so it plays in the middle. Mixology leaves its pan alone.") };
         return { true, {} };
     }
 
@@ -878,7 +883,7 @@ namespace mixology
     BridgeSession::RestoreSummary BridgeSession::restoreAll (double now)
     {
         RestoreSummary sum;
-        if (linkState != Link::connected) { sum.message = "Not connected to Cubase."; return sum; }
+        if (linkState != Link::connected) { sum.message = ("Not connected to " + dawLabel + "."); return sum; }
         if (scan.active) { sum.message = "Mixology is busy (" + (scan.plan ? plan.what : std::string ("reading faders")) + "): try again in a second."; return sum; }
 
         // Changed channels outside the bank: the whole restore goes through a plan (the bank pages through
@@ -1033,7 +1038,7 @@ namespace mixology
 
     BridgeSession::Result BridgeSession::scanAllChannels (double now)
     {
-        if (linkState != Link::connected) return { false, "Not connected to Cubase." };
+        if (linkState != Link::connected) return { false, ("Not connected to " + dawLabel + ".") };
         if (scan.active && scan.plan) return { false, "Mixology is still applying " + plan.what + "." };
         if (scan.active) return { true, {} };
         cancelMoves ({}, now);
@@ -1183,7 +1188,7 @@ namespace mixology
 
     BridgeSession::Result BridgeSession::applyPlan (const std::string& what, std::vector<PlanStep> steps, double now)
     {
-        if (linkState != Link::connected) return { false, "Not connected to Cubase." };
+        if (linkState != Link::connected) return { false, ("Not connected to " + dawLabel + ".") };
         if (scan.active) return { false, scan.plan ? "Mixology is still applying " + plan.what + "." : "Mixology is reading your faders: try again in a second." };
         planPending.clear();
         for (auto& st : steps)
@@ -1232,7 +1237,7 @@ namespace mixology
             // Each field only changes if it is where the plan saw it: a fader or pan you moved since stays yours.
             bool doVolume = step.setVolume, doPan = step.setPan && s.hasPan;
             std::string kept;
-            if (doVolume && ! s.hasVolume) { doVolume = false; kept = "Cubase didn't report its fader"; }
+            if (doVolume && ! s.hasVolume) { doVolume = false; kept = (dawLabel + " didn't report its fader"); }
             if (doVolume && step.checkFrom)
             {
                 const bool bothInf = isMinusInf (s.volumeDb) && isMinusInf (step.fromDb);
@@ -1329,7 +1334,7 @@ namespace mixology
         for (const auto& [hash, st] : planPending)
         {
             ++plan.skipped;
-            plan.notes.push_back (quoted (st.title) + ": not found in Cubase (renamed or removed?).");
+            plan.notes.push_back (quoted (st.title) + (": not found in " + dawLabel + " (renamed or removed?)."));
         }
         planPending.clear();
 
@@ -1371,7 +1376,7 @@ namespace mixology
 
     BridgeSession::Result BridgeSession::showChannel (int first, double now)
     {
-        if (linkState != Link::connected) return { false, "Not connected to Cubase." };
+        if (linkState != Link::connected) return { false, ("Not connected to " + dawLabel + ".") };
         if (scan.active) return { false, scan.plan ? "Mixology is still applying " + plan.what + "." : "Mixology is moving the bank: one moment." };
         const int n = slotCount();
         const int total = static_cast<int> (order.size());
@@ -1397,7 +1402,7 @@ namespace mixology
 
     BridgeSession::Result BridgeSession::bank (BankAction action, double now)
     {
-        if (linkState != Link::connected) return { false, "Not connected to Cubase." };
+        if (linkState != Link::connected) return { false, ("Not connected to " + dawLabel + ".") };
         Message m;
         m.cmd = Cmd::bank;
         m.flag = static_cast<int> (action);

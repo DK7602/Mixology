@@ -48,7 +48,8 @@ FIRST TIME IN YOUR DAW
 
 
 MOVING FADERS
-  In Cubase, FL Studio and Ableton Live, Mixology moves the mixer faders itself (volume, pan, mute, solo).
+  In Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology moves the mixer faders itself (volume, pan,
+  mute, solo).
   Mixology's Settings (the gear) has a Bridge tab named after your DAW with the steps; in short:
 
   The two MIDI ports (every DAW)
@@ -62,14 +63,21 @@ MOVING FADERS
             "Mixology Bridge", Port 200. Output: pick "Cubase to Mixology", Port 200 (the same number).
   Ableton   Restart Live after installing. Settings > Link, Tempo & MIDI: in a free Control Surface row pick
             "MixologyBridge", Input "Mixology to Cubase", Output "Cubase to Mixology".
+  Logic Pro Nothing to install: Mixology acts as a Mackie Control. Open Mixology's window once; Logic often
+            finds it by itself. If not: Logic Pro > Control Surfaces > Setup > New > Install > Mackie Control >
+            Add, then Output Port "Cubase to Mixology", Input Port "Mixology to Cubase".
+  Cakewalk  Nothing to install: Mixology acts as a Mackie Control. Preferences > MIDI > Devices: tick
+            "Mixology to Cubase" (Inputs) and "Cubase to Mixology" (Outputs). MIDI > Control Surfaces > Add
+            (the star) > Mackie Control, Input "Mixology to Cubase", Output "Cubase to Mixology", OK.
   Then open Mixology: its Bridge tab turns green ("Connected to ...").
 
-  Logic Pro, Cakewalk Sonar, others
-            For now Mixology tells you every fader move (Auto Mix and Balance list them with the exact dB) and
-            you set the faders. Fader control for Logic Pro and Cakewalk is next.
+  Other DAWs
+            Mixology tells you every fader move (Auto Mix and Balance list them with the exact dB) and you set
+            the faders.
 
-  New in this beta: the FL Studio and Ableton bridges. If yours doesn't connect, open Mixology's Bridge tab,
-  press Copy log and send us what it says.
+  New in this beta: the FL Studio, Ableton, Logic and Cakewalk bridges. If yours doesn't connect, or a fader
+  lands on another dB than Mixology says, open Mixology's Bridge tab, press Copy log and send us what it says
+  (with a screenshot of the DAW's fader).
 
 
 WHAT WE'D LOVE TO HEAR

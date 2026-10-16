@@ -101,7 +101,8 @@ const isMac = /Mac/i.test(navigator.platform || navigator.userAgent || "");
 
 // The bridge's one-time setup in each DAW that has one (the Sonicology installer puts every script in place).
 function setupSteps(daw) {
-  const ports = isMac
+  const mac = daw === "logic" ? true : daw === "cakewalk" ? false : isMac;   // Logic runs on a Mac only, Cakewalk on Windows only
+  const ports = mac
     ? `<li>The two MIDI ports: nothing to do. On a Mac, Mixology makes <code>Mixology to Cubase</code> and <code>Cubase to Mixology</code> itself once its window has been open (the names say Cubase; they work for every DAW).</li>`
     : `<li>Install <b>loopMIDI</b> (free, by Tobias Erichsen). Add two ports named exactly <code>Mixology to Cubase</code> and <code>Cubase to Mixology</code> (the names say Cubase; they work for every DAW). Keep loopMIDI running (it can start with Windows).</li>`;
   const ol = (items) => `<ol style="margin:10px 0 4px 0;padding-left:24px">${ports}${items}</ol>`;
@@ -113,12 +114,21 @@ function setupSteps(daw) {
       <li>The Sonicology installer puts the script in ${isMac ? "<code>~/Music/Ableton/User Library/Remote Scripts/MixologyBridge</code>" : "<code>Documents\\Ableton\\User Library\\Remote Scripts\\MixologyBridge</code>"}. Restart Live after installing.</li>
       <li>In Live: <b>Settings &gt; Link, Tempo &amp; MIDI</b>. In the first free <b>Control Surface</b> row pick <b>MixologyBridge</b>, Input <code>Mixology to Cubase</code>, Output <code>Cubase to Mixology</code>.</li>
       <li>Open Mixology (on the Main track). This panel turns green. Mixology's strips are Live's tracks and return tracks.</li>`);
+  if (daw === "logic") return ol(`
+      <li>Nothing to install in Logic: Mixology acts as a <b>Mackie Control</b> (a hardware mixer controller Logic knows).</li>
+      <li>Logic often finds the Mackie Control by itself once Mixology's window has been open (this panel then turns green). If not: <b>Logic Pro &gt; Control Surfaces &gt; Setup</b>, choose <b>New &gt; Install</b>, pick <b>Mackie Designs: Mackie Control</b>, click <b>Add</b>. With the new Mackie Control selected, set its <b>Output Port</b> to <code>Cubase to Mixology</code>, then its <b>Input Port</b> to <code>Mixology to Cubase</code>.</li>
+      <li>Open Mixology (on the Stereo Out). This panel turns green. Mixology's strips are the 8 channels the Mackie Control shows; Logic shortens names to 7 letters, and Mixology matches them back to your tracks' full names (through their Mixology Links).</li>`);
+  if (daw === "cakewalk") return ol(`
+      <li>Nothing to install in Cakewalk: Mixology acts as a <b>Mackie Control</b> (a hardware mixer controller Cakewalk knows).</li>
+      <li>In Cakewalk: <b>Edit &gt; Preferences &gt; MIDI &gt; Devices</b>: tick <code>Mixology to Cubase</code> under Inputs and <code>Cubase to Mixology</code> under Outputs, then <b>Apply</b>.</li>
+      <li><b>MIDI &gt; Control Surfaces</b>: click <b>Add New Controller/Surface</b> (the star), pick <b>Mackie Control</b>, Input Port <code>Mixology to Cubase</code>, Output Port <code>Cubase to Mixology</code>, <b>OK</b>, then <b>Apply</b>.</li>
+      <li>Open Mixology (on the Master bus). This panel turns green. Mixology's strips are the 8 channels the Mackie Control shows; names are matched back to your tracks' full names (through their Mixology Links).</li>`);
   if (daw === "cubase") return ol(`
       <li>The Sonicology installer puts the Cubase script in place. Without it: copy the <code>Mixology</code> folder from the download's <code>Cubase MIDI Remote</code> folder into ${isMac ? "<code>~/Documents/Steinberg/Cubase/MIDI Remote/Driver Scripts/Local/</code>" : "<code>Documents\\Steinberg\\Cubase\\MIDI Remote\\Driver Scripts\\Local\\</code>"}.</li>
       <li>Start Cubase. In <b>Studio &gt; Studio Setup &gt; MIDI Port Setup</b>, untick <b>In 'All MIDI Inputs'</b> for both Mixology ports (so bridge messages never reach your instruments).</li>
       <li>Cubase should find "Mixology Bridge" on its own (MIDI Remote tab). If not: MIDI Remote tab &gt; <b>+</b> (Add MIDI Controller Surface) &gt; vendor Mixology, model Bridge, input <i>Mixology to Cubase</i>, output <i>Cubase to Mixology</i>.</li>
       <li>Open Mixology (on the Stereo Out). This panel turns green when it hears the script.</li>`);
-  return `<p style="margin:10px 0 4px">Mixology moves faders in Cubase, FL Studio and Ableton Live for now (Logic Pro and Cakewalk are next). In ${dawName(daw)} it lists every fader move for you (Auto Mix, Balance) with the exact dB; everything else works as usual.</p>`;
+  return `<p style="margin:10px 0 4px">Mixology moves faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk for now. In ${dawName(daw)} it lists every fader move for you (Auto Mix, Balance) with the exact dB; everything else works as usual.</p>`;
 }
 
 function bridgePanel(app, root) {
@@ -164,8 +174,9 @@ function bridgePanel(app, root) {
     const ok = b.link === "connected";
     const dot = ok ? "ok" : b.link === "waiting" ? "warn" : "bad";
     const dn = hasBridge(app.daw) ? dawName(app.daw) : "your DAW";
-    const linkText = { connected: `Connected to ${dn}`, waiting: `Ports open, waiting for the Mixology Bridge script in ${dn}`, lost: `Lost contact with ${dn}: retrying`, offline: "Not connected" }[b.link] || b.link;
-    status.innerHTML = `<div><span class="status-dot ${dot}"></span><b>${linkText}</b>${ok ? ` <span class="dim">(script v${b.script})</span>` : ""}</div>
+    const surface = b.via === "mcu";
+    const linkText = { connected: `Connected to ${dn}`, waiting: surface ? `Ports open, waiting for ${dn} to talk to its Mackie Control (Mixology)` : `Ports open, waiting for the Mixology Bridge script in ${dn}`, lost: `Lost contact with ${dn}: retrying`, offline: "Not connected" }[b.link] || b.link;
+    status.innerHTML = `<div><span class="status-dot ${dot}"></span><b>${linkText}</b>${ok ? ` <span class="dim">(${surface ? "as its Mackie Control" : `script v${b.script}`})</span>` : ""}</div>
       <div class="dim" style="font-size:17px">Ports: <code>${b.toCubase}</code> (Mixology → ${dn}), <code>${b.fromCubase}</code> (${dn} → Mixology)</div>
       ${b.portProblem ? `<div style="color:var(--amber);font-size:17px">${b.portProblem}</div>` : ""}`;
     if (!ok) setup.open = true;

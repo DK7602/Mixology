@@ -122,6 +122,10 @@ namespace mixology
         explicit BridgeSession (std::uint16_t nonce = 1);
 
         // ---- transport -------------------------------------------------------------------------
+        /** The DAW on the other side, for the messages ("Not connected to FL Studio."); `surface` when Mixology is
+            its Mackie Control surface (Logic Pro, Cakewalk) rather than talking to a bridge script. */
+        void setDaw (const std::string& label, bool surface) { dawLabel = label.empty() ? "your DAW" : label; dawSurface = surface; }
+        const std::string& dawName() const { return dawLabel; }
         void setPortsOpen (bool open, double now, const std::string& detail = {});
         void receive (const std::uint8_t* data, std::size_t size, double now);
         void tick (double now);
@@ -369,6 +373,10 @@ namespace mixology
         FaderLaw law;
 
         Link linkState = Link::offline;
+
+        std::string dawLabel = "Cubase";
+
+        bool dawSurface = false;
         int remoteVersion = 0;
         double lastHeard = 0.0, lastHelloSent = -1.0e9, lastPingSent = -1.0e9;
         std::uint16_t sessionNonce = 1, tokenCounter = 0;

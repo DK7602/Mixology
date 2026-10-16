@@ -7,6 +7,7 @@ add_library(mixology_dsp STATIC
     src/SpaceFx.cpp
     src/BridgeProtocol.cpp
     src/BridgeSession.cpp
+    src/McuBridge.cpp
     src/FaderLaw.cpp
     src/Fft.cpp
     src/LinkRegistry.cpp

@@ -692,9 +692,10 @@ export function buildTracks(root, app) {
   function render(b) {
     const connected = b && b.link === "connected";
     const slots = (b && b.slots) || [];
+    const dawShown = hasBridge(app.daw) ? dawName(app.daw) : "your DAW";
     status.innerHTML = connected
-      ? `<span class="status-dot ok"></span>Cubase connected <span class="dim">(Bridge v${b.script})</span>`
-      : `<span class="status-dot ${b && b.link === "waiting" ? "warn" : "bad"}"></span>${b && b.link === "waiting" ? "Waiting for Cubase..." : b && b.link === "lost" ? "Lost contact with Cubase" : "Not connected to Cubase"}`;
+      ? `<span class="status-dot ok"></span>${dawShown} connected <span class="dim">(${b.via === "mcu" ? "Mackie Control" : `Bridge v${b.script}`})</span>`
+      : `<span class="status-dot ${b && b.link === "waiting" ? "warn" : "bad"}"></span>${b && b.link === "waiting" ? `Waiting for ${dawShown}...` : b && b.link === "lost" ? `Lost contact with ${dawShown}` : `Not connected to ${dawShown}`}`;
     updateScroll(b);
     const changed = (b && b.changedCount) || 0;
     restoreBtn.textContent = changed ? `↺ Restore (${changed})` : "↺ Restore";

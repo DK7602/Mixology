@@ -3,7 +3,7 @@
 Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list all three are under Sonicology.
 
-Manual for version 0.18.0 (the interface, live meters, the faders in Cubase, FL Studio and Ableton Live, Mixology Link, Analyze Mix, the smart
+Manual for version 0.19.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -31,7 +31,8 @@ fix):
 | Stereo page: vectorscope and correlation | Live |
 | Master page: loudness history, hand-off check for Masterology | Live |
 | Tracks page: your real Cubase channels (names, faders, pan, mute, solo), 12 at a time | Live, both ways, through the Cubase bridge |
-| The same in FL Studio (mixer inserts) and Ableton Live (tracks and return tracks) | New: built and tested against a simulator, not yet in the real programs |
+| The same in FL Studio (mixer inserts) and Ableton Live (tracks and return tracks) | Built and tested against a simulator, not yet in the real programs |
+| The same in Logic Pro and Cakewalk, with Mixology as their Mackie Control (8 channels at a time) | New: built and tested against a simulator, not yet in the real programs |
 | Mixology Link on a track: its level on the Tracks page, a Trim, the Assist EQ | Live |
 | Analyze Mix and the Mix Assistant's advice; track roles; the analyzer's track colours | Live |
 | Auto Mix, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match | Live |
@@ -71,9 +72,9 @@ another if it got it wrong. Voxology and Masterology share it: pick it in any of
 newest choice wins, also after you reopen the project). BandLab: pick **Cakewalk** (BandLab's desktop DAW for
 Windows). BandLab's web studio (in the browser or the app) can't load plug-ins, so the three can't run there.
 
-**Moving faders works in Cubase, FL Studio and Ableton Live.** Mixology moves their faders through a small bridge
-script in the DAW (see "The DAW bridge" below); the Bridge tab in Settings is named after your DAW. In
-another DAW (Logic Pro and Cakewalk are next), Analyze Mix, the Mix Assistant, Mixology Link and every tool's EQ, compression, space and the mix's tone
+**Moving faders works in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk.** Mixology moves their faders
+through a small bridge script in the DAW, or (Logic Pro, Cakewalk) as the DAW's Mackie Control surface (see "The DAW
+bridge" below); the Bridge tab in Settings is named after your DAW. In another DAW, Analyze Mix, the Mix Assistant, Mixology Link and every tool's EQ, compression, space and the mix's tone
 work as usual; the Tracks page and the fader and pan moves don't: Auto Mix and Balance list those moves for you to set
 by hand (untick their rows to apply the rest). A level and pan control inside each Mixology Link, so this works in any
 DAW, is planned (docs/PLAN.md, "Link Mix mode").
@@ -113,7 +114,8 @@ Knobs: drag up / down (hold Shift for fine steps), scroll, or use the arrow keys
 
 Mixology moves the real mixer faders through a small script inside your DAW (Cubase's MIDI Remote, an FL Studio
 controller script, an Ableton Live control surface) and two virtual MIDI ports. The Sonicology installer puts the
-script for each DAW in place. Settings (gear) > **Bridge** (named after your DAW: "Cubase Bridge", "FL Studio
+script for each DAW in place. Logic Pro and Cakewalk need no script: Mixology acts as a **Mackie Control** (a hardware
+mixer controller both know), on the same two ports. Settings (gear) > **Bridge** (named after your DAW: "Cubase Bridge", "FL Studio
 Bridge", "Ableton Live Bridge") shows these steps for the DAW you picked.
 
 **The two ports (every DAW).**
@@ -160,6 +162,32 @@ counts). Unused "Insert 37"s are left out, and the Master is never moved.
 Mixology's strips are Live's tracks, then its return tracks, in mixer order; the Main track is never moved. Live
 shows dB with one decimal, so an exact value you type lands within 0.05 dB.
 
+### Logic Pro (Mac)
+
+1. Nothing to install in Logic. Open Mixology's window once (on the Stereo Out): it makes the two ports.
+2. Logic often finds the Mackie Control by itself (Settings > Logic Pro Bridge turns green). If not: **Logic Pro >
+   Control Surfaces > Setup**, **New > Install**, pick **Mackie Designs: Mackie Control**, **Add**. With it selected,
+   set **Output Port** to `Cubase to Mixology`, then **Input Port** to `Mixology to Cubase`.
+3. Mixology's strips are the 8 channels the Mackie Control shows (Logic's tracks, in order). Logic shortens names to
+   6 letters ("LdVcl"): Mixology matches them back to your tracks' full names through their Mixology Links. A short
+   name that fits two of your tracks stays short (a guess could move the wrong fader): rename one so they differ.
+
+### Cakewalk (Windows)
+
+1. Nothing to install in Cakewalk (the two loopMIDI ports above are all it needs).
+2. **Edit > Preferences > MIDI > Devices**: tick `Mixology to Cubase` under Inputs and `Cubase to Mixology` under
+   Outputs, **Apply**.
+3. **MIDI > Control Surfaces**: **Add New Controller/Surface** (the star), pick **Mackie Control**, Input Port
+   `Mixology to Cubase`, Output Port `Cubase to Mixology`, **OK**, **Apply**.
+4. Open Mixology (on the Master bus). **Settings > Cakewalk Bridge** turns green. The strips are the 8 tracks the
+   Mackie Control shows; names are matched back to your tracks' full names as in Logic.
+
+**How exact are Logic and Cakewalk?** A Mackie Control sees fader positions, not dB. Mixology knows where each DAW puts
+0 dB and +6 dB, and learns the rest of the curve whenever the DAW's display shows a fader's dB (Logic does when you
+edit a volume). Until then a move can be off by a fraction of a dB (more far below 0 dB): this is what we're testing.
+Cakewalk's faders have 1024 steps, so a move lands within about 0.1 dB of what it aims for. Pans move in the DAW's
+own steps (Logic: -64 to +63).
+
 ## Moving faders
 
 Every strip on the Tracks page moves its real mixer channel (Cubase's MixConsole, FL Studio's mixer, Live's tracks):
@@ -191,7 +219,8 @@ Safety rules (always on):
 - Every move names the channel you were looking at. If the bank moved or tracks were reordered or renamed in
   between, the move is refused (in Mixology, and again by the bridge script) instead of landing on another channel.
 - A channel with automation **Write (W)** on is never moved (red **W** on the strip), so no automation gets
-  recorded by accident (Cubase; FL Studio and Live don't tell the script). With **Read (R)** on (green **R**) you get a warning: if that channel has volume
+  recorded by accident (Cubase; FL Studio, Live, Logic and Cakewalk don't tell Mixology: keep Mixology's tracks in
+  Read or Off while it moves faders). With **Read (R)** on (green **R**) you get a warning: if that channel has volume
   automation, playback moves the fader back.
 - The Stereo Out (FL Studio's Master, Live's Main) is never part of the bank.
 - Two channels with the same name: both can be moved, but Restore and Mixology Link can't tell them apart
@@ -631,6 +660,13 @@ If Cubase crackles or the performance meter peaks:
   effect on it (Mixology Link counts), then press Refresh.
 - **Ableton Live: MixologyBridge isn't in the Control Surface list**: the folder must be
   `User Library/Remote Scripts/MixologyBridge` (run the installer again), then restart Live.
+- **Logic: the Bridge tab keeps waiting**: check Logic Pro > Control Surfaces > Setup has a Mackie Control with
+  Output `Cubase to Mixology` and Input `Mixology to Cubase` (set the output first). Then press **Reconnect**.
+- **Cakewalk: the Bridge tab keeps waiting**: both ports must be ticked in Preferences > MIDI > Devices (Inputs and
+  Outputs), and the Mackie Control must use them (MIDI > Control Surfaces). Open a project: Cakewalk's Mackie Control
+  only talks while one is loaded. Then press **Reconnect**.
+- **Logic / Cakewalk: a strip shows a short name ("LdVcl")**: Mixology has no Mixology Link with a name that fits it,
+  or two of your tracks fit it. Insert Mixology Link on the track, or rename one of the two.
 - **Mac: the two Mixology ports aren't in your DAW's MIDI list**: Mixology makes them when its window first opens.
   Open Mixology, then restart the DAW (or refresh its MIDI devices). Prefer fixed ports? Make two IAC Driver buses
   (Audio MIDI Setup > IAC Driver) named exactly `Mixology to Cubase` and `Cubase to Mixology`: Mixology uses those.

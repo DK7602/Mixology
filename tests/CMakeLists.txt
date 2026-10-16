@@ -7,6 +7,7 @@ FetchContent_MakeAvailable(Catch2)
 
 add_executable(mixology_tests
     test_bridge.cpp
+    test_mcu.cpp
     test_link.cpp
     test_analysis.cpp
     test_proc.cpp

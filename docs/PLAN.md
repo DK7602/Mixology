@@ -193,6 +193,18 @@ tracks). Each DAW's folder keeps a copy of the core (ctest checks they're identi
 the real scripts against simulated FL Studio and Live mixers and the real Mixology session (214 checks, in ctest).
 To check with the testers: does FL / Live tell Mixology Link its track name (pairing), FL's dB readout, Live's fader
 curve (Mixology learns it), and on a Mac whether the DAW needs a MIDI refresh after Mixology makes its ports.
+v0.19.0: faders in Logic Pro and Cakewalk, with Mixology as their Mackie Control (dsp/include/mixology/McuBridge.h,
+no script in the DAW). The translator answers the session as a bridge script would (8 strips) and speaks Mackie
+Control on the same two ports. What it relies on, from Cakewalk's published surface source (Cakewalk-Control-Surface-
+SDK, Surfaces/MackieControl) and captures of Logic 12: Logic's handshake (device query 00 -> 01, 02 -> 03; buttons
+ignored ~1.5 s after), 0 dB at fader 12443; Cakewalk's wake-up (01: it starts over and resends everything), 10-bit
+faders, 0 dB at 101/127, an accelerating knob (n steps = 0.005 (3n - 2) of the range), the knob's value shown in the
+name's place for ~1.5 s, labels under the names until NAME/VALUE. Names: 6 letters, expanded to the Links' full
+names only when exactly one fits (a guess could move the wrong fader). The fader curve between 0 dB and the ends is
+a guess (dB = k log10 (pos / zero)), corrected by every dB the display shows for a still fader (Logic's volume help
+tag); learned points are saved per DAW. To check with the testers: the curves (set -6 dB, read the DAW's fader), the
+pan texts, Logic finding the surface by itself.
+Also: the session's messages name the DAW in use ("Not connected to FL Studio."), not always Cubase.
 Still to come in M6: code signing (later).
 
 ### Built in v0.11.0 - Auto Analyze (asked 2026-10-15: "once an analyze mix has been run should have an auto analyze option")
@@ -217,8 +229,7 @@ Still to come in M6: code signing (later).
 - Needs push access to the Voxology and Masterology repositories from this session (or their own threads).
 
 ### Other DAWs (asked 2026-10-15: "add that to the plan for later"; FL Studio and Ableton built in v0.18.0)
-Next: Logic Pro and Cakewalk Sonar, through Mackie Control (both take a Mackie Control surface on the two ports:
-Mixology would speak it itself, 8 channels a bank, fader positions without dB text, so the fader law has to be learned).
+Logic Pro and Cakewalk: built in v0.19.0 (Mackie Control).
 Before v0.18.0 everything except the Tracks page and Auto Mix's fader / pan moves works in any VST3 host (Studio One, Reaper,
 FL Studio, Ableton Live, Bitwig...): Mixology on the master, Mixology Link, Analyze Mix, Polish's processing, Voxology,
 Masterology. The fader and pan moves need the Cubase MIDI Remote script (Nuendo has the same system: probably works,

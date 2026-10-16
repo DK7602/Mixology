@@ -109,7 +109,7 @@
         linkStatus: c.link ? "matched" : "none", trim: c.trim, linkAudio: true, stereoPanner: c.name === "Keys", voxology: VOXOLOGY[c.name] };
     });
     return {
-      enabled: true, link: "connected", portProblem: "", script: 3, toCubase: "Mixology to Cubase", fromCubase: "Cubase to Mixology", slots,
+      enabled: true, link: "connected", portProblem: "", script: 3, via: ["logic", "cakewalk"].includes(MOCK_DAW.key) ? "mcu" : "script", toCubase: "Mixology to Cubase", fromCubase: "Cubase to Mixology", slots,
       changedCount: chans.filter(isChanged).length, restorePoints: Object.keys(B.restore).length, scanning: B.an.state === "reading",
       analysis: { state: B.an.state, seconds: B.an.seconds, enough: 20, max: 60, playing: B.an.playing, heard: chans.filter((c) => c.link).length, report: B.an.report, analyzed: B.an.analyzed || 0, fromProject: !!B.an.fromProject, auto: { ...B.an.auto, seconds: Math.floor(B.an.auto.seconds), pause: !B.an.auto.on ? "off" : B.an.playing ? "" : "stopped" } },
       apply: { ...B.apply },

@@ -6,6 +6,7 @@
 #include "mixology/BridgeSession.h"
 #include "mixology/History.h"
 #include "mixology/LinkRegistry.h"
+#include "mixology/McuBridge.h"
 #include "mixology/AutoAnalyze.h"
 #include "mixology/MixAnalysis.h"
 #include "mixology/MixPlanner.h"
@@ -17,6 +18,7 @@
 #include <juce_events/juce_events.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include <atomic>
 #include <map>
 #include <memory>
 #include <optional>
@@ -46,6 +48,10 @@ public:
     bool isEnabled() const { return enabled; }
 
     mixology::BridgeSession& session() { return bridge; }
+
+    /** The DAW Mixology works in (the suite's DAW key: "cubase", "logic", ...). Logic Pro and Cakewalk take
+        Mixology as a Mackie Control surface (mixology::mcu::McuBridge); the others run a bridge script. */
+    void setDaw (const std::string& key);
 
     /** Mixology's own Full Mix processing, for Polish / Auto Mix (the plug-in on the Stereo Out registers itself;
         message thread). */
@@ -368,6 +374,15 @@ private:
 
     juce::CriticalSection inboxLock;
     std::vector<std::vector<std::uint8_t>> inbox;
+
+    // Logic Pro / Cakewalk: Mixology is the DAW's Mackie Control surface; the session talks to this translator.
+    std::string dawKey;
+    std::unique_ptr<mixology::mcu::McuBridge> mcu;
+    std::atomic<bool> mcuMode { false };   // read on the MIDI thread: pass every message, not only SysEx
+    std::vector<std::string> mcuNames;
+    std::size_t mcuLawSaved = 0;
+    void sendToDaw (const std::vector<std::uint8_t>&);
+    void saveMcuLaw();
 
     std::unique_ptr<juce::PropertiesFile> settingsFile;
     std::size_t lawPointsSaved = 0;

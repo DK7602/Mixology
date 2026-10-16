@@ -2,6 +2,7 @@
 
 #include "mixology/Pack.h"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <regex>
@@ -178,9 +179,70 @@ BridgeHub::BridgeHub()
     lawPointsSaved = bridge.faderLaw().size();
 }
 
+void BridgeHub::sendToDaw (const std::vector<std::uint8_t>& m)
+{
+    if (toCubase == nullptr || m.empty()) return;
+    if (m.front() == 0xF0)
+    {
+        if (m.size() >= 2)
+            toCubase->sendMessageNow (juce::MidiMessage::createSysExMessage (m.data() + 1, static_cast<int> (m.size()) - 2));
+        return;
+    }
+    toCubase->sendMessageNow (juce::MidiMessage (m.data(), static_cast<int> (m.size())));
+}
+
+void BridgeHub::saveMcuLaw()
+{
+    if (mcu == nullptr) return;
+    mcuLawSaved = mcu->law().learned();
+    settingsFile->setValue ("mcuLaw." + juce::String (dawKey), juce::String (mcu->law().serialise()));
+    settingsFile->saveIfNeeded();
+}
+
+void BridgeHub::setDaw (const std::string& key)
+{
+    if (key == dawKey) return;
+    using mixology::mcu::Dialect;
+    const bool wasMcu = mcu != nullptr;
+    const auto oldDialect = wasMcu ? mcu->dialect() : Dialect::logic;
+    saveMcuLaw();
+    dawKey = key;
+    const bool known = ! key.empty() && key != "other";
+    bridge.setDaw (known ? suite::dawName (key) : std::string ("your DAW"), key == "logic" || key == "cakewalk");
+    const bool wantMcu = key == "logic" || key == "cakewalk";
+    const auto dialect = key == "logic" ? Dialect::logic : Dialect::cakewalk;
+    if (wantMcu == wasMcu && (! wantMcu || dialect == oldDialect)) return;
+
+    const double t = now();
+    if (wantMcu)
+    {
+        mcu = std::make_unique<mixology::mcu::McuBridge> (dialect);
+        mcu->law().deserialise (settingsFile->getValue ("mcuLaw." + juce::String (key)).toStdString());
+        mcuLawSaved = mcu->law().learned();
+        mcu->setTrackNames (mcuNames);
+        mcu->reset (t);
+    }
+    else
+    {
+        mcu.reset();
+    }
+    mcuMode.store (mcu != nullptr);
+    {
+        const juce::ScopedLock sl (inboxLock);
+        inbox.clear();
+    }
+    // Start the conversation again: the other side is now a script or a surface.
+    if (toCubase != nullptr && fromCubase != nullptr)
+    {
+        bridge.setPortsOpen (false, t, "switching to " + std::string (mcu != nullptr ? mcu->dawName() : "a bridge script"));
+        bridge.setPortsOpen (true, t, mcu != nullptr ? std::string (mcu->dawName()) + " Mackie Control" : "bridge script");
+    }
+}
+
 BridgeHub::~BridgeHub()
 {
     stopTimer();
+    saveMcuLaw();
     closePorts ("Mixology closed");
     settingsFile->setValue ("faderLaw", juce::String (bridge.faderLaw().serialise()));
     settingsFile->saveIfNeeded();
@@ -217,6 +279,7 @@ void BridgeHub::openPorts()
         {
             fromCubase->start();
             portProblem.clear();
+            if (mcu != nullptr) mcu->reset (now());
             bridge.setPortsOpen (true, now(), "Mixology's own ports (macOS)");
             return;
         }
@@ -253,6 +316,7 @@ void BridgeHub::openPorts()
         {
             fromCubase->start();
             portProblem.clear();
+            if (mcu != nullptr) mcu->reset (now());
             bridge.setPortsOpen (true, now(), (outInfo.name + " / " + inInfo.name).toStdString());
             return;
         }
@@ -276,7 +340,7 @@ void BridgeHub::closePorts (const juce::String& why)
 
 void BridgeHub::handleIncomingMidiMessage (juce::MidiInput*, const juce::MidiMessage& message)
 {
-    if (! message.isSysEx()) return;
+    if (! message.isSysEx() && ! mcuMode.load()) return;   // a Mackie Control DAW also sends faders, lights, knob rings
     const auto* raw = message.getRawData();
     const auto size = static_cast<std::size_t> (message.getRawDataSize());
     const juce::ScopedLock sl (inboxLock);
@@ -366,8 +430,22 @@ void BridgeHub::timerCallback()
         const juce::ScopedLock sl (inboxLock);
         received.swap (inbox);
     }
-    for (const auto& m : received)
-        bridge.receive (m.data(), m.size(), t);
+    if (mcu != nullptr)
+    {
+        // Logic Pro / Cakewalk: the DAW speaks Mackie Control to the translator, the translator the bridge
+        // protocol to the session.
+        for (const auto& m : received)
+            mcu->fromDaw (m.data(), m.size(), t);
+        mcu->tick (t);
+        for (const auto& m : mcu->takeForMixology())
+            bridge.receive (m.data(), m.size(), t);
+    }
+    else
+    {
+        for (const auto& m : received)
+            if (! m.empty() && m.front() == 0xF0)
+                bridge.receive (m.data(), m.size(), t);
+    }
 
     bridge.tick (t);
     if (bridge.planProgress().serial != seenPlanSerial)
@@ -394,8 +472,20 @@ void BridgeHub::timerCallback()
     }
 
     for (const auto& m : bridge.takeOutgoing())
-        if (toCubase != nullptr)
-            toCubase->sendMessageNow (juce::MidiMessage::createSysExMessage (m.data() + 1, static_cast<int> (m.size()) - 2));
+    {
+        if (mcu != nullptr) mcu->fromMixology (m, t);
+        else sendToDaw (m);
+    }
+    if (mcu != nullptr)
+    {
+        for (const auto& m : mcu->takeForDaw())
+            sendToDaw (m);
+        if (mcu->law().learned() != mcuLawSaved && t - lastLawSave > 5.0)
+        {
+            lastLawSave = t;
+            saveMcuLaw();
+        }
+    }
 
     // Save the learned fader curve now and then (it is the same for every project).
     if (bridge.faderLaw().size() != lawPointsSaved && t - lastLawSave > 5.0)
@@ -485,6 +575,19 @@ void BridgeHub::updateLinks()
     registry.mainHeartbeat (ms);
 
     const auto links = registry.links (ms);
+    if (mcu != nullptr)
+    {
+        // The display shows 7 characters: the Links' full names let the translator expand them.
+        std::vector<std::string> names;
+        for (const auto& l : links)
+            if (l.identity.hasName && ! l.identity.name.empty()) names.push_back (l.identity.name);
+        std::sort (names.begin(), names.end());
+        if (names != mcuNames)
+        {
+            mcuNames = names;
+            mcu->setTrackNames (mcuNames);
+        }
+    }
     std::vector<ChannelKey> keys;
     for (int i = 0; i < bridge.slotCount(); ++i)
     {
@@ -1563,6 +1666,8 @@ juce::var BridgeHub::getState (bool includeLog)
     o->setProperty ("link", mixology::toString (bridge.link()));
     o->setProperty ("portProblem", portProblem);
     o->setProperty ("script", bridge.scriptVersion());
+    o->setProperty ("via", mcu != nullptr ? "mcu" : "script");   // Logic Pro / Cakewalk: Mixology is their Mackie Control
+    o->setProperty ("dawSeen", mcu != nullptr && mcu->dawSeen());
     o->setProperty ("toCubase", kToCubase);
     o->setProperty ("fromCubase", kFromCubase);
 
@@ -2402,7 +2507,7 @@ mixology::BridgeSession::Result BridgeHub::applyCurrentPlan (const juce::var& pi
     ++applyVersion;
 
     std::vector<std::string> parts;
-    if (! steps.empty()) parts.push_back ("moving " + std::to_string (steps.size()) + " channel" + (steps.size() == 1 ? "" : "s") + " in Cubase");
+    if (! steps.empty()) parts.push_back ("moving " + std::to_string (steps.size()) + " channel" + (steps.size() == 1 ? "" : "s") + " in {daw}");
     if (! eq.empty()) parts.push_back ("Assist EQ on " + std::to_string (eq.size()) + " track" + (eq.size() == 1 ? "" : "s"));
     if (! procTracks.empty()) parts.push_back ("processing on " + std::to_string (procTracks.size()) + (procTracks.size() == 1 ? " track" : " tracks"));
     std::string joined;
@@ -2684,7 +2789,7 @@ mixology::BridgeSession::Result BridgeHub::playHistory (const std::vector<mixolo
     }
 
     info = what + ".";
-    if (! steps.empty()) info += " Moving " + std::to_string (steps.size()) + " channel" + (steps.size() == 1 ? "" : "s") + " in Cubase.";
+    if (! steps.empty()) info += " Moving " + std::to_string (steps.size()) + " channel" + (steps.size() == 1 ? "" : "s") + " in {daw}.";
     if (! missing.empty())
     {
         std::string names;

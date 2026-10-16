@@ -66,6 +66,7 @@ void MixologyAudioProcessor::timerCallback()
         handoffCountdown = 4;
         syncStyle();
         publishHandoff();
+        bridgeHub->setDaw (dawNow().key);   // Logic Pro / Cakewalk: Mixology is their Mackie Control surface
     }
 }
 
