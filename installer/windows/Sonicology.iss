@@ -35,6 +35,9 @@ UninstallDisplayName=Sonicology
 Compression=lzma2/max
 SolidCompression=yes
 
+[Messages]
+SelectComponentsLabel2=Select the components you want to install; clear the components you do not want to install. Click Next when you are ready to continue.%n%nLogic Pro and Cakewalk need no script: Mixology works as their Mackie Control (the Read Me says how).
+
 [Types]
 Name: "full"; Description: "Everything (recommended)"
 Name: "custom"; Description: "Pick what to install"; Flags: iscustom
