@@ -15,17 +15,24 @@ mkdir -p "$OUT" "$WORK/pkgs" "$WORK/resources"
 component () {
   local id="$1" root="$2" scripts="${3:-}"
   pkgbuild --analyze --root "$root" "$WORK/$id.plist" >/dev/null
-  /usr/libexec/PlistBuddy -c "Print" "$WORK/$id.plist" >/dev/null
-  local n; n=$(/usr/libexec/PlistBuddy -c "Print" "$WORK/$id.plist" | grep -c "BundleIsRelocatable" || true)
-  for ((i = 0; i < n; i++)); do /usr/libexec/PlistBuddy -c "Set :$i:BundleIsRelocatable false" "$WORK/$id.plist"; done
-  local extra=()
-  [ -n "$scripts" ] && extra=(--scripts "$scripts")
-  pkgbuild --root "$root" --component-plist "$WORK/$id.plist" --identifier "com.sonicology.$id" --version "$VERSION" \
-           --install-location / "${extra[@]}" "$WORK/pkgs/$id.pkg"
+  local i=0
+  while /usr/libexec/PlistBuddy -c "Print :$i" "$WORK/$id.plist" >/dev/null 2>&1; do
+    /usr/libexec/PlistBuddy -c "Set :$i:BundleIsRelocatable false" "$WORK/$id.plist"
+    i=$((i + 1))
+  done
+  # macOS's bash 3.2 calls an empty array unbound under set -u: two calls instead
+  if [ -n "$scripts" ]; then
+    pkgbuild --root "$root" --component-plist "$WORK/$id.plist" --identifier "com.sonicology.$id" --version "$VERSION" \
+             --install-location / --scripts "$scripts" "$WORK/pkgs/$id.pkg"
+  else
+    pkgbuild --root "$root" --component-plist "$WORK/$id.plist" --identifier "com.sonicology.$id" --version "$VERSION" \
+             --install-location / "$WORK/pkgs/$id.pkg"
+  fi
 }
 
 plugins () {   # the plug-ins of one product, signed ad hoc, laid out as they install
-  local name="$1" id="$2" root="$WORK/root-$id"
+  local name="$1" id="$2"
+  local root="$WORK/root-$id"   # its own line: "local" expands every word before it sets any
   mkdir -p "$root/Library/Audio/Plug-Ins/VST3" "$root/Library/Audio/Plug-Ins/Components"
   cp -R "$STAGE/$name/VST3/"*.vst3 "$root/Library/Audio/Plug-Ins/VST3/"
   if compgen -G "$STAGE/$name/AU/*.component" >/dev/null; then cp -R "$STAGE/$name/AU/"*.component "$root/Library/Audio/Plug-Ins/Components/"; fi

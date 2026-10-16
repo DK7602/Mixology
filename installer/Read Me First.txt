@@ -21,6 +21,7 @@ WHAT THE INSTALLER PUTS WHERE
               FL Studio   ~/Documents/Image-Line/FL Studio/Settings/Hardware/Mixology Bridge
               Ableton     ~/Music/Ableton/User Library/Remote Scripts/MixologyBridge
             this Read Me and the manuals in /Applications/Sonicology
+            (a script missing from your folder: copy it from /Library/Application Support/Sonicology)
   All three are listed under "Sonicology" in your DAW's plug-in list. Each plug-in also has its full manual
   inside (the ? button).
 
