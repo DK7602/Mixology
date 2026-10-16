@@ -1,7 +1,9 @@
 #include "mixology/Presets.h"
 
 #include <algorithm>
-#include <charconv>
+#include <cctype>
+#include <iomanip>
+#include <locale>
 #include <cmath>
 #include <cstdio>
 #include <sstream>
@@ -44,18 +46,34 @@ namespace mixology::presets
             return s.substr (a, b - a + 1);
         }
 
-        std::string number (float v)
-        {
-            char buf[32];
-            const auto r = std::to_chars (buf, buf + sizeof (buf), v);
-            return std::string (buf, r.ptr);
-        }
-
+        // Numbers in the preset file: always with a '.' whatever the computer's language, the shortest text that
+        // reads back as the same value (std::to_chars for floats needs macOS 13.3, so streams in the "C" locale).
         bool parseNumber (const std::string& s, float& v)
         {
-            const auto* end = s.data() + s.size();
-            const auto r = std::from_chars (s.data(), end, v);
-            return r.ec == std::errc() && r.ptr == end && std::isfinite (v);
+            if (s.empty() || std::isspace (static_cast<unsigned char> (s.front()))) return false;
+            std::istringstream in (s);
+            in.imbue (std::locale::classic());
+            float x = 0.0f;
+            in >> x;
+            if (in.fail() || ! in.eof() || ! std::isfinite (x)) return false;
+            v = x;
+            return true;
+        }
+
+        std::string number (float v)
+        {
+            for (int digits = 1; digits <= 9; ++digits)
+            {
+                std::ostringstream out;
+                out.imbue (std::locale::classic());
+                out << std::setprecision (digits) << v;
+                float back = 0.0f;
+                if (parseNumber (out.str(), back) && back == v) return out.str();
+            }
+            std::ostringstream out;
+            out.imbue (std::locale::classic());
+            out << std::setprecision (9) << v;
+            return out.str();
         }
     }
 
