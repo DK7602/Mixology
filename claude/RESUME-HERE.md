@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-17, v0.20.0)
+# Mixology: resume here (updated 2026-10-17, v0.21.0)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,20 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## v0.21.0: suite link 4, with the Voxology audit (2026-10-17, session "Mixology audit")
+- Released together with Voxology 0.52.0 and Masterology 0.29.3 (kLayout 4: older ones don't see these).
+- SuiteLink layout 4 (Mixology is the master copy; same files in all three): VocalSlot gets Mixology's answer
+  (VocalAck: matched / noLink / noName / sharedName / notVocal / beatTrack + bits balancesLevel, heard + vocalDb /
+  targetDb), tied to that claim of the slot (generation) and that track name (hash), alive 2 s. KeySlot: the beat key
+  (Voxology BEAT mode -> Honey Tune + every Voxology; was a process environment variable, not thread-safe on macOS).
+  lockStyle has the release fence after its CAS. Tests in test_suite.cpp.
+- BridgeHub::updateSuite answers every vocal; suiteTick() runs it at 4 Hz from the owner's feedAnalysis while the hub
+  isn't enabled (no editor opened yet / no bridge). Two Voxologys on one track: beat only if both, max recorded peak.
+- MixPlanner: fix-first says press AUTO-EDIT in Voxology again after lowering the clip gain; Polish notes Voxology's
+  Tone EQ (VocalInfo eq flag).
+- CI: auval for Mixology + Link in build.yml's Mac job; sonicology.yml checks all five AUs (continue-on-error);
+  build-pkg.sh restores the executable bit on Contents/MacOS (GitHub zips drop it).
 
 ## v0.20.0: the full audit (2026-10-17, session "Mixology audit")
 - User: "run a full audit on Mixology: bugs, misses, how it works with Voxology and Masterology, top-tier
