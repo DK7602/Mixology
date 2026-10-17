@@ -5,6 +5,7 @@ import { el, box, icon, fmt, clamp, Knob, Meter, select, graph, freqToX, xToFreq
 import { knobFor, eqBand, magnitudeDb, EQ_SHAPES, MODULE_NAMES } from "./proc.js";
 import { createScene } from "./space_scene.js";
 import { dawName, say } from "./daws.js";
+import { guessRole } from "./roles.js";
 
 const SR = 48000;
 function biquadDb(type, f0, gainDb, q, f) {
@@ -550,8 +551,10 @@ const MODE_HELP = {
 const SCENE_PARAMS = { reverb: ["pre", "decay", "damping", "width", "mix"], delay: ["time", "feedback", "tone", "pingpong", "mix"],
   chorus: ["rate", "depth", "delay", "width", "mix"], phaser: ["rate", "depth", "feedback", "centre", "mix"], hall: ["pre", "decay", "size", "damping", "mix"],
   room: ["pre", "decay", "size", "early", "mix"], special: ["shift", "feedback", "motion", "tone", "mix"] };
-// Cubase names FX channels "FX 1-<plug-in>"; names like these are FX channels (returns) too.
-const looksLikeFxChannel = (name) => /^fx\s*\d|\b(verb|reverb|delay|echo|return|aux|send|space)\b/i.test(name || "");
+// Cubase names FX channels "FX 1-<plug-in>"; names like these are FX channels (returns) too, unless the name says it
+// plays something ("Space Pad", "Aux Keys": an instrument, not a return).
+const looksLikeFxChannel = (name) => /^fx\s*\d|\b(verbs?|reverbs?|delays?|echo|returns?|aux|sends?|plate|hall)\b/i.test(name || "")
+  && ["fx", "other"].includes(guessRole(name || "") || "other");
 
 export function buildSpace(root, app) {
   const proc = app.proc;

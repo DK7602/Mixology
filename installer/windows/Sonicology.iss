@@ -57,6 +57,11 @@ Source: "{#Stage}\Masterology\VST3\*"; DestDir: "{commoncf64}\VST3"; Flags: recu
 Source: "{#Stage}\Mixology\Cubase MIDI Remote\Mixology\*"; DestDir: "{userdocs}\Steinberg\Cubase\MIDI Remote\Driver Scripts\Local\Mixology"; Flags: recursesubdirs createallsubdirs ignoreversion; Components: cubase
 Source: "{#Stage}\Mixology\FL Studio\Mixology Bridge\*"; DestDir: "{userdocs}\Image-Line\FL Studio\Settings\Hardware\Mixology Bridge"; Flags: recursesubdirs createallsubdirs ignoreversion; Components: flstudio
 Source: "{#Stage}\Mixology\Ableton\MixologyBridge\*"; DestDir: "{userdocs}\Ableton\User Library\Remote Scripts\MixologyBridge"; Flags: recursesubdirs createallsubdirs ignoreversion; Components: ableton
+; A spare copy of the scripts beside the Read Me: for a DAW whose folder isn't the usual one, or an installer run from
+; another (admin) account, whose Documents the copies above went to.
+Source: "{#Stage}\Mixology\Cubase MIDI Remote\Mixology\*"; DestDir: "{app}\Bridge scripts\Cubase\Mixology"; Flags: recursesubdirs createallsubdirs ignoreversion; Components: cubase
+Source: "{#Stage}\Mixology\FL Studio\Mixology Bridge\*"; DestDir: "{app}\Bridge scripts\FL Studio\Mixology Bridge"; Flags: recursesubdirs createallsubdirs ignoreversion; Components: flstudio
+Source: "{#Stage}\Mixology\Ableton\MixologyBridge\*"; DestDir: "{app}\Bridge scripts\Ableton\MixologyBridge"; Flags: recursesubdirs createallsubdirs ignoreversion; Components: ableton
 Source: "{#Stage}\Read Me First.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Stage}\Manuals\*"; DestDir: "{app}\Manuals"; Flags: recursesubdirs ignoreversion
 ; The header's Sonicology title, in a few sizes for the screen's scaling (used by the [Code] below, not installed)
@@ -72,7 +77,14 @@ Name: "{autoprograms}\Sonicology\Uninstall Sonicology"; Filename: "{uninstallexe
 
 [Run]
 Filename: "{app}\Read Me First.txt"; Description: "Open the Read Me"; Flags: postinstall shellexec skipifsilent
-Filename: "https://www.tobias-erichsen.de/software/loopmidi.html"; Description: "Get loopMIDI (free): Mixology needs it to move Cubase's faders"; Flags: postinstall shellexec skipifsilent unchecked
+Filename: "https://www.tobias-erichsen.de/software/loopmidi.html"; Description: "Get loopMIDI (free): Mixology needs it to move faders in Cubase, FL Studio, Live and Cakewalk"; Flags: postinstall shellexec skipifsilent unchecked
+
+[UninstallDelete]
+; FL Studio and Live leave compiled copies of the Python scripts next to them.
+Type: filesandordirs; Name: "{userdocs}\Image-Line\FL Studio\Settings\Hardware\Mixology Bridge\__pycache__"; Components: flstudio
+Type: filesandordirs; Name: "{userdocs}\Ableton\User Library\Remote Scripts\MixologyBridge\__pycache__"; Components: ableton
+Type: dirifempty; Name: "{userdocs}\Image-Line\FL Studio\Settings\Hardware\Mixology Bridge"; Components: flstudio
+Type: dirifempty; Name: "{userdocs}\Ableton\User Library\Remote Scripts\MixologyBridge"; Components: ableton
 
 [Code]
 // The header of the inner pages: dark and a little taller, with the whole Sonicology title on the right

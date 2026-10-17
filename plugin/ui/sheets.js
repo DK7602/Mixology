@@ -117,7 +117,7 @@ const isMac = /Mac/i.test(navigator.platform || navigator.userAgent || "");
 function setupSteps(daw) {
   const mac = daw === "logic" ? true : daw === "cakewalk" ? false : isMac;   // Logic runs on a Mac only, Cakewalk on Windows only
   const ports = mac
-    ? `<li>The two MIDI ports: nothing to do. On a Mac, Mixology makes <code>Mixology to Cubase</code> and <code>Cubase to Mixology</code> itself once its window has been open (the names say Cubase; they work for every DAW).</li>`
+    ? `<li>The two MIDI ports: nothing to do. On a Mac, Mixology makes <code>Mixology to Cubase</code> and <code>Cubase to Mixology</code> itself while it runs: from the moment the project plays (the names say Cubase; they work for every DAW). Don't restart the DAW to find them: they go away with it.</li>`
     : `<li>Install <b>loopMIDI</b> (free, by Tobias Erichsen). Add two ports named exactly <code>Mixology to Cubase</code> and <code>Cubase to Mixology</code> (the names say Cubase; they work for every DAW). Keep loopMIDI running (it can start with Windows).</li>`;
   const ol = (items) => `<ol style="margin:10px 0 4px 0;padding-left:24px">${ports}${items}</ol>`;
   if (daw === "fl") return ol(`
@@ -126,12 +126,12 @@ function setupSteps(daw) {
       <li>Open Mixology (on the Master). This panel turns green. Mixology's strips are FL's mixer inserts in use (renamed ones, or ones with an effect such as Mixology Link).</li>`);
   if (daw === "ableton") return ol(`
       <li>The Sonicology installer puts the script in ${isMac ? "<code>~/Music/Ableton/User Library/Remote Scripts/MixologyBridge</code>" : "<code>Documents\\Ableton\\User Library\\Remote Scripts\\MixologyBridge</code>"}. Restart Live after installing.</li>
-      <li>In Live: <b>Settings &gt; Link, Tempo &amp; MIDI</b>. In the first free <b>Control Surface</b> row pick <b>MixologyBridge</b>, Input <code>Mixology to Cubase</code>, Output <code>Cubase to Mixology</code>.</li>
+      <li>In Live: <b>Settings &gt; Link, Tempo &amp; MIDI</b> (Live 11: Preferences). In the first free <b>Control Surface</b> row pick <b>MixologyBridge</b>, Input <code>Mixology to Cubase</code>, Output <code>Cubase to Mixology</code>.</li>
       <li>Open Mixology (on the Main track). This panel turns green. Mixology's strips are Live's tracks and return tracks.</li>`);
   if (daw === "logic") return ol(`
       <li>Nothing to install in Logic: Mixology acts as a <b>Mackie Control</b> (a hardware mixer controller Logic knows).</li>
-      <li>Logic often finds the Mackie Control by itself once Mixology's window has been open (this panel then turns green). If not: <b>Logic Pro &gt; Control Surfaces &gt; Setup</b>, choose <b>New &gt; Install</b>, pick <b>Mackie Designs: Mackie Control</b>, click <b>Add</b>. With the new Mackie Control selected, set its <b>Output Port</b> to <code>Cubase to Mixology</code>, then its <b>Input Port</b> to <code>Mixology to Cubase</code>.</li>
-      <li>Open Mixology (on the Stereo Out). This panel turns green. Mixology's strips are the 8 channels the Mackie Control shows; Logic shortens names to 7 letters, and Mixology matches them back to your tracks' full names (through their Mixology Links).</li>`);
+      <li>Logic often finds the Mackie Control by itself once the project has played (this panel then turns green). If not: <b>Logic Pro &gt; Control Surfaces &gt; Setup</b>, choose <b>New &gt; Install</b>, pick <b>Mackie Designs: Mackie Control</b>, click <b>Add</b>. With the new Mackie Control selected, set its <b>Output Port</b> to <code>Cubase to Mixology</code>, then its <b>Input Port</b> to <code>Mixology to Cubase</code>.</li>
+      <li>Open Mixology (on the Stereo Out). This panel turns green. Mixology's strips are the 8 channels the Mackie Control shows; Logic shortens names to about 6 letters, and Mixology matches them back to your tracks' full names (through their Mixology Links).</li>`);
   if (daw === "cakewalk") return ol(`
       <li>Nothing to install in Cakewalk: Mixology acts as a <b>Mackie Control</b> (a hardware mixer controller Cakewalk knows).</li>
       <li>In Cakewalk: <b>Edit &gt; Preferences &gt; MIDI &gt; Devices</b>: tick <code>Mixology to Cubase</code> under Inputs and <code>Cubase to Mixology</code> under Outputs, then <b>Apply</b>.</li>

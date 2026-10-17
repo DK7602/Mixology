@@ -43,7 +43,7 @@ fix):
 | Space page: reverbs, delay, chorus, phaser, special effects on a track or an FX channel, ducking | Live |
 | Polish (and Auto Mix): EQ, compression, vocal reverb / delay and the mix's tone proposed for you | Live |
 | Master page's finishing knobs (Glue, Tilt, Width, Trim on the Full Mix) | Live |
-| Suite link: Voxology on your vocals (VOX tag, no second compressor / reverb / delay), Masterology's goal on the Master page, the hand-off to Masterology | Live (needs Voxology 0.47 and Masterology 0.26 or newer) |
+| Suite link: Voxology on your vocals (VOX tag, no second compressor / reverb / delay), Masterology's goal on the Master page, the hand-off to Masterology | Live (needs Voxology 0.50 and Masterology 0.29 or newer) |
 | Setup check: a mono group or output on the way, vocals without Mixology Link (Mix Assistant, Tracks page) | Live |
 | Presets: Mixology's starting points and yours, for tracks, FX channels and the Full Mix | Live |
 | History: every change Mixology makes, step by step; go back to any point and forward again | Live |
@@ -91,7 +91,8 @@ Mixology remembers your choice.
 - **Overview**: the mix analyzer (your whole mix as a rainbow, and each kind of track as a coloured line:
   Kick, Bass, Drums, Vocals, Instruments, Other), L / R peak meters and loudness, six quick tone knobs (the full
   mix's EQ bands: the EQ page with Full Mix picked shows the same), **Analyze Mix**, and the Mix Assistant.
-- **Tracks**: the MixConsole as Mixology sees it, 12 channels at a time. Arrows move the bank.
+- **Tracks**: the MixConsole as Mixology sees it, 12 channels at a time. The scroll bar under the strips moves
+  through all of them.
   The colour bar on top of each strip is the Cubase track colour. Every strip moves its real Cubase channel
   (see "Moving faders" below). Meters show on strips whose track has Mixology Link.
 - **EQ**: six bands on the track you pick (or the full mix). Drag a point to change frequency and gain; scroll on
@@ -106,7 +107,8 @@ Mixology remembers your choice.
 - **Tone**: Tone Balance, Loudness, Clip Control, Harmonic, Analog Touch, Final Touch; your mix's tonal balance
   against the style's target (red line), and loudness.
 - **Stereo**: Width (and Low / Mid / High Width), Mono Check, and how wide your mix is.
-- **Master**: loudness over the last minute, a checklist for handing the mix to Masterology, and four finishing
+- **Master**: loudness over the last minute, a checklist for handing the mix to Masterology (the peaks and overall
+  loudness count from the last time you pressed play), and four finishing
   knobs on the Full Mix (before Masterology): **Glue** (gentle bus compression), **Tilt** (+ brighter, − warmer),
   **Width** and **Trim** (the level going into Masterology). Leave the loudness to Masterology.
 
@@ -124,8 +126,10 @@ Bridge", "Ableton Live Bridge") shows these steps for the DAW you picked.
 - **Windows:** install **loopMIDI** (free, by Tobias Erichsen). Click **+** twice and name the ports exactly
   `Mixology to Cubase` and `Cubase to Mixology` (the names say Cubase; they work for every DAW). Tick "Autostart" in
   loopMIDI's tray menu.
-- **Mac:** nothing to install: Mixology makes these two ports itself once its window has been open. If your DAW was
-  already running, restart it (or refresh its MIDI devices) so it sees them.
+- **Mac:** nothing to install: Mixology makes these two ports itself while it runs (from the moment the project
+  plays in Cubase, FL Studio, Live or Logic; in another DAW once Mixology's window has been open). They exist only
+  while the DAW runs, so don't restart the DAW to find them: open its MIDI or control surface settings again and pick
+  them there.
 
 ### Cubase
 
@@ -157,7 +161,7 @@ counts). Unused "Insert 37"s are left out, and the Master is never moved.
 
 1. The installer puts the script in `Documents\Ableton\User Library\Remote Scripts\MixologyBridge` (Mac:
    `~/Music/Ableton/User Library/Remote Scripts/MixologyBridge`). Restart Live after installing.
-2. In Live: **Settings > Link, Tempo & MIDI**. In the first free **Control Surface** row pick **MixologyBridge**,
+2. In Live: **Settings > Link, Tempo & MIDI** (Live 11: Preferences > Link / Tempo / MIDI). In the first free **Control Surface** row pick **MixologyBridge**,
    Input `Mixology to Cubase`, Output `Cubase to Mixology`.
 3. Open Mixology (on the Main track). **Settings > Ableton Live Bridge** turns green.
 
@@ -166,7 +170,7 @@ shows dB with one decimal, so an exact value you type lands within 0.05 dB.
 
 ### Logic Pro (Mac)
 
-1. Nothing to install in Logic. Open Mixology's window once (on the Stereo Out): it makes the two ports.
+1. Nothing to install in Logic. Mixology (on the Stereo Out) makes the two ports as soon as the project plays.
 2. Logic often finds the Mackie Control by itself (Settings > Logic Pro Bridge turns green). If not: **Logic Pro >
    Control Surfaces > Setup**, **New > Install**, pick **Mackie Designs: Mackie Control**, **Add**. With it selected,
    set **Output Port** to `Cubase to Mixology`, then **Input Port** to `Mixology to Cubase`.
@@ -294,7 +298,8 @@ What it looks at:
 keeps listening and checks the advice every 15 seconds; the cards change only when the advice really changed ("Auto
 Analyze, updated 2:14 PM"). When you move a fader or change a track's processing, it listens again from that moment
 (the first check 20 seconds later), so the advice is always about the mix as it is now. It pauses when the song stops,
-while Mixology applies a plan, while you listen to your reference song, and while Mixology's window is closed. It
+while Mixology applies a plan and while you listen to your reference song; it keeps listening with Mixology's window
+closed (once the window has been open, or from the start in Cubase, FL Studio, Live, Logic and Cakewalk). It
 only gives advice: it never moves anything. Your choice is saved with the project: open the project again and Auto
 Analyze is still on and carries on from the advice you had. (A project saved before Mixology 0.14 has no advice
 saved: there it reads the faders once when you press play, as Analyze Mix does, and the first advice comes about
@@ -346,7 +351,7 @@ list: every change it wants to make, **now → new**, and why, in plain words. U
   track's own setting away. Balance and Auto Mix then move each vocal track to its own level (the band makes room for
   the average), and the advice checks each one. Saved with the song.
   **Room for Masterology** is a separate line at the bottom, unticked: every fader that plays goes down together
-  (e.g. -12.8 dB when the mix peaks at +6.8 dBTP). The balance stays the same, the mix gets quieter, Masterology
+  (e.g. -12.8 dB when the mix peaks at about +6.8 dB). The balance stays the same, the mix gets quieter, Masterology
   brings the level back. Tick it last, once the balance sounds right.
 - **Stereo Architect**: pans. Kick, bass, snare and the lead vocal in the middle. Pairs and doubles
   ("Gtr L" / "Gtr R", "Electric Rhythm" / "Electric Rhythm (D)", "Keys 1" / "Keys 2") spread left and right:
@@ -354,7 +359,8 @@ list: every change it wants to make, **now → new**, and why, in plain words. U
   out with the tracks pulling it there. It only pans **mono** tracks: for a stereo track Cubase doesn't tell
   Mixology where its panner really sits. If Cubase reports pans your mix doesn't match (stereo tracks with Cubase's
   Combined Panner show one side only, e.g. "L100" on a full-width track), it leaves the pans alone and says so.
-- **Clean Up**: Assist EQ. Low cuts on tracks with rumble they don't need (and on vocals: about 90 Hz), and mud
+- **Clean Up**: Assist EQ. Low cuts on tracks with rumble they don't need (on vocals about 90 Hz; on keys and synths
+  50 Hz, and only for rumble below about 45 Hz: their low notes are part of the sound), and mud
   dips (200 - 500 Hz) on the tracks carrying it when the mix is muddier than your style.
 - **Vocal Pocket**: Assist EQ. Gentle dips (2 - 4 dB) at 1.6 - 4 kHz in the instruments that cover the vocal's
   words, each where it overlaps the vocal most (always inside 1.6 - 4 kHz, the range the advice measures). When
@@ -474,7 +480,8 @@ Space gives a track (or an FX channel) one effect: **Reverb** (a plate), **Delay
      Cubase, add an **FX channel** (Project > Add Track > Effect, or any FX channel you have), put **Mixology Link**
      on it, pick it here, and send your vocals to it with their **Sends** in the MixConsole. One reverb for all
      the vocals sounds like one room. A track whose name looks like an FX channel ("FX 1-...", "Verb", "Delay",
-     "Return") is set to FX channel by itself the first time you switch Space on.
+     "Return") is set to FX channel by itself the first time you switch Space on (not one whose name says it plays
+     something, like "Space Pad").
 4. **EFFECT EQ** (right): the effect's low cut and high cut (200 Hz and 9 kHz to start: a reverb without boomy
    lows or hissy highs sits better). Double-click: back to the start.
 5. **DUCKING**: pick the track(s) to duck under (usually your lead vocal, or All vocals) and the **AMOUNT**. The
@@ -580,7 +587,8 @@ Click a step to see each change ("'Kick' fader −3.2 → −5.0 dB"). Then:
 Good to know:
 - A fader or pan you moved in Cubase itself after Mixology moved it stays where you put it (the log says so). Moves
   you make in Cubase are not Mixology's: Cubase's own Edit > History has those.
-- Faders need the DAW bridge connected; processing changes don't.
+- Faders need the DAW bridge connected; processing changes don't. A step that moved faders waits for the bridge as a
+  whole (undoing only half of it would leave the History wrong): connect the bridge, then undo it.
 - A track renamed or removed since: its processing changes are skipped (the message names it).
 - The history is saved with the project (the last 200 steps), the same for every Mixology window. Open the song again
   and the steps are still there, under **EARLIER SESSIONS (SAVED WITH THE PROJECT)**, with their date: GO BACK HERE and
@@ -598,9 +606,9 @@ Final limiting is Masterology's job: keep Mixology's Limiter off on the Full Mix
 
 ### The three talk to each other (the suite link)
 
-In the same Cubase project, the three plug-ins tell each other what they do. Nothing to set up: just use
-Voxology 0.47, Mixology 0.8 and Masterology 0.26 (or newer). The shared song style needs Voxology 0.49,
-Mixology 0.12 and Masterology 0.28: update all three together (older and newer versions don't see each other).
+In the same project, the three plug-ins tell each other what they do. Nothing to set up: just use Voxology 0.50,
+Mixology 0.13 and Masterology 0.29 (or newer), the versions that share the song style and your DAW. Update all
+three together (older and newer versions don't see each other); the Sonicology installer always has matching ones.
 
 - **Voxology on a vocal.** The Tracks page shows a small gold **VOX** tag under the track's icon (hover it to
   see what Voxology does there: compressing, de-essing, its reverb or delay...). Mixology then:
@@ -614,12 +622,17 @@ Mixology 0.12 and Masterology 0.28: update all three together (older and newer v
 - **Masterology after Mixology.** The Master page's HAND-OFF panel shows what Masterology aims for (for example
   "Masterology: −14 LUFS · −1.0 dBTP"; hover it for the goal and genre) and a check that it is there.
 - **Mixology's hand-off to Masterology.** Mixology tells Masterology the mix style you picked, the mix's peaks
-  and loudness, and (after Analyze Mix) how its tone sits against the style and whether the mix is mono.
-  Masterology shows it and can start from the matching genre.
+  and loudness since you last pressed play, whether the mix is mono right now, and (after Analyze Mix) how its tone
+  sits against the style, including what Mixology's own Full Mix EQ and Tone Balance add. Masterology shows it and
+  can start from the matching genre. The Mixology on your master channel does this (with Mixology on a group too,
+  the one on the channel called Stereo Out / Master / Main; when it goes, another takes over).
 - **One song style** for all three (see Mix styles): pick it in any of them, the others follow.
 
-The link only works inside one program: Voxology, Mixology and Masterology must run in the same Cubase (they do,
-unless you mix in one project and master in another; then Masterology simply works on its own as before).
+The link only works inside one program: Voxology, Mixology and Masterology must run in the same DAW, in the same
+process (they do, unless you mix in one project and master in another; then Masterology simply works on its own as
+before). DAWs that can run each plug-in in its own process keep them apart: in Bitwig set Settings > Plug-ins >
+Plug-in hosting to "By manufacturer" or "Together", in REAPER don't run them as separate / dedicated processes, in
+FL Studio don't make them bridged.
 
 ## Performance (big sessions)
 
@@ -669,9 +682,13 @@ If Cubase crackles or the performance meter peaks:
   only talks while one is loaded. Then press **Reconnect**.
 - **Logic / Cakewalk: a strip shows a short name ("LdVcl")**: Mixology has no Mixology Link with a name that fits it,
   or two of your tracks fit it. Insert Mixology Link on the track, or rename one of the two.
-- **Mac: the two Mixology ports aren't in your DAW's MIDI list**: Mixology makes them when its window first opens.
-  Open Mixology, then restart the DAW (or refresh its MIDI devices). Prefer fixed ports? Make two IAC Driver buses
-  (Audio MIDI Setup > IAC Driver) named exactly `Mixology to Cubase` and `Cubase to Mixology`: Mixology uses those.
+- **Mac: the two Mixology ports aren't in your DAW's MIDI list**: Mixology makes them while it runs: press play once
+  (or open Mixology's window), then open the DAW's MIDI or control surface settings again. Don't restart the DAW for
+  them: the ports go away with it. Prefer fixed ports? Make two IAC Driver buses (Audio MIDI Setup > IAC Driver) named
+  exactly `Mixology to Cubase` and `Cubase to Mixology`: Mixology uses those.
+- **Two projects open in your DAW**: Mixology keeps each project's History, advice, padlocks and roles apart and
+  shows the one that plays. It hears every open project's Mixology Links, though: a track called the same in both
+  counts as two tracks with one name (the Mix Assistant says so). Close the project you're done with.
 - **Connected, but no channels on the Tracks page**: press **Refresh** in Settings > Bridge. If
   the slots stay empty, check that the script says v3 or later, then **Copy log** and send it.
 - **"That strip now shows ..."**: the bank or the track order changed between your click and the move. Nothing
@@ -683,7 +700,7 @@ If Cubase crackles or the performance meter peaks:
   from the same download (an older Link can't talk to a newer Mixology). After an update, copy **both**
   .vst3 folders again and restart Cubase.
 - **Analyze Mix waits at "Press play in Cubase"**: it only listens while the song plays.
-- **A stereo track shows "Stereo" under its pan knob**: it uses Cubase's Stereo Combined Panner. Cubase only tells
+- **A stereo track shows "Stereo" under its pan knob (Cubase)**: it uses Cubase's Stereo Combined Panner. Cubase only tells
   Mixology the panner's left edge (a full-width track would read "L100"), so Mixology never pans those tracks:
   pan them in Cubase.
 - **Strange notes on an instrument track**: untick "In 'All MIDI Inputs'" for both Mixology ports (setup step 3).

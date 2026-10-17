@@ -39,6 +39,8 @@ class FLStudio(object):
     def __init__(self):
         self.ticks = RESCAN_TICKS
         self.inserts = []
+        self.any_solo = False
+        self.mutes = {}   # each insert's own mute, as it was before a solo (FL's solo switches the others off)
 
     # ---- the inserts in use ----------------------------------------------------------------------------------
     def last_insert(self):
@@ -70,6 +72,11 @@ class FLStudio(object):
         if self.ticks >= RESCAN_TICKS:
             self.ticks = 0
             self.rescan()
+        # FL solos an insert by muting the others: while one is soloed, Mixology goes on seeing the mutes from
+        # before (it knows who is heard from the solo itself), so Restore and the History never "unmute" them.
+        self.any_solo = any(mixer.isTrackSolo(i) for i in self.inserts)
+        if not self.any_solo:
+            self.mutes = dict((i, bool(mixer.isTrackMuted(i))) for i in self.inserts)
 
     def soon(self):
         self.ticks = max(self.ticks, RESCAN_TICKS - 5)   # a rename or a new effect: look again within 0.1 s
@@ -96,6 +103,8 @@ class FLStudio(object):
         return mixer.getTrackPan(i)
 
     def mute(self, i):
+        if self.any_solo:
+            return self.mutes.get(i, False)
         return bool(mixer.isTrackMuted(i))
 
     def solo(self, i):
@@ -111,18 +120,32 @@ class FLStudio(object):
         return False   # FL records automation per control, not per track: nothing to refuse
 
     def set_volume(self, i, v):
-        mixer.setTrackVolume(i, min(max(v, 0.0), 1.0), midi.PIM_None)
+        v = min(max(v, 0.0), 1.0)
+        try:
+            mixer.setTrackVolume(i, v, midi.PIM_None)
+        except (TypeError, AttributeError):   # FL before scripting API 13: no pickup argument
+            mixer.setTrackVolume(i, v)
 
     def set_pan(self, i, p):
-        mixer.setTrackPan(i, min(max(p, -1.0), 1.0), midi.PIM_None)
+        p = min(max(p, -1.0), 1.0)
+        try:
+            mixer.setTrackPan(i, p, midi.PIM_None)
+        except (TypeError, AttributeError):
+            mixer.setTrackPan(i, p)
 
     def set_mute(self, i, on):
+        self.mutes[i] = on
+        if self.any_solo:
+            return   # FL's solo owns the mute switches now: kept for when the solo ends
         if bool(mixer.isTrackMuted(i)) != on:
             mixer.muteTrack(i)   # toggles (works on every FL version)
 
     def set_solo(self, i, on):
+        if on and not self.any_solo:
+            self.mutes = dict((k, bool(mixer.isTrackMuted(k))) for k in self.inserts)   # the mutes before the solo
         if bool(mixer.isTrackSolo(i)) != on:
             mixer.soloTrack(i)   # toggles
+        self.any_solo = any(mixer.isTrackSolo(k) for k in self.inserts)
 
     def send(self, frame):
         device.midiOutSysex(bytes(frame))

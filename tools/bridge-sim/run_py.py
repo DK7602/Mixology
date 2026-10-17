@@ -105,7 +105,18 @@ class FakeFL(object):
         mixer.muteTrack = muteTrack
 
         def soloTrack(i, value=-1, mode=-1):
-            fl.tracks[i]['solo'] = (not fl.tracks[i]['solo']) if value == -1 else bool(value)
+            # FL solos an insert by switching the other inserts' mutes on (and back when the solo ends).
+            on = (not fl.tracks[i]['solo']) if value == -1 else bool(value)
+            if on and not any(t['solo'] for t in fl.tracks):
+                fl.before_solo = [t['mute'] for t in fl.tracks]
+                for k in range(1, fl.LAST + 1):
+                    fl.tracks[k]['mute'] = k != i
+            for t in fl.tracks:
+                t['solo'] = False
+            fl.tracks[i]['solo'] = on
+            if not on:
+                for k, m in enumerate(getattr(fl, 'before_solo', [])):
+                    fl.tracks[k]['mute'] = m
         mixer.soloTrack = soloTrack
         mixer.getTrackColor = lambda i: fl.tracks[i]['color'] - 0x1000000   # FL reports colours as signed ints
 
@@ -410,6 +421,8 @@ def common_scenarios(daw_db, vol_of, names_in_order, tol):
         check(r.cmd('solo', 8, 1)['ok'], 'solo Lead Vox')
         r.run(0.5)
         check(r.state['slots'][5]['mute'] and r.state['slots'][8]['solo'], 'mute and solo mirrored')
+        others = [s['title'] for i, s in enumerate(r.state['slots'][:9]) if s['mute'] and i not in (5, 8)]
+        check(not others, "FL's solo mutes the others, Mixology still sees only Keys muted: %s" % others)
         check(r.cmd('restore', 4)['ok'], 'restore 808')
         r.run(1.0)
         check(r.state['slots'][4]['panText'] == 'C', '808 back to C: ' + r.state['slots'][4]['panText'])
