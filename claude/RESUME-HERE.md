@@ -89,6 +89,10 @@ sends higher-resolution art, re-run it.
   presence block (plug-ins in separate processes), Masterology never writes MasterInfo.inputPeakDbtp, MixInfo
   shortTermLufs unused, VocalInfo eq flag (Polish still adds vocal EQ), SuiteLink choice seqlock needs a release fence
   after the CAS lock (SuiteLink.cpp ~418 / 466: copy to all three).
+- CI green: Build & Test run 39057234750 (8522820; Windows build, tests, Link check, CPU check, pluginval 10 + VST3
+  validator, ASan engine + simulators). Sonicology suite run 39057269833 (label "Beta 2", version 0.2.0; Mixology
+  0.20.0 with Voxology 0.51.0 / Masterology 0.29.2, Windows + macOS). Downloads for the user: that run's
+  Sonicology-Windows (installer) and run 39057234750's Mixology-Windows. Waiting for the DAW tests.
 - Not done (ideas): McuBridge trusts its own sent values as read-back (Logic / Cakewalk), Mackie knobs in Pan mode
   check, Live snapshot per flush, analysis aware of pans and song sections, integrated LUFS / true peak from the
   meter for the report.
