@@ -1228,6 +1228,9 @@ namespace mixology::mix
                     if (clarity >= -2.5 && clarity <= 5.0 && airGap >= -7.0)
                         plan.notes.push_back (quoted (t.name) + " already sounds balanced (presence " + signedDb (clarity) + " against its body, air "
                                               + signedDb (airGap) + " against its presence): no EQ needed.");
+                    else if (ch->voxology.on && ch->voxology.eq)
+                        plan.notes.push_back (quoted (t.name) + ": Voxology's Tone EQ shapes this vocal too. You can make the same change there "
+                                              "instead (one place for the vocal's tone), and skip it here.");
                 }
                 if (t.role == Role::kick)
                 {
@@ -1584,8 +1587,9 @@ namespace mixology::mix
                     what += (what.empty() ? "" : "; ") + std::to_string (v.clippedSpots) + " spot" + (v.clippedSpots == 1 ? "" : "s") + " clipped while it was recorded";
                 if (what.empty()) what = v.recordedClipped ? "it clipped while it was recorded" : "it comes in over the top of the meter";
                 plan.first.push_back ("Voxology says " + quoted (c.name) + " was recorded too hot (" + what + "). Lower its clip gain first, "
-                                      "until its loudest words peak around -6 dB. In {daw}: {daw:clipGain}. Then let Analyze Mix hear it again "
-                                      "(Auto Analyze does it by itself): these moves are worked out from how loud it is now.");
+                                      "until its loudest words peak around -6 dB. In {daw}: {daw:clipGain}. Then press AUTO-EDIT in Voxology again "
+                                      "(its settings follow the level) and let Analyze Mix hear it again (Auto Analyze does it by itself): "
+                                      "these moves are worked out from how loud it is now.");
             }
 
         // Notes once each, in order.

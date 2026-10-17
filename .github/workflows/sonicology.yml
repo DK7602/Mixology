@@ -161,6 +161,25 @@ jobs:
               -e "s|@MASTEROLOGY@|$(v Masterology)|" "installer/Read Me First.txt" > "stage/Read Me First.txt"
           mkdir -p stage/Manuals
           for p in Voxology Mixology Masterology; do cp "stage/$p/Manual.md" "stage/Manuals/$p Manual.txt"; done
+      # Apple's Audio Unit check on every AU the package holds (Logic only loads AUs that pass it). Reported here;
+      # a failure doesn't stop the installer (the VST3s are fine either way), so read this step when it's red.
+      - name: Audio Unit validation (auval)
+        continue-on-error: true
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          for c in stage/*/AU/*.component; do
+            cp -R "$c" ~/Library/Audio/Plug-Ins/Components/
+            name=$(basename "$c")
+            find ~/Library/Audio/Plug-Ins/Components/"$name" -path "*/Contents/MacOS/*" -type f -exec chmod 755 {} +
+            codesign --force --deep --sign - ~/Library/Audio/Plug-Ins/Components/"$name"
+          done
+          killall -9 AudioComponentRegistrar || true
+          failed=0
+          for id in "aumf Vox1 Voxa" "aufx Hny1 Voxa" "aufx Mxl1 Mxlg" "aufx Mxk1 Mxlg" "aufx Pls1 Plsh"; do
+            if auval -v $id > auval.log 2>&1; then echo "auval $id: PASS"; else echo "auval $id: FAIL"; tail -30 auval.log; failed=1; fi
+          done
+          exit $failed
+
       - name: Build the package
         run: |
           chmod +x installer/mac/build-pkg.sh

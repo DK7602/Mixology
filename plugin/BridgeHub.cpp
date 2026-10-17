@@ -1262,20 +1262,61 @@ void BridgeHub::updateSuite (double t)
 {
     auto& link = suite::Link::process();
     const auto ms = suite::nowMs();
+    const auto vocals = link.vocals (ms);
     std::map<std::uint32_t, suite::VocalInfo> merged;   // two Voxologys on one channel: what both do
-    for (const auto& v : link.vocals (ms))
+    for (const auto& v : vocals)
     {
         if (v.nameHash == 0) continue;
         auto [it, fresh] = merged.try_emplace (v.nameHash, v);
         if (fresh) continue;
         auto& m = it->second;
-        m.flags |= v.flags;
+        // Beat mode only when every Voxology there is in it (a vocal one makes it a vocal); the rest adds up.
+        const auto beat = static_cast<std::uint32_t> (suite::VocalInfo::beat);
+        const bool bothBeat = (m.flags & beat) != 0 && (v.flags & beat) != 0;
+        m.flags = ((m.flags | v.flags) & ~beat) | (bothBeat ? beat : 0u);
         m.compressionDb = std::max (m.compressionDb, v.compressionDb);
         m.reverbMix = std::max (m.reverbMix, v.reverbMix);
         m.delayMix = std::max (m.delayMix, v.delayMix);
+        m.recordedPeakDb = std::max (m.recordedPeakDb, v.recordedPeakDb);
+        m.clippedSpots = std::max (m.clippedSpots, v.clippedSpots);
         if (m.style == suite::VocalInfo::Style::unknown) m.style = v.style;
     }
     for (const auto& [hash, v] : merged) suiteVocals[hash] = { v, t };
+
+    // Answer every Voxology (each one, also two on one track): did Mixology find that track and treat it as a vocal
+    // (and if not, why), and what does it hear there. Voxology says "MIXOLOGY ✓" only for a match.
+    {
+        using State = suite::VocalAck::State;
+        const auto links = mixology::link::processRegistry().links (mixology::link::nowMs());
+        const auto shared = sharedNames();
+        const bool connected = bridge.link() == mixology::BridgeSession::Link::connected;
+        for (const auto& v : vocals)
+        {
+            suite::VocalAck a;
+            const auto hash = v.nameHash;
+            const auto role = hash != 0 ? roleFor (hash, v.trackName) : std::nullopt;
+            if (hash == 0) a.state = State::noName;
+            else if ((v.flags & suite::VocalInfo::beat) != 0) a.state = State::beatTrack;
+            else if (shared.count (hash) != 0) a.state = State::sharedName;
+            else if (role && *role != mixology::mix::Role::vox && *role != mixology::mix::Role::adlibs) a.state = State::notVocal;
+            else if (uniqueLink (links, hash) == nullptr) a.state = State::noLink;
+            else a.state = State::matched;
+            if (a.state == State::matched)
+            {
+                if (connected && bridge.knownFaders().count (hash) != 0 && ! bridge.isProtected (hash))
+                    a.bits |= suite::VocalAck::balancesLevel;
+                if (report.valid)
+                    for (const auto& tr : report.tracks)
+                        if (tr.hash == hash && tr.hasVocalRatio)
+                        {
+                            a.bits |= suite::VocalAck::heard;
+                            a.vocalDb = static_cast<float> (tr.vocalRatio);
+                            a.targetDb = static_cast<float> (tr.vocalTarget);
+                        }
+            }
+            link.ackVocal (v, a, ms);
+        }
+    }
     // One that stops reporting stays a few seconds: a busy message thread holds up every plug-in's heartbeat.
     for (auto it = suiteVocals.begin(); it != suiteVocals.end();)
         it = t - it->second.lastSeen > 5.0 ? suiteVocals.erase (it) : std::next (it);
@@ -1301,6 +1342,17 @@ void BridgeHub::updateSuite (double t)
         reevaluate();   // a vocal Voxology sits on is a vocal in the advice too
         ++analysisVersion;
     }
+}
+
+void BridgeHub::suiteTick()
+{
+    // The hub's own timer isn't running yet (a DAW without a bridge, window never opened): Voxology still gets its
+    // answers and Mixology still knows the vocals.
+    if (enabled) return;
+    const double t = now();
+    if (t - lastSuiteUpdate < 0.25) return;
+    lastSuiteUpdate = t;
+    updateSuite (t);
 }
 
 void BridgeHub::updateSetup()

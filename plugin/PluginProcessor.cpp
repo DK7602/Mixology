@@ -107,7 +107,8 @@ void MixologyAudioProcessor::timerCallback()
 void MixologyAudioProcessor::feedAnalysis()
 {
     // Analyze Mix and the setup check hear the hub's Full Mix (the Mixology on the master), window open or not.
-    if (! bridgeHub->isMixOwner (this) || ! bridgeHub->isEnabled()) return;
+    if (! bridgeHub->isMixOwner (this)) return;
+    if (! bridgeHub->isEnabled()) { bridgeHub->suiteTick(); return; }
     const double rate = juce::jmax (8000.0, getSampleRate());
     analysisRing.copyLatest (mixL.data(), mixR.data(), mixology::TrackAnalyzer::sizeFor (rate));
     const auto frame = mixAnalyzer.analyse (mixL.data(), mixR.data(), rate);

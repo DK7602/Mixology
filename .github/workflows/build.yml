@@ -124,6 +124,16 @@ jobs:
             pluginval.app/Contents/MacOS/pluginval --strictness-level 10 --timeout-ms 1800000 --skip-gui-tests --validate-in-process --validate "$p"
           done
 
+      - name: Audio Unit validation (auval)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R build/plugin/Mixology_artefacts/Release/AU/Mixology.component ~/Library/Audio/Plug-Ins/Components/
+          cp -R "build/link/MixologyLink_artefacts/Release/AU/Mixology Link.component" ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar || true
+          auval -v aufx Mxl1 Mxlg
+          auval -v aufx Mxk1 Mxlg
+
       # Steinberg's own VST3 validator, built from the VST3 SDK (cached by SDK commit).
       - name: Find VST3 SDK version (Windows)
         if: runner.os == 'Windows'

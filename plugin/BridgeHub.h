@@ -101,6 +101,8 @@ public:
     /** What Analyze Mix knows for Masterology (the style it analysed against, its tone against it, a mono mix);
         the plug-in adds its meters and publishes it. False before Analyze Mix (or after the style changed). */
     bool handoffTone (const std::string& styleKey, suite::MixInfo&) const;
+    /** The suite link while the hub's timer isn't running (the Full Mix's Mixology calls it from its own timer). */
+    void suiteTick();
     /** The Masterology after Mixology, if one is open in this project (message thread). */
     std::optional<suite::MasterInfo> masterology() const;
 

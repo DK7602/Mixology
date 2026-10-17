@@ -290,9 +290,47 @@ namespace suite
             if (! ok || v.version == 0) continue;
             v.slot = i;
             v.instanceId = s.instanceId.load (kRelaxed);
+            v.generation = s.generation.load (kAcquire);
             out.push_back (std::move (v));
         }
         return out;
+    }
+
+    void Link::ackVocal (const VocalInfo& v, const VocalAck& a, std::uint64_t now)
+    {
+        if (v.slot < 0 || v.slot >= kMaxVocals) return;
+        auto& s = block.vocals[static_cast<std::size_t> (v.slot)];
+        if (s.generation.load (kAcquire) != v.generation) return;   // claimed again since: the answer isn't for it
+        beginWrite (s.ackSeq);
+        s.ackGeneration.store (v.generation, kRelaxed);
+        s.ackHash.store (v.nameHash, kRelaxed);
+        s.ackState.store (static_cast<std::uint32_t> (a.state), kRelaxed);
+        s.ackBits.store (a.bits, kRelaxed);
+        s.ackVocalDb.store (a.vocalDb, kRelaxed);
+        s.ackTargetDb.store (a.targetDb, kRelaxed);
+        endWrite (s.ackSeq);
+        s.ackMs.store (now, kRelease);
+    }
+
+    bool Link::vocalAck (int slot, std::uint64_t instanceId, std::uint32_t hash, VocalAck& out, std::uint64_t now) const
+    {
+        if (slot < 0 || slot >= kMaxVocals) return false;
+        const auto& s = block.vocals[static_cast<std::size_t> (slot)];
+        if (s.instanceId.load (kRelaxed) != instanceId) return false;
+        VocalAck a;
+        std::uint32_t generation = 0, ackHash = 0;
+        const bool ok = readConsistent (s.ackSeq, [&] {
+            generation = s.ackGeneration.load (kRelaxed);
+            ackHash = s.ackHash.load (kRelaxed);
+            a.state = static_cast<VocalAck::State> (s.ackState.load (kRelaxed));
+            a.bits = s.ackBits.load (kRelaxed);
+            a.vocalDb = s.ackVocalDb.load (kRelaxed);
+            a.targetDb = s.ackTargetDb.load (kRelaxed);
+        });
+        // For this claim of the slot and this name (a renamed track gets a fresh answer), and recent.
+        if (! ok || generation != s.generation.load (kAcquire) || ackHash != hash || ! alive (s.ackMs.load (kAcquire), now)) return false;
+        out = a;
+        return true;
     }
 
     // ---- Mixology --------------------------------------------------------------------------------------
@@ -406,7 +444,11 @@ namespace suite
             for (int attempt = 0; attempt < 1000; ++attempt)
             {
                 auto v = seq.load (kRelaxed);
-                if ((v & 1u) == 0 && seq.compare_exchange_weak (v, v + 1, std::memory_order_acq_rel)) return true;
+                if ((v & 1u) == 0 && seq.compare_exchange_weak (v, v + 1, std::memory_order_acq_rel))
+                {
+                    std::atomic_thread_fence (kRelease);   // the odd count is seen before anything written after it
+                    return true;
+                }
             }
             return false;   // another writer stuck mid-write (it crashed): try again next time
         }

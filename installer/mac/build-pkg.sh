@@ -37,6 +37,8 @@ plugins () {   # the plug-ins of one product, signed ad hoc, laid out as they in
   mkdir -p "$root/Library/Audio/Plug-Ins/VST3" "$root/Library/Audio/Plug-Ins/Components"
   cp -R "$STAGE/$name/VST3/"*.vst3 "$root/Library/Audio/Plug-Ins/VST3/"
   if compgen -G "$STAGE/$name/AU/*.component" >/dev/null; then cp -R "$STAGE/$name/AU/"*.component "$root/Library/Audio/Plug-Ins/Components/"; fi
+  # GitHub's artifact zips drop the executable bit: give it back to each bundle's program before signing
+  find "$root/Library/Audio/Plug-Ins" -path "*/Contents/MacOS/*" -type f -exec chmod 755 {} +
   find "$root/Library/Audio/Plug-Ins" -maxdepth 2 \( -name "*.vst3" -o -name "*.component" \) -print0 |
     while IFS= read -r -d '' b; do codesign --force --deep --sign - "$b"; done
   component "$id" "$root" "$WORK/scripts-au"
