@@ -12,7 +12,7 @@ namespace mixology
     class AudioRing
     {
     public:
-        static constexpr int kSize = 8192;   // power of two, >= TrackAnalyzer::kSize
+        static constexpr int kSize = 16384;   // power of two, >= TrackAnalyzer::kMaxSize
 
         template <typename Sample>
         void push (const Sample* const* channels, int numChannels, int numSamples) noexcept

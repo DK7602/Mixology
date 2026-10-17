@@ -434,10 +434,11 @@ void MixWebEditor::timerCallback()
     // Analyze Mix and the analyzer's track colours: five times a second.
     if (++frameCount % 6 == 0)
     {
-        mixL.resize (static_cast<std::size_t> (mixology::TrackAnalyzer::kSize));
+        const double rate = juce::jmax (8000.0, processor.getSampleRate());
+        mixL.resize (static_cast<std::size_t> (mixology::TrackAnalyzer::kMaxSize));
         mixR.resize (mixL.size());
-        processor.analysisRing.copyLatest (mixL.data(), mixR.data(), mixology::TrackAnalyzer::kSize);
-        const auto mixFrame = mixAnalyzer.analyse (mixL.data(), mixR.data(), juce::jmax (8000.0, processor.getSampleRate()));
+        processor.analysisRing.copyLatest (mixL.data(), mixR.data(), mixology::TrackAnalyzer::sizeFor (rate));
+        const auto mixFrame = mixAnalyzer.analyse (mixL.data(), mixR.data(), rate);
         hub.analysisTick (mixFrame, processor.transportPlaying.load(), processor.getTotalNumOutputChannels());
         if (currentPage == "overview")
             frame->setProperty ("roleCurves", hub.roleCurves (processor.getSampleRate()));

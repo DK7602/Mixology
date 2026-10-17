@@ -31,45 +31,55 @@ namespace mixology
         return 1000.0 * std::pow (2.0, (band - 17) / 3.0);
     }
 
-    TrackAnalyzer::TrackAnalyzer()
-        : window (static_cast<std::size_t> (kSize)), buffer (static_cast<std::size_t> (kSize))
-    {
-        for (int i = 0; i < kSize; ++i)
-        {
-            const double w = 0.5 - 0.5 * std::cos (2.0 * kPi * i / kSize);   // Hann
-            window[static_cast<std::size_t> (i)] = static_cast<float> (w);
-            windowPower += w * w;
-        }
-    }
+    TrackAnalyzer::TrackAnalyzer() = default;
 
-    void TrackAnalyzer::prepareBands (double sampleRate)
+    void TrackAnalyzer::prepare (double sampleRate)
     {
         preparedRate = sampleRate;
-        binBand.assign (static_cast<std::size_t> (kSize / 2), -1);
-        binKWeight.assign (static_cast<std::size_t> (kSize / 2), 0.0f);
-        const double edge = std::pow (2.0, 1.0 / 6.0);
-        for (int k = 1; k < kSize / 2; ++k)
+        const int n = sizeFor (sampleRate);
+        if (n != size)
         {
-            const double hz = k * sampleRate / kSize;
+            size = n;
+            int order = 0;
+            while ((1 << order) < n) ++order;
+            fft = std::make_unique<Fft> (order);
+            buffer.assign (static_cast<std::size_t> (n), {});
+            window.assign (static_cast<std::size_t> (n), 0.0f);
+            windowPower = 0.0;
+            for (int i = 0; i < n; ++i)
+            {
+                const double w = 0.5 - 0.5 * std::cos (2.0 * kPi * i / n);   // Hann
+                window[static_cast<std::size_t> (i)] = static_cast<float> (w);
+                windowPower += w * w;
+            }
+        }
+
+        shares.clear();
+        binKWeight.assign (static_cast<std::size_t> (size / 2), 0.0f);
+        const double edge = std::pow (2.0, 1.0 / 6.0);
+        const double binHz = sampleRate / size;
+        for (int k = 1; k < size / 2; ++k)
+        {
+            const double hz = k * binHz;
             binKWeight[static_cast<std::size_t> (k)] = static_cast<float> (kWeightPower (hz));
+            // The bin covers hz +- half a bin; each band it overlaps gets that part of its energy.
+            const double lo = hz - 0.5 * binHz, hi = hz + 0.5 * binHz;
             for (int b = 0; b < kBands; ++b)
             {
-                if (hz >= bandHz (b) / edge && hz < bandHz (b) * edge)
-                {
-                    binBand[static_cast<std::size_t> (k)] = b;
-                    break;
-                }
+                const double overlap = std::min (hi, bandHz (b) * edge) - std::max (lo, bandHz (b) / edge);
+                if (overlap > 0.0) shares.push_back ({ k, b, static_cast<float> (overlap / binHz) });
             }
         }
     }
 
     AnalysisFrame TrackAnalyzer::analyse (const float* left, const float* right, double sampleRate)
     {
-        if (sampleRate != preparedRate) prepareBands (sampleRate);
+        if (! (sampleRate >= 8000.0)) sampleRate = 48000.0;   // not known yet
+        if (sampleRate != preparedRate) prepare (sampleRate);
 
         AnalysisFrame f;
         double ll = 0.0, rr = 0.0, lr = 0.0, peak = 0.0;
-        for (int i = 0; i < kSize; ++i)
+        for (int i = 0; i < size; ++i)
         {
             const double l = left[i], r = right[i];
             ll += l * l;
@@ -81,7 +91,7 @@ namespace mixology
             buffer[static_cast<std::size_t> (i)] = { static_cast<float> (0.5 * (l + r)) * w, static_cast<float> (0.5 * (l - r)) * w };
         }
 
-        const double meanSquare = 0.5 * (ll + rr) / kSize;
+        const double meanSquare = 0.5 * (ll + rr) / size;
         f.rmsDb = energyDb (meanSquare);
         f.peakDb = peak > 1.0e-7 ? static_cast<float> (20.0 * std::log10 (peak)) : kSilentDb;
         f.silent = meanSquare < 1.0e-10;   // below about -100 dBFS
@@ -90,26 +100,33 @@ namespace mixology
             f.balanceDb = static_cast<float> (std::clamp (10.0 * std::log10 ((ll + 1.0e-12) / (rr + 1.0e-12)), -40.0, 40.0));
         if (f.silent) return f;
 
-        fft.forward (buffer);
+        fft->forward (buffer);
 
         // One-sided power, normalised so the bands of a signal add up to its mean square (Parseval).
-        const double norm = 2.0 / (static_cast<double> (kSize) * windowPower);
-        std::array<double, kBands> mid {}, side {};
+        const double norm = 2.0 / (static_cast<double> (size) * windowPower);
+        std::vector<double>& pm = binMid;
+        std::vector<double>& ps = binSide;
+        pm.assign (static_cast<std::size_t> (size / 2), 0.0);
+        ps.assign (static_cast<std::size_t> (size / 2), 0.0);
         double weighted = 0.0, totalMid = 0.0, totalSide = 0.0;
-        for (int k = 1; k < kSize / 2; ++k)
+        for (int k = 1; k < size / 2; ++k)
         {
-            const auto z = buffer[static_cast<std::size_t> (k)];
-            const auto zc = std::conj (buffer[static_cast<std::size_t> (kSize - k)]);
+            const auto i = static_cast<std::size_t> (k);
+            const auto z = buffer[i];
+            const auto zc = std::conj (buffer[static_cast<std::size_t> (size - k)]);
             const auto m = 0.5f * (z + zc);                                  // FFT of mid
             const auto s = std::complex<float> (0.0f, -0.5f) * (z - zc);     // FFT of side
-            const double pm = std::norm (m) * norm, ps = std::norm (s) * norm;
-            totalMid += pm;
-            totalSide += ps;
-            weighted += (pm + ps) * binKWeight[static_cast<std::size_t> (k)];
-            const int b = binBand[static_cast<std::size_t> (k)];
-            if (b < 0) continue;
-            mid[static_cast<std::size_t> (b)] += pm;
-            side[static_cast<std::size_t> (b)] += ps;
+            pm[i] = std::norm (m) * norm;
+            ps[i] = std::norm (s) * norm;
+            totalMid += pm[i];
+            totalSide += ps[i];
+            weighted += (pm[i] + ps[i]) * binKWeight[i];
+        }
+        std::array<double, kBands> mid {}, side {};
+        for (const auto& sh : shares)
+        {
+            mid[static_cast<std::size_t> (sh.band)] += pm[static_cast<std::size_t> (sh.bin)] * sh.weight;
+            side[static_cast<std::size_t> (sh.band)] += ps[static_cast<std::size_t> (sh.bin)] * sh.weight;
         }
 
         for (int b = 0; b < kBands; ++b)

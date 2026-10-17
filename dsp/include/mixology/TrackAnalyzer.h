@@ -4,6 +4,7 @@
 
 #include <array>
 #include <complex>
+#include <memory>
 #include <vector>
 
 /** What Mixology Link hears on its track at one moment (about 85 ms of audio), for Analyze Mix:
@@ -39,25 +40,35 @@ namespace mixology
     class TrackAnalyzer
     {
     public:
-        static constexpr int kOrder = 12;
-        static constexpr int kSize = 1 << kOrder;   // 4096 samples (85 ms at 48 kHz)
+        static constexpr int kMaxSize = 1 << 14;   // 16384 samples (85 ms at 192 kHz)
+
+        /** How many samples one moment takes at this rate: about 85 ms, so the bands stay the same width in Hz
+            at every sample rate (4096 up to 50 kHz, 8192 up to 100 kHz, 16384 above). */
+        static constexpr int sizeFor (double sampleRate)
+        {
+            return sampleRate <= 50000.0 ? 1 << 12 : sampleRate <= 100000.0 ? 1 << 13 : kMaxSize;
+        }
 
         TrackAnalyzer();
 
-        /** left / right: the newest kSize samples (right may equal left for a mono track). */
+        /** left / right: the newest sizeFor (sampleRate) samples (right may equal left for a mono track). */
         AnalysisFrame analyse (const float* left, const float* right, double sampleRate);
 
     private:
-        void prepareBands (double sampleRate);
+        void prepare (double sampleRate);
 
-        Fft fft { kOrder };
+        int size = 0;
+        std::unique_ptr<Fft> fft;
         std::vector<float> window;
         double windowPower = 0.0;
         std::vector<std::complex<float>> buffer;
 
-        // For each FFT bin: the band it falls into and a K-weighting factor (prepared per sample rate).
+        // Each FFT bin's share of the bands it overlaps (a bin can be wider than the lowest bands, so its energy
+        // is split by overlap and no band is ever left empty), and its K-weighting factor. Prepared per sample rate.
+        struct BinShare { int bin; int band; float weight; };
         double preparedRate = 0.0;
-        std::vector<int> binBand;
+        std::vector<BinShare> shares;
         std::vector<float> binKWeight;
+        std::vector<double> binMid, binSide;   // per bin, reused by every analysis
     };
 }

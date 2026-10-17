@@ -72,8 +72,8 @@ MixologyLinkProcessor::MixologyLinkProcessor()
                  ^ static_cast<std::uint32_t> (juce::Random::getSystemRandom().nextInt()) ^ static_cast<std::uint64_t> (juce::Time::getHighResolutionTicks());
     slot = registry.claim (instanceId, mixology::link::nowMs());
     registry.learnProcRequests (slot, procRequestSeen);
-    snapL.resize (static_cast<std::size_t> (mixology::TrackAnalyzer::kSize));
-    snapR.resize (static_cast<std::size_t> (mixology::TrackAnalyzer::kSize));
+    snapL.resize (static_cast<std::size_t> (mixology::TrackAnalyzer::kMaxSize));
+    snapR.resize (static_cast<std::size_t> (mixology::TrackAnalyzer::kMaxSize));
     startTimerHz (30);
     analysisThread->addTimeSliceClient (this);
 }
@@ -93,8 +93,9 @@ int MixologyLinkProcessor::useTimeSlice()
     const auto last = lastAudioMs.load (std::memory_order_relaxed);
     if (last == 0 || now - std::min (now, last) > 300) return kIntervalMs;   // stopped or bypassed: nothing new
 
-    ring.copyLatest (snapL.data(), snapR.data(), mixology::TrackAnalyzer::kSize);
-    const auto frame = analyzer.analyse (snapL.data(), snapR.data(), currentRate.load());
+    const double rate = currentRate.load();
+    ring.copyLatest (snapL.data(), snapR.data(), mixology::TrackAnalyzer::sizeFor (rate));
+    const auto frame = analyzer.analyse (snapL.data(), snapR.data(), rate);
     registry.publishAnalysis (slot, frame, transportPlaying.load(), songPosition.load(), now);
     return kIntervalMs;
 }

@@ -4,6 +4,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
@@ -16,7 +17,7 @@ namespace
 {
     constexpr double kPi = 3.14159265358979323846;
     constexpr double sr = 48000.0;
-    constexpr int N = TrackAnalyzer::kSize;
+    constexpr int N = TrackAnalyzer::sizeFor (sr);
 
     std::vector<float> sine (double hz, double amp, double phase = 0.0)
     {
@@ -133,11 +134,51 @@ TEST_CASE ("Analysis: works at 44.1 and 96 kHz", "[analysis]")
     TrackAnalyzer a;
     for (double rate : { 44100.0, 96000.0 })
     {
-        std::vector<float> x (N);
-        for (int i = 0; i < N; ++i) x[static_cast<std::size_t> (i)] = static_cast<float> (0.5 * std::sin (2.0 * kPi * 2000.0 * i / rate));
+        const int n = TrackAnalyzer::sizeFor (rate);
+        std::vector<float> x (static_cast<std::size_t> (n));
+        for (int i = 0; i < n; ++i) x[static_cast<std::size_t> (i)] = static_cast<float> (0.5 * std::sin (2.0 * kPi * 2000.0 * i / rate));
         const auto f = a.analyse (x.data(), x.data(), rate);
         CHECK (f.bandDb[20] == Catch::Approx (-6.02).margin (0.6));   // 2 kHz band
     }
+}
+
+TEST_CASE ("Analysis: every band hears the same noise the same way at every sample rate", "[analysis]")
+{
+    // A moment is about 85 ms at every rate, so the bands are as wide in Hz at 96 or 192 kHz as at 48 kHz, and
+    // a bin wider than the lowest bands shares its energy with them: no band is ever left empty.
+    auto bands = [] (double rate) {
+        std::array<double, kBands> sum {};
+        TrackAnalyzer a;
+        const int n = TrackAnalyzer::sizeFor (rate);
+        std::mt19937 rng (11);
+        std::normal_distribution<float> noise (0.0f, 0.1f);
+        std::vector<float> x (static_cast<std::size_t> (n));
+        for (int rep = 0; rep < 64; ++rep)   // averaged over 64 moments: noise is noisy
+        {
+            for (auto& v : x) v = noise (rng);
+            const auto f = a.analyse (x.data(), x.data(), rate);
+            for (int b = 0; b < kBands; ++b) sum[static_cast<std::size_t> (b)] += std::pow (10.0, f.bandDb[static_cast<std::size_t> (b)] / 10.0) / 64.0;
+        }
+        std::array<double, kBands> db {};
+        for (int b = 0; b < kBands; ++b) db[static_cast<std::size_t> (b)] = 10.0 * std::log10 (sum[static_cast<std::size_t> (b)]);
+        return db;
+    };
+    const auto at48 = bands (48000.0);
+    for (double rate : { 44100.0, 88200.0, 96000.0, 176400.0, 192000.0 })
+    {
+        const auto other = bands (rate);
+        for (int b = 0; b < kBands; ++b)
+        {
+            // White noise: the same energy per Hz at every rate, so a band reads the same, minus how much more
+            // bandwidth the faster rate spreads the same noise over.
+            const double expected = at48[static_cast<std::size_t> (b)] - 10.0 * std::log10 (rate / 48000.0);
+            if (bandHz (b) * 1.12 >= rate / 2.0) continue;   // above that rate's Nyquist
+            INFO ("rate " << rate << " band " << b);
+            CHECK (other[static_cast<std::size_t> (b)] > -90.0);
+            CHECK (other[static_cast<std::size_t> (b)] == Catch::Approx (expected).margin (1.5));
+        }
+    }
+    for (int b = 0; b < kBands; ++b) CHECK (at48[static_cast<std::size_t> (b)] > -90.0);   // 20 and 31.5 Hz too
 }
 
 // =================================================================================================
