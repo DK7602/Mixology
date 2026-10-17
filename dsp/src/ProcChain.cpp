@@ -92,6 +92,7 @@ namespace mixology::proc
 
     void Chain::ensureSpace()
     {
+        const std::lock_guard<std::mutex> lock (spaceLock);   // the timer and a prepare on another thread may both ask
         if (spaceOwner != nullptr) return;
         auto bankNew = std::make_unique<SpaceBank>();
         bankNew->prepare (rate);
@@ -124,6 +125,7 @@ namespace mixology::proc
     // ---------------------------------------------------------------------------------------------
     void Chain::prepare (double sampleRate, int numChannels)
     {
+        const std::lock_guard<std::mutex> lock (spaceLock);   // never while ensureSpace() makes the engine at the old rate
         rate = sampleRate > 0.0 ? sampleRate : 48000.0;
         channels = std::clamp (numChannels, 1, kMaxChannels);
         compressor.prepare (rate);

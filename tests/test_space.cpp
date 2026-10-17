@@ -5,9 +5,11 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <random>
+#include <thread>
 #include <vector>
 
 using namespace mixology;
@@ -421,6 +423,32 @@ TEST_CASE ("Space: any settings, any audio: finite and bounded", "[space]")
         double* ch[2] = { l.data(), r.data() };
         chain.process (ch, 2, 999);
         for (double x : l) REQUIRE ((std::isfinite (x) && std::abs (x) < 100.0));
+    }
+}
+
+TEST_CASE ("Space: its engine is made once, at the right rate, even when two threads ask at the same time", "[space]")
+{
+    // Some hosts prepare a plug-in off the message thread while its timer makes the Space engine: that could make
+    // two engines (one freed while the audio thread used it) or one at the old sample rate.
+    for (int round = 0; round < 20; ++round)
+    {
+        INFO ("round " << round);
+        auto chain = std::make_unique<Chain>();
+        chain->prepare (48000.0, 2);
+        std::thread timer ([&] { chain->ensureSpace(); });
+        std::thread host ([&] { chain->prepare (96000.0, 2); chain->ensureSpace(); });
+        timer.join();
+        host.join();
+        REQUIRE (chain->spaceReady());
+
+        // A 1/8 note at 120 BPM: the echo 0.25 s after the click, counted at 96 kHz.
+        chain->setValues (space (SpaceType::delay, { { dlyTime, 3.0f }, { dlyPingPong, 0.0f }, { dlyTone, 20000.0f } }));
+        play (*chain, std::vector<double> (9600, 0.0));   // faded in
+        std::vector<double> click (static_cast<std::size_t> (0.4 * 96000.0));
+        click[0] = 0.5;
+        const auto out = play (*chain, click);
+        const auto echo = static_cast<std::size_t> (std::max_element (out.l.begin(), out.l.end(), [] (double a, double b) { return std::abs (a) < std::abs (b); }) - out.l.begin());
+        CHECK (std::abs (static_cast<double> (echo) - 24000.0) <= 2.0);
     }
 }
 

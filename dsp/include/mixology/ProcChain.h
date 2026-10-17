@@ -8,6 +8,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 
 /** Milestone 5: a track's processing (or the full mix's): Gate, EQ, Compressor, Multiband, Transient,
     Tone Balance, Loudness, Harmonics, Analog Touch, Clip Control, Stereo, Final Touch and Limiter, in that
@@ -30,7 +31,8 @@ namespace mixology::proc
         void prepare (double sampleRate, int numChannels);
         /** Space needs a few MB of delay lines, so they are only made when Space is first switched on: the
             host calls this from its message thread (never the audio thread) when it sees Space on. Until then
-            the Space module passes the sound through. */
+            the Space module passes the sound through. Safe while prepare() runs on another thread (some hosts
+            prepare off the message thread): one engine, made once, at the current sample rate. */
         void ensureSpace();
         bool spaceReady() const { return spaceBank.load (std::memory_order_acquire) != nullptr; }
         /** Audio thread, before process(): the song's tempo (for the Delay's note values; 0 = unknown) and the
@@ -183,6 +185,7 @@ namespace mixology::proc
 
         struct SpaceBank;
         std::unique_ptr<SpaceBank> spaceOwner;           // message thread
+        std::mutex spaceLock;                            // ensureSpace() / prepare(), never the audio thread
         std::atomic<SpaceBank*> spaceBank { nullptr };   // what the audio thread uses (set once, never freed while running)
         double hostBpm = 0.0, hostKey = -1.0;
     };
