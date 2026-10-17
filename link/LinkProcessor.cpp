@@ -160,6 +160,11 @@ void MixologyLinkProcessor::process (juce::AudioBuffer<Sample>& buffer)
     const int n = buffer.getNumSamples();
     if (channels <= 0 || n <= 0) return;
     mixology::proc::host::silenceNonFinite (buffer, channels);
+    if (resetWanted.exchange (false))
+    {
+        assist.reset();
+        chain.reset();
+    }
 
     trimGain.setTargetValue (juce::Decibels::decibelsToGain (static_cast<double> (trimParam->load())));
     if (trimGain.isSmoothing())
@@ -244,6 +249,11 @@ void MixologyLinkProcessor::processBlock (juce::AudioBuffer<double>& buffer, juc
 template <typename Sample>
 void MixologyLinkProcessor::bypass (juce::AudioBuffer<Sample>& buffer)
 {
+    if (resetWanted.exchange (false))
+    {
+        assist.reset();
+        chain.reset();
+    }
     chain.bypass (buffer.getArrayOfWritePointers(), juce::jmin (buffer.getNumChannels(), getTotalNumOutputChannels()),
                   buffer.getNumSamples(), latencyTold.load (std::memory_order_relaxed));
 }

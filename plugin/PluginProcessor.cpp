@@ -158,6 +158,7 @@ void MixologyAudioProcessor::process (juce::AudioBuffer<Sample>& buffer)
     const int n = buffer.getNumSamples();
     if (channels <= 0 || n <= 0) return;
     mixology::proc::host::silenceNonFinite (buffer, channels);
+    if (resetWanted.exchange (false)) chain.reset();
 
     // Analyze Mix hears what the tracks add up to (before the Full Mix processing) ...
     analysisRing.push (buffer.getArrayOfReadPointers(), channels, n);
@@ -236,6 +237,7 @@ void MixologyAudioProcessor::processBlock (juce::AudioBuffer<double>& buffer, ju
 template <typename Sample>
 void MixologyAudioProcessor::bypass (juce::AudioBuffer<Sample>& buffer)
 {
+    if (resetWanted.exchange (false)) chain.reset();
     // JUCE's own bypass passes the sound on time while the host still moves it earlier by the latency it was told.
     chain.bypass (buffer.getArrayOfWritePointers(), buffer.getNumChannels(), buffer.getNumSamples(),
                   latencyTold.load (std::memory_order_relaxed));

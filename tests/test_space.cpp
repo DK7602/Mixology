@@ -417,6 +417,29 @@ TEST_CASE ("Space: switched on again, or back to an effect, it starts from silen
     CHECK (peak (back.l) < 1.0e-4);   // only the wet EQ's last ringing; the old 12 s tail would still be loud
 }
 
+TEST_CASE ("Space: a reset (the host stops or jumps) silences the tails at once", "[space]")
+{
+    // Both plug-ins now pass the host's reset (AU Reset, VST3 processing off) on to their chain, on the audio
+    // thread at the next block: instant now that nothing is cleared.
+    std::mt19937 rng (17);
+    std::normal_distribution<double> nd (0.0, 0.3);
+    std::vector<double> noise (static_cast<std::size_t> (0.5 * kSr));
+    for (auto& x : noise) x = nd (rng);
+    for (const auto& v : { space (SpaceType::hall, { { hallDecay, 12.0f }, { hallMix, 100.0f } }),
+                           space (SpaceType::delay, { { dlyFeedback, 95.0f }, { dlyMix, 100.0f } }),
+                           space (SpaceType::special, { { spxFeedback, 95.0f }, { spxMix, 100.0f } }) })
+    {
+        INFO ("type " << v[spType]);
+        auto chain = makeChain (v);
+        play (*chain, noise);
+        const auto ringing = play (*chain, std::vector<double> (4800, 0.0));
+        CHECK (peak (ringing.l) > 1.0e-3);   // the tail rings on ...
+        chain->reset();
+        const auto after = play (*chain, std::vector<double> (9600, 0.0));
+        CHECK (peak (after.l) == 0.0);       // ... until the reset
+    }
+}
+
 TEST_CASE ("Space: any settings, any audio: finite and bounded", "[space]")
 {
     std::mt19937 rng (21);

@@ -26,6 +26,9 @@ public:
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
+    /** The host stops or jumps (AU Reset, VST3 processing off): reverb and delay tails stop, at the start of the
+        next block (instant, so any thread may call this). */
+    void reset() override { resetWanted.store (true); }
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
@@ -130,6 +133,7 @@ private:
     mixology::proc::host::Raw procRaw;
     mixology::proc::Chain chain;
     std::atomic<int> latencyTold { 0 };   // what setLatencySamples last told the host (the bypass keeps to it)
+    std::atomic<bool> resetWanted { false };
     std::array<std::atomic<float>, mixology::proc::kMeterValues> procMeters {};
     std::atomic<std::uint32_t> procRunning { 0 };
     juce::CriticalSection stateLock;
