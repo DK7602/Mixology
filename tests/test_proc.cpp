@@ -1,12 +1,16 @@
+#include "mixology/AssistEq.h"
+#include "mixology/LoudnessMeter.h"
 #include "mixology/ProcChain.h"
 #include "mixology/ProcDsp.h"
 #include "mixology/ProcParams.h"
+#include "mixology/TrackMeter.h"
 #include "mixology/TruePeakDetector.h"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <cmath>
+#include <limits>
 #include <random>
 #include <set>
 #include <string>
@@ -603,4 +607,99 @@ TEST_CASE ("Processing: any settings, any audio: always finite, never blows up",
         }
         CHECK (peak < 1.0e-2);
     }
+}
+
+TEST_CASE ("Processing and meters: a sample that is not a number (NaN, infinity) poisons nothing", "[proc]")
+{
+    const double sr = 48000.0;
+    const double nan = std::numeric_limits<double>::quiet_NaN(), inf = std::numeric_limits<double>::infinity();
+    auto finite = [] (const Stereo& s) {
+        for (std::size_t i = 0; i < s.size(); ++i)
+            if (! std::isfinite (s.l[i]) || ! std::isfinite (s.r[i])) return false;
+        return true;
+    };
+
+    // The chain with the EQ on: one NaN left the EQ's filters NaN until a reset (every sample after it NaN, the track
+    // silent in the host). Now a broken sample is silence, and the rest sounds exactly as without it.
+    const auto v = with ({ { eqOn, 1.0f }, { eq3Gain, 6.0f } });
+    Chain clean, broken;
+    for (auto* c : { &clean, &broken })
+    {
+        c->prepare (sr, 2);
+        c->setValues (v);
+    }
+    auto a = sine (300.0, 0.3, 1.0, sr), b = a;
+    b.l[1000] = nan;
+    b.r[20000] = inf;
+    a.l[1000] = a.r[20000] = 0.0;   // what they become
+    run (clean, a);
+    run (broken, b);
+    CHECK (finite (b));
+    CHECK ((b.l == a.l && b.r == a.r));
+
+    // A module whose numbers grow past what a double holds (a sample of 1e308 through the Loudness module's +12 dB
+    // trim: infinity, then NaN in its filters) starts again from silence; a moment later it sounds as before.
+    const auto loud = with ({ { ldOn, 1.0f }, { ldTrim, 12.0f }, { ldLow, 6.0f } });
+    Chain huge, hugeClean;
+    for (auto* c : { &huge, &hugeClean })
+    {
+        c->prepare (sr, 2);
+        c->setValues (loud);
+    }
+    auto h = sine (300.0, 0.03, 1.0, sr), hc = h;
+    h.l[1000] = h.r[1000] = 1.0e308;
+    run (huge, h);
+    run (hugeClean, hc);
+    CHECK (finite (h));
+    CHECK (db (rms (h.l, h.size() / 2, h.size()) / rms (hc.l, hc.size() / 2, hc.size())) == Catch::Approx (0.0).margin (0.01));
+
+    // The Assist EQ (Mixology Link) likewise.
+    AssistEq assist, assistClean;
+    AssistSettings cut;
+    cut.lowCutHz = 100.0f;
+    cut.mudDb = -4.0f;
+    for (auto* e : { &assist, &assistClean })
+    {
+        e->setTarget (cut);
+        e->prepare (sr, 2);
+    }
+    auto ea = sine (300.0, 0.3, 1.0, sr), eb = ea;
+    eb.l[5000] = nan;
+    for (std::size_t start = 0; start < ea.size(); start += 512)
+    {
+        const int n = static_cast<int> (std::min<std::size_t> (512, ea.size() - start));
+        double* ca[2] = { ea.l.data() + start, ea.r.data() + start };
+        double* cb[2] = { eb.l.data() + start, eb.r.data() + start };
+        assistClean.process (ca, 2, n);
+        assist.process (cb, 2, n);
+    }
+    CHECK (finite (eb));
+    CHECK (db (rms (eb.l, eb.size() / 2, eb.size()) / rms (ea.l, ea.size() / 2, ea.size())) == Catch::Approx (0.0).margin (0.01));
+
+    // The loudness meters: an infinity as the last sample of a 100 ms step crashed Mixology's meter (an array index
+    // made from infinity); a NaN froze the loudness for good. A sample too loud for its energy to be a number (1e200)
+    // must not stop them either (those 100 ms count as silence). They read as if those samples were silence.
+    std::vector<double> l (static_cast<std::size_t> (4.0 * sr)), r;
+    for (std::size_t i = 0; i < l.size(); ++i) l[i] = 0.1 * std::sin (2.0 * kPi * 500.0 * static_cast<double> (i) / sr);
+    r = l;
+    auto bl = l, br = r;
+    bl[4800 * 4 - 1] = inf;
+    br[30000] = nan;
+    bl[100000] = 1.0e200;
+    LoudnessMeter meter, meterClean;
+    TrackMeter track, trackClean;
+    for (auto* m : { &meter, &meterClean }) m->prepare (sr, 2);
+    for (auto* m : { &track, &trackClean }) m->prepare (sr, 2);
+    const double* cleanCh[2] = { l.data(), r.data() };
+    const double* brokenCh[2] = { bl.data(), br.data() };
+    meterClean.process (cleanCh, 2, static_cast<int> (l.size()));
+    meter.process (brokenCh, 2, static_cast<int> (l.size()));
+    trackClean.process (cleanCh, 2, static_cast<int> (l.size()));
+    track.process (brokenCh, 2, static_cast<int> (l.size()));
+    CHECK (std::isfinite (meter.integratedLufs()));
+    CHECK (meter.integratedLufs() == Catch::Approx (meterClean.integratedLufs()).margin (0.2));
+    CHECK (meter.momentaryLufs() == Catch::Approx (meterClean.momentaryLufs()).margin (0.01));
+    CHECK (std::isfinite (meter.truePeakDbtp()));
+    CHECK (track.momentaryLufs() == Catch::Approx (trackClean.momentaryLufs()).margin (0.01));
+    CHECK (track.shortTermLufs() == Catch::Approx (trackClean.shortTermLufs()).margin (0.2));
 }

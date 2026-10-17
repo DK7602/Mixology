@@ -161,6 +161,7 @@ void MixologyAudioProcessor::process (juce::AudioBuffer<Sample>& buffer)
     const int channels = buffer.getNumChannels();
     const int n = buffer.getNumSamples();
     if (channels <= 0 || n <= 0) return;
+    mixology::proc::host::silenceNonFinite (buffer, channels);
 
     // Analyze Mix hears what the tracks add up to (before the Full Mix processing) ...
     analysisRing.push (buffer.getArrayOfReadPointers(), channels, n);

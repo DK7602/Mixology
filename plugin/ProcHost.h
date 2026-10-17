@@ -50,6 +50,19 @@ namespace mixology::proc::host
         return std::abs (now - told) > 0.5;
     }
 
+    /** Audio thread, first thing in a block: a sample that is not a number (NaN, infinity, from a broken plug-in
+        before this one) would poison every filter it reaches and the loudness meters for good: it becomes silence. */
+    template <typename Sample>
+    void silenceNonFinite (juce::AudioBuffer<Sample>& buffer, int channels) noexcept
+    {
+        for (int c = 0; c < channels; ++c)
+        {
+            const auto* x = buffer.getReadPointer (c);
+            for (int i = 0; i < buffer.getNumSamples(); ++i)
+                if (! std::isfinite (x[i])) buffer.getWritePointer (c)[i] = Sample (0);
+        }
+    }
+
     inline float valueFromText (const ParamSpec& s, const juce::String& text)
     {
         if (s.kind != Kind::number)

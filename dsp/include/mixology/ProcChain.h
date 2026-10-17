@@ -57,7 +57,11 @@ namespace mixology::proc
                 const int len = std::min (kChunk, numSamples - start);
                 for (int c = 0; c < nch; ++c)
                     for (int i = 0; i < len; ++i)
-                        work[static_cast<std::size_t> (c)][static_cast<std::size_t> (i)] = static_cast<double> (ch[c][start + i]);
+                    {
+                        const double x = static_cast<double> (ch[c][start + i]);
+                        // A sample that is not a number (NaN, infinity) would poison every filter after it.
+                        work[static_cast<std::size_t> (c)][static_cast<std::size_t> (i)] = std::isfinite (x) ? x : 0.0;
+                    }
                 if (! run)
                 {
                     idle (nch, len);

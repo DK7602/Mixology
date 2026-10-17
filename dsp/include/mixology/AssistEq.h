@@ -66,6 +66,11 @@ namespace mixology
                         }
                         z[0] = z1;
                         z[1] = z2;
+                        if (! std::isfinite (z1 + z2))   // it broke (a sample that was not a number): again from silence
+                        {
+                            z = { 0.0, 0.0 };
+                            for (int i = start; i < end; ++i) x[i] = Sample (0);
+                        }
                     }
                 }
             }

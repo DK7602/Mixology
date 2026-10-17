@@ -159,6 +159,7 @@ void MixologyLinkProcessor::process (juce::AudioBuffer<Sample>& buffer)
     const int channels = juce::jmin (buffer.getNumChannels(), getTotalNumOutputChannels());
     const int n = buffer.getNumSamples();
     if (channels <= 0 || n <= 0) return;
+    mixology::proc::host::silenceNonFinite (buffer, channels);
 
     trimGain.setTargetValue (juce::Decibels::decibelsToGain (static_cast<double> (trimParam->load())));
     if (trimGain.isSmoothing())
