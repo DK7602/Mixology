@@ -31,7 +31,7 @@
     - Space (Milestone 5, round 2): reverbs, delay, chorus, phaser and special effects at the end of the chain,
       on the track itself or (on an FX channel) 100 % wet. The effect can duck under other tracks (the vocal):
       every Link publishes its track's level each block, and a Link told to duck reads those tracks' levels.
-      While Space is on the host is told about a long tail, so it never cuts a reverb off.
+      The host is always told about a long tail (a minute), so it never cuts a reverb off, however late Space goes on.
     No latency, except while the Limiter is on (its lookahead; the host is told). */
 class MixologyLinkProcessor final : public juce::AudioProcessor,
                                     private juce::Timer,
@@ -43,9 +43,15 @@ public:
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
+    /** The host stops or jumps (AU Reset, VST3 processing off): reverb and delay tails stop, at the start of the
+        next block (instant, so any thread may call this). */
+    void reset() override { resetWanted.store (true); }
     bool isBusesLayoutSupported (const BusesLayout&) const override;
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     void processBlock (juce::AudioBuffer<double>&, juce::MidiBuffer&) override;
+    /** Bypassed by the host: the track passes, late by the latency the host was told (so it stays in time). */
+    void processBlockBypassed (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    void processBlockBypassed (juce::AudioBuffer<double>&, juce::MidiBuffer&) override;
     bool supportsDoublePrecisionProcessing() const override { return true; }
 
     juce::AudioProcessorEditor* createEditor() override;
@@ -55,7 +61,7 @@ public:
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return mixology::proc::host::reportedTail (procRaw.read()); }
+    double getTailLengthSeconds() const override { return mixology::proc::Chain::kTailSeconds; }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -104,6 +110,8 @@ public:
 private:
     template <typename Sample>
     void process (juce::AudioBuffer<Sample>&);
+    template <typename Sample>
+    void bypass (juce::AudioBuffer<Sample>&);
     void timerCallback() override;
     int useTimeSlice() override;   // analysis thread
     void publishIdentity();
@@ -133,6 +141,8 @@ private:
     mixology::AssistEq assist;
     mixology::proc::host::Raw procRaw;
     mixology::proc::Chain chain;
+    std::atomic<int> latencyTold { 0 };   // what setLatencySamples last told the host (the bypass keeps to it)
+    std::atomic<bool> resetWanted { false };
     std::atomic<std::uint32_t> running { 0 };
     std::array<std::uint32_t, mixology::link::kProcSlots> procRequestSeen {};
     juce::SmoothedValue<double, juce::ValueSmoothingTypes::Multiplicative> trimGain;
@@ -147,12 +157,11 @@ private:
     std::uint32_t duckRequestSeen = mixology::link::kNoRequestSeen;
 
     // Space: the ducking sources (message thread), the slots they have now (read by the audio thread), this
-    // track's own key level (audio thread), the tail last told to the host.
+    // track's own key level (audio thread).
     mixology::link::DuckSources duck;
     std::array<std::atomic<int>, mixology::link::kMaxDuckSources> duckSlots {};
     std::atomic<int> duckSlotCount { 0 };
     double keyEnv = 0.0;
-    std::atomic<double> tailTold { 0.0 };
     std::atomic<float> spaceWet { -100.0f };
     int resolveCountdown = 0;
 

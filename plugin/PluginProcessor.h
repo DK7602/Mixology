@@ -27,10 +27,16 @@ public:
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
+    /** The host stops or jumps (AU Reset, VST3 processing off): reverb and delay tails stop, at the start of the
+        next block (instant, so any thread may call this). */
+    void reset() override { resetWanted.store (true); }
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     void processBlock (juce::AudioBuffer<double>&, juce::MidiBuffer&) override;
+    /** Bypassed by the host: the mix passes, late by the latency the host was told (so it stays in time). */
+    void processBlockBypassed (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    void processBlockBypassed (juce::AudioBuffer<double>&, juce::MidiBuffer&) override;
     bool supportsDoublePrecisionProcessing() const override { return true; }
 
     juce::AudioProcessorEditor* createEditor() override;
@@ -40,7 +46,7 @@ public:
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return mixology::proc::host::reportedTail (procRaw.read()); }
+    double getTailLengthSeconds() const override { return mixology::proc::Chain::kTailSeconds; }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -110,7 +116,7 @@ public:
     std::atomic<bool> monoListen { false };
 
 private:
-    void timerCallback() override;   // the Limiter's latency, Space's engine and tail, the hand-off to Masterology
+    void timerCallback() override;   // the Limiter's latency, Space's engine, the hand-off to Masterology
     /** M6: what Masterology should know about this mix (the style, peaks, loudness, tone), a few times a second. */
     void publishHandoff();
     int handoffCountdown = 0;
@@ -138,13 +144,16 @@ private:
 
     template <typename Sample>
     void process (juce::AudioBuffer<Sample>&);
+    template <typename Sample>
+    void bypass (juce::AudioBuffer<Sample>&);
 
     mixology::LoudnessMeter loudness;
     mixology::proc::host::Raw procRaw;
     mixology::proc::Chain chain;
+    std::atomic<int> latencyTold { 0 };   // what setLatencySamples last told the host (the bypass keeps to it)
+    std::atomic<bool> resetWanted { false };
     std::array<std::atomic<float>, mixology::proc::kMeterValues> procMeters {};
     std::atomic<std::uint32_t> procRunning { 0 };
-    std::atomic<double> tailTold { 0.0 };
     juce::CriticalSection stateLock;
     juce::String uiState;
 

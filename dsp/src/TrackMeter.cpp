@@ -58,6 +58,11 @@ namespace mixology
             hopSum[static_cast<std::size_t> (c)] = 0.0;
         }
         hopPos = 0;
+        if (! std::isfinite (energy))   // samples beyond any real level overflowed the filters: start them again
+        {
+            for (auto& w : weighting) w.reset();
+            energy = 0.0;
+        }
         hopEnergy[static_cast<std::size_t> (hopIndex)] = energy;
         hopIndex = (hopIndex + 1) % kShortTermHops;
         hopsFilled = std::min (hopsFilled + 1, kShortTermHops);

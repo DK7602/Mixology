@@ -61,7 +61,8 @@ public:
         {
             for (int c = 0; c < nch; ++c)
             {
-                const double x = static_cast<double> (channels[c][i]);
+                double x = static_cast<double> (channels[c][i]);
+                if (! std::isfinite (x)) x = 0.0;   // not a number (NaN, infinity): it would stop the meter for good
                 const double k = weighting[static_cast<size_t> (c)].process (x);
                 hopSum[static_cast<size_t> (c)] += k * k;
 

@@ -5,9 +5,11 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <random>
+#include <thread>
 #include <vector>
 
 using namespace mixology;
@@ -61,6 +63,14 @@ namespace
         c->setHost (bpm, -1.0);
         c->process (ch, 2, 4800);
         return c;
+    }
+
+    double peak (const std::vector<double>& x, std::size_t from = 0, std::size_t to = 0)
+    {
+        if (to == 0) to = x.size();
+        double p = 0.0;
+        for (std::size_t i = from; i < to; ++i) p = std::max (p, std::abs (x[i]));
+        return p;
     }
 
     double rmsDb (const std::vector<double>& x, std::size_t from, std::size_t to)
@@ -123,6 +133,29 @@ TEST_CASE ("Space reverbs: the tail fades at the Decay you set (RT60), then to s
     CHECK (rmsDb (out.l, out.l.size() - 4800, out.l.size()) < -110.0);
     CHECK (Chain::tailSecondsFor (space (SpaceType::reverb, { { revDecay, 2.0f }, { revPre, 100.0f } })) == Catch::Approx (0.1 + 2.6));
     CHECK (Chain::tailSecondsFor (defaults()) == 0.0);
+}
+
+TEST_CASE ("Space: the tail the host is told is one long, finite time that covers every setting", "[space]")
+{
+    // Hosts only ask for the tail again when the latency changes, so a tail that followed the settings never reached
+    // them when Space went on mid-song (Cubase then cut the reverb off), and Freeze's endless one went to AU hosts
+    // as infinity. Now it is one time, longer than any effect rings at its longest.
+    CHECK (std::isfinite (Chain::kTailSeconds));
+    const std::vector<Values> longest {
+        space (SpaceType::reverb, { { revDecay, 10.0f }, { revPre, 200.0f } }),
+        space (SpaceType::hall, { { hallDecay, 12.0f }, { hallPre, 200.0f } }),
+        space (SpaceType::room, { { roomDecay, 3.0f }, { roomPre, 100.0f } }),
+        space (SpaceType::delay, { { dlyFeedback, 95.0f }, { dlyTime, 8.0f } }),
+        space (SpaceType::special, { { spxFeedback, 95.0f } }),
+        space (SpaceType::special, { { spxMode, 3.0f }, { spxFeedback, 95.0f } }),
+        space (SpaceType::chorus),
+        space (SpaceType::phaser),
+    };
+    for (const auto& v : longest)
+    {
+        INFO ("type " << v[spType] << ", mode " << v[spxMode]);
+        CHECK (Chain::tailSecondsFor (v) <= Chain::kTailSeconds);
+    }
 }
 
 TEST_CASE ("Space delay: echoes on the beat, fainter by Feedback, ping-pong left / right", "[space]")
@@ -229,6 +262,82 @@ TEST_CASE ("Space special FX: shimmer adds the octave, swell fades in, freeze st
     CHECK (peak <= 1.2 + 1.0e-9);
 }
 
+TEST_CASE ("Space: every effect's tail dies away, at the most feedback too, and never comes back", "[space]")
+{
+    // Shimmer fed its pitched tail back with nothing to stop the lows (they keep their pitch and the reverb rings
+    // them up): at the default Feedback (55 %) they grew slowly, at 95 % by 10 dB a second until the sound was
+    // infinite (NaN). Each effect at its longest / most feedback hears one second of quiet noise with a DC offset
+    // (-26 dBFS; the offset feeds exactly the lows that ran away, so a slow runaway shows within seconds instead of
+    // minutes), then silence, about six minutes in all: its tail must fade the whole time (no 10 s stretch louder
+    // than the one before), end at least 40 dB below where it started, and stay under the wet sound's safety
+    // rounding (0.8), so that never has to step in.
+    struct Case
+    {
+        const char* name;
+        Values v;
+        double seconds;
+    };
+    const std::vector<Case> cases {
+        { "shimmer default", space (SpaceType::special, { { spxMix, 100.0f } }), 60.0 },
+        { "shimmer +12", space (SpaceType::special, { { spxFeedback, 95.0f }, { spxShift, 12.0f }, { spxTone, 20000.0f }, { spxMotion, 0.0f }, { spxMix, 100.0f } }), 30.0 },
+        { "shimmer 0", space (SpaceType::special, { { spxFeedback, 95.0f }, { spxShift, 0.0f }, { spxTone, 20000.0f }, { spxMotion, 0.0f }, { spxMix, 100.0f } }), 30.0 },
+        { "shimmer -12", space (SpaceType::special, { { spxFeedback, 95.0f }, { spxShift, -12.0f }, { spxTone, 20000.0f }, { spxMotion, 0.0f }, { spxMix, 100.0f } }), 30.0 },
+        { "drift", space (SpaceType::special, { { spxMode, 1.0f }, { spxFeedback, 95.0f }, { spxTone, 20000.0f }, { spxMix, 100.0f } }), 20.0 },
+        { "swell", space (SpaceType::special, { { spxMode, 2.0f }, { spxFeedback, 95.0f }, { spxTone, 20000.0f }, { spxMix, 100.0f } }), 20.0 },
+        { "freeze", space (SpaceType::special, { { spxMode, 3.0f }, { spxFeedback, 95.0f }, { spxTone, 20000.0f }, { spxMix, 100.0f } }), 40.0 },
+        { "reverb", space (SpaceType::reverb, { { revDecay, 10.0f }, { revDamp, 20000.0f }, { revMix, 100.0f } }), 20.0 },
+        { "hall", space (SpaceType::hall, { { hallDecay, 12.0f }, { hallSize, 100.0f }, { hallDamp, 20000.0f }, { hallMix, 100.0f } }), 20.0 },
+        { "room", space (SpaceType::room, { { roomDecay, 3.0f }, { roomSize, 100.0f }, { roomMix, 100.0f } }), 20.0 },
+        { "delay", space (SpaceType::delay, { { dlyFeedback, 95.0f }, { dlyTime, 3.0f }, { dlyTone, 20000.0f }, { dlyPingPong, 100.0f }, { dlyMix, 100.0f } }), 40.0 },
+        { "chorus", space (SpaceType::chorus, { { choMix, 100.0f } }), 20.0 },
+        { "phaser", space (SpaceType::phaser, { { phaFeedback, 90.0f }, { phaDepth, 100.0f }, { phaMix, 100.0f } }), 20.0 },
+    };
+    for (const auto& c : cases)
+    {
+        INFO (c.name);
+        auto chain = makeChain (c.v);
+        std::mt19937 rng (4);
+        std::normal_distribution<double> nd (0.0, 0.035);
+        constexpr std::size_t kBlock = 1024;
+        const auto window = static_cast<std::size_t> (10.0 * kSr);
+        const auto inputEnd = static_cast<std::size_t> (kSr);
+        const auto total = inputEnd + static_cast<std::size_t> (c.seconds * kSr);
+        std::vector<double> l (kBlock), r (kBlock), peaks;   // the wet sound's peak in each 10 s after the input
+        bool finite = true;
+        double windowPeak = 0.0;
+        for (std::size_t done = 0; done < total; done += kBlock)
+        {
+            for (std::size_t i = 0; i < kBlock; ++i)
+            {
+                const bool playing = done + i < inputEnd;
+                l[i] = playing ? 0.035 + nd (rng) : 0.0;
+                r[i] = playing ? 0.035 + nd (rng) : 0.0;
+            }
+            chain->setHost (120.0, -1.0);
+            double* ch[2] = { l.data(), r.data() };
+            chain->process (ch, 2, static_cast<int> (kBlock));
+            for (std::size_t i = 0; i < kBlock; ++i)
+            {
+                finite = finite && std::isfinite (l[i]) && std::isfinite (r[i]);
+                if (done + i < inputEnd) continue;
+                windowPeak = std::max ({ windowPeak, std::abs (l[i]), std::abs (r[i]) });
+                if ((done + i + 1 - inputEnd) % window == 0)
+                {
+                    peaks.push_back (windowPeak);
+                    windowPeak = 0.0;
+                }
+            }
+        }
+        REQUIRE (finite);
+        REQUIRE (peaks.size() >= 2);
+        CHECK (peaks.front() < 0.8);
+        bool fading = true;
+        for (std::size_t k = 1; k < peaks.size(); ++k) fading = fading && peaks[k] <= peaks[k - 1];
+        CHECK (fading);
+        CHECK (peaks.back() < 0.01 * peaks.front());
+    }
+}
+
 TEST_CASE ("Space: switching effects and settings never clicks; off is untouched", "[space]")
 {
     std::vector<double> tone (static_cast<std::size_t> (4.0 * kSr));
@@ -265,6 +374,72 @@ TEST_CASE ("Space: switching effects and settings never clicks; off is untouched
     CHECK (passed.l == tone);
 }
 
+TEST_CASE ("Space: switched on again, or back to an effect, it starts from silence (nothing cleared on the audio thread)", "[space]")
+{
+    // A delay line forgets what it held on reset (instantly), and fills again from there.
+    dsp::DelayLine line;
+    line.prepare (1000);
+    for (int i = 0; i < 3000; ++i) line.push (1.0);
+    line.reset();
+    bool silent = true;
+    for (double d : { 0.0, 0.5, 1.0, 10.0, 999.0, 1000.0 }) silent = silent && line.read (d) == 0.0;
+    CHECK (silent);
+    line.push (0.5);
+    CHECK (line.read (0.0) == 0.5);
+    CHECK (line.read (0.5) == 0.25);   // half way to the silence before it
+    CHECK (line.read (1.0) == 0.0);
+
+    // A loud Hall tail, then Space off and on again: the new effect starts from silence (no old tail).
+    std::mt19937 rng (13);
+    std::normal_distribution<double> nd (0.0, 0.5);
+    std::vector<double> noise (static_cast<std::size_t> (kSr));
+    for (auto& x : noise) x = nd (rng);
+    auto hall = space (SpaceType::hall, { { hallDecay, 12.0f }, { hallMix, 100.0f } });
+    auto chain = makeChain (hall);
+    play (*chain, noise);
+    auto off = hall;
+    off[spOn] = 0.0f;
+    chain->setValues (off);
+    play (*chain, std::vector<double> (4800, 0.0));   // faded out
+    chain->setValues (hall);
+    const auto again = play (*chain, std::vector<double> (9600, 0.0));
+    CHECK (peak (again.l) == 0.0);
+
+    // Hall -> Reverb -> Hall: the Reverb's 60 ms crossfade carries the old tail away, then the Hall starts afresh.
+    play (*chain, noise);
+    auto plate = hall;
+    plate[spType] = static_cast<float> (SpaceType::reverb);
+    chain->setValues (plate);
+    const auto handover = play (*chain, std::vector<double> (9600, 0.0));
+    CHECK (peak (handover.l, 0, 480) > 0.05);   // the Hall still fading out
+    chain->setValues (hall);
+    const auto back = play (*chain, std::vector<double> (9600, 0.0));
+    CHECK (peak (back.l) < 1.0e-4);   // only the wet EQ's last ringing; the old 12 s tail would still be loud
+}
+
+TEST_CASE ("Space: a reset (the host stops or jumps) silences the tails at once", "[space]")
+{
+    // Both plug-ins now pass the host's reset (AU Reset, VST3 processing off) on to their chain, on the audio
+    // thread at the next block: instant now that nothing is cleared.
+    std::mt19937 rng (17);
+    std::normal_distribution<double> nd (0.0, 0.3);
+    std::vector<double> noise (static_cast<std::size_t> (0.5 * kSr));
+    for (auto& x : noise) x = nd (rng);
+    for (const auto& v : { space (SpaceType::hall, { { hallDecay, 12.0f }, { hallMix, 100.0f } }),
+                           space (SpaceType::delay, { { dlyFeedback, 95.0f }, { dlyMix, 100.0f } }),
+                           space (SpaceType::special, { { spxFeedback, 95.0f }, { spxMix, 100.0f } }) })
+    {
+        INFO ("type " << v[spType]);
+        auto chain = makeChain (v);
+        play (*chain, noise);
+        const auto ringing = play (*chain, std::vector<double> (4800, 0.0));
+        CHECK (peak (ringing.l) > 1.0e-3);   // the tail rings on ...
+        chain->reset();
+        const auto after = play (*chain, std::vector<double> (9600, 0.0));
+        CHECK (peak (after.l) == 0.0);       // ... until the reset
+    }
+}
+
 TEST_CASE ("Space: any settings, any audio: finite and bounded", "[space]")
 {
     std::mt19937 rng (21);
@@ -294,6 +469,32 @@ TEST_CASE ("Space: any settings, any audio: finite and bounded", "[space]")
         double* ch[2] = { l.data(), r.data() };
         chain.process (ch, 2, 999);
         for (double x : l) REQUIRE ((std::isfinite (x) && std::abs (x) < 100.0));
+    }
+}
+
+TEST_CASE ("Space: its engine is made once, at the right rate, even when two threads ask at the same time", "[space]")
+{
+    // Some hosts prepare a plug-in off the message thread while its timer makes the Space engine: that could make
+    // two engines (one freed while the audio thread used it) or one at the old sample rate.
+    for (int round = 0; round < 20; ++round)
+    {
+        INFO ("round " << round);
+        auto chain = std::make_unique<Chain>();
+        chain->prepare (48000.0, 2);
+        std::thread timer ([&] { chain->ensureSpace(); });
+        std::thread host ([&] { chain->prepare (96000.0, 2); chain->ensureSpace(); });
+        timer.join();
+        host.join();
+        REQUIRE (chain->spaceReady());
+
+        // A 1/8 note at 120 BPM: the echo 0.25 s after the click, counted at 96 kHz.
+        chain->setValues (space (SpaceType::delay, { { dlyTime, 3.0f }, { dlyPingPong, 0.0f }, { dlyTone, 20000.0f } }));
+        play (*chain, std::vector<double> (9600, 0.0));   // faded in
+        std::vector<double> click (static_cast<std::size_t> (0.4 * 96000.0));
+        click[0] = 0.5;
+        const auto out = play (*chain, click);
+        const auto echo = static_cast<std::size_t> (std::max_element (out.l.begin(), out.l.end(), [] (double a, double b) { return std::abs (a) < std::abs (b); }) - out.l.begin());
+        CHECK (std::abs (static_cast<double> (echo) - 24000.0) <= 2.0);
     }
 }
 

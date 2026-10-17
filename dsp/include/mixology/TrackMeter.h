@@ -28,7 +28,8 @@ namespace mixology
             {
                 for (int c = 0; c < nch; ++c)
                 {
-                    const double x = static_cast<double> (channels[c][i]);
+                    double x = static_cast<double> (channels[c][i]);
+                    if (! std::isfinite (x)) x = 0.0;   // not a number (NaN, infinity): it would stop the loudness for good
                     const double ax = std::abs (x);
                     auto& pk = windowPeak[static_cast<std::size_t> (c)];
                     if (ax > pk) pk = ax;

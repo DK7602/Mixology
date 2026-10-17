@@ -122,7 +122,7 @@ void MixologyLinkProcessor::prepareToPlay (double sampleRate, int)
     if (mixology::proc::isOn (values, mixology::proc::Module::space)) chain.ensureSpace();
     chain.setValues (values);
     setLatencySamples (chain.latencyFor (values));
-    tailTold.store (mixology::proc::host::reportedTail (values));
+    latencyTold.store (getLatencySamples());
     keyEnv = 0.0;
 }
 
@@ -159,6 +159,12 @@ void MixologyLinkProcessor::process (juce::AudioBuffer<Sample>& buffer)
     const int channels = juce::jmin (buffer.getNumChannels(), getTotalNumOutputChannels());
     const int n = buffer.getNumSamples();
     if (channels <= 0 || n <= 0) return;
+    mixology::proc::host::silenceNonFinite (buffer, channels);
+    if (resetWanted.exchange (false))
+    {
+        assist.reset();
+        chain.reset();
+    }
 
     trimGain.setTargetValue (juce::Decibels::decibelsToGain (static_cast<double> (trimParam->load())));
     if (trimGain.isSmoothing())
@@ -239,6 +245,22 @@ void MixologyLinkProcessor::process (juce::AudioBuffer<Sample>& buffer)
 void MixologyLinkProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&) { process (buffer); }
 void MixologyLinkProcessor::processBlock (juce::AudioBuffer<double>& buffer, juce::MidiBuffer&) { process (buffer); }
 
+// JUCE's own bypass passes the sound on time while the host still moves the track earlier by the latency it was told.
+template <typename Sample>
+void MixologyLinkProcessor::bypass (juce::AudioBuffer<Sample>& buffer)
+{
+    if (resetWanted.exchange (false))
+    {
+        assist.reset();
+        chain.reset();
+    }
+    chain.bypass (buffer.getArrayOfWritePointers(), juce::jmin (buffer.getNumChannels(), getTotalNumOutputChannels()),
+                  buffer.getNumSamples(), latencyTold.load (std::memory_order_relaxed));
+}
+
+void MixologyLinkProcessor::processBlockBypassed (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&) { bypass (buffer); }
+void MixologyLinkProcessor::processBlockBypassed (juce::AudioBuffer<double>& buffer, juce::MidiBuffer&) { bypass (buffer); }
+
 void MixologyLinkProcessor::updateTrackProperties (const TrackProperties& p)
 {
     trackIdentity.hasName = p.name.has_value() && p.name->isNotEmpty();
@@ -307,16 +329,11 @@ void MixologyLinkProcessor::timerCallback()
     const auto now = procRaw.read();
     const int latency = chain.latencyFor (now);
     if (latency != getLatencySamples()) setLatencySamples (latency);   // the Limiter's lookahead, while it is on
+    latencyTold.store (latency);
     registry.publishProc (slot, now, static_cast<float> (currentRate.load()), latency);
 
-    // Space: its delay lines are made the first time it is switched on (never on the audio thread); the host
-    // hears about the tail when Space goes on or off, so it never cuts a reverb short.
+    // Space: its delay lines are made the first time it is switched on (never on the audio thread).
     if (mixology::proc::isOn (now, mixology::proc::Module::space)) chain.ensureSpace();
-    if (const double tail = mixology::proc::host::reportedTail (now); mixology::proc::host::tailChanged (tail, tailTold.load()))
-    {
-        tailTold.store (tail);
-        updateHostDisplay (ChangeDetails().withLatencyChanged (true));   // the host asks for latency and tail again
-    }
 
     mixology::link::DuckSources wantedDuck;
     if (registry.takeDuckRequest (slot, duckRequestSeen, wantedDuck)) setDuck (wantedDuck);

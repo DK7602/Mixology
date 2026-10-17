@@ -8,6 +8,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 
 /** Milestone 5: a track's processing (or the full mix's): Gate, EQ, Compressor, Multiband, Transient,
     Tone Balance, Loudness, Harmonics, Analog Touch, Clip Control, Stereo, Final Touch and Limiter, in that
@@ -30,7 +31,8 @@ namespace mixology::proc
         void prepare (double sampleRate, int numChannels);
         /** Space needs a few MB of delay lines, so they are only made when Space is first switched on: the
             host calls this from its message thread (never the audio thread) when it sees Space on. Until then
-            the Space module passes the sound through. */
+            the Space module passes the sound through. Safe while prepare() runs on another thread (some hosts
+            prepare off the message thread): one engine, made once, at the current sample rate. */
         void ensureSpace();
         bool spaceReady() const { return spaceBank.load (std::memory_order_acquire) != nullptr; }
         /** Audio thread, before process(): the song's tempo (for the Delay's note values; 0 = unknown) and the
@@ -38,6 +40,10 @@ namespace mixology::proc
         void setHost (double bpm, double keyLevel) { hostBpm = bpm; hostKey = keyLevel; }
         /** How long the sound goes on after the input stops (the Space effect's tail), in seconds. */
         static double tailSecondsFor (const Values&);
+        /** The tail the host is told, the same whatever the settings: longer than any of them rings
+            (tailSecondsFor), and finite. Hosts only ask again when the latency changes, so a tail that followed the
+            settings never reached them when Space went on mid-song (Cubase then cut the reverb off). */
+        static constexpr double kTailSeconds = 60.0;
         void reset();
         /** Where the controls should be (they glide there). */
         void setValues (const Values&);
@@ -57,13 +63,43 @@ namespace mixology::proc
                 const int len = std::min (kChunk, numSamples - start);
                 for (int c = 0; c < nch; ++c)
                     for (int i = 0; i < len; ++i)
-                        work[static_cast<std::size_t> (c)][static_cast<std::size_t> (i)] = static_cast<double> (ch[c][start + i]);
+                    {
+                        const double x = static_cast<double> (ch[c][start + i]);
+                        // A sample that is not a number (NaN, infinity) would poison every filter after it.
+                        work[static_cast<std::size_t> (c)][static_cast<std::size_t> (i)] = std::isfinite (x) ? x : 0.0;
+                    }
                 if (! run)
                 {
                     idle (nch, len);
                     continue;
                 }
                 processChunk (nch, len);
+                for (int c = 0; c < nch; ++c)
+                    for (int i = 0; i < len; ++i)
+                        ch[c][start + i] = static_cast<Sample> (work[static_cast<std::size_t> (c)][static_cast<std::size_t> (i)]);
+            }
+        }
+
+        /** The host bypasses the plug-in (audio thread, instead of process()): the sound passes untouched, `latency`
+            samples late (the latency the host was told: 0, or the Limiter's lookahead), so the track stays in time.
+            The Limiter's delay line keeps filling, so switching back continues the sound. */
+        template <typename Sample>
+        void bypass (Sample* const* ch, int numChannels, int numSamples, int latency)
+        {
+            const int nch = std::min ({ numChannels, channels, kMaxChannels });
+            if (nch <= 0 || numSamples <= 0) return;
+            for (int start = 0; start < numSamples; start += kChunk)
+            {
+                const int len = std::min (kChunk, numSamples - start);
+                for (int c = 0; c < nch; ++c)
+                    for (int i = 0; i < len; ++i)
+                    {
+                        const double x = static_cast<double> (ch[c][start + i]);
+                        work[static_cast<std::size_t> (c)][static_cast<std::size_t> (i)] = std::isfinite (x) ? x : 0.0;
+                    }
+                double* rows[2] = { work[0].data(), work[1].data() };
+                limiter.pass (rows, nch, len, latency);
+                if (latency <= 0) continue;   // on time: the buffer is not touched at all
                 for (int c = 0; c < nch; ++c)
                     for (int i = 0; i < len; ++i)
                         ch[c][start + i] = static_cast<Sample> (work[static_cast<std::size_t> (c)][static_cast<std::size_t> (i)]);
@@ -92,6 +128,7 @@ namespace mixology::proc
         void glide (int n);
         void resetModule (Module);
         void runModule (Module, int nch, int n);
+        bool scrub (int nch, int n);   // samples that are not numbers (NaN, infinity) become silence; true if there were any
         void peakInto (float& l, float& r, int nch, int n) const;
 
         void gate (int nch, int n);
@@ -178,6 +215,7 @@ namespace mixology::proc
 
         struct SpaceBank;
         std::unique_ptr<SpaceBank> spaceOwner;           // message thread
+        std::mutex spaceLock;                            // ensureSpace() / prepare(), never the audio thread
         std::atomic<SpaceBank*> spaceBank { nullptr };   // what the audio thread uses (set once, never freed while running)
         double hostBpm = 0.0, hostKey = -1.0;
     };

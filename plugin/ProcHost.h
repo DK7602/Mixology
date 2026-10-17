@@ -7,7 +7,6 @@
 #include <array>
 #include <atomic>
 #include <cmath>
-#include <limits>
 
 /** Milestone 5: the processing controls (mixology::proc's table) as host parameters. Shared by Mixology Link
     (each track) and Mixology (the full mix): same ids, ranges and texts in both. */
@@ -31,23 +30,17 @@ namespace mixology::proc::host
         return juce::String (v, 2);
     }
 
-    /** The tail the host is told about. Cubase can stop a plug-in once its input has been silent for longer
-        than its tail, which would cut a reverb off, so while Space is on the tail is generous (longer than any
-        setting makes it) and endless for Freeze. Only switching Space on / off (or Freeze) changes it, so the
-        host is rarely asked to look again (which restarts the plug-in). */
-    inline double reportedTail (const Values& v)
+    /** Audio thread, first thing in a block: a sample that is not a number (NaN, infinity, from a broken plug-in
+        before this one) would poison every filter it reaches and the loudness meters for good: it becomes silence. */
+    template <typename Sample>
+    void silenceNonFinite (juce::AudioBuffer<Sample>& buffer, int channels) noexcept
     {
-        if (! isOn (v, Module::space)) return 0.0;
-        const bool freeze = juce::roundToInt (v[static_cast<std::size_t> (spType)]) == static_cast<int> (SpaceType::special)
-                            && juce::roundToInt (v[static_cast<std::size_t> (spxMode)]) == static_cast<int> (SpecialMode::freeze);
-        return freeze ? std::numeric_limits<double>::infinity() : 30.0;
-    }
-
-    /** True when the host should hear about a new tail. */
-    inline bool tailChanged (double now, double told)
-    {
-        if (std::isinf (now) || std::isinf (told)) return std::isinf (now) != std::isinf (told);
-        return std::abs (now - told) > 0.5;
+        for (int c = 0; c < channels; ++c)
+        {
+            const auto* x = buffer.getReadPointer (c);
+            for (int i = 0; i < buffer.getNumSamples(); ++i)
+                if (! std::isfinite (x[i])) buffer.getWritePointer (c)[i] = Sample (0);
+        }
     }
 
     inline float valueFromText (const ParamSpec& s, const juce::String& text)

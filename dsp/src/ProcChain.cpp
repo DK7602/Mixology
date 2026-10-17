@@ -41,6 +41,7 @@ namespace mixology::proc
         Phaser phaser;
         PitchShifter shifter;
         Filter2 lowCut, highCut, toneLp;   // the wet sound's EQ, and Special FX's Tone
+        Filter2 shimmerHp;                  // no lows in the shimmer's feedback
         float lcHz = -1.0f, hcHz = -1.0f, toneHz = -1.0f;
         int type = -1, prevType = -1;
         double fade = 1.0;                  // from the previous effect to this one (a switch never clicks)
@@ -58,8 +59,10 @@ namespace mixology::proc
             chorus.prepare (sr);
             phaser.prepare (sr);
             shifter.prepare (sr);
+            shimmerHp.k = design (Shape::highPass, 120.0, 0.0, 0.7071, sr);
             resetAll();
         }
+        /** Instant (the delay lines forget what they hold, nothing is cleared), so the audio thread may call it. */
         void resetType (int t)
         {
             switch (static_cast<SpaceType> (t))
@@ -70,7 +73,7 @@ namespace mixology::proc
                 case SpaceType::phaser: phaser.reset(); break;
                 case SpaceType::hall: hall.reset(); break;
                 case SpaceType::room: room.reset(); break;
-                case SpaceType::special: special.reset(); shifter.reset(); shimmer = {}; swell = 1.0; break;
+                case SpaceType::special: special.reset(); shifter.reset(); shimmerHp.reset(); shimmer = {}; swell = 1.0; break;
             }
         }
         void resetAll()
@@ -89,6 +92,7 @@ namespace mixology::proc
 
     void Chain::ensureSpace()
     {
+        const std::lock_guard<std::mutex> lock (spaceLock);   // the timer and a prepare on another thread may both ask
         if (spaceOwner != nullptr) return;
         auto bankNew = std::make_unique<SpaceBank>();
         bankNew->prepare (rate);
@@ -121,6 +125,7 @@ namespace mixology::proc
     // ---------------------------------------------------------------------------------------------
     void Chain::prepare (double sampleRate, int numChannels)
     {
+        const std::lock_guard<std::mutex> lock (spaceLock);   // never while ensureSpace() makes the engine at the old rate
         rate = sampleRate > 0.0 ? sampleRate : 48000.0;
         channels = std::clamp (numChannels, 1, kMaxChannels);
         compressor.prepare (rate);
@@ -259,6 +264,7 @@ namespace mixology::proc
                 limiter.set (v (limIn), v (limCeil), v (limRel), v (limLook), v (limChar) / 100.0, v (limDetect) > 0.5);
                 double* rows[2] = { work[0].data(), work[1].data() };
                 limiter.process (rows, nch, n, w0, w1);
+                if (scrub (nch, n)) limiter.reset();
                 meters.limit = metric (meters.limit, static_cast<float> (limiter.reductionDb()));
                 continue;
             }
@@ -266,6 +272,7 @@ namespace mixology::proc
             const bool blend = w0 < 1.0 || w1 < 1.0;
             if (blend) dry = work;
             runModule (m, nch, n);
+            if (scrub (nch, n)) resetModule (m);   // it broke (e.g. a runaway tail): it starts again from silence
             if (blend)
                 for (int c = 0; c < nch; ++c)
                     for (int i = 0; i < n; ++i)
@@ -299,6 +306,18 @@ namespace mixology::proc
             case Module::limit:
             case Module::count: break;
         }
+    }
+
+    bool Chain::scrub (int nch, int n)
+    {
+        bool bad = false;
+        for (int c = 0; c < nch; ++c)
+            for (int i = 0; i < n; ++i)
+            {
+                auto& x = work[ix (c)][ix (i)];
+                if (! std::isfinite (x)) { x = 0.0; bad = true; }
+            }
+        return bad;
     }
 
     void Chain::resetModule (Module m)
@@ -821,12 +840,23 @@ namespace mixology::proc
                     rs.modHz = 0.15 + 0.6 * motion;
                     rs.dampHz = std::min (20000.0, v (spxTone) * 1.2);
                     bank.special.set (rs);
-                    // Shimmer: last chunk's wet sound, pitched by Shift, goes back into the tail.
+                    // Shimmer: last chunk's wet sound, pitched by Shift, goes back into the tail. That loop must lose a
+                    // little on every trip, whatever the settings, or the tail grows until it explodes: no lows (they
+                    // keep their pitch and the tail rings them up), and with no Shift the sound lands back on the
+                    // tail's own resonances, so there the feedback stays below what they ring up.
                     std::array<double, kChunk> extra {};
                     if (mode == SpecialMode::shimmer)
                     {
-                        bank.shifter.setSemitones (v (spxShift));
-                        for (int i = 0; i < n; ++i) extra[ix (i)] = bank.shifter.process (bank.shimmer[ix (i)]) * fb * 0.55;
+                        const double shift = v (spxShift), most = fb * 0.55;
+                        const double unshifted = std::min (most, 0.9 / bank.special.resonance());
+                        const double loop = unshifted + (most - unshifted) * std::min (1.0, std::abs (shift));
+                        bank.shifter.setSemitones (shift);
+                        for (int i = 0; i < n; ++i)
+                        {
+                            const double e = bank.shimmerHp.process (0, bank.shifter.process (bank.shimmer[ix (i)])) * loop;
+                            const double ae = std::abs (e);
+                            extra[ix (i)] = ae > 1.0 ? std::copysign (1.0 + std::tanh (ae - 1.0), e) : e;   // and never past 2
+                        }
                     }
                     // Freeze: the tail hardly decays, so only a little of the track goes in.
                     std::array<double, kChunk> fl {}, fr {};

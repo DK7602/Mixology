@@ -49,14 +49,13 @@ namespace mixology::dsp
         const auto size = nextPow2 (static_cast<std::size_t> (std::max (4, maxDelaySamples + 4)));
         buf.assign (size, 0.0);
         mask = size - 1;
-        pos = 0;
+        pos = filled = 0;
         maxDelay = static_cast<double> (maxDelaySamples);
     }
 
     void DelayLine::reset()
     {
-        std::fill (buf.begin(), buf.end(), 0.0);
-        pos = 0;
+        pos = filled = 0;   // the old samples stay in memory but read as silence until they are written over
     }
 
     // ---------------------------------------------------------------------------------------------

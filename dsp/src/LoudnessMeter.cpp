@@ -55,6 +55,11 @@ void LoudnessMeter::finishHop() noexcept
         hopSum[static_cast<size_t> (c)] = 0.0;
     }
     hopPos = 0;
+    if (! std::isfinite (energy))   // samples beyond any real level overflowed the filters: start them again
+    {
+        for (auto& w : weighting) w.reset();
+        energy = 0.0;
+    }
 
     hopEnergies[static_cast<size_t> (hopIndex)] = energy;
     hopIndex = (hopIndex + 1) % kShortTermHops;
@@ -151,12 +156,16 @@ int LoudnessMeter::GatedHistogram::binFor (double lufs) noexcept
 {
     if (! (lufs > kMinLufs))
         return 0;
+    if (! (lufs < kMaxLufs))
+        return kBins - 1;   // (+infinity would not fit an int)
     const auto b = static_cast<int> ((lufs - kMinLufs) / kBinLu);
     return std::min (b, kBins - 1);
 }
 
 void LoudnessMeter::GatedHistogram::add (double energy) noexcept
 {
+    if (! std::isfinite (energy))
+        return;   // samples beyond any real level: they would spoil every reading after them
     const double lufs = energyToLufs (energy);
     if (! (lufs > kMinLufs))
         return;   // absolute gate
