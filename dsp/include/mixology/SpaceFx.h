@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -67,6 +68,10 @@ namespace mixology::dsp
         void set (const Settings&);
         /** Mono or stereo in, stereo wet out. `extra` (optional) is added to the tail's input (the shimmer). */
         void process (const double* inL, const double* inR, double* outL, double* outR, int n, const double* extra = nullptr);
+        /** How much the tail's mid ((L + R) / 2) rings up a steady tone at its strongest resonances, at most
+            (about 0.26 / (1 - the shortest line's gain per pass)). Feedback from the wet sound back into the tail
+            stays below 1 / this, or it grows without end. */
+        double resonance() const { return 0.26 / std::max (1.0e-6, 1.0 - gain[0]); }
 
     private:
         double rate = 48000.0;

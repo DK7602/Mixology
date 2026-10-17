@@ -237,6 +237,82 @@ TEST_CASE ("Space special FX: shimmer adds the octave, swell fades in, freeze st
     CHECK (peak <= 1.2 + 1.0e-9);
 }
 
+TEST_CASE ("Space: every effect's tail dies away, at the most feedback too, and never comes back", "[space]")
+{
+    // Shimmer fed its pitched tail back with nothing to stop the lows (they keep their pitch and the reverb rings
+    // them up): at the default Feedback (55 %) they grew slowly, at 95 % by 10 dB a second until the sound was
+    // infinite (NaN). Each effect at its longest / most feedback hears one second of quiet noise with a DC offset
+    // (-26 dBFS; the offset feeds exactly the lows that ran away, so a slow runaway shows within seconds instead of
+    // minutes), then silence, about six minutes in all: its tail must fade the whole time (no 10 s stretch louder
+    // than the one before), end at least 40 dB below where it started, and stay under the wet sound's safety
+    // rounding (0.8), so that never has to step in.
+    struct Case
+    {
+        const char* name;
+        Values v;
+        double seconds;
+    };
+    const std::vector<Case> cases {
+        { "shimmer default", space (SpaceType::special, { { spxMix, 100.0f } }), 60.0 },
+        { "shimmer +12", space (SpaceType::special, { { spxFeedback, 95.0f }, { spxShift, 12.0f }, { spxTone, 20000.0f }, { spxMotion, 0.0f }, { spxMix, 100.0f } }), 30.0 },
+        { "shimmer 0", space (SpaceType::special, { { spxFeedback, 95.0f }, { spxShift, 0.0f }, { spxTone, 20000.0f }, { spxMotion, 0.0f }, { spxMix, 100.0f } }), 30.0 },
+        { "shimmer -12", space (SpaceType::special, { { spxFeedback, 95.0f }, { spxShift, -12.0f }, { spxTone, 20000.0f }, { spxMotion, 0.0f }, { spxMix, 100.0f } }), 30.0 },
+        { "drift", space (SpaceType::special, { { spxMode, 1.0f }, { spxFeedback, 95.0f }, { spxTone, 20000.0f }, { spxMix, 100.0f } }), 20.0 },
+        { "swell", space (SpaceType::special, { { spxMode, 2.0f }, { spxFeedback, 95.0f }, { spxTone, 20000.0f }, { spxMix, 100.0f } }), 20.0 },
+        { "freeze", space (SpaceType::special, { { spxMode, 3.0f }, { spxFeedback, 95.0f }, { spxTone, 20000.0f }, { spxMix, 100.0f } }), 40.0 },
+        { "reverb", space (SpaceType::reverb, { { revDecay, 10.0f }, { revDamp, 20000.0f }, { revMix, 100.0f } }), 20.0 },
+        { "hall", space (SpaceType::hall, { { hallDecay, 12.0f }, { hallSize, 100.0f }, { hallDamp, 20000.0f }, { hallMix, 100.0f } }), 20.0 },
+        { "room", space (SpaceType::room, { { roomDecay, 3.0f }, { roomSize, 100.0f }, { roomMix, 100.0f } }), 20.0 },
+        { "delay", space (SpaceType::delay, { { dlyFeedback, 95.0f }, { dlyTime, 3.0f }, { dlyTone, 20000.0f }, { dlyPingPong, 100.0f }, { dlyMix, 100.0f } }), 40.0 },
+        { "chorus", space (SpaceType::chorus, { { choMix, 100.0f } }), 20.0 },
+        { "phaser", space (SpaceType::phaser, { { phaFeedback, 90.0f }, { phaDepth, 100.0f }, { phaMix, 100.0f } }), 20.0 },
+    };
+    for (const auto& c : cases)
+    {
+        INFO (c.name);
+        auto chain = makeChain (c.v);
+        std::mt19937 rng (4);
+        std::normal_distribution<double> nd (0.0, 0.035);
+        constexpr std::size_t kBlock = 1024;
+        const auto window = static_cast<std::size_t> (10.0 * kSr);
+        const auto inputEnd = static_cast<std::size_t> (kSr);
+        const auto total = inputEnd + static_cast<std::size_t> (c.seconds * kSr);
+        std::vector<double> l (kBlock), r (kBlock), peaks;   // the wet sound's peak in each 10 s after the input
+        bool finite = true;
+        double windowPeak = 0.0;
+        for (std::size_t done = 0; done < total; done += kBlock)
+        {
+            for (std::size_t i = 0; i < kBlock; ++i)
+            {
+                const bool playing = done + i < inputEnd;
+                l[i] = playing ? 0.035 + nd (rng) : 0.0;
+                r[i] = playing ? 0.035 + nd (rng) : 0.0;
+            }
+            chain->setHost (120.0, -1.0);
+            double* ch[2] = { l.data(), r.data() };
+            chain->process (ch, 2, static_cast<int> (kBlock));
+            for (std::size_t i = 0; i < kBlock; ++i)
+            {
+                finite = finite && std::isfinite (l[i]) && std::isfinite (r[i]);
+                if (done + i < inputEnd) continue;
+                windowPeak = std::max ({ windowPeak, std::abs (l[i]), std::abs (r[i]) });
+                if ((done + i + 1 - inputEnd) % window == 0)
+                {
+                    peaks.push_back (windowPeak);
+                    windowPeak = 0.0;
+                }
+            }
+        }
+        REQUIRE (finite);
+        REQUIRE (peaks.size() >= 2);
+        CHECK (peaks.front() < 0.8);
+        bool fading = true;
+        for (std::size_t k = 1; k < peaks.size(); ++k) fading = fading && peaks[k] <= peaks[k - 1];
+        CHECK (fading);
+        CHECK (peaks.back() < 0.01 * peaks.front());
+    }
+}
+
 TEST_CASE ("Space: switching effects and settings never clicks; off is untouched", "[space]")
 {
     std::vector<double> tone (static_cast<std::size_t> (4.0 * kSr));

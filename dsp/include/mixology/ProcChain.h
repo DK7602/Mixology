@@ -92,6 +92,7 @@ namespace mixology::proc
         void glide (int n);
         void resetModule (Module);
         void runModule (Module, int nch, int n);
+        bool scrub (int nch, int n);   // samples that are not numbers (NaN, infinity) become silence; true if there were any
         void peakInto (float& l, float& r, int nch, int n) const;
 
         void gate (int nch, int n);
