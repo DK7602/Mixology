@@ -15,6 +15,7 @@
 //              its tone against the style, a mono mix), so Masterology can start from the right place.
 //   - masters: each Masterology publishes its goal (loudness target, true-peak ceiling, genre), so Mixology's
 //              hand-off check uses Masterology's real numbers.
+//   - beat key: the song's key as a Voxology on the beat hears it, for Honey Tune (another plug-in file).
 //   - choices: the song's style (Mixology's list of 75, "genre.style") and the DAW you work in ("cubase", "studioone"...),
 //              the same in all three: pick one in any of them and the others follow. The newest choice wins (each saves
 //              the time you picked it with the project).
@@ -222,11 +223,20 @@ namespace suite
         Text<kTextBytes> key, name;
     };
 
+    struct alignas (64) KeySlot
+    {
+        std::atomic<std::uint32_t> seq;          // odd while written; writers take it with a compare-exchange
+        std::atomic<std::uint64_t> whenMs;       // 0 = never written
+        std::atomic<std::int32_t> key, scale;
+        std::atomic<float> confidence;
+    };
+
     struct Block
     {
         std::atomic<std::uint32_t> layout;
         MixSlot mix;
         std::array<ChoiceSlot, kChoices> choices;   // [Choice::style], [Choice::daw]
+        KeySlot beatKey;
         std::array<VocalSlot, kMaxVocals> vocals;
         std::array<MasterSlot, kMaxMasters> masters;
     };
@@ -254,6 +264,10 @@ namespace suite
         /** Mixology's answer for this instance's slot and track (nameHash as published), if a Mixology gave one within
             kAliveMs for this claim of the slot and this name. */
         bool vocalAck (int slot, std::uint64_t instanceId, std::uint32_t nameHash, VocalAck&, std::uint64_t nowMs) const;
+        /** The song's key as a Voxology on the beat hears it (key 0 = C .. 11, Voxology's scale index, 0..1 sure), with
+            the time it was heard; Honey Tune reads it (and judges how old is too old). */
+        void publishBeatKey (int key, int scale, float confidence, std::uint64_t whenMs);
+        bool readBeatKey (int& key, int& scale, float& confidence, std::uint64_t& whenMs) const;   // false: never written
 
         // ---- Mixology ---------------------------------------------------------------------------------
         /** Every live Voxology. */

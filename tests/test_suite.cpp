@@ -317,6 +317,22 @@ TEST_CASE ("Suite: Mixology answers each vocal, for that claim of the slot and t
     CHECK (got.state == suite::VocalAck::State::noLink);
 }
 
+TEST_CASE ("Suite: the beat key goes from Voxology on the beat to Honey Tune", "[suite]")
+{
+    Memory mem;
+    suite::Link vox (mem.data()), honey (mem.data());
+    int key = -1, scale = -1;
+    float sure = 0.0f;
+    std::uint64_t when = 0;
+    CHECK_FALSE (honey.readBeatKey (key, scale, sure, when));   // nothing yet
+    vox.publishBeatKey (4, 2, 0.83f, 123456);
+    REQUIRE (honey.readBeatKey (key, scale, sure, when));
+    CHECK (key == 4);
+    CHECK (scale == 2);
+    CHECK (sure == Catch::Approx (0.83f));
+    CHECK (when == 123456);
+}
+
 TEST_CASE ("Suite: the DAW is found from the host program", "[suite]")
 {
     CHECK (suite::dawFromHostPath ("C:\\Program Files\\Steinberg\\Cubase 14\\Cubase14.exe") == "cubase");

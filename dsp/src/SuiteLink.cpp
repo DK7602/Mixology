@@ -509,4 +509,37 @@ namespace suite
         if (s.holder.load (kRelaxed) == instanceId) s.heartbeatMs.store (0, kRelaxed);
         s.seq.fetch_add (1, kRelease);
     }
+
+    // ---- the beat key (Voxology on the beat -> Honey Tune) ------------------------------------------------
+
+    void Link::publishBeatKey (int key, int scale, float confidence, std::uint64_t whenMs)
+    {
+        auto& s = block.beatKey;
+        if (! lockStyle (s.seq)) return;   // (several Voxologys on beats may write: one at a time)
+        s.key.store (key, kRelaxed);
+        s.scale.store (scale, kRelaxed);
+        s.confidence.store (confidence, kRelaxed);
+        s.whenMs.store (whenMs, kRelaxed);
+        s.seq.fetch_add (1, kRelease);
+    }
+
+    bool Link::readBeatKey (int& key, int& scale, float& confidence, std::uint64_t& whenMs) const
+    {
+        const auto& s = block.beatKey;
+        int k = 0, sc = 0;
+        float c = 0.0f;
+        std::uint64_t when = 0;
+        const bool ok = readConsistent (s.seq, [&] {
+            k = s.key.load (kRelaxed);
+            sc = s.scale.load (kRelaxed);
+            c = s.confidence.load (kRelaxed);
+            when = s.whenMs.load (kRelaxed);
+        });
+        if (! ok || when == 0) return false;
+        key = k;
+        scale = sc;
+        confidence = c;
+        whenMs = when;
+        return true;
+    }
 }
