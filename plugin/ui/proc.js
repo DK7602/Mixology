@@ -24,10 +24,13 @@ export function createProc(app) {
   const pending = {};          // id -> value, sent together every 30 ms
   let flushTimer = null;
   const listeners = new Set();
+  // The target saved with the project (by name: a track's key changes from session to session). Picked again as soon
+  // as the plug-in lists that track (for a few seconds after the first list); until then the pages show the Full Mix.
+  let wanted = store.get("procTarget", "Full Mix"), wantedUntil = 0;
 
   const api = {
     key: "mix",
-    name: store.get("procTarget", "Full Mix"),
+    name: "Full Mix",
     targets: [{ key: "mix", name: "Full Mix", on: [], running: [] }],
     ok: true,
     loadedKey: null,   // the target whose values have arrived (until then they are only defaults)
@@ -78,6 +81,7 @@ export function createProc(app) {
     select(key) {
       const t = api.targets.find((x) => x.key === key);
       if (!t || key === api.key) return;
+      wanted = null;
       api.key = key;
       api.name = t.name;
       store.set("procTarget", t.name);
@@ -134,6 +138,13 @@ export function createProc(app) {
       if (f.procTargets) {
         api.targets = f.procTargets;
         let cur = api.targets.find((t) => t.key === api.key);
+        if (wanted) {
+          const now = performance.now();
+          if (!wantedUntil) wantedUntil = now + 10000;
+          const w = api.targets.find((t) => t.name === wanted);
+          if (w) { cur = w; wanted = null; }
+          else if (now > wantedUntil) wanted = null;   // that track isn't in this project (any more)
+        }
         if (!cur) cur = api.targets.find((t) => t.name === api.name) || api.targets[0];
         if (cur && cur.key !== api.key) {
           api.key = cur.key;

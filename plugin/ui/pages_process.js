@@ -1,7 +1,7 @@
 // EQ, Dynamics and Space pages. EQ and Dynamics work on the target you pick (Full Mix or a track's Mixology
 // Link, Milestone 5); Space on a track or an FX channel (Milestone 5, round 2).
 
-import { el, box, icon, fmt, clamp, Knob, Meter, select, graph, freqToX, xToFreq, moduleList, store, cssVar } from "./ui.js";
+import { el, box, icon, fmt, clamp, Knob, Meter, select, graph, freqToX, xToFreq, moduleList, store, cssVar, wheelSteps } from "./ui.js";
 import { knobFor, eqBand, magnitudeDb, EQ_SHAPES, MODULE_NAMES } from "./proc.js";
 import { createScene } from "./space_scene.js";
 import { dawName, say } from "./daws.js";
@@ -175,12 +175,14 @@ export function buildEq(root, app) {
     const i = hit(x, y);
     if (i >= 0 && !isCut(band(i).shape)) proc.set(id(i, "gain"), 0, { autoOn: false });
   });
+  const qWheel = wheelSteps();   // a notch = one step of width; a trackpad's small moves add up
   g.canvas.addEventListener("wheel", (e) => {
     const [x, y] = toLocal(e);
     const i = hit(x, y);
     if (i < 0) return;
     e.preventDefault();
-    proc.set(id(i, "q"), Math.round(clamp(band(i).q * (e.deltaY < 0 ? 1.08 : 1 / 1.08), 0.3, 10) * 100) / 100);
+    const n = qWheel(e);
+    if (n) proc.set(id(i, "q"), Math.round(clamp(band(i).q * Math.pow(1.08, n), 0.3, 10) * 100) / 100);
   }, { passive: false });
 
   // Band cards
@@ -568,10 +570,13 @@ export function buildSpace(root, app) {
   const target = () => proc.targets.find((t) => t.key === proc.key);
   const usedElsewhere = (id) => proc.targets.filter((t) => t.key !== "mix" && t.key !== proc.key && (t.on || []).includes("space") && SPACE[t.spaceType] && SPACE[t.spaceType].id === id);
 
+  // Space works on a track or an FX channel: with Full Mix picked, a move says so (and the control goes back).
+  const needTrack = () => { if (onTrack()) return false; app.toast("Pick a track or an FX channel first (top right)"); return true; };
+
   /** Your move on this effect. Space off: it switches on with this effect (an FX channel's name sets it to 100 % wet). */
   let routeNote = "";
   function apply(changes) {
-    if (!onTrack()) return;
+    if (needTrack()) { sync(); return false; }
     if (!spaceOn()) {
       changes.sp_on = 1;
       changes.sp_type = typeIndex(view);
@@ -581,6 +586,7 @@ export function buildSpace(root, app) {
       }
     }
     proc.setMany(changes);
+    return true;
   }
 
   // ---- middle: title, ON, target, presets; the picture; the knobs ----------------------------
@@ -590,7 +596,7 @@ export function buildSpace(root, app) {
   power.innerHTML = icon("power", 'stroke-width="2.6"');
   const powerLabel = el("span", "", power);
   power.addEventListener("click", () => {
-    if (!onTrack()) { app.toast("Pick a track or an FX channel first (top right)"); return; }
+    if (needTrack()) return;
     if (inUseHere(view)) proc.setMany({ sp_on: 0 });
     else if (spaceOn()) proc.setMany({ sp_type: typeIndex(view) });   // this effect instead of the other one
     else apply({});
@@ -609,7 +615,7 @@ export function buildSpace(root, app) {
   const usedLabel = el("div", "label", knobPanel, { position: "absolute", left: "16px", top: "22px", fontSize: "15px", color: "var(--text-dim)" });
   usedLabel.textContent = "USED AS";
   const routeSel = select(knobPanel, 96, 12, 300, [{ value: 0, label: "On this track" }, { value: 1, label: "FX channel (100 % wet)" }], 0,
-    (v) => { routeNote = ""; proc.set("sp_route", v, { autoOn: false }); sync(); }, { h: 40 });
+    (v) => { if (!needTrack()) { routeNote = ""; proc.set("sp_route", v, { autoOn: false }); } sync(); }, { h: 40 });
   routeSel.el.title = `On this track: MIX blends the effect in. FX channel: put this on an FX channel and send tracks to it in ${dawName(app.daw)}; only the effect comes out.`;
   const modeRow = el("div", "", knobPanel, { position: "absolute", left: "418px", top: "12px", display: "flex", gap: "8px" });
   const knobArea = el("div", "", knobPanel, box(0, 64, 756, 230));
@@ -634,7 +640,7 @@ export function buildSpace(root, app) {
     const d = def();
     renderedFx = fxRoute();
     knobs = knobDefs().map(([id, label, format], i) => new Knob(knobArea, knobFor(proc, id, { x: 4 + i * 150, y: 4, w: 148, size: 120, label, format, labelGap: 14, valueGap: 12,
-      onChange: (v) => { apply({ [id]: v }); sceneParams[SCENE_PARAMS[d.id][i]] = v; picture.setParams(Object.assign({}, sceneParams)); }, pid: id })));
+      onChange: (v) => { if (!apply({ [id]: v })) return; sceneParams[SCENE_PARAMS[d.id][i]] = v; picture.setParams(Object.assign({}, sceneParams)); }, pid: id })));
     modeChips = (d.modes || []).map((m, k) => {
       const c = el("div", "chip", modeRow, { height: "40px", padding: "0 14px", fontSize: "15px" });
       c.textContent = m;
@@ -725,7 +731,7 @@ export function buildSpace(root, app) {
   });
   duckSel.el.title = "The effect gets quieter while these tracks play (each needs a Mixology Link)";
   const duckKnob = new Knob(duck, knobFor(proc, "duck_amount", { x: 80, y: 150, w: 180, size: 92, label: "AMOUNT", format: (v) => (v < 0.05 ? "Off" : fmt.db(-v)), labelGap: 8, valueGap: 6,
-    onChange: (v) => proc.set("duck_amount", v, { autoOn: false }), pid: "duck_amount" }));
+    onChange: (v) => { if (needTrack()) syncDuck(); else proc.set("duck_amount", v, { autoOn: false }); }, pid: "duck_amount" }));
   const duckBar = el("div", "", duck, { position: "absolute", left: "22px", right: "22px", top: "312px", height: "10px", borderRadius: "5px", background: "var(--knob-track)", overflow: "hidden" });
   duckBar.title = "How far the effect is ducked right now";
   const duckFill = el("div", "", duckBar, { position: "absolute", left: "0", top: "0", bottom: "0", width: "0%", background: "var(--gold)", transition: "width 80ms linear" });

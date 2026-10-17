@@ -1,20 +1,24 @@
 // Overlays: Settings (Cubase Bridge, Mixology Link, display), the built-in manual, and mix styles.
 
-import { $, el, icon, fmt, popupMenu } from "./ui.js";
+import { $, el, icon, fmt, esc, popupMenu } from "./ui.js";
 import { GENRES } from "./mixstyles.js";
 import { DAWS, dawOf, dawName, say, hasBridge } from "./daws.js";
 import { ROLES, ROLE_ORDER, roleIcon } from "./roles.js";
 import { openToolSheet } from "./tools.js";
 
 // The smart tools by the interface's id (the Mix Assistant's points link to the one that fixes them).
-const TOOL_NAMES = { auto: "Auto Mix", polish: "Polish", balance: "Balance", clean: "Clean Up", pocket: "Vocal Pocket", stereo: "Stereo Architect" };
+export const TOOL_NAMES = { auto: "Auto Mix", polish: "Polish", balance: "Balance", clean: "Clean Up", pocket: "Vocal Pocket", stereo: "Stereo Architect" };
 
 let historyRender = null;
+let sheetSerial = 0;   // counts the sheets opened: a late answer or a timer checks its sheet is still the one showing
 
 export function sheet(title) {
   const pop = $("style-pop");
   if (pop) pop.remove();
   historyRender = null;
+  bridgeRender = null;
+  settingsRender = null;
+  sheetSerial++;
   $("sheet-title").textContent = title;
   const body = $("sheet-body");
   body.innerHTML = "";
@@ -24,13 +28,20 @@ export function sheet(title) {
   return body;
 }
 
+/** The sheet showing now; stillOpen(it) later: is that sheet still open (not closed, not replaced by another)? */
+export const sheetNow = () => sheetSerial;
+export const stillOpen = (serial) => serial === sheetSerial && $("overlay").classList.contains("shown");
+
 // ---------------------------------------------------------------------------------------------
 // Settings
 
 let bridgeRender = null;
+let settingsRender = null;   // the Settings sheet again, in the new DAW's words (hookBridge)
 
 export function openSettings(app, tab = "bridge") {
   const body = sheet("SETTINGS");
+  const me = sheetNow();
+  let shownTab = tab;
   dawRow(app, body);
   const tabs = el("div", "", body, { display: "flex", gap: "10px", marginBottom: "18px" });
   const content = el("div", "", body);
@@ -43,6 +54,7 @@ export function openSettings(app, tab = "bridge") {
     return c;
   });
   function show(id) {
+    shownTab = id;
     chips.forEach((c) => c.classList.toggle("on", c.dataset.id === id));
     content.innerHTML = "";
     bridgeRender = null;
@@ -51,6 +63,7 @@ export function openSettings(app, tab = "bridge") {
     else aboutPanel(app, content);
   }
   show(tab);
+  settingsRender = () => { if (stillOpen(me)) openSettings(app, shownTab); };
 }
 
 // Your DAW: found from the host Mixology runs in, or picked here (or in Voxology / Masterology: all three follow).
@@ -71,11 +84,12 @@ function dawRow(app, root) {
   sel.value = app.dawPicked ? app.daw : "";
   const note = el("span", "", row, { flex: "1", fontSize: "16px", color: "var(--text-dim)", lineHeight: "1.3" });
   const explain = () => {
-    note.textContent = (hasBridge(app.daw) ? `Tips and fixes are written for ${dawOf(app.daw).name}; Mixology moves its faders through the bridge below. ` : `Tips and fixes are written for ${dawOf(app.daw).name}. Moving faders (the Tracks page, Auto Mix's fader moves) works in Cubase, FL Studio and Ableton Live for now. `)
+    note.textContent = (hasBridge(app.daw) ? `Tips and fixes are written for ${dawOf(app.daw).name}; Mixology moves its faders through the bridge below. ` : `Tips and fixes are written for ${dawOf(app.daw).name}. Moving faders (the Tracks page, Auto Mix's fader moves) works in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk for now. `)
       + "Voxology and Masterology follow your pick.";
   };
   explain();
-  sel.addEventListener("change", () => { app.native.pickDaw(sel.value); app.daw = sel.value || found.key; app.dawPicked = !!sel.value; explain(); });
+  // The next frame brings the pick (app.js): every page, every tip and this sheet follow it.
+  sel.addEventListener("change", () => app.native.pickDaw(sel.value));
 }
 
 function displayPanel(app, root) {
@@ -87,13 +101,13 @@ function displayPanel(app, root) {
     b.addEventListener("click", () => { if (document.documentElement.dataset.theme !== t) $("logoBtn").click(); });
   }
   const p = el("p", "", root, { fontSize: "18px", color: "var(--text-dim)", lineHeight: "1.5", marginTop: "18px" });
-  p.innerHTML = "Tip: click the beaker logo to switch looks any time. The choice is remembered for every project.<br>Drag the window's corner to resize; the interface keeps its proportions and stays sharp at any Windows display scaling.";
+  p.innerHTML = "Tip: click the beaker logo to switch looks any time. The choice is remembered for every project.<br>Drag the window's corner to resize; the interface keeps its proportions and stays sharp at any display scaling.";
 }
 
 function aboutPanel(app, root) {
   const p = el("div", "", root, { fontSize: "19px", lineHeight: "1.6" });
   p.innerHTML = `<b>Mixology</b>: intelligent mixing engineer. Part of the suite: Voxology (vocals), Mixology (the mix), Masterology (mastering).<br>
-    This build: the full interface, live mix meters, loudness, vectorscope, the Cubase bridge (every fader in view), Mixology Link on each track, and Analyze Mix with the Mix Assistant (Milestone 3).<br>
+    ${app.version ? `Version ${esc(app.version)}. ` : ""}The manual (the ? button) explains everything it does.<br>
     <span class="dim">Fonts: Barlow Semi Condensed (SIL Open Font License).</span>`;
 }
 
@@ -166,37 +180,47 @@ function bridgePanel(app, root) {
   const logHead = el("div", "", logCard, { display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" });
   el("span", "", logHead, { fontWeight: "600", color: "var(--gold)" }).textContent = "Log";
   const copy = el("button", "small-btn", logHead, { marginLeft: "auto" }); copy.textContent = "Copy log";
-  copy.addEventListener("click", async () => { await app.command("copyLog"); app.toast("Log copied: paste it into the chat with Claude."); });
+  copy.addEventListener("click", async () => {
+    const r = await app.command("copyLog");
+    if (r && r.ok) app.toast("Log copied: paste it into your message to the developer.");
+    else if (!r || !r.message) app.toast("The log couldn't be copied: select it below and copy it by hand.");
+  });
   const log = el("div", "scroll", logCard, { height: "230px", overflow: "auto", fontSize: "15px", lineHeight: "1.45", whiteSpace: "pre-wrap", userSelect: "text", fontFamily: "Consolas, 'IBM Plex Mono', monospace", color: "var(--text-dim)" });
 
+  const shown = new Map();   // what each part shows: rewritten only when it changes (a text selection stays)
+  const put = (e, html) => { if (shown.get(e) !== html) { shown.set(e, html); e.innerHTML = html; } };
+  let wasOk = null, logText = "";
   bridgeRender = (b) => {
     if (!b) return;
     const ok = b.link === "connected";
     const dot = ok ? "ok" : b.link === "waiting" ? "warn" : "bad";
     const dn = hasBridge(app.daw) ? dawName(app.daw) : "your DAW";
     const surface = b.via === "mcu";
-    const linkText = { connected: `Connected to ${dn}`, waiting: surface ? `Ports open, waiting for ${dn} to talk to its Mackie Control (Mixology)` : `Ports open, waiting for the Mixology Bridge script in ${dn}`, lost: `Lost contact with ${dn}: retrying`, offline: "Not connected" }[b.link] || b.link;
-    status.innerHTML = `<div><span class="status-dot ${dot}"></span><b>${linkText}</b>${ok ? ` <span class="dim">(${surface ? "as its Mackie Control" : `script v${b.script}`})</span>` : ""}</div>
-      <div class="dim" style="font-size:17px">Ports: <code>${b.toCubase}</code> (Mixology → ${dn}), <code>${b.fromCubase}</code> (${dn} → Mixology)</div>
-      ${b.portProblem ? `<div style="color:var(--amber);font-size:17px">${b.portProblem}</div>` : ""}`;
-    if (!ok) setup.open = true;
+    const linkText = { connected: `Connected to ${dn}`, waiting: surface ? `Ports open, waiting for ${dn} to talk to its Mackie Control (Mixology)` : `Ports open, waiting for the Mixology Bridge script in ${dn}`, lost: `Lost contact with ${dn}: retrying`, offline: "Not connected" }[b.link] || esc(b.link);
+    put(status, `<div><span class="status-dot ${dot}"></span><b>${linkText}</b>${ok ? ` <span class="dim">(${surface ? "as its Mackie Control" : `script v${esc(b.script)}`})</span>` : ""}</div>
+      <div class="dim" style="font-size:17px">Ports: <code>${esc(b.toCubase)}</code> (Mixology → ${dn}), <code>${esc(b.fromCubase)}</code> (${dn} → Mixology)</div>
+      ${b.portProblem ? `<div style="color:var(--amber);font-size:17px">${esc(b.portProblem)}</div>` : ""}`);
+    if (!ok && wasOk !== false) setup.open = true;   // the setup steps open when it isn't connected (you can still close them)
+    wasOk = ok;
 
     const changed = b.changedCount || 0;
-    changesText.innerHTML = !b.restorePoints ? "Nothing changed yet. Before Mixology first moves a channel it remembers how it was, so you can always go back."
-      : `${changed ? `<b>${changed}</b> channel${changed === 1 ? "" : "s"} changed by Mixology (faders, pans${b.changedEq ? `, Assist EQ on ${b.changedEq}` : ""}).` : "Everything Mixology changed is back how it was."} Restore puts them back the way they were before Mixology's first move, wherever they are in the project. What you changed yourself since stays as you set it.`;
+    put(changesText, !b.restorePoints ? "Nothing changed yet. Before Mixology first moves a channel it remembers how it was, so you can always go back."
+      : `${changed ? `<b>${changed}</b> channel${changed === 1 ? "" : "s"} changed by Mixology (faders, pans${b.changedEq ? `, Assist EQ on ${b.changedEq}` : ""}).` : "Everything Mixology changed is back how it was."} Restore puts them back the way they were before Mixology's first move, wherever they are in the project. What you changed yourself since stays as you set it.`);
     restoreBtn.disabled = !ok || !changed;
     forgetBtn.disabled = !b.restorePoints;
     result.textContent = b.lastMove || "";
 
     const seen = b.linksSeen || 0, paired = b.linksPaired || 0;
-    linkInfo.innerHTML = b.linksShared === false
-      ? `<span style="color:var(--red)">Windows refused the shared memory Mixology Link uses.</span> Restart Cubase; if it keeps happening, Copy log and send it.`
+    put(linkInfo, b.linksShared === false
+      ? `<span style="color:var(--red)">${isMac ? "macOS" : "Windows"} refused the shared memory Mixology Link uses.</span> Restart ${dawName(app.daw)}; if it keeps happening, Copy log and send it.`
       : seen === 0 ? "No Mixology Link found yet. Insert <b>Mixology Link</b> on a track (after its other plug-ins): its level shows on that strip of the Tracks page."
-      : `${seen} Mixology Link${seen === 1 ? "" : "s"} running, <b>${paired}</b> paired with the channels in view. Links pair by track name (and colour when two tracks share a name).`;
+      : `${seen} Mixology Link${seen === 1 ? "" : "s"} running, <b>${paired}</b> paired with the channels in view. Links pair by track name (and colour when two tracks share a name).`);
     lawInfo.textContent = `Fader curve: ${b.lawPoints} points learned`;
-    if (b.log) {
+    const text = b.log ? b.log.join("\n") : logText;
+    if (text !== logText) {   // only when there's something new (a selection in it stays)
+      logText = text;
       const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 8;
-      log.textContent = b.log.join("\n");
+      log.textContent = text;
       if (atBottom) log.scrollTop = log.scrollHeight;
     }
   };
@@ -205,6 +229,7 @@ function bridgePanel(app, root) {
 }
 
 export function hookBridge(app) {
+  app.on("daw", () => { if (settingsRender) settingsRender(); });
   app.on("bridge", (b) => {
     if (!$("overlay").classList.contains("shown")) return;
     if (bridgeRender) bridgeRender(b);
@@ -218,6 +243,7 @@ export function hookBridge(app) {
 
 export function openHistory(app) {
   const body = sheet("HISTORY");
+  const me = sheetNow();
   body.className = "scroll";
   const opened = new Set();   // steps showing their details
   let seen = -1, busy = false;
@@ -241,6 +267,7 @@ export function openHistory(app) {
 
   async function render() {
     const r = await app.native.bridgeCommand("history", 0);
+    if (!stillOpen(me)) return;
     const h = r && r.history;
     if (!h) { body.textContent = "The history needs the plug-in."; return; }
     seen = h.version;
@@ -254,7 +281,7 @@ export function openHistory(app) {
     const redo = btn(top, redoable.length ? `REDO: ${redoable[0].what}` : "REDO", () => go("historyRedo"));
     redo.disabled = !redoable.length || h.busy;
     for (const b of [undo, redo]) Object.assign(b.style, { maxWidth: "520px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-    if (h.busy) el("span", "", top, { fontSize: "17px", color: "var(--amber)" }).textContent = "Moving faders in Cubase...";
+    if (h.busy) el("span", "", top, { fontSize: "17px", color: "var(--amber)" }).textContent = `Moving faders in ${dawName(app.daw)}...`;
     el("p", "", body, { fontSize: "17px", color: "var(--text-dim)", margin: "0 0 12px", lineHeight: "1.4" }).textContent =
       "Every change Mixology makes, newest first: faders, pans, mute and solo, Trim, every knob, presets, the smart tools and Restore. " +
       "GO BACK HERE puts the mix back to how it was right after that step. Undone steps stay (dimmed) until you change something new. " +
@@ -348,13 +375,14 @@ function markdown(md) {
 
 export async function openHelp(app) {
   const body = sheet("MANUAL");
+  const me = sheetNow();
   body.className = "scroll manual";
   let text = "";
   const preview = !location.host.includes("juce");   // inside the plug-in the page is served from juce.backend
   for (const url of preview ? ["../../docs/MANUAL.md", "MANUAL.md"] : ["MANUAL.md"]) {
     try { const r = await fetch(url); if (r.ok) { text = await r.text(); break; } } catch (e) { /* next */ }
   }
-  body.innerHTML = text ? markdown(text) : "<p>The manual couldn't be loaded.</p>";
+  if (stillOpen(me)) body.innerHTML = text ? markdown(text) : "<p>The manual couldn't be loaded.</p>";
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -370,6 +398,7 @@ const KIND_TITLE = { track: "Tracks", fx: "FX channels (100 % wet returns)", mix
 
 export async function openPresets(app) {
   const body = sheet("PRESETS");
+  const me = sheetNow();
   body.className = "scroll";
   let key = (app.proc && app.proc.key) || "mix";
   let draftName = "";
@@ -383,6 +412,7 @@ export async function openPresets(app) {
 
   async function render() {
     const r = await app.native.presetList(key);
+    if (!stillOpen(me)) return;
     if (!r || !r.target) { body.textContent = "Presets need the plug-in."; return; }
     const t = r.target;
     key = t.key;
@@ -432,8 +462,8 @@ export async function openPresets(app) {
       if (!p.factory) btn(c, "DELETE", async (e) => {
         const b = e.currentTarget;
         if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "SURE?"; return; }
-        await app.native.presetDelete(p.name);
-        app.toast(`Deleted '${p.name}'.`);
+        const ok = await app.native.presetDelete(p.name);
+        app.toast(ok ? `Deleted '${p.name}'.` : `'${p.name}' couldn't be deleted.`);
         render();
       });
     };
@@ -533,11 +563,12 @@ const KIND = { warn: ["#ff5a3c", "Worth fixing"], info: ["#19d3ff", "Have a look
 
 export function openSuggestion(app, sg, opts = {}) {
   const body = sheet("MIX ASSISTANT");
+  const me = sheetNow();
   body.className = "scroll";
   const [colour, kindLabel] = sg.done ? [KIND.calm[0], "Done: play the song to check"] : KIND[sg.kind] || KIND.info;
   const head = el("div", "", body, { display: "flex", alignItems: "center", gap: "16px", marginBottom: "12px" });
   head.innerHTML = `<span style="width:54px;height:54px;flex:none;color:${colour};filter:drop-shadow(0 0 6px ${colour})">${icon(sg.icon)}</span>
-    <span><span style="display:block;font-size:30px;font-weight:600">${sg.title}</span>
+    <span><span style="display:block;font-size:30px;font-weight:600">${esc(sg.title)}</span>
     <span style="font-size:16px;letter-spacing:0.12em;text-transform:uppercase;color:${colour}">${kindLabel}</span></span>`;
   el("p", "", body, { fontSize: "21px", lineHeight: "1.5", margin: "0 0 16px" }).textContent = sg.text;
   const toolName = TOOL_NAMES[sg.tool];
@@ -545,10 +576,10 @@ export function openSuggestion(app, sg, opts = {}) {
     // A smart tool (or you) already changed it since Mixology listened: the point is about the mix before that.
     const done = el("div", "card", body, { position: "relative", padding: "14px 18px 14px 58px", marginBottom: "16px", fontSize: "19px", lineHeight: "1.45", borderColor: KIND.calm[0] });
     done.innerHTML = `<div style="position:absolute;left:16px;top:14px;width:28px;height:28px;color:${KIND.calm[0]}">${icon("check")}</div>
-      <b style="color:${KIND.calm[0]}">Done since Mixology listened.</b> Changed: ${sg.doneWhat}. This point is about the mix as it was before: Mixology checks it again when it hears the song (Auto Analyze while it plays, or Analyze Mix), and it goes when it's fixed.`;
+      <b style="color:${KIND.calm[0]}">Done since Mixology listened.</b> Changed: ${esc(sg.doneWhat)}. This point is about the mix as it was before: Mixology checks it again when it hears the song (Auto Analyze while it plays, or Analyze Mix), and it goes when it's fixed.`;
   }
   const need = el("div", "card", body, { position: "relative", padding: "14px 18px", marginBottom: "16px", fontSize: "20px", lineHeight: "1.45", borderColor: colour });
-  need.innerHTML = `<b style="color:var(--gold)">Do I need to fix it?</b> ${sg.need}`;
+  need.innerHTML = `<b style="color:var(--gold)">Do I need to fix it?</b> ${esc(sg.need)}`;
   if (sg.steps && sg.steps.length) {
     el("div", "", body, { fontSize: "18px", fontWeight: "600", color: "var(--gold)", margin: "4px 0 6px", letterSpacing: "0.06em" }).textContent = "HOW";
     const ol = el("ol", "", body, { fontSize: "20px", lineHeight: "1.5", margin: "0 0 16px", paddingLeft: "28px" });
@@ -577,6 +608,7 @@ export function openSuggestion(app, sg, opts = {}) {
       // Stay here (set the next track too): the card again, as the advice now reads.
       const hash = picked && picked.hash;
       setTimeout(() => {
+        if (!stillOpen(me)) return;   // closed, or another sheet opened meanwhile
         const rep = app.bridge && app.bridge.analysis && app.bridge.analysis.report;
         const fresh = rep && rep.suggestions.find((x) => x.id && x.id.startsWith("vocal-") && x.id !== "vocal-pocket");
         if (fresh) openSuggestion(app, fresh, { track: hash });
@@ -642,7 +674,9 @@ export function openSuggestion(app, sg, opts = {}) {
 
 export function openTracksSheet(app) {
   const body = sheet("YOUR TRACKS");
+  const me = sheetNow();
   body.className = "scroll";
+  const later = () => setTimeout(() => { if (stillOpen(me)) render(); }, 250);   // the new list, if this sheet is still open
   const render = () => {
     body.innerHTML = "";
     const report = app.bridge && app.bridge.analysis && app.bridge.analysis.report;
@@ -663,7 +697,7 @@ export function openTracksSheet(app) {
       roleBtn.addEventListener("click", () => {
         const items = ROLE_ORDER.map((k) => ({ label: ROLES[k].label, value: k, icon: ROLES[k].icon, colour: ROLES[k].colour, sel: k === t.role }));
         items.push({ divider: true }, { label: "Automatic", value: "", icon: "wand" });
-        popupMenu(roleBtn, items, async (v) => { await app.command("setRole", { hash: t.hash, value: v }); setTimeout(render, 250); }, 260);
+        popupMenu(roleBtn, items, async (v) => { await app.command("setRole", { hash: t.hash, value: v }); later(); }, 260);
       });
       el("div", "", table).textContent = t.loudness > -99 ? fmt.num(t.loudness, 1) + " LUFS" : "—";
       const pk = el("div", "", table, { color: t.peak > 0 ? "var(--red)" : "" });
@@ -672,7 +706,7 @@ export function openTracksSheet(app) {
       const inc = el("button", "small-btn", table);
       inc.textContent = t.excluded ? "Left out" : "Included";
       inc.style.color = t.excluded ? "var(--text-dim)" : "var(--green)";
-      inc.addEventListener("click", async () => { await app.command("setExcluded", { hash: t.hash, value: !t.excluded }); setTimeout(render, 250); });
+      inc.addEventListener("click", async () => { await app.command("setExcluded", { hash: t.hash, value: !t.excluded }); later(); });
     }
     if (report.unheard && report.unheard.length) {
       const u = el("p", "", body, { fontSize: "17px", color: "var(--text-dim)", marginTop: "18px" });

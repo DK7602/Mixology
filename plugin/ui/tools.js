@@ -2,9 +2,10 @@
 // nothing moves until you press Apply, and Undo puts back what it changed. Reference Match compares your
 // mix with a reference song and switches between them, level-matched.
 
-import { $, el, icon, fmt, graph, freqToX, cssVar } from "./ui.js";
+import { $, el, icon, fmt, esc, graph, freqToX, cssVar } from "./ui.js";
 import { ROLES, roleIcon } from "./roles.js";
-import { sheet } from "./sheets.js";
+import { sheet, sheetNow, stillOpen, TOOL_NAMES } from "./sheets.js";
+import { dawName } from "./daws.js";
 
 const TOOL_ICON = { auto: "wand", balance: "sliders", clean: "wave", pocket: "mic", stereo: "rings", polish: "star" };
 const TOOL_ABOUT = {
@@ -26,8 +27,6 @@ function valueText(c, v, which) {
   return Math.abs(v) < 0.05 ? "None" : fmt.db(v, 1) + " at " + fmt.hz(c.hz);
 }
 
-const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
-
 let openTool = null;   // re-renders the open tool sheet when the bridge reports progress
 
 export function hookTools(app) {
@@ -36,16 +35,23 @@ export function hookTools(app) {
 
 export async function openToolSheet(app, tool) {
   const body = sheet("");
+  const me = sheetNow();
   body.style.display = "flex";
   body.style.flexDirection = "column";
   const r = await app.command("plan", { value: tool });
+  if (!stillOpen(me)) return;   // closed (or another sheet opened) while Mixology worked it out
   const plan = r && r.plan;
-  if (!plan) return;
+  if (!plan) {   // refused (e.g. faders still moving): say why here too
+    $("sheet-title").textContent = (TOOL_NAMES[tool] || "").toUpperCase();
+    el("p", "", body, { fontSize: "21px", lineHeight: "1.45", margin: "0" }).textContent = (r && r.message) || "Mixology couldn't work this out right now. Try again in a moment.";
+    return;
+  }
   $("sheet-title").textContent = plan.title.toUpperCase();
 
   const picked = new Set(plan.changes.map((_, i) => i));
   let allowBig = false, lastSerial = null, waiting = false, headroomOn = false, reopenAfter = null;
-  const reopen = () => { openTool = null; openToolSheet(app, tool); };
+  // The same tool again with a fresh plan, unless you closed this sheet or opened another one meanwhile.
+  const reopen = () => { if (!stillOpen(me)) return; openTool = null; openToolSheet(app, tool); };
 
   // ---- head: what this tool does, and what it found
   const head = el("div", "", body, { display: "flex", gap: "16px", alignItems: "flex-start", marginBottom: "12px", flex: "none" });
@@ -194,11 +200,13 @@ export async function openToolSheet(app, tool) {
     refresh();
   });
 
+  // A tick box's insides are rebuilt only when it changes: a box rebuilt under the mouse would lose the click.
+  const tick = (b, on) => { if (b.dataset.on !== String(on)) { b.dataset.on = String(on); b.innerHTML = on ? icon("check", 'stroke-width="3"') : ""; } };
   function refresh() {
-    if (!document.body.contains(body) || $("sheet-title").textContent !== plan.title.toUpperCase()) { openTool = null; return; }
+    if (!stillOpen(me)) { openTool = null; return; }
     for (const { c, i, box, val } of rows) {
       const on = picked.has(i);
-      box.innerHTML = on ? icon("check", 'stroke-width="3"') : "";
+      tick(box, on);
       const to = c.kind === "level" && allowBig ? c.wanted : c.to;
       val.innerHTML = `<span style="color:var(--text-dim)">${esc(valueText(c, c.from, "from"))}</span> → <b style="color:${on ? "var(--text)" : "var(--text-dim)"}">${esc(valueText(c, to, "to"))}</b>`
         + (c.big ? ` <span style="color:var(--amber);font-size:15px" title="The whole move is ${fmt.db(c.wanted - c.from)}">${allowBig ? "" : "(limited)"}</span>` : "");
@@ -210,18 +218,19 @@ export async function openToolSheet(app, tool) {
       bigBtn.style.color = allowBig ? "var(--amber)" : "";
     }
     count.textContent = `${picked.size} of ${plan.changes.length} ticked`;
-    if (headBox) headBox.innerHTML = headroomOn ? icon("check", 'stroke-width="3"') : "";
+    if (headBox) tick(headBox, headroomOn);
 
     const a = (app.bridge && app.bridge.apply) || {};
     if (reopenAfter !== null && !a.active && a.serial !== reopenAfter) { reopenAfter = null; setTimeout(reopen, 300); }
     const n = picked.size + (headroomOn ? 1 : 0);
     const done = applyBtn.dataset.done === "1";
-    if (a.active) status.innerHTML = `<span style="color:var(--cyan)">${a.what}: ${a.done} of ${a.total} channels…</span> Mixology steps through Cubase's channels and comes back.`;
+    const dn = dawName(app.daw);
+    if (a.active) status.innerHTML = `<span style="color:var(--cyan)">${esc(a.what)}: ${a.done} of ${a.total} channels…</span> Mixology steps through ${dn}'s channels and comes back.`;
     else if (done && lastSerial !== null && a.serial !== lastSerial && a.message) {
-      status.innerHTML = `<span style="color:var(--green)">${a.message}</span>` + (a.notes && a.notes.length ? `<br>${a.notes.slice(0, 3).join("<br>")}` : "");
+      status.innerHTML = `<span style="color:var(--green)">${esc(a.message)}</span>` + (a.notes && a.notes.length ? `<br>${a.notes.slice(0, 3).map(esc).join("<br>")}` : "");
     } else if (done) status.innerHTML = `<span style="color:var(--green)">Applied.</span> Listen, then keep it or press Undo.`;
     else status.textContent = plan.changes.length || plan.headroomDb < 0 ? "Nothing changes until you press Apply. Protected channels are never touched." : "";
-    if (reopenAfter !== null) status.innerHTML = `<span style="color:var(--cyan)">Undoing…</span> the list comes back fresh when Cubase has the faders back.`;
+    if (reopenAfter !== null) status.innerHTML = `<span style="color:var(--cyan)">Undoing…</span> the list comes back fresh when ${dn} has the faders back.`;
     undoBtn.style.display = a.canUndo && reopenAfter === null ? "" : "none";
     undoBtn.textContent = "Undo " + (a.undoWhat || "");
     applyBtn.disabled = waiting || a.active || !n || done || reopenAfter !== null;
@@ -238,7 +247,9 @@ let openRef = null;
 
 export function openReferenceSheet(app) {
   const body = sheet("REFERENCE MATCH");
+  const me = sheetNow();
   body.className = "scroll";
+  const later = (ms) => setTimeout(() => { if (stillOpen(me)) render(); }, ms);   // the new state, if this sheet is still open
   const render = () => {
     body.innerHTML = "";
     const an = app.bridge && app.bridge.analysis;
@@ -254,7 +265,7 @@ export function openReferenceSheet(app) {
       for (const t of report.tracks) {
         const b = el("button", "small-btn", grid, { height: "52px", fontSize: "19px", textAlign: "left", overflow: "hidden", textOverflow: "ellipsis" });
         b.textContent = t.name;
-        b.addEventListener("click", async () => { await app.command("setReference", { hash: t.hash, value: true }); setTimeout(render, 250); });
+        b.addEventListener("click", async () => { await app.command("setReference", { hash: t.hash, value: true }); later(250); });
       }
       return;
     }
@@ -263,7 +274,7 @@ export function openReferenceSheet(app) {
     el("div", "", headRow, { fontSize: "24px", fontWeight: "600", flex: "1" }).textContent = `Your mix against '${ref.name}'`;
     const change = el("button", "small-btn", headRow);
     change.textContent = "Choose another";
-    change.addEventListener("click", async () => { await app.command("setReference", { hash: ref.hash, value: false }); setTimeout(render, 250); });
+    change.addEventListener("click", async () => { await app.command("setReference", { hash: ref.hash, value: false }); later(250); });
 
     if (!ref.heard) {
       el("p", "", body, { fontSize: "20px", lineHeight: "1.45" }).textContent = `Mixology didn't hear '${ref.name}' while it listened. Make sure it plays under your song (same bars), with Mixology Link on it, then Analyze Mix again. It can stay muted.`;
@@ -314,8 +325,8 @@ export function openReferenceSheet(app) {
     }
     const more = el("div", "", body, { fontSize: "18px", lineHeight: "1.5", color: "var(--text-dim)", marginBottom: "16px" });
     const louder = ref.loudnessDiff;
-    more.innerHTML = (Math.abs(louder) < 1 ? `Loudness: about the same as '${ref.name}'.`
-      : `Loudness: '${ref.name}' is ${fmt.num(Math.abs(louder), 1)} LU ${louder > 0 ? "louder" : "quieter"}. ${louder > 0 ? "That's mastering: Masterology closes that gap, so don't push your mix up to match." : ""}`)
+    more.innerHTML = (Math.abs(louder) < 1 ? `Loudness: about the same as '${esc(ref.name)}'.`
+      : `Loudness: '${esc(ref.name)}' is ${fmt.num(Math.abs(louder), 1)} LU ${louder > 0 ? "louder" : "quieter"}. ${louder > 0 ? "That's mastering: Masterology closes that gap, so don't push your mix up to match." : ""}`)
       + `<br>Width: your mix is ${Math.abs(ref.widthDiff) < 0.05 ? "about as wide as" : ref.widthDiff > 0 ? "wider than" : "narrower than"} the reference.`;
 
     // A / B, level-matched.
@@ -324,11 +335,11 @@ export function openReferenceSheet(app) {
     const toRef = el("button", "small-btn" + (hearing ? "" : " red"), ab, { height: "52px", fontSize: "20px", minWidth: "260px" });
     toRef.textContent = "Hear the reference";
     toRef.disabled = hearing;
-    toRef.addEventListener("click", async () => { await app.command("refListen", { value: "ref" }); setTimeout(render, 300); });
+    toRef.addEventListener("click", async () => { await app.command("refListen", { value: "ref" }); later(300); });
     const toMix = el("button", "small-btn" + (hearing ? " red" : ""), ab, { height: "52px", fontSize: "20px", minWidth: "220px" });
     toMix.textContent = "Back to your mix";
     toMix.disabled = !hearing;
-    toMix.addEventListener("click", async () => { await app.command("refListen", { value: "mix" }); setTimeout(render, 300); });
+    toMix.addEventListener("click", async () => { await app.command("refListen", { value: "mix" }); later(300); });
     el("div", "", ab, { fontSize: "16px", color: "var(--text-dim)", lineHeight: "1.35" }).textContent = "The reference plays alone (solo), its Trim matched to your mix's loudness, so you compare sound, not volume.";
   };
   openRef = render;

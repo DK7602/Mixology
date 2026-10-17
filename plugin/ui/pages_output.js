@@ -1,7 +1,7 @@
 // Tone, Stereo and Master pages. Tone and Stereo work on the target you pick (Full Mix or a track's Mixology
 // Link, Milestone 5); their meters and scopes are live. Master's finishing controls are still a preview.
 
-import { el, box, icon, fmt, clamp, Knob, Meter, select, graph, freqToX, moduleList, store, cssVar } from "./ui.js";
+import { el, box, icon, fmt, esc, clamp, Knob, Meter, select, graph, freqToX, moduleList, store, cssVar } from "./ui.js";
 import { knobFor, biquad, magnitudeDb, MODULE_NAMES } from "./proc.js";
 import { dawName, say } from "./daws.js";
 
@@ -125,8 +125,8 @@ export function buildTone(root, app) {
   };
   function renderLegend() {
     const sw = (c) => `<span style="display:inline-block;width:22px;height:3px;background:${c};vertical-align:5px;margin-right:8px"></span>`;
-    legend.innerHTML = (proc.key === "mix" ? `<span>${sw("#ff2a2a")}Target: ${app.style.fullName}</span><span>${sw("var(--text)")}Your mix</span>`
-      : `<span>${sw("var(--text)")}${proc.name}</span>`)
+    legend.innerHTML = (proc.key === "mix" ? `<span>${sw("#ff2a2a")}Target: ${esc(app.style.fullName)}</span><span>${sw("var(--text)")}Your mix</span>`
+      : `<span>${sw("var(--text)")}${esc(proc.name)}</span>`)
       + (toneChange(proc, mod, 1000) !== null ? `<span>${sw("#ffd21f")}${MODULE_NAMES[mod]}</span>` : "");
   }
   app.on("preset", () => { renderLegend(); g.redraw(); });
@@ -433,7 +433,7 @@ export function buildMaster(root, app) {
       if (f.master) items.push(g
         ? [true, `Masterology is on${g.goal ? " (" + g.goal + ")" : ""}: it gets this mix's style and tone`]
         : [null, `Open Masterology after Mixology on the ${say(app.daw, "master")} channel: it picks up this mix's style and tone`]);
-      checks.innerHTML = items.map(([ok, text]) => `<div style="display:flex;gap:10px;align-items:flex-start"><span style="width:22px;height:22px;flex:none;color:${ok === null ? "var(--text-faint)" : ok ? "var(--green)" : "var(--amber)"}">${icon(ok === false ? "headroom" : "check", 'stroke-width="2.4"')}</span><span>${text}</span></div>`).join("");
+      checks.innerHTML = items.map(([ok, text]) => `<div style="display:flex;gap:10px;align-items:flex-start"><span style="width:22px;height:22px;flex:none;color:${ok === null ? "var(--text-faint)" : ok ? "var(--green)" : "var(--amber)"}">${icon(ok === false ? "headroom" : "check", 'stroke-width="2.4"')}</span><span>${esc(text)}</span></div>`).join("");
     },
   };
 }

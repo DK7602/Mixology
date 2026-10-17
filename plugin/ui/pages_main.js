@@ -1,12 +1,10 @@
 // Overview and Tracks pages.
 
-import { el, box, icon, fmt, clamp, Knob, Meter, select, graph, freqToX, previewTag, store, popupMenu } from "./ui.js";
+import { el, box, icon, fmt, esc, clamp, Knob, Meter, select, graph, freqToX, previewTag, store, popupMenu, wheelSteps } from "./ui.js";
 import { ROLES, ROLE_ORDER, GROUPS, guessRole, roleIcon } from "./roles.js";
 import { openSuggestion, openTracksSheet } from "./sheets.js";
 import { openToolSheet, openReferenceSheet } from "./tools.js";
 import { dawName, say, hasBridge } from "./daws.js";
-
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
 export { ROLES, guessRole };
 
@@ -206,7 +204,7 @@ export function buildOverview(root, app) {
     barFill.style.width = Math.min(100, (s / (a.max || 60)) * 100) + "%";
     finishBtn.disabled = s < 10;
     lpText.innerHTML = a.state === "reading"
-      ? "Reading every channel's fader in Cubase (a second or two). Nothing moves."
+      ? `Reading every channel's fader in ${dawName(app.daw)} (a second or two). Nothing moves.`
       : !a.playing
         ? `<b>Press play in ${dawName(app.daw)}.</b> Play the busiest part of the song (the hook or the drop), 30 to 60 seconds. Mixology listens to ${a.heard} track${a.heard === 1 ? "" : "s"} through Mixology Link and to the whole mix.`
         : `<b>Listening: ${Math.floor(s)} s</b> to ${a.heard} track${a.heard === 1 ? "" : "s"} and the whole mix. ${s < (a.enough || 20) ? "Keep playing..." : "That's enough to go on: press Finish now, or let it run to 60 s."}`;
@@ -244,6 +242,9 @@ export function buildOverview(root, app) {
   const autoBtn = el("button", "small-btn", ma, { position: "absolute", left: "12px", right: "12px", bottom: "68px", height: "44px", display: "none", textAlign: "left", paddingLeft: "38px", fontSize: "17px" });
   autoBtn.title = "Auto Analyze: whenever the song plays, Mixology keeps listening and refreshes this advice every 15 seconds when something changed (after you move a fader or change an EQ, it listens again from there). Advice only: it never changes your mix.";
   autoBtn.addEventListener("click", () => { const au = app.bridge && app.bridge.analysis && app.bridge.analysis.auto; app.command("autoAnalyze", { value: !(au && au.on) }); });
+  const autoLamp = el("span", "lamp", autoBtn);
+  autoBtn.appendChild(document.createTextNode("AUTO ANALYZE"));
+  const autoStatus = el("span", "", autoBtn, { float: "right", color: "var(--text-dim)" });
   function renderAuto(b) {
     const a = b && b.analysis, au = a && a.auto;
     const show = !!(a && au && (a.report || au.on));
@@ -256,8 +257,9 @@ export function buildOverview(root, app) {
       : au.pause === "quiet" ? "Waiting for sound"
       : au.pause === "busy" ? "Paused" : au.pause ? "Off"
       : au.seconds < 20 ? `Listening ${au.seconds} s` : a.report ? "Listening" : "Checking...";
-    const html = `<span class="lamp${au.on ? " on" : ""}${au.on && !au.pause ? " live" : ""}"></span>AUTO ANALYZE<span style="float:right;color:var(--text-dim)">${status}</span>`;
-    if (autoBtn.dataset.html !== html) { autoBtn.dataset.html = html; autoBtn.innerHTML = html; }
+    const lamp = `lamp${au.on ? " on" : ""}${au.on && !au.pause ? " live" : ""}`;
+    if (autoLamp.className !== lamp) autoLamp.className = lamp;
+    if (autoStatus.textContent !== status) autoStatus.textContent = status;
   }
   app.on("bridge", renderAuto);
   app.on("daw", () => { lastKey = ""; renderAssistant(); });
@@ -265,14 +267,21 @@ export function buildOverview(root, app) {
   function card(iconName, colour, title, hint, onClick) {
     const c = el("div", "card", list, { position: "relative", flex: "none", minHeight: "104px", padding: "14px 34px 12px 70px", cursor: onClick ? "pointer" : "default" });
     c.innerHTML = `<div style="position:absolute;left:12px;top:22px;width:46px;height:46px;color:${colour};filter:drop-shadow(0 0 6px ${colour})">${icon(iconName)}</div>
-      <div style="font-size:19px;font-weight:500;line-height:1.2">${title}</div>
-      <div style="font-size:16px;margin-top:5px;line-height:1.25;color:var(--info)">${hint}</div>
+      <div style="font-size:19px;font-weight:500;line-height:1.2"></div>
+      <div style="font-size:16px;margin-top:5px;line-height:1.25;color:var(--info)"></div>
       ${onClick ? `<div style="position:absolute;right:8px;top:36px;width:24px;height:24px;color:var(--text)">${icon("chevR", 'stroke-width="2.4"')}</div>` : ""}`;
+    c.children[1].textContent = title;   // track names and the plug-in's words, as they are
+    c.children[2].textContent = hint;
     if (onClick) c.addEventListener("click", onClick);
     return c;
   }
+  const setText = (e, t) => { if (e.textContent !== t) e.textContent = t; };
+  const loudText = (st) => `Mix loudness ${fmt.lufs(st)} LUFS (short-term)`;
+  const peakText = (tp) => tp > -3 ? `Peaks reach ${fmt.num(tp, 1)} dBTP` : `Headroom is good (peaks ${fmt.num(tp, 1)} dBTP)`;
 
-  let lastKey = "";
+  // The cards are rebuilt only when what they say changes, not with every new loudness reading (a card rebuilt
+  // under the mouse loses the click): the live numbers are written into the cards in place (live).
+  let lastKey = "", live = null;
   function renderAssistant() {
     const f = app.frame || {};
     const b = app.bridge || {};
@@ -281,16 +290,17 @@ export function buildOverview(root, app) {
     const useReport = report && !showLive;
     const setup = b.setup || [];
     const key = JSON.stringify(setup.map((x) => x.id + x.title)) + "|" + (useReport ? "r|" + JSON.stringify(report.suggestions.map((x) => x.id + x.kind + x.title + (x.done ? "|done" : ""))) + report.seconds + report.style + (b.analysis.auto && b.analysis.auto.on ? b.analysis.auto.updated : "") + (b.analysis.fromProject ? "|p" : "")
-      : [b.link, (b.slots || []).filter((s) => s.present).length, b.linksPaired, b.linksSeen, Math.round(st), Math.round(tp), !!report, !!(b.analysis && b.analysis.auto && b.analysis.auto.on), app.daw].join("|"));
-    if (key === lastKey) return;
+      : [b.link, (b.slots || []).filter((s) => s.present).length, b.linksPaired, b.linksSeen, st > -70, tp > -70 ? (tp > -1 ? 2 : tp > -3 ? 1 : 0) : -1, !!report, !!(b.analysis && b.analysis.auto && b.analysis.auto.on), app.daw].join("|"));
+    if (key === lastKey) { if (live) live(st, tp); return; }
     lastKey = key;
+    live = null;
     list.innerHTML = "";
     maFoot.style.display = report ? "flex" : "none";
     renderAuto(b);
     liveBtn.textContent = showLive ? "Analysis" : "Live view";
     if (report) tracksBtn.textContent = `Your tracks (${report.tracks.length})`;
     // The setup check first: things in the Cubase project no mixing move can fix (a mono group, vocals without a Link).
-    const setupHint = (sg) => sg.id === "setup-mono-group" ? (sg.tracks && sg.tracks.length ? `Most likely '${esc(sg.tracks[0])}' is a mono group: click for the fix` : "A mono group or output on the way: click for the fix")
+    const setupHint = (sg) => sg.id === "setup-mono-group" ? (sg.tracks && sg.tracks.length ? `Most likely '${sg.tracks[0]}' is a mono group: click for the fix` : "A mono group or output on the way: click for the fix")
       : sg.id === "setup-vocal-link" ? "Add Mixology Link under Voxology on each: click for how"
       : sg.id === "setup-mono-mixology" ? `Put it on the ${say(app.daw, "master")} channel: click for how`
       : sg.id === "setup-shared-name" ? "Rename one so each track has its own name: click for more" : sg.need;
@@ -319,18 +329,20 @@ export function buildOverview(root, app) {
         ? `${b.linksPaired} with Mixology Link · move any fader on the Tracks page`
         : "Move any fader on the Tracks page. Add Mixology Link to tracks to see their levels", () => app.showPage("tracks"));
     else if (!hasBridge(app.daw))
-      card("sliders", "#19d3ff", `${dawName(app.daw)}: you set the faders`, "Mixology moves faders in Cubase, FL Studio and Ableton Live (for now). Auto Mix and Balance list the moves for you", () => app.openSettings("bridge"));
+      card("sliders", "#19d3ff", `${dawName(app.daw)}: you set the faders`, "Mixology moves faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk (for now). Auto Mix and Balance list the moves for you", () => app.openSettings("bridge"));
     else
       card("link", "#ffc04a", `Not connected to ${dawName(app.daw)}`, b.portProblem ? "Ports missing: open the setup steps" : `Open Settings > ${dawName(app.daw)} Bridge for the setup`, () => app.openSettings("bridge"));
+    let loudEl = null, peakEl = null;
     if (st > -70)
-      card("speaker", "#19d3ff", `Mix loudness ${fmt.lufs(st)} LUFS (short-term)`, "Information only: Masterology sets the final loudness");
+      loudEl = card("speaker", "#19d3ff", loudText(st), "Information only: Masterology sets the final loudness").children[1];
     else
       card("speaker", "#19d3ff", "No audio yet", `Press play in ${dawName(app.daw)} to see the mix here`);
     if (tp > -70) {
-      if (tp > -1) card("headroom", "#ff2b2b", `Peaks reach ${fmt.num(tp, 1)} dBTP`, "Pull the faders down a little: leave 3-6 dB for Masterology");
-      else if (tp > -3) card("headroom", "#ffc04a", `Peaks reach ${fmt.num(tp, 1)} dBTP`, "A bit hot for mastering: aim for peaks around -6 to -3");
-      else card("check", "#39e26b", `Headroom is good (peaks ${fmt.num(tp, 1)} dBTP)`, "Plenty of room for Masterology");
+      if (tp > -1) peakEl = card("headroom", "#ff2b2b", peakText(tp), "Pull the faders down a little: leave 3-6 dB for Masterology").children[1];
+      else if (tp > -3) peakEl = card("headroom", "#ffc04a", peakText(tp), "A bit hot for mastering: aim for peaks around -6 to -3").children[1];
+      else peakEl = card("check", "#39e26b", peakText(tp), "Plenty of room for Masterology").children[1];
     }
+    live = (st2, tp2) => { if (loudEl) setText(loudEl, loudText(st2)); if (peakEl) setText(peakEl, peakText(tp2)); };
     if (!report && b.analysis && b.analysis.auto && b.analysis.auto.on)
       card("bulb", "#ff36e1", "Auto Analyze is on", "Play the song: the first advice comes about 20 seconds in");
     else if (!report)
@@ -522,6 +534,7 @@ export function buildTracks(root, app) {
     const val = el("div", "", s, { position: "absolute", left: "0", right: "0", top: "602px", textAlign: "center", fontSize: "26px", fontWeight: "600", cursor: "text" });
     val.title = "Click to type an exact level";
     const pan = new Knob(s, { x: 0, y: 640, w: 100, size: 66, min: -100, max: 100, def: 0, bipolar: true, step: 1, format: (v) => fmt.pan(v), valueGap: 2 });
+    pan.root.setAttribute("aria-label", "Pan");
 
     const strip = { s, colourBar, name, lock, undo, badge, linkDot, ic, vox, sBtn, mBtn, zone, cap, val, pan, mL, mR, scale, index: i, data: null };
     strips.push(strip);
@@ -591,10 +604,12 @@ export function buildTracks(root, app) {
     cap.addEventListener("pointerup", end);
     cap.addEventListener("pointercancel", end);
     cap.addEventListener("dblclick", () => { if (guarded()) send("setDb", 0); });
+    const wheel = wheelSteps();   // a notch = 0.5 dB (Shift: 0.1); a trackpad's small moves add up
     zone.addEventListener("wheel", (e) => {
       e.preventDefault();
       if (!guarded()) return;
-      send("nudge", (e.deltaY < 0 ? 1 : -1) * (e.shiftKey ? 0.1 : 0.5));
+      const n = wheel(e);
+      if (n) send("nudge", n * (e.shiftKey ? 0.1 : 0.5));
     }, { passive: false });
     strip.isDragging = () => dragging || performance.now() < holdUntil;
     strip.capTop = capTop;
@@ -631,13 +646,14 @@ export function buildTracks(root, app) {
       if (strip.data && strip.data.stereoPanner) {
         pan.set(0);
         pan.valueEl.textContent = "Stereo";
-        app.toast(`'${strip.data.title}' uses Cubase's Stereo Combined Panner: Cubase only tells Mixology its left edge. Pan it in Cubase.`);
+        const dn = dawName(app.daw);
+        app.toast(`'${strip.data.title}' uses ${app.daw === "cubase" ? "Cubase's Stereo Combined Panner" : "a stereo panner"}: ${dn} only tells Mixology its left edge. Pan it in ${dn}.`);
         return;
       }
       if (strip.data && strip.data.noPan) {
         pan.set(0);
         pan.valueEl.textContent = "No pan";
-        app.toast(`'${strip.data.title}' doesn't pan in Cubase: its output is mono (a mono group or output), so it plays in the middle.`);
+        app.toast(`'${strip.data.title}' doesn't pan in ${dawName(app.daw)}: its output is mono (a mono group or output), so it plays in the middle.`);
         return;
       }
       if (!guarded()) { pan.set(strip.data && strip.data.present ? Math.round((strip.data.pan - 0.5) * 200) : 0); return; }
@@ -690,12 +706,13 @@ export function buildTracks(root, app) {
     ambiguous: "Mixology Link found, but another track has the same name: rename one so Mixology can pair it",
   };
 
+  let hintShown = null;
   function render(b) {
     const connected = b && b.link === "connected";
     const slots = (b && b.slots) || [];
     const dawShown = hasBridge(app.daw) ? dawName(app.daw) : "your DAW";
     status.innerHTML = connected
-      ? `<span class="status-dot ok"></span>${dawShown} connected <span class="dim">(${b.via === "mcu" ? "Mackie Control" : `Bridge v${b.script}`})</span>`
+      ? `<span class="status-dot ok"></span>${dawShown} connected <span class="dim">(${b.via === "mcu" ? "Mackie Control" : `Bridge v${esc(b.script)}`})</span>`
       : `<span class="status-dot ${b && b.link === "waiting" ? "warn" : "bad"}"></span>${b && b.link === "waiting" ? `Waiting for ${dawShown}...` : b && b.link === "lost" ? `Lost contact with ${dawShown}` : `Not connected to ${dawShown}`}`;
     updateScroll(b);
     const changed = (b && b.changedCount) || 0;
@@ -712,18 +729,19 @@ export function buildTracks(root, app) {
     hint.style.cursor = setupIssue ? "pointer" : "";
     hint.onclick = setupIssue ? () => openSuggestion(app, setupIssue) : null;
     hint.title = setupIssue ? setupIssue.text : "";
-    hint.innerHTML = setupIssue ? `<span style="color:var(--amber)">⚠ ${esc(setupIssue.title)}</span> <span style="text-decoration:underline">What to do</span>`
+    const hintHtml = setupIssue ? `<span style="color:var(--amber)">⚠ ${esc(setupIssue.title)}</span> <span style="text-decoration:underline">What to do</span>`
       : !connected ? ""
-      : named === 0 ? `<span style="color:var(--amber)">●</span> Connected, but Cubase hasn't reported any channels yet. Settings › Cubase Bridge › <b>Refresh</b>, then <b>Copy log</b>.`
+      : named === 0 ? `<span style="color:var(--amber)">●</span> Connected, but ${dawShown} hasn't reported any channels yet. Settings › ${dawShown} Bridge › <b>Refresh</b>, then <b>Copy log</b>.`
       : paired === 0 ? "Drag, scroll or click a level to move it. Meters: add Mixology Link to your tracks."
       : `Drag, scroll or click a level to move it. <span style="color:var(--green)">${paired}</span> with Mixology Link.`;
+    if (hintHtml !== hintShown) { hintShown = hintHtml; hint.innerHTML = hintHtml; }   // (it's clickable: rebuilt only when it changes)
     cover.style.display = connected ? "none" : "grid";
     const noBridge = !hasBridge(app.daw), dn = dawName(app.daw);
     coverBtn.textContent = noBridge ? "Settings: your DAW" : `Open the ${dn} Bridge setup`;
     coverText.innerHTML = noBridge
-      ? `<b>This page moves your DAW's faders.</b><br>You work in ${esc(dn)}: Mixology can't move its faders yet (Cubase, FL Studio and Ableton Live for now), so set levels with ${esc(say(app.daw, "mixer"))}. Analyze Mix, the Mix Assistant, Mixology Link and every tool's EQ, compression and space work as usual; Auto Mix lists the fader moves for you to make.`
+      ? `<b>This page moves your DAW's faders.</b><br>You work in ${esc(dn)}: Mixology can't move its faders yet (Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk for now), so set levels with ${esc(say(app.daw, "mixer"))}. Analyze Mix, the Mix Assistant, Mixology Link and every tool's EQ, compression and space work as usual; Auto Mix lists the fader moves for you to make.`
       : b && b.portProblem
-      ? `<b>Mixology can't reach ${esc(dn)} yet.</b><br>${b.portProblem}`
+      ? `<b>Mixology can't reach ${esc(dn)} yet.</b><br>${esc(b.portProblem)}`
       : `<b>Waiting for ${esc(dn)}.</b><br>Mixology talks to ${esc(say(app.daw, "mixer"))} through a small script and two virtual MIDI ports. It takes about five minutes to set up once.`;
 
     const marks = (b && b.marks) || [];
@@ -804,8 +822,8 @@ export function buildTracks(root, app) {
       if (present && d.stereoPanner) st.pan.valueEl.textContent = "Stereo";
       if (present && d.noPan) st.pan.valueEl.textContent = "No pan";
       st.pan.root.title = !present ? ""
-        : d.noPan ? "Cubase didn't follow a pan move on this channel: its output is mono (a mono group or output), so it plays in the middle whatever the pan says. Mixology leaves it alone."
-        : d.stereoPanner ? "Cubase's Stereo Combined Panner: Cubase only tells Mixology its left edge (\"L100\" at full width). Pan this track in Cubase."
+        : d.noPan ? `${dawShown} didn't follow a pan move on this channel: its output is mono (a mono group or output), so it plays in the middle whatever the pan says. Mixology leaves it alone.`
+        : d.stereoPanner ? `${app.daw === "cubase" ? "Cubase's Stereo Combined Panner" : "A stereo panner"}: ${dawShown} only tells Mixology its left edge ("L100" at full width). Pan this track in ${dawShown}.`
         : b && b.mixMono ? `Your mix plays in mono at the ${say(app.daw, "master")} channel (Analyze Mix heard left = right): pans change nothing until the output is stereo.`
         : "";
       st.pan.root.style.opacity = present && d.hasPan !== false && !panInert && !(b && b.mixMono) ? "1" : "0.5";

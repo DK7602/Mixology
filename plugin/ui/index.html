@@ -38,7 +38,7 @@
     <button class="tab" data-page="master">MASTER</button>
     <button class="tab" id="tab-presets">PRESETS</button>
     <button class="tab icon" id="tab-history" aria-label="History" title="History: undo any change Mixology made"></button>
-    <button class="tab icon" id="tab-settings" aria-label="Settings" title="Settings and Cubase bridge"></button>
+    <button class="tab icon" id="tab-settings" aria-label="Settings" title="Settings and DAW bridge"></button>
     <button class="tab icon" id="tab-help" aria-label="Help" title="Manual"></button>
   </nav>
 
@@ -54,7 +54,7 @@
   </main>
 
   <div id="overlay">
-    <div id="sheet">
+    <div id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
       <div id="sheet-title"></div>
       <button class="close" type="button" id="sheet-close" aria-label="Close"></button>
       <div id="sheet-body" class="scroll"></div>

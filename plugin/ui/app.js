@@ -2,14 +2,14 @@
 // to the plug-in (native functions + the 30 Hz "mixFrame" event).
 
 import * as Juce from "./juce/index.js";
-import { $, el, icon, store, setRenderScale } from "./ui.js";
+import { $, el, icon, store, setRenderScale, closeMenu } from "./ui.js";
 import { buildOverview, buildTracks } from "./pages_main.js";
 import { buildEq, buildDynamics, buildSpace } from "./pages_process.js";
 import { buildTone, buildStereo, buildMaster } from "./pages_output.js";
 import { openSettings, openHelp, openPresets, openStyles, openHistory, hookBridge } from "./sheets.js";
 import { hookTools } from "./tools.js";
 import { styleByKey } from "./mixstyles.js";
-import { fillDaw, dawOf } from "./daws.js";
+import { fillDaw, dawOf, dawName, hasBridge } from "./daws.js";
 import { createProc } from "./proc.js";
 
 // ---------------------------------------------------------------------------------------------
@@ -123,7 +123,10 @@ function showPage(id) {
   if (current && current !== id && pages[current].onHide) pages[current].onHide();
   current = id;
   for (const [key, p] of Object.entries(pages)) p.root.classList.toggle("shown", key === id);
-  document.querySelectorAll(".tab[data-page]").forEach((t) => t.classList.toggle("active", t.dataset.page === id));
+  document.querySelectorAll(".tab[data-page]").forEach((t) => {
+    t.classList.toggle("active", t.dataset.page === id);
+    if (t.dataset.page === id) t.setAttribute("aria-current", "page"); else t.removeAttribute("aria-current");   // (screen readers)
+  });
   store.set("page", id);
   native.setPage(id);
   if (pages[id].onShow) pages[id].onShow();
@@ -133,6 +136,7 @@ document.querySelectorAll(".tab[data-page]").forEach((t) => t.addEventListener("
 $("tab-settings").innerHTML = icon("gear");
 $("tab-help").innerHTML = icon("help", 'stroke-width="2.4"');
 $("tab-settings").addEventListener("click", () => openSettings(app));
+const settingsTip = () => { $("tab-settings").title = `Settings and ${hasBridge(app.daw) ? dawName(app.daw) : "DAW"} bridge`; };   // your DAW's bridge
 $("tab-help").addEventListener("click", () => openHelp(app));
 $("tab-presets").addEventListener("click", () => openPresets(app));
 $("tab-history").innerHTML = icon("history", 'stroke-width="2.2"');
@@ -140,7 +144,8 @@ $("tab-history").addEventListener("click", () => openHistory(app));
 $("sheet-close").innerHTML = icon("close", 'stroke-width="2.6"');
 $("sheet-close").addEventListener("click", () => $("overlay").classList.remove("shown"));
 $("overlay").addEventListener("pointerdown", (e) => { if (e.target.id === "overlay") $("overlay").classList.remove("shown"); });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("overlay").classList.remove("shown"); });
+// Esc: an open dropdown first, then the sheet.
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !closeMenu()) $("overlay").classList.remove("shown"); });
 
 // Mix style picker in the header: the arrows step through the styles of the current genre;
 // clicking the name opens the genre / style picker.
@@ -177,6 +182,7 @@ $("preset-name").addEventListener("click", () => openStyles(app));
 
 async function start() {
   const settings = (await native.getSettings()) || {};
+  app.version = settings.version || "";   // (Settings > About)
   let theme = settings.theme;
   if (!theme) { try { theme = localStorage.getItem("mixology-theme"); } catch (e) { /* preview */ } }
   applyTheme(theme === "light" ? "light" : "dark");
@@ -185,6 +191,7 @@ async function start() {
   hookBridge(app);
   hookTools(app);
   app.proc = createProc(app);   // the processing target and controls the EQ / Dynamics / Tone / Stereo pages share
+  settingsTip();
 
   const build = {
     overview: buildOverview, tracks: buildTracks, eq: buildEq, dynamics: buildDynamics, space: buildSpace,
@@ -204,10 +211,11 @@ async function start() {
   let styleSeen = -1;
   window.__JUCE__.backend.addEventListener("mixFrame", (frame) => {
     app.frame = frame;
+    if (frame.daw) app.dawDetected = frame.daw.detected;   // the one found from the host (Settings: "Found: ...")
     if (frame.daw && (frame.daw.key !== app.daw || !!frame.daw.picked !== app.dawPicked)) {
       app.daw = frame.daw.key || "other";
       app.dawPicked = !!frame.daw.picked;
-      app.dawDetected = frame.daw.detected;
+      settingsTip();
       if (frame.daw.picked && frame.daw.from !== 2 && performance.now() > 5000) app.toast(`DAW: ${dawOf(app.daw).name} (picked in another plug-in of the suite)`);
       app.emit("daw", app.daw);
       native.getBridgeState().then((b) => { if (b) { app.bridge = b; app.emit("bridge", b); } });   // its text again, in this DAW's words
