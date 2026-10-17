@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-16, v0.16.1)
+# Mixology: resume here (updated 2026-10-17, v0.20.0)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,72 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## v0.20.0: the full audit (2026-10-17, session "Mixology audit")
+- User: "run a full audit on Mixology: bugs, misses, how it works with Voxology and Masterology, top-tier
+  improvements; update the Sonicology suite and the Mixology download. Then the same for Voxology and Masterology."
+- Six parallel reviews (engine, bridges vs real DAW docs, audio thread, hub/editor, UI in Playwright, suite +
+  installers), each finding checked in the code before fixing. Two helpers fixed the audio code and the UI in
+  worktrees (merged).
+- Engine: TrackAnalyzer FFT size scales with the rate (4096 <= 50 kHz, 8192 <= 100 kHz, 16384 above; AudioRing
+  16384), bins split over the bands they overlap (20 / 31.5 Hz were always empty at 48 k; at 96 k low bands empty ->
+  tone off by 6 - 20 dB). Stereo Architect predict(): Link balance is BEFORE the panner (bal = balance + pan(to)); a
+  mono L100 synth was mirrored to R100. Polish isFxReturn(): spRoute on, role fx, or an FX-like name with role
+  other ("Space Pad" became a 100 % wet return; same rule in pages_process.js). Report.mixMoments: tone needs >= 5
+  heard mix moments. lowCutTopBand(role): keys / synths rumble = below 45 Hz (Clean Up cuts 50). FaderLaw::toDb
+  shifts outside the learned points like toNormalised. Analysis::load count(11). Polish skips shared names.
+- Hub: PROJECTS. Each Mixology saves attribute "project" (hex id; old projects: FNV of their saved strings, empty ->
+  own id). Hub activeProject + parked map (protectedLock): loadProject applies when active (or a fresh instance's own
+  id), else parks; saveProject returns live / parked / unknown (processor keeps projectCopy). updateProjects (0.5 s):
+  rule 1 = an instance with another id processing audio while the active project does -> adopt (same project), merge
+  its parked state fill-empty; rule 2 = active quiet > 1.5 s and another plays -> switchProject (park live, resetProject,
+  apply parked). Audio only (a window opened while stopped may be a 2nd Mixology of the same project). Last instance
+  of the active project gone -> switch to the most recent other, or reset. Known gaps: two copies of the SAME project
+  open share an id; a .vstpreset with another project's session can merge it fill-empty; Links of both projects are
+  heard (setup point "setup-other-project").
+- Hub: registerInstance / unregisterInstance (replaces setMixProcessing): owner = active project's instance on a
+  master-named track (looksLikeMaster), else the oldest; promoted when removed. Analyze Mix fed by the owner
+  processor's timer (feedAnalysis, 5 Hz, hub enabled), not the editors. Bridge: enable() at prepare in cubase / fl /
+  ableton / logic / cakewalk (detected host); setDaw(detectedDaw unless other); no ports in studioone / reaper /
+  bitwig (dawHasBridge); faderLaw per DAW (lawKey: "faderLaw" for cubase, "faderLaw.<daw>"). Done points: level points
+  need movable faders and a fader change. Loudness statistics reset on play start (wasPlaying). Hand-off tone + Full
+  Mix EQ / Tone Balance response; monoMix from monoWatch. Presets file re-read on mtime change, write errors reported.
+  History packed when it rests 1.5 s / every 10 s / at save. Combined Panner check Cubase only. sessionDirty after
+  load. analyzeFinish only while listening; hearingReference cleared when unsoloed / disconnected.
+- Bridges: Python core target() looks the slot up in the mixer NOW (a deleted / moved track's move went to its
+  neighbour); FL solo = FL mutes the others: adapter keeps pre-solo mutes while any_solo; FL pickup arg fallback;
+  FL transport.isRecording / Live Automation Arm + record -> writing (ACK automation); FL supportedDevices header.
+  Simulator: core race checks, FL's solo, recording scenarios (226 checks).
+- Audio (helper): Shimmer feedback loop high-passed at 120 Hz, scaled by FdnReverb::resonance() at Shift 0,
+  soft-limited inside the loop, modules reset on non-finite output (long-run test of every effect at max feedback);
+  constant 60 s tail (Chain::kTailSeconds; reportedTail / tailChanged / tailTold gone); limiter toggle crossfades
+  late and on-time sound over the 20 ms fade (latency still only while on); processBlockBypassed delays by the latency
+  told (latencyTold) in both plug-ins; delay lines "forget" instead of memset (Space on / type change 12 - 15 us);
+  LoudnessMeter ignores non-finite energy, binFor clamps; silenceNonFinite() at block start (both plug-ins), meters and
+  Assist EQ guard themselves; ensureSpace / prepare share a mutex; reset() = flag, chain reset next block.
+- UI (helper): esc() for every DAW / engine string in innerHTML (a track name could run script), .menu z-index 150,
+  closed sheets stay closed (stillOpen), saved processing target restored, DAW pick propagates, clicks not lost to
+  re-renders, DAW-correct texts (Logic / Cakewalk in the lists, no hard-coded Cubase), dropdown toggles, refusal
+  shown, Link Trim gestures for wheel / keys, wheelSteps() (trackpad), graph leak, version in About, aria roles.
+- Docs / installers: Mixology-Windows ships FL + Live scripts, INSTALL.txt for every DAW (Mac paths, quarantine),
+  no Standalone; Inno: spare scripts in {app}\Bridge scripts, loopMIDI text, UninstallDelete __pycache__; Read Me /
+  manual: Mac ports (no restart), min suite versions 0.50 / 0.13 / 0.29, separate-process hosts, Live 11 wording.
+- For the Voxology / Masterology passes (need all three, suite kLayout bump): Mixology acknowledges matched vocals
+  (Voxology's "MIXOLOGY ✓" can be false when the host gives no track name), track colour in VocalInfo, a pid-less
+  presence block (plug-ins in separate processes), Masterology never writes MasterInfo.inputPeakDbtp, MixInfo
+  shortTermLufs unused, VocalInfo eq flag (Polish still adds vocal EQ), SuiteLink choice seqlock needs a release fence
+  after the CAS lock (SuiteLink.cpp ~418 / 466: copy to all three).
+- Not done (ideas): McuBridge trusts its own sent values as read-back (Logic / Cakewalk), Mackie knobs in Pan mode
+  check, Live snapshot per flush, analysis aware of pans and song sections, integrated LUFS / true peak from the
+  meter for the report.
+
+## v0.17.0 - v0.19.1 (2026-10-16 / 17, other threads; see git log)
+- 0.17.0 Sonicology: company name in all three, macOS build (Mixology makes its own MIDI ports), suite installers
+  (installer/, .github/workflows/sonicology.yml; input reuse_run repacks an earlier run's plug-ins).
+- 0.18.0 FL Studio and Ableton Live bridges: bridge/common/mixology_bridge_core.py (copied into both, ctest checks
+  the copies) + adapters; tools/bridge-sim/run_py.py.
+- 0.19.0 Logic Pro and Cakewalk: Mixology is their Mackie Control (dsp McuBridge, tests/test_mcu.cpp, FakeMcuHost).
+- 0.19.1 two tracks with one name: setup point, plans leave them alone.
 
 ## v0.16.1: Vocal Pocket and advice from an older project (2026-10-16)
 - User on 0.16.0: OPEN VOCAL POCKET from "Instruments cover the vocal's words" ('Hats - Verse') opened Vocal Pocket

@@ -7,7 +7,7 @@ HTML / CSS / JS interface in the platform web view, GitHub Actions builds on eve
 The plan and milestones: [docs/PLAN.md](docs/PLAN.md). User manual (also built into the plug-in): [docs/MANUAL.md](docs/MANUAL.md).
 Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_TEST.md) (passed), [docs/M3_TEST.md](docs/M3_TEST.md), [docs/M4_TEST.md](docs/M4_TEST.md), [docs/M5_TEST.md](docs/M5_TEST.md), [docs/M6_TEST.md](docs/M6_TEST.md) (current).
 
-## Status: v0.19.1
+## Status: v0.20.0
 
 | Piece | State |
 | --- | --- |
@@ -38,6 +38,7 @@ Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_T
 | Faders in FL Studio and Ableton Live (v0.18.0): one Python bridge core (`bridge/common/mixology_bridge_core.py`, the Cubase script's protocol) with an adapter per DAW (`bridge/flstudio`, `bridge/ableton`); the setup steps per DAW in Settings > Bridge | Passed the simulator (`tools/bridge-sim/run_py.py`, 214 checks, in ctest); waiting for FL Studio and Live |
 | Faders in Logic Pro and Cakewalk (v0.19.0): Mixology is their Mackie Control (`dsp/include/mixology/McuBridge.h`): translates the bridge protocol to Mackie Control, short display names back to full track names, the fader curve built in per DAW and learned from the display | Passed the simulator (`tests/test_mcu.cpp`, a fake Logic and Cakewalk modelled on Cakewalk's surface source and Logic captures); waiting for Logic and Cakewalk |
 | Two tracks with one name (v0.19.1): a Mix Assistant point says which name; Auto Mix and the tools leave those tracks alone (before, Auto Mix repeated the same move after it was applied) | Built; found by the user in Cubase |
+| The full audit (v0.20.0): analysis right at every sample rate, Stereo Architect never mirrors a lopsided mix, Polish never turns an instrument into a reverb return, each open project keeps its own Mixology state, the Mixology on the master leads (and another takes over), Analyze Mix with the window closed, FL / Live moves checked against the mixer as it is now and refused while recording, FL's solo, audio safety (Shimmer always dies away, no limiter click, NaN-proof, constant tail, bypass in time, no big memory clears while playing), track names never run as code in the window, installers and docs up to date | Built; tests and simulators pass, waiting for the DAW tests |
 | CPU check (v0.8.2): 48 real Links + Mixology timed on every build (tools/cpucheck); the idle chain made cheaper | Done: typical 48-track session about 17 % of one core |
 
 ## Layout

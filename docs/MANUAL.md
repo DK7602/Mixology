@@ -3,7 +3,7 @@
 Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list all three are under Sonicology.
 
-Manual for version 0.19.1 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
+Manual for version 0.20.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -456,7 +456,7 @@ The modules (the sound runs through them in this order):
 | Tone | Clip Control | Rounds off peaks over the Threshold; Softness; Oversampling 1x - 8x (cleaner); Mix. |
 | Stereo | Width | Width, Low / Mid / High Width (the side signal split at Low Below / High Above). 100 % = as it is. Mono tracks: nothing to widen (pan them). |
 | Tone | Final Touch | Width, Air, Glue, Output. |
-| Dynamics | Limiter | Nothing passes the Ceiling (sample or true peaks). Adds 5 ms of delay while it's on; Cubase lines the track up. On the full mix, leave the final limiting to Masterology. |
+| Dynamics | Limiter | Nothing passes the Ceiling (sample or true peaks). Adds 5 ms of delay while it's on (switching it never clicks); your DAW lines the track up, also while the plug-in is bypassed. On the full mix, leave the final limiting to Masterology. |
 
 **Mono Check** (Stereo page): the whole mix plays in mono while the red badge shows (the scope and meters keep
 showing the mix as it really is, so you can still see its stereo picture). It switches itself off when
@@ -502,9 +502,10 @@ Space gives a track (or an FX channel) one effect: **Reverb** (a plate), **Delay
 Good starting points: lead vocal on an FX channel with **Vocal Plate** + a second FX channel with **Dotted 1/8**
 delay, both ducking under the lead vocal. Adlibs: **Ping-Pong 1/8**. Drums: **Drum Room** on the track, Mix 15 %.
 
-Cubase is told how long each effect rings (its "tail"), so a reverb is never cut off when the track goes quiet.
-Switching Space on or off makes Cubase restart that plug-in for a moment (a tiny gap in its sound): do it while
-stopped if you can. A Space effect uses 0.3 - 2.3 % of one CPU core (Delay the least, Hall the most).
+Your DAW is told that each Mixology Link and Mixology can ring on for up to a minute (their "tail"), so a reverb or
+delay is never cut off when the track goes quiet, and switching Space on or off never interrupts the sound. A Space
+effect uses 0.3 - 2.3 % of one CPU core (Delay the least, Hall the most). Every feedback (Shimmer, Drift, Delay)
+always dies away once the sound stops, at any setting.
 
 ## Mix styles
 
