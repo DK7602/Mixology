@@ -205,6 +205,10 @@ a guess (dB = k log10 (pos / zero)), corrected by every dB the display shows for
 tag); learned points are saved per DAW. To check with the testers: the curves (set -6 dB, read the DAW's fader), the
 pan texts, Logic finding the surface by itself.
 Also: the session's messages name the DAW in use ("Not connected to FL Studio."), not always Cubase.
+v0.19.1 (user: an Auto Mix move came back after every Apply; two tracks shared a name): names more than one track
+has (two Links reporting one name, or two strips in view showing it) are a setup point (setup-shared-name); plans
+leave those channels alone and say so once (ChannelNow.sharedName). Their faders share one entry by name hash, so
+"moved since Analyze Mix" couldn't see the move: that is why it repeated.
 Still to come in M6: code signing (later).
 
 ### Built in v0.11.0 - Auto Analyze (asked 2026-10-15: "once an analyze mix has been run should have an auto analyze option")

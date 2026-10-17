@@ -45,6 +45,8 @@ namespace mixology::mix
         double pan = 0.0;          // -100 = L100, 0 = centre, +100 = R100
         bool panUnknown = false;   // a stereo track on Cubase's Combined Panner: Cubase only reports its left edge
         int channels = 0;          // its Mixology Link's channels (1 mono, 2 stereo, 0 unknown): only mono tracks get panned
+        bool sharedName = false;           // another track has the same name: Mixology can't tell their faders and
+                                           // Links apart, so plans leave it alone
         bool hasFaderAtAnalysis = false;   // the fader when Analyze Mix listened: moves since then are allowed for
         double faderAtAnalysis = 0.0;      // (so applying a plan and opening it again doesn't repeat its moves)
         bool musicBus = false;     // the music group you marked: the instruments play through it

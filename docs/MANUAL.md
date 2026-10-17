@@ -3,7 +3,7 @@
 Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list all three are under Sonicology.
 
-Manual for version 0.19.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
+Manual for version 0.19.1 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -18,6 +18,8 @@ fix):
 - **Vocals without Mixology Link**: a vocal with Voxology on it but no Mixology Link, so Mixology can't hear it on
   its own (add the Link under Voxology).
 - **Mixology on a mono channel**: it belongs on the Stereo Out.
+- **Two tracks with the same name**: Mixology tells tracks, their faders and their Mixology Links apart by name. Until
+  you rename one, Auto Mix and the smart tools leave both alone (they say so), and the advice about them may be off.
 
 **Voxology** makes each vocal sound great. **Mixology** makes all your tracks work together.
 **Masterology** turns the finished mix into the master.
@@ -223,8 +225,8 @@ Safety rules (always on):
   Read or Off while it moves faders). With **Read (R)** on (green **R**) you get a warning: if that channel has volume
   automation, playback moves the fader back.
 - The Stereo Out (FL Studio's Master, Live's Main) is never part of the bank.
-- Two channels with the same name: both can be moved, but Restore and Mixology Link can't tell them apart
-  (the name shows in amber). Give one a different name.
+- Two channels with the same name: you can move them on the Tracks page, but Restore, Mixology Link and Auto Mix
+  can't tell them apart (the name shows in amber, and the Mix Assistant says which name). Give one a different name.
 
 ## Mixology Link
 

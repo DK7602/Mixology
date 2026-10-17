@@ -110,6 +110,23 @@ TEST_CASE ("Setup: mono tracks panned left and right count; a channel Cubase doe
     CHECK_FALSE (w2.monoFold());
 }
 
+TEST_CASE ("Setup: two tracks with one name are flagged, with the fix", "[setup]")
+{
+    Context c;
+    c.sharedNames = { "Pop Kit 1" };
+    const auto one = issues (c);
+    REQUIRE (one.size() == 1);
+    CHECK (one[0].id == "setup-shared-name");
+    CHECK (one[0].kind == "warn");
+    CHECK (one[0].title == "Two tracks are called 'Pop Kit 1'");
+    CHECK (one[0].text.find ("can't tell which fader and which Mixology Link") != std::string::npos);
+    CHECK (one[0].steps[0].find ("Rename one of them") != std::string::npos);
+    CHECK (one[0].tracks == std::vector<std::string> { "Pop Kit 1" });
+
+    c.sharedNames = { "Pop Kit 1", "Vox" };
+    CHECK (issues (c)[0].title == "2 names are used by more than one track");
+}
+
 TEST_CASE ("Setup: the issues name the likely group and the vocals without a Link", "[setup]")
 {
     Context c;

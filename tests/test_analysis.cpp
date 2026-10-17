@@ -692,6 +692,16 @@ TEST_CASE ("Plans: Balance lifts a buried vocal and makes room for it", "[plan]"
         CHECK (change (p, "Lead Vox", "level") == nullptr);
         CHECK (move (change (p, "Kick", "level")) == Catch::Approx (-(r.vocalTarget - r.vocalRatio)).margin (0.4));
     }
+    SECTION ("a vocal whose name another track has too: never moved, and the plan says why")
+    {
+        auto chans = channelsOf (tracks (0));
+        for (auto& c : chans) if (c.name == "Lead Vox") c.sharedName = true;
+        const auto p = makePlan (Tool::autoMix, r, chans);
+        CHECK (change (p, "Lead Vox", "level") == nullptr);
+        CHECK (change (p, "Lead Vox", "pan") == nullptr);
+        CHECK (noted (p, "'Lead Vox': another track has the same name"));
+        CHECK_FALSE (noted (p, "'Lead Vox' has no Mixology Link"));
+    }
     SECTION ("you like it where it is: nothing moves")
     {
         Analysis a = listen (tracks);

@@ -136,7 +136,15 @@ namespace mixology::mix
             }
         };
 
-        bool movable (const ChannelNow* c) { return c != nullptr && c->faderKnown && ! c->locked && c->faderDb > -100.0; }
+        bool movable (const ChannelNow* c) { return c != nullptr && c->faderKnown && ! c->locked && ! c->sharedName && c->faderDb > -100.0; }
+
+        // Two tracks with one name: Mixology can't tell which fader or Link is which, so it moves neither. Said once.
+        void noteShared (Plan& plan, const std::string& name)
+        {
+            const auto note = quoted (name) + ": another track has the same name, so Mixology can't tell which fader and Mixology Link "
+                                              "is which and leaves them alone. Rename one of them, then Analyze Mix again.";
+            if (std::find (plan.notes.begin(), plan.notes.end(), note) == plan.notes.end()) plan.notes.push_back (note);
+        }
 
         // How far its fader moved since Analyze Mix listened (dB): the measurements are corrected by this.
         double movedSince (const ChannelNow* c)
@@ -198,6 +206,7 @@ namespace mixology::mix
                 g.role = t.role;
                 g.viaBus = busActive && viaMusicBus (t.role);
                 const auto* ch = look.of (t);
+                if (ch != nullptr && ch->sharedName) noteShared (plan, t.name);
                 const double since = movedSince (ch) + (bus != nullptr && viaMusicBus (t.role) ? busSince : 0.0);
                 if (std::abs (since) > 0.05) ++movedChannels;
                 g.e += toE (t.loudness + since);
@@ -470,7 +479,8 @@ namespace mixology::mix
                     if (g.anyExtra()) moved.push_back ({ move, quoted (m.name) });
                     if (! movable (m.ch))
                     {
-                        plan.notes.push_back (quoted (m.name) + (m.ch == nullptr ? ": Cubase hasn't shown its fader (press Analyze Mix again)"
+                        if (m.ch != nullptr && m.ch->sharedName) continue;   // said above
+                        plan.notes.push_back (quoted (m.name) + (m.ch == nullptr ? ": {daw} hasn't shown its fader (press Analyze Mix again)"
                                                                  : m.ch->locked ? ": protected (padlock)" : ": its fader wasn't read")
                                               + ", so it stays where it is (it would have moved " + signedDb (move) + ").");
                         continue;
@@ -594,7 +604,7 @@ namespace mixology::mix
                                       + (stereoPanners.size() == 1 ? "it" : "them") + " in Cubase if needed.");
             if (! stereoTracks.empty())
                 plan.notes.push_back (joinNames (stereoTracks) + (stereoTracks.size() == 1 ? " is a stereo track" : " are stereo tracks")
-                                      + ": Mixology only pans mono tracks (Cubase doesn't tell it where a stereo panner really sits).");
+                                      + ": Mixology only pans mono tracks ({daw} doesn't tell it where a stereo panner really sits).");
 
             // The pans Cubase reports must agree with what the Stereo Out hears. A stereo track with Cubase's Combined
             // Panner reports one side of it (e.g. "L100" for a full-width track): then the numbers can't be trusted.
@@ -747,6 +757,11 @@ namespace mixology::mix
                     plan.notes.push_back (quoted (x.t->name) + ": protected (padlock), so its pan stays " + panText (x.pan) + " (it would have gone " + panText (to) + ").");
                     continue;
                 }
+                if (x.ch->sharedName)
+                {
+                    noteShared (plan, x.t->name);
+                    continue;
+                }
                 Change c;
                 c.hash = x.ch->hash;
                 c.name = x.t->name;
@@ -784,6 +799,11 @@ namespace mixology::mix
         const ChannelNow* eqChannel (const TrackReport& t, const Lookup& look, Plan& plan, const char* what)
         {
             const auto* ch = look.of (t);
+            if (ch != nullptr && ch->sharedName)
+            {
+                noteShared (plan, t.name);
+                return nullptr;
+            }
             if (ch == nullptr || ! ch->hasLink)
             {
                 plan.notes.push_back (quoted (t.name) + " has no Mixology Link Mixology can reach: " + what + " skipped.");

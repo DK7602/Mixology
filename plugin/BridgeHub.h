@@ -164,6 +164,9 @@ private:
 
     // ---- Milestone 4: plans you approve, then apply (faders and pans through the bridge, EQ through the Links)
     std::vector<mixology::mix::ChannelNow> channelsNow() const;
+    /** Names more than one track has (two Links reporting it, or two strips in view showing it): Mixology can't
+        tell those tracks apart, so plans leave them alone and the Mix Assistant says to rename one. */
+    std::map<std::uint32_t, std::string> sharedNames() const;
     void fillProc (mixology::mix::ChannelNow&, const mixology::link::LinkInfo&) const;
     void fillVoxology (mixology::mix::ChannelNow&) const;
     juce::var planToVar (const mixology::mix::Plan&) const;

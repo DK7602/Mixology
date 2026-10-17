@@ -1278,6 +1278,8 @@ void BridgeHub::updateSetup()
     for (const auto& [hash, sv] : suiteVocals)
         if (voxologyOn (hash) != nullptr && linked.count (hash) == 0)
             c.vocalsWithoutLink.push_back (titleOf (hash, sv.info.trackName));
+    for (const auto& [hash, name] : sharedNames())
+        c.sharedNames.push_back (titleOf (hash, name));
 
     setupNow = setup::issues (c);
     std::string key;
@@ -2237,9 +2239,21 @@ void BridgeHub::fillVoxology (mixology::mix::ChannelNow& c) const
     c.voxology.clippedSpots = static_cast<int> (v->clippedSpots);
 }
 
+std::map<std::uint32_t, std::string> BridgeHub::sharedNames() const
+{
+    std::map<std::uint32_t, std::string> out;
+    std::map<std::uint32_t, int> count;
+    for (const auto& l : mixology::link::processRegistry().links (mixology::link::nowMs()))
+        if (l.identity.hasName && ++count[l.nameHash] == 2) out[l.nameHash] = l.identity.name;
+    for (int i = 0; i < bridge.slotCount(); ++i)
+        if (bridge.slot (i).present && bridge.nameIsDuplicated (i)) out[bridge.slot (i).hash] = bridge.slot (i).title;
+    return out;
+}
+
 std::vector<mixology::mix::ChannelNow> BridgeHub::channelsNow() const
 {
     const auto links = mixology::link::processRegistry().links (mixology::link::nowMs());
+    const auto shared = sharedNames();
     std::vector<mixology::mix::ChannelNow> out;
     std::set<std::uint32_t> seen;
     for (const auto& [hash, f] : bridge.knownFaders())
@@ -2252,6 +2266,7 @@ std::vector<mixology::mix::ChannelNow> BridgeHub::channelsNow() const
         c.hasPan = f.hasPan;
         c.pan = (f.pan - 0.5) * 200.0;
         c.locked = bridge.isProtected (hash);
+        c.sharedName = shared.count (hash) != 0;
         if (auto ts = trackSettings.find (hash); ts != trackSettings.end()) c.musicBus = ts->second.musicBus;
         fillVoxology (c);
         if (auto it = fadersAtAnalysis.find (hash); it != fadersAtAnalysis.end())
@@ -2279,6 +2294,7 @@ std::vector<mixology::mix::ChannelNow> BridgeHub::channelsNow() const
         c.hash = l.nameHash;
         c.name = l.identity.name;
         c.locked = bridge.isProtected (l.nameHash);
+        c.sharedName = shared.count (l.nameHash) != 0;
         c.hasLink = uniqueLink (links, l.nameHash) != nullptr;
         c.assist = l.assist;
         if (auto it = assistAtAnalysis.find (l.nameHash); it != assistAtAnalysis.end()) { c.assistAtAnalysisKnown = true; c.assistAtAnalysis = it->second; }

@@ -292,7 +292,8 @@ export function buildOverview(root, app) {
     // The setup check first: things in the Cubase project no mixing move can fix (a mono group, vocals without a Link).
     const setupHint = (sg) => sg.id === "setup-mono-group" ? (sg.tracks && sg.tracks.length ? `Most likely '${esc(sg.tracks[0])}' is a mono group: click for the fix` : "A mono group or output on the way: click for the fix")
       : sg.id === "setup-vocal-link" ? "Add Mixology Link under Voxology on each: click for how"
-      : sg.id === "setup-mono-mixology" ? `Put it on the ${say(app.daw, "master")} channel: click for how` : sg.need;
+      : sg.id === "setup-mono-mixology" ? `Put it on the ${say(app.daw, "master")} channel: click for how`
+      : sg.id === "setup-shared-name" ? "Rename one so each track has its own name: click for more" : sg.need;
     for (const sg of setup) card(sg.icon, KIND.warn, sg.title, setupHint(sg), () => openSuggestion(app, sg));
     if (useReport) {
       const au = b.analysis.auto;

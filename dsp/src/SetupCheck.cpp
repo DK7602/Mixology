@@ -148,6 +148,26 @@ namespace mixology::setup
             s.tracks = c.vocalsWithoutLink;
             out.push_back (std::move (s));
         }
+
+        if (! c.sharedNames.empty())
+        {
+            mix::Suggestion s;
+            s.id = "setup-shared-name";
+            s.kind = "warn";
+            s.icon = "link";
+            const auto n = c.sharedNames.size();
+            s.title = n == 1 ? "Two tracks are called " + quoted (c.sharedNames.front())
+                             : std::to_string (n) + " names are used by more than one track";
+            s.text = "Mixology tells your tracks apart by their names. " + (n == 1 ? quoted (c.sharedNames.front()) + " is the name of more than one track"
+                                                                                 : joinQuoted (c.sharedNames, 4) + " are each the name of more than one track")
+                     + ", so Mixology can't tell which fader and which Mixology Link belong to which: Auto Mix and the smart tools leave "
+                     + (n == 1 ? "them" : "those tracks") + " alone, and the advice about them may be off.";
+            s.need = "Yes, if those tracks matter for the mix: every track needs a name of its own.";
+            s.steps = { "Rename one of them in {daw} (add \"B\", or what it plays: \"Snare Top\" and \"Snare Bottom\").",
+                        "Then run Analyze Mix again (Auto Analyze does it by itself while the song plays)." };
+            s.tracks = c.sharedNames;
+            out.push_back (std::move (s));
+        }
         return out;
     }
 }
