@@ -7,7 +7,6 @@
 #include <array>
 #include <atomic>
 #include <cmath>
-#include <limits>
 
 /** Milestone 5: the processing controls (mixology::proc's table) as host parameters. Shared by Mixology Link
     (each track) and Mixology (the full mix): same ids, ranges and texts in both. */
@@ -29,25 +28,6 @@ namespace mixology::proc::host
         if (unit == "s") return juce::String (v, v < 10.0f ? 2 : 1) + " s";
         if (unit == "st") return (v > 0.04f ? "+" : "") + juce::String (v, 1) + " st";
         return juce::String (v, 2);
-    }
-
-    /** The tail the host is told about. Cubase can stop a plug-in once its input has been silent for longer
-        than its tail, which would cut a reverb off, so while Space is on the tail is generous (longer than any
-        setting makes it) and endless for Freeze. Only switching Space on / off (or Freeze) changes it, so the
-        host is rarely asked to look again (which restarts the plug-in). */
-    inline double reportedTail (const Values& v)
-    {
-        if (! isOn (v, Module::space)) return 0.0;
-        const bool freeze = juce::roundToInt (v[static_cast<std::size_t> (spType)]) == static_cast<int> (SpaceType::special)
-                            && juce::roundToInt (v[static_cast<std::size_t> (spxMode)]) == static_cast<int> (SpecialMode::freeze);
-        return freeze ? std::numeric_limits<double>::infinity() : 30.0;
-    }
-
-    /** True when the host should hear about a new tail. */
-    inline bool tailChanged (double now, double told)
-    {
-        if (std::isinf (now) || std::isinf (told)) return std::isinf (now) != std::isinf (told);
-        return std::abs (now - told) > 0.5;
     }
 
     /** Audio thread, first thing in a block: a sample that is not a number (NaN, infinity, from a broken plug-in

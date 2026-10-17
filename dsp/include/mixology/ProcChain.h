@@ -40,6 +40,10 @@ namespace mixology::proc
         void setHost (double bpm, double keyLevel) { hostBpm = bpm; hostKey = keyLevel; }
         /** How long the sound goes on after the input stops (the Space effect's tail), in seconds. */
         static double tailSecondsFor (const Values&);
+        /** The tail the host is told, the same whatever the settings: longer than any of them rings
+            (tailSecondsFor), and finite. Hosts only ask again when the latency changes, so a tail that followed the
+            settings never reached them when Space went on mid-song (Cubase then cut the reverb off). */
+        static constexpr double kTailSeconds = 60.0;
         void reset();
         /** Where the controls should be (they glide there). */
         void setValues (const Values&);

@@ -39,7 +39,7 @@ public:
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return mixology::proc::host::reportedTail (procRaw.read()); }
+    double getTailLengthSeconds() const override { return mixology::proc::Chain::kTailSeconds; }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -107,7 +107,7 @@ public:
     std::atomic<bool> monoListen { false };
 
 private:
-    void timerCallback() override;   // the Limiter's latency, Space's engine and tail, the hand-off to Masterology
+    void timerCallback() override;   // the Limiter's latency, Space's engine, the hand-off to Masterology
     /** M6: what Masterology should know about this mix (the style, peaks, loudness, tone), a few times a second. */
     void publishHandoff();
     int handoffCountdown = 0;
@@ -126,7 +126,6 @@ private:
     mixology::proc::Chain chain;
     std::array<std::atomic<float>, mixology::proc::kMeterValues> procMeters {};
     std::atomic<std::uint32_t> procRunning { 0 };
-    std::atomic<double> tailTold { 0.0 };
     juce::CriticalSection stateLock;
     juce::String uiState;
 

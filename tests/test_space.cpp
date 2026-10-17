@@ -135,6 +135,29 @@ TEST_CASE ("Space reverbs: the tail fades at the Decay you set (RT60), then to s
     CHECK (Chain::tailSecondsFor (defaults()) == 0.0);
 }
 
+TEST_CASE ("Space: the tail the host is told is one long, finite time that covers every setting", "[space]")
+{
+    // Hosts only ask for the tail again when the latency changes, so a tail that followed the settings never reached
+    // them when Space went on mid-song (Cubase then cut the reverb off), and Freeze's endless one went to AU hosts
+    // as infinity. Now it is one time, longer than any effect rings at its longest.
+    CHECK (std::isfinite (Chain::kTailSeconds));
+    const std::vector<Values> longest {
+        space (SpaceType::reverb, { { revDecay, 10.0f }, { revPre, 200.0f } }),
+        space (SpaceType::hall, { { hallDecay, 12.0f }, { hallPre, 200.0f } }),
+        space (SpaceType::room, { { roomDecay, 3.0f }, { roomPre, 100.0f } }),
+        space (SpaceType::delay, { { dlyFeedback, 95.0f }, { dlyTime, 8.0f } }),
+        space (SpaceType::special, { { spxFeedback, 95.0f } }),
+        space (SpaceType::special, { { spxMode, 3.0f }, { spxFeedback, 95.0f } }),
+        space (SpaceType::chorus),
+        space (SpaceType::phaser),
+    };
+    for (const auto& v : longest)
+    {
+        INFO ("type " << v[spType] << ", mode " << v[spxMode]);
+        CHECK (Chain::tailSecondsFor (v) <= Chain::kTailSeconds);
+    }
+}
+
 TEST_CASE ("Space delay: echoes on the beat, fainter by Feedback, ping-pong left / right", "[space]")
 {
     // 120 BPM, 1/8 note = 0.25 s; full ping-pong: the first echo on the left, the next on the right.

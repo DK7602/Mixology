@@ -56,11 +56,6 @@ void MixologyAudioProcessor::timerCallback()
     const int latency = chain.latencyFor (values);
     if (latency != getLatencySamples()) setLatencySamples (latency);   // the Limiter's lookahead, while it is on
     if (mixology::proc::isOn (values, mixology::proc::Module::space)) chain.ensureSpace();   // never on the audio thread
-    if (const double tail = mixology::proc::host::reportedTail (values); mixology::proc::host::tailChanged (tail, tailTold.load()))
-    {
-        tailTold.store (tail);
-        updateHostDisplay (ChangeDetails().withLatencyChanged (true));   // the host asks for latency and tail again
-    }
     if (--handoffCountdown <= 0)
     {
         handoffCountdown = 4;
@@ -151,7 +146,6 @@ void MixologyAudioProcessor::prepareToPlay (double sampleRate, int)
     if (mixology::proc::isOn (values, mixology::proc::Module::space)) chain.ensureSpace();
     chain.setValues (values);
     setLatencySamples (chain.latencyFor (values));
-    tailTold.store (mixology::proc::host::reportedTail (values));
 }
 
 template <typename Sample>

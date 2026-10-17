@@ -122,7 +122,6 @@ void MixologyLinkProcessor::prepareToPlay (double sampleRate, int)
     if (mixology::proc::isOn (values, mixology::proc::Module::space)) chain.ensureSpace();
     chain.setValues (values);
     setLatencySamples (chain.latencyFor (values));
-    tailTold.store (mixology::proc::host::reportedTail (values));
     keyEnv = 0.0;
 }
 
@@ -310,14 +309,8 @@ void MixologyLinkProcessor::timerCallback()
     if (latency != getLatencySamples()) setLatencySamples (latency);   // the Limiter's lookahead, while it is on
     registry.publishProc (slot, now, static_cast<float> (currentRate.load()), latency);
 
-    // Space: its delay lines are made the first time it is switched on (never on the audio thread); the host
-    // hears about the tail when Space goes on or off, so it never cuts a reverb short.
+    // Space: its delay lines are made the first time it is switched on (never on the audio thread).
     if (mixology::proc::isOn (now, mixology::proc::Module::space)) chain.ensureSpace();
-    if (const double tail = mixology::proc::host::reportedTail (now); mixology::proc::host::tailChanged (tail, tailTold.load()))
-    {
-        tailTold.store (tail);
-        updateHostDisplay (ChangeDetails().withLatencyChanged (true));   // the host asks for latency and tail again
-    }
 
     mixology::link::DuckSources wantedDuck;
     if (registry.takeDuckRequest (slot, duckRequestSeen, wantedDuck)) setDuck (wantedDuck);
