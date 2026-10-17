@@ -4,6 +4,8 @@
 export const $ = (id) => document.getElementById(id);
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 export const MINUS = "−";
+/** Text that goes into innerHTML: track names, notes and messages from the DAW or the plug-in show as they are. */
+export const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
 export function el(tag, cls, parent, style) {
   const e = document.createElement(tag);
@@ -34,6 +36,23 @@ export const fmt = {
   q(v) { return v.toFixed(1); },
   lufs(v) { return v <= -99 ? MINUS + "∞" : fmt.num(v, 1); },
 };
+
+/** Wheel turns in whole steps (up = +). A mouse wheel's notch is one step; a trackpad sends dozens of small moves,
+    which add up (about 100 px a step), so a swipe doesn't jump. The first turn after a pause always moves one step. */
+export function wheelSteps() {
+  let acc = 0, last = -1e9;
+  return (e, delta = -e.deltaY) => {
+    if (!delta) return 0;
+    const fresh = e.timeStamp - last > 200;
+    last = e.timeStamp;
+    if (fresh) acc = 0;
+    acc += e.deltaMode === 0 ? clamp(delta / 100, -1, 1) : Math.sign(delta);
+    if (fresh && Math.abs(acc) < 1) acc = Math.sign(delta);
+    const n = Math.trunc(acc);
+    acc -= n;
+    return n;
+  };
+}
 
 // ---------------------------------------------------------------------------------------------
 // Icons (24 x 24 viewBox, stroke = currentColor)
@@ -138,8 +157,11 @@ let renderScale = 1;
 const canvases = new Set();
 export function setRenderScale(s) {
   renderScale = s;
+  forgetGone();
   for (const c of canvases) c.resize();
 }
+// A graph whose sheet or card was rebuilt is gone from the page: let it go.
+const forgetGone = () => { for (const c of canvases) if (!c.wrap.isConnected) canvases.delete(c); };
 
 export function graph(parent, x, y, w, h, cls = "graph") {
   const wrap = el("div", cls, parent, box(x, y, w, h));
@@ -156,6 +178,7 @@ export function graph(parent, x, y, w, h, cls = "graph") {
     },
     redraw() { ctx.clearRect(0, 0, w, h); if (g.draw) g.draw(ctx, w, h); },
   };
+  forgetGone();
   canvases.add(g);
   g.resize();
   return g;
@@ -212,6 +235,10 @@ export class Knob {
 
     const root = el("div", "knob", parent, { left: o.x + "px", top: o.y + "px", width: (o.w || size + 40) + "px" });
     root.tabIndex = 0;
+    root.setAttribute("role", "slider");   // for screen readers (nothing shows)
+    if (o.label) root.setAttribute("aria-label", o.label);
+    root.setAttribute("aria-valuemin", String(Math.min(this.o.min, this.o.max)));
+    root.setAttribute("aria-valuemax", String(Math.max(this.o.min, this.o.max)));
     this.root = root;
     if (o.label !== undefined) {
       this.labelEl = el("div", "k-label", root, { marginBottom: this.o.labelGap + "px" });
@@ -297,6 +324,8 @@ export class Knob {
     this.svg.querySelector(".rest2").setAttribute("d", rest);
     this.pointer.style.transform = `rotate(${a}deg)`;
     this.valueEl.textContent = this.o.format(this.value);
+    this.root.setAttribute("aria-valuenow", String(this.value));
+    this.root.setAttribute("aria-valuetext", this.valueEl.textContent);
   }
 
   bind() {
@@ -320,10 +349,11 @@ export class Knob {
     d.addEventListener("pointerup", end);
     d.addEventListener("pointercancel", end);
     d.addEventListener("dblclick", () => this.set(this.o.def, true));
+    const wheel = wheelSteps();
     d.addEventListener("wheel", (e) => {
       e.preventDefault();
-      const stepN = (e.shiftKey ? 0.002 : 0.01) * (e.deltaY < 0 ? 1 : -1);
-      this.set(this.fromNorm(this.toNorm(this.value) + stepN), true);
+      const n = wheel(e);
+      if (n) this.set(this.fromNorm(this.toNorm(this.value) + n * (e.shiftKey ? 0.002 : 0.01)), true);
     }, { passive: false });
     this.root.addEventListener("keydown", (e) => {
       const k = { ArrowUp: 0.01, ArrowRight: 0.01, ArrowDown: -0.01, ArrowLeft: -0.01 }[e.key];
@@ -368,9 +398,18 @@ export class Meter {
 // Dropdown
 
 let openMenu = null;
+// A press outside the menu closes it. A press on the button that opened it leaves that to the button's click,
+// which closes it (otherwise this would close it and the click open it again).
 document.addEventListener("pointerdown", (e) => {
-  if (openMenu && !openMenu.contains(e.target)) { openMenu.remove(); openMenu = null; }
+  if (openMenu && !openMenu.contains(e.target) && !(openMenu.owner && openMenu.owner.contains(e.target))) { openMenu.remove(); openMenu = null; }
 });
+/** Closes the open dropdown, if there is one (Esc). True when there was one. */
+export function closeMenu() {
+  if (!openMenu) return false;
+  openMenu.remove();
+  openMenu = null;
+  return true;
+}
 
 /** Keeps a menu on the stage: opens it upward when there is more room above its button, and makes it
     scroll when it is still too long. r = the button's rectangle, sr = the stage's, k = the stage's scale. */
@@ -410,6 +449,7 @@ export function select(parent, x, y, w, options, value, onChange, opts = {}) {
     const k = sr.width / 1440;
     const left = (r.left - sr.left) / k;
     const m = el("div", "menu scroll", stage, { left: left + "px", top: (r.bottom - sr.top) / k + 4 + "px", minWidth: w + "px" });
+    m.owner = s;
     for (const o of options) {
       const v = o.value ?? o, label = o.label ?? o;
       const item = el("div", v === api.value ? "sel" : "", m);
@@ -424,12 +464,18 @@ export function select(parent, x, y, w, options, value, onChange, opts = {}) {
 
 /** A menu that pops up under `anchor`. items: { label, value, icon?, colour?, sel?, divider? }. */
 export function popupMenu(anchor, items, onPick, width = 240) {
-  if (openMenu) { openMenu.remove(); openMenu = null; }
+  if (openMenu) {
+    const again = openMenu.owner === anchor;   // its button clicked again: just close it
+    openMenu.remove();
+    openMenu = null;
+    if (again) return null;
+  }
   const stage = document.getElementById("stage");
   const r = anchor.getBoundingClientRect(), sr = stage.getBoundingClientRect();
   const k = sr.width / 1440;
   let left = (r.left - sr.left) / k, top = (r.bottom - sr.top) / k + 4;
   const m = el("div", "menu scroll", stage, { left: left + "px", top: top + "px", minWidth: width + "px" });
+  m.owner = anchor;
   for (const it of items) {
     if (it.divider) { el("div", "", m, { height: "1px", margin: "6px 4px", padding: "0", background: "var(--panel-edge)", pointerEvents: "none" }); continue; }
     const item = el("div", it.sel ? "sel" : "", m, { display: "flex", alignItems: "center", gap: "10px" });
@@ -441,7 +487,7 @@ export function popupMenu(anchor, items, onPick, width = 240) {
     item.addEventListener("click", () => { m.remove(); openMenu = null; onPick(it.value); });
   }
   fitMenu(m, r, sr, k, left);
-  setTimeout(() => { openMenu = m; }, 0);   // the click that opened it must not close it
+  openMenu = m;   // (a press on its button doesn't close it: see the pointerdown above)
   return m;
 }
 

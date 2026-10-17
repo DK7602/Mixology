@@ -276,8 +276,8 @@ button { font-family: inherit; }
 .select span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 code { font-family: inherit; font-weight: 600; color: var(--cyan); }
 :root[data-theme="light"] code { color: #0077a8; }
-.menu {
-  position: absolute; z-index: 50; min-width: 220px; padding: 6px; border-radius: 10px; border: 1.5px solid var(--select-edge);
+.menu {   /* over the sheets (#overlay: 100), under the messages (200) */
+  position: absolute; z-index: 150; min-width: 220px; padding: 6px; border-radius: 10px; border: 1.5px solid var(--select-edge);
   background: var(--select); box-shadow: 0 12px 30px rgba(0,0,0,0.55);
 }
 .menu div { padding: 9px 12px; border-radius: 7px; font-size: 18px; cursor: pointer; white-space: nowrap; }

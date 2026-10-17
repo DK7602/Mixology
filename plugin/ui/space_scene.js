@@ -452,7 +452,7 @@ export function createScene(parent, x, y, w, h) {
       if (key === S.key) return;
       S.key = key;
       const img = new Image();
-      img.onload = () => { S.img = img; S.glowKey = ""; };
+      img.onload = () => { if (S.key === key) { S.img = img; S.glowKey = ""; } };   // (another effect picked meanwhile: not this picture)
       img.src = src;
       seedParticles();
     },
