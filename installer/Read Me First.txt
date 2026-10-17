@@ -34,7 +34,10 @@ THE INSTALLER ISN'T SIGNED YET (BETA)
 
 FIRST TIME IN YOUR DAW
   1. Rescan plug-ins (Cubase: Studio > VST Plug-in Manager; FL Studio: Options > Manage plugins > Find plugins;
-     Ableton Live: Settings > Plug-Ins > Rescan; Logic Pro checks Audio Units when it starts).
+     Ableton Live: Settings > Plug-Ins > Rescan; Logic Pro checks Audio Units when it starts; Cakewalk: Edit >
+     Preferences > VST Settings, tick "Rescan Failed Plug-Ins", press Scan). In the plug-in list they are under
+     Sonicology (sort by manufacturer). Cakewalk still doesn't show them: Utilities > Cakewalk Plug-in Manager,
+     and enable them if they are listed as excluded.
   2. Where they go:
        Voxology         on each vocal track (first)
        Mixology Link    on every track you want Mixology to hear (the last plug-in on the track)
