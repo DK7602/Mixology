@@ -152,6 +152,7 @@ namespace mixology::mix
         std::vector<double> mixBands;     // average mix spectrum (dB), and the style's target, both
         std::vector<double> targetBands;  // normalised to the same overall level
         double mixLoudness = -120.0, mixPeak = -120.0, mixCorrelation = 1.0, mixBalance = 0.0;
+        int mixMoments = 0;               // moments the Stereo Out itself was heard (the mix numbers need 5)
         std::vector<std::string> unheard; // channels in Cubase without a Link (not part of this analysis)
         bool hasVocalRatio = false;       // the lead vocal against the rest of the mix while it sings (dB),
         double vocalRatio = 0.0;          // and where it should sit: the style's target plus your offset
@@ -174,6 +175,11 @@ namespace mixology::mix
         ReferenceReport reference;
     };
 
+    /** Rumble on a track: its energy below what a low cut for its kind would remove. That is the bands up to
+        lowCutTopBand (about 100 Hz; about 45 Hz for keys and synths, whose low notes are part of the sound). */
+    int lowCutTopBand (Role);
+    int lowCutTopHz (Role);
+
     /** Where the style wants the lead vocal against the rest of the mix (dB). */
     double vocalTargetFor (const std::string& styleKey);
 
@@ -182,10 +188,10 @@ namespace mixology::mix
     struct ToneAgainstStyle
     {
         bool valid = false;
-        double low = 0.0;       // 50 - 160 Hz
-        double lowMid = 0.0;    // 200 - 500 Hz
-        double presence = 0.0;  // 2.5 - 5 kHz
-        double air = 0.0;       // 8 - 16 kHz
+        double low = 0.0;       // 40 - 125 Hz (bands 3 - 8)
+        double lowMid = 0.0;    // 200 - 400 Hz (bands 10 - 14)
+        double presence = 0.0;  // 2.5 - 4 kHz (bands 21 - 23)
+        double air = 0.0;       // 8 - 16 kHz (bands 26 - 29)
     };
     ToneAgainstStyle toneAgainstStyle (const Report&);
 

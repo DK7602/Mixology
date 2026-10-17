@@ -82,8 +82,8 @@
         { ...sg("vocal-pocket", "warn", "mic", "Instruments cover the vocal's words", "'Keys' and 'Snare' are nearly as loud as the vocal at 1.6 - 4 kHz while it sings: the range where words are understood.",
           "Yes, if lyrics get lost in busy parts.", ["Dip 'Keys' and 'Snare' 2 - 3 dB around 2 - 3 kHz (a medium EQ bell), or pan them a little off-centre.", "Vocal Pocket (left of the analyzer) makes these dips for you, in each track's Mixology Link."], ["Keys", "Snare"]),
           tool: "pocket", ...(B.pocketDone ? { done: true, doneWhat: "'Keys' Assist EQ, 'Snare' Assist EQ" } : {}) },
-        { tool: "clean", ...sg("highpass", "info", "lowcut", "Low rumble in tracks that don't need it", "'Adlibs' has a lot of energy below 100 Hz. It adds mud and fights the kick and bass without being heard as part of the sound.",
-          "Usually yes: it's free headroom and a cleaner low end.", ["Put a low cut (high-pass) on it: about 80 - 100 Hz for vocals, 60 - 80 Hz for keys, guitars and synths."], ["Adlibs"]) },
+        { tool: "clean", ...sg("highpass", "info", "lowcut", "Low rumble in tracks that don't need it", "'Adlibs' has a lot of energy in the lowest lows. It adds mud and fights the kick and bass without being heard as part of the sound.",
+          "Usually yes: it's free headroom and a cleaner low end.", ["Put a low cut (high-pass) on it: about 80 - 100 Hz for vocals, 60 - 80 Hz for guitars, 40 - 50 Hz for keys and synths."], ["Adlibs"]) },
         sg("unheard", "info", "link", "5 channels without Mixology Link", "'Perc', 'Synth', 'Guitar' and 'FX' and 1 more play in your mix, but Mixology can't hear them one by one, so the advice below leaves them out.",
           "Only if those tracks matter for the balance (they usually do).", ["Insert Mixology Link on each of them, after their other plug-ins, then Analyze Mix again."], ["Perc", "Synth", "Guitar", "FX"]),
         Object.keys(B.vocalOwn).length
@@ -211,7 +211,7 @@
       if (value === "auto" || value === "clean" || value === "pocket") notes.push("'Synth' has no Mixology Link Mixology can reach: vocal pocket skipped.");
       if (value === "auto" || value === "polish") notes.push("Send 'Lead Vox' to 'FX 1-Vox Verb' ({daw:sendHow}): Mixology can't add sends.");
       const first = value === "auto" || value === "balance" ? ["Voxology says 'Lead Vox' was recorded too hot (it reaches +0.2 dB coming in, over the top of the meter; 29 spots clipped while it was recorded). Lower its clip gain first, until its loudest words peak around -6 dB. In {daw}: {daw:clipGain}. Then let Analyze Mix hear it again (Auto Analyze does it by itself): these moves are worked out from how loud it is now."] : [];
-      const hd = value === "auto" || value === "balance" ? { headroomDb: -12.8, headroomCount: 8, headroomWhy: "Your mix peaks at +6.8 dBTP. Masterology works best with peaks around -6: every fader goes down 12.8 dB together. The balance stays the same, the mix just gets quieter (Masterology brings the level back)." } : { headroomDb: 0, headroomCount: 0, headroomWhy: "" };
+      const hd = value === "auto" || value === "balance" ? { headroomDb: -12.8, headroomCount: 8, headroomWhy: "Your mix peaks at about +6.8 dB. Masterology works best with peaks around -6: every fader goes down 12.8 dB together. The balance stays the same, the mix just gets quieter (Masterology brings the level back)." } : { headroomDb: 0, headroomCount: 0, headroomWhy: "" };
       const busSet = Object.values(B.settings).some((x) => x && x.musicBus);
       B.plan = { ...hd, groupHints: (value === "auto" || value === "balance") && !busSet ? ["Pad"] : [], id: B.planId, tool: value, title, valid: true, summary: `${changes.length} changes for ${window.__mixStyle || "Hip Hop - Modern Clean"}: levels: the hats -3.4 dB, the kick -1.5 dB; pans: 2 tracks; 1 low cut, 1 mud dip; 2 pocket dips.`, notes, first, changes };
       return { ok: true, plan: B.plan };

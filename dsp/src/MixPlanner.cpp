@@ -448,7 +448,7 @@ namespace mixology::mix
                 if (r.mixPeak > -100.0 && peak > -5.0)
                 {
                     plan.headroomDb = std::round (-(peak + 6.0) * 10.0) / 10.0;
-                    plan.headroomWhy = "Your mix peaks at " + signedDb (peak) + "TP. Masterology works best with peaks around -6: every fader goes down "
+                    plan.headroomWhy = "Your mix peaks at about " + signedDb (peak) + ". Masterology works best with peaks around -6: every fader goes down "
                                        + fmt1 (-plan.headroomDb) + " dB together. The balance stays the same, the mix just gets quieter (Masterology brings the level back).";
                     std::vector<std::string> stuck;
                     if (busActive) plan.headroom.push_back ({ bus->hash, bus->name, bus->faderDb, std::min (bus->faderDb + busMove, kMaxFaderDb) });
@@ -709,7 +709,8 @@ namespace mixology::mix
                 for (const auto& x : ts)
                 {
                     const double e = toE (x.t->loudness) * std::max (0.05, x.t->activity);
-                    const double bal = std::clamp (x.t->balance + panBalanceDb (x.to) - panBalanceDb (x.pan), -40.0, 40.0);
+                    // The Link sits before the panner (an insert): what it hears plus where the pan puts it.
+                    const double bal = std::clamp (x.t->balance + panBalanceDb (x.to), -40.0, 40.0);
                     const double q = toE (bal);
                     l += 2.0 * e * q / (1.0 + q);
                     rgt += 2.0 * e / (1.0 + q);
@@ -825,7 +826,7 @@ namespace mixology::mix
                 if (! counts (t) || t.role == Role::kick || t.role == Role::bass || t.role == Role::fx) continue;
                 const double all = rangeE (t.bands, 0, kBands - 1);
                 if (all <= 0.0) continue;
-                const double share = rangeE (t.bands, 0, 7) / all;
+                const double share = rangeE (t.bands, 0, lowCutTopBand (t.role)) / all;
                 const bool vocal = t.role == Role::vox || t.role == Role::adlibs;
                 if (! t.rumble && ! (vocal && share >= 0.03)) continue;
                 const double hz = lowCutFor (t.role);
@@ -841,7 +842,7 @@ namespace mixology::mix
                 c.from = now;
                 c.to = c.wanted = hz;
                 c.hz = hz;
-                c.why = t.rumble ? fmt0 (share * 100.0) + "% of its energy is below 100 Hz, where it only muddies the kick and bass"
+                c.why = t.rumble ? fmt0 (share * 100.0) + "% of its energy is below " + std::to_string (lowCutTopHz (t.role)) + " Hz, where it only muddies the kick and bass"
                                  : "vocals have nothing useful below " + fmt0 (hz) + " Hz: a low cut keeps rumble and pops out";
                 plan.changes.push_back (c);
                 ++cuts;
@@ -1022,14 +1023,30 @@ namespace mixology::mix
 
         bool looksLikeFxChannel (const std::string& name)
         {
-            static const std::regex fx (R"(^fx\s*\d|\b(verb|reverb|delay|echo|return|aux|send|space|plate|hall)\b)", std::regex::icase);
+            static const std::regex fx (R"(^fx\s*\d|\b(verbs?|reverbs?|delays?|echo|returns?|aux|sends?|plate|hall)\b)", std::regex::icase);
             return std::regex_search (name, fx);
+        }
+
+        /** An FX channel Polish may put the vocal's reverb on: one already set up as a return, one you or its name
+            call an FX return, or one named like a return that plays no instrument or vocal ("Space Pad" is a pad). */
+        bool isFxReturn (const ChannelNow& c, const Report& r)
+        {
+            if (c.hasProc && pv (c.proc, proc::spRoute) > 0.5f) return true;
+            const TrackReport* t = nullptr;
+            for (const auto& x : r.tracks) if ((c.hash != 0 && x.hash == c.hash) || (c.hash == 0 && x.name == c.name)) t = &x;
+            if (t != nullptr && t->role == Role::fx) return true;
+            return looksLikeFxChannel (c.name) && (t == nullptr || t->role == Role::other);
         }
 
         /** The Link that carries a track's processing, or nullptr (with a note why). */
         const ChannelNow* procChannel (const TrackReport& t, const Lookup& look, Plan& plan, const char* what)
         {
             const auto* ch = look.of (t);
+            if (ch != nullptr && ch->sharedName)
+            {
+                noteShared (plan, t.name);
+                return nullptr;
+            }
             if (ch == nullptr || ! ch->hasLink || ! ch->hasProc) return nullptr;   // Clean Up already says so
             if (ch->locked)
             {
@@ -1285,7 +1302,7 @@ namespace mixology::mix
                 const auto* leadCh = look.of (*lead);
                 std::vector<const ChannelNow*> fx;
                 for (const auto& c : channels)
-                    if (c.hasLink && c.hasProc && ! c.locked && c.hash != lead->hash && (looksLikeFxChannel (c.name) || pv (c.proc, proc::spRoute) > 0.5f)) fx.push_back (&c);
+                    if (c.hasLink && c.hasProc && ! c.locked && ! c.sharedName && c.hash != lead->hash && isFxReturn (c, r)) fx.push_back (&c);
                 const ChannelNow* busy = nullptr;
                 for (const auto* c : fx) if (spaceOn (*c)) busy = c;
                 const double under = reverbUnderVocal (r.style.key);
@@ -1363,7 +1380,7 @@ namespace mixology::mix
                         plan.notes.push_back ("Send " + quoted (lead->name) + " to " + quoted (target->name) + " ({daw:sendHow}): Mixology can't add sends. "
                                               "The effect's LEVEL (Space page) sets how much comes back.");
                 }
-                else if (leadCh != nullptr && leadCh->hasLink && leadCh->hasProc && ! leadCh->locked && pv (leadCh->proc, proc::chainOn) > 0.5f)
+                else if (leadCh != nullptr && leadCh->hasLink && leadCh->hasProc && ! leadCh->locked && ! leadCh->sharedName && pv (leadCh->proc, proc::chainOn) > 0.5f)
                 {
                     const auto snd = vocalReverb (r.style.key, false);
                     Change c;

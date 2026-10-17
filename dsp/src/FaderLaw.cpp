@@ -71,15 +71,35 @@ namespace mixology
     double FaderLaw::toDb (double n) const
     {
         const long k = key (n);
-        if (points.empty()) return guessDb (n);
         if (auto it = points.find (k); it != points.end()) return it->second;
 
-        auto hi = points.lower_bound (k);
-        if (hi == points.begin() || hi == points.end()) return guessDb (n);
-        auto lo = std::prev (hi);
-        if (lo->second <= kMinusInf || hi->second <= kMinusInf) return guessDb (n);
-        const double t = static_cast<double> (k - lo->first) / static_cast<double> (hi->first - lo->first);
-        return lo->second + t * (hi->second - lo->second);
+        // The learned points with a real dB value (minus infinity says nothing about the curve's shape).
+        const std::pair<const long, double>* lo = nullptr;
+        const std::pair<const long, double>* hi = nullptr;
+        const std::pair<const long, double>* first = nullptr;
+        const std::pair<const long, double>* last = nullptr;
+        for (const auto& p : points)
+        {
+            if (p.second <= kMinusInf) continue;
+            if (first == nullptr) first = &p;
+            last = &p;
+            if (p.first < k) lo = &p;
+            else if (hi == nullptr) hi = &p;
+        }
+        if (first == nullptr) return guessDb (n);
+        if (lo != nullptr && hi != nullptr)
+        {
+            const double t = static_cast<double> (k - lo->first) / static_cast<double> (hi->first - lo->first);
+            return lo->second + t * (hi->second - lo->second);
+        }
+
+        // Outside the learned range: the built-in curve shifted through the nearest learned point, as toNormalised
+        // does, so a dB value turned into a fader position and back stays the same.
+        const auto* nearest = lo != nullptr ? last : first;
+        const double guess = guessDb (n);
+        if (guess <= kMinusInf) return kMinusInf;
+        const double offset = nearest->second - guessDb (static_cast<double> (nearest->first) / bridge::kValueMax);
+        return std::max (kMinusInf, guess + offset);
     }
 
     double FaderLaw::toNormalised (double db) const

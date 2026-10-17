@@ -76,6 +76,7 @@ namespace
     {
         Report r;
         r.valid = true;
+        r.mixMoments = 300;   // a minute of the mix heard at the Stereo Out
         r.style.key = style;
         r.tracks = std::move (tracks);
         return r;
@@ -227,6 +228,15 @@ TEST_CASE ("Polish: the lead vocal's reverb on an FX channel (ducking under it),
     REQUIRE (ad != nullptr);
     CHECK (value (*ad, proc::spType) == static_cast<float> (proc::SpaceType::delay));
     CHECK (value (*ad, proc::dlyMix) == Catch::Approx (15.0f));
+
+    // A pad called "Space Pad" (or an "Aux Keys" synth) is an instrument, not an FX return: never turned into one.
+    {
+        auto pads = std::vector<ChannelNow> { link ("Lead Vox"), link ("Lead Vox (D)"), link ("Adlibs"), link ("Space Pad", 2) };
+        const auto pad = track ("Space Pad", Role::synth, vocalBands (-20.0, 0.0, 0.0));
+        const auto withPad = makePlan (Tool::polish, report ({ lead, dbl, adlibs, pad }), pads);
+        CHECK (change (withPad, "Space Pad", "space") == nullptr);
+        REQUIRE (change (withPad, "Lead Vox", "space") != nullptr);   // the plate goes on the vocal itself instead
+    }
 
     // Without an FX channel: a little plate on the vocal itself. Gospel: a hall.
     chans.pop_back();
@@ -441,6 +451,9 @@ TEST_CASE ("Analysis: the mix's tone against the style, for Polish and the hand-
     tone.targetBands.assign (static_cast<std::size_t> (kBands), 0.0);
     for (int b = 26; b <= 29; ++b) tone.mixBands[static_cast<std::size_t> (b)] = -3.0;
     for (int b = 3; b <= 8; ++b) tone.mixBands[static_cast<std::size_t> (b)] = 2.0;
+    tone.mixMoments = 4;
+    CHECK_FALSE (toneAgainstStyle (tone).valid);   // the Stereo Out itself hardly heard the mix: no tone to report
+    tone.mixMoments = 300;
     const auto t = toneAgainstStyle (tone);
     REQUIRE (t.valid);
     CHECK (t.air == Catch::Approx (-3.0));

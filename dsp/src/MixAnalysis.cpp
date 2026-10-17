@@ -158,7 +158,7 @@ namespace mixology::mix
     ToneAgainstStyle toneAgainstStyle (const Report& r)
     {
         ToneAgainstStyle t;
-        if (! r.valid || r.mixBands.size() < static_cast<std::size_t> (kBands) || r.targetBands.size() != r.mixBands.size()) return t;
+        if (! r.valid || r.mixMoments < 5 || r.mixBands.size() < static_cast<std::size_t> (kBands) || r.targetBands.size() != r.mixBands.size()) return t;
         auto off = [&r] (int from, int to) {
             double d = 0.0;
             for (int b = from; b <= to; ++b) d += r.mixBands[static_cast<std::size_t> (b)] - r.targetBands[static_cast<std::size_t> (b)];
@@ -171,6 +171,9 @@ namespace mixology::mix
         t.air = off (26, 29);
         return t;
     }
+
+    int lowCutTopBand (Role r) { return r == Role::keys || r == Role::synth ? 3 : kHpTo; }
+    int lowCutTopHz (Role r) { return r == Role::keys || r == Role::synth ? 45 : 100; }
 
     bool viaMusicBus (Role r) { return r != Role::vox && r != Role::adlibs && r != Role::fx; }
 
@@ -381,7 +384,7 @@ namespace mixology::mix
         std::vector<std::pair<std::uint32_t, std::string>> names (r.count (8));
         for (auto& [hash, name] : names) { hash = r.u32(); name = r.str(); }
 
-        const auto n = r.count (64);
+        const auto n = r.count (11);   // a moment with a silent mix and no tracks is 11 bytes
         if (! r.ok() || n > static_cast<std::uint32_t> (kMaxMoments)) return false;
         std::vector<Moment> heard;
         heard.reserve (n);
@@ -672,6 +675,7 @@ namespace mixology::mix
         }
 
         std::vector<double> mixDb (kBands, -120.0);
+        r.mixMoments = mixN;
         if (mixN > 0)
         {
             r.mixLoudness = toDb (mixLoudE / mixN);
@@ -1072,7 +1076,7 @@ namespace mixology::mix
             for (const auto& t : r.tracks)
             {
                 if (! counts (t) || t.role == Role::kick || t.role == Role::bass || t.role == Role::fx) continue;
-                const double low = rangeE (t.bands, 0, kHpTo), all = rangeE (t.bands, 0, kBands - 1);
+                const double low = rangeE (t.bands, 0, lowCutTopBand (t.role)), all = rangeE (t.bands, 0, kBands - 1);
                 if (all <= 0.0 || low / all < 0.2 || toDb (low) < toDb (mixSub) - 18.0) continue;
                 r.tracks[indexOf.at (t.hash)].rumble = true;
                 names.push_back (t.name);
@@ -1080,9 +1084,9 @@ namespace mixology::mix
             }
             if (! names.empty())
                 out.push_back ({ "highpass", vocalAmong ? "warn" : "info", "lowcut", "Low rumble in tracks that don't need it",
-                                 joinNames (names) + (names.size() == 1 ? " has" : " have") + " a lot of energy below 100 Hz. It adds mud and fights the kick and bass without being heard as part of the sound.",
+                                 joinNames (names) + (names.size() == 1 ? " has" : " have") + " a lot of energy in the lowest lows. It adds mud and fights the kick and bass without being heard as part of the sound.",
                                  vocalAmong ? "Yes for vocals: there's nothing useful down there." : "Usually yes: it's free headroom and a cleaner low end.",
-                                 { std::string ("Put a low cut (high-pass) on ") + (names.size() == 1 ? "it" : "them") + ": about 80 - 100 Hz for vocals, 60 - 80 Hz for keys, guitars and synths." }, names });
+                                 { std::string ("Put a low cut (high-pass) on ") + (names.size() == 1 ? "it" : "them") + ": about 80 - 100 Hz for vocals, 60 - 80 Hz for guitars, 40 - 50 Hz for keys and synths." }, names });
         }
 
         // ---- 7. stereo: low end in the middle, mono-safe -------------------------------------

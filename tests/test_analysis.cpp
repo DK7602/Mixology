@@ -970,6 +970,34 @@ TEST_CASE ("Plans: Stereo Architect evens out a lopsided mix", "[plan]")
     CHECK (movedRight);
 }
 
+TEST_CASE ("Plans: Stereo Architect centres a mono track that pulls the mix, never mirrors it", "[plan]")
+{
+    // Mixology Link sits before the panner: a mono track's Link hears no lean at all, the panner puts it left.
+    auto tr = [] (const char* n, std::uint32_t h, Role role, double loud) {
+        TrackReport t;
+        t.name = n; t.hash = h; t.role = role; t.roleFrom = "you"; t.loudness = loud; t.activity = 1.0; t.balance = 0.0;
+        t.bands.assign (kBands, -60.0);
+        return t;
+    };
+    auto ch = [] (const char* n, std::uint32_t h, double pan) {
+        ChannelNow c;
+        c.name = n; c.hash = h; c.faderKnown = true; c.hasPan = true; c.pan = pan; c.channels = 1; c.hasLink = true;
+        return c;
+    };
+    Report r;
+    r.valid = true;
+    r.style.name = "Test";
+    r.tracks = { tr ("Kick", 1, Role::kick, -14.0), tr ("Lead Vox", 2, Role::vox, -12.0), tr ("Synth", 3, Role::synth, -11.1) };
+    const double others = std::pow (10.0, -1.4) + std::pow (10.0, -1.2), synth = std::pow (10.0, -1.11);
+    r.mixBalance = 10.0 * std::log10 ((others + 2.0 * synth) / others);   // what the Stereo Out hears with Synth at L100
+    REQUIRE (r.mixBalance > 3.0);
+    const auto p = makePlan (Tool::stereo, r, { ch ("Kick", 1, 0.0), ch ("Lead Vox", 2, 0.0), ch ("Synth", 3, -100.0) });
+    const auto* c = change (p, "Synth", "pan");
+    REQUIRE (c != nullptr);
+    CHECK (c->to > -60.0);   // towards the middle ...
+    CHECK (c->to < 30.0);    // ... never mirrored to the other side (that leans the mix right just as much)
+}
+
 TEST_CASE ("Plans: Clean Up cuts rumble and dips mud, never the kick", "[plan]")
 {
     // A vocal with rumble, and a muddy pad.

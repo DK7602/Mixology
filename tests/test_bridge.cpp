@@ -154,6 +154,15 @@ TEST_CASE ("FaderLaw: learns a curve and inverts it", "[bridge]")
 }
 
 
+TEST_CASE ("FaderLaw: outside the learned points, dB to position and back stays the same", "[bridge]")
+{
+    FaderLaw law;
+    law.learn (0.70, 0.0);
+    law.learn (0.75, 1.5);
+    for (double db : { -30.0, -12.0, -6.0, 0.0, 0.75, 1.5, 3.0, 6.0 })
+        CHECK (law.toDb (law.toNormalised (db)) == Catch::Approx (db).margin (0.05));
+}
+
 TEST_CASE ("FaderLaw: a contradicting reading replaces stale points", "[bridge]")
 {
     FaderLaw law;
