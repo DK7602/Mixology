@@ -80,6 +80,32 @@ namespace mixology::proc
             }
         }
 
+        /** The host bypasses the plug-in (audio thread, instead of process()): the sound passes untouched, `latency`
+            samples late (the latency the host was told: 0, or the Limiter's lookahead), so the track stays in time.
+            The Limiter's delay line keeps filling, so switching back continues the sound. */
+        template <typename Sample>
+        void bypass (Sample* const* ch, int numChannels, int numSamples, int latency)
+        {
+            const int nch = std::min ({ numChannels, channels, kMaxChannels });
+            if (nch <= 0 || numSamples <= 0) return;
+            for (int start = 0; start < numSamples; start += kChunk)
+            {
+                const int len = std::min (kChunk, numSamples - start);
+                for (int c = 0; c < nch; ++c)
+                    for (int i = 0; i < len; ++i)
+                    {
+                        const double x = static_cast<double> (ch[c][start + i]);
+                        work[static_cast<std::size_t> (c)][static_cast<std::size_t> (i)] = std::isfinite (x) ? x : 0.0;
+                    }
+                double* rows[2] = { work[0].data(), work[1].data() };
+                limiter.pass (rows, nch, len, latency);
+                if (latency <= 0) continue;   // on time: the buffer is not touched at all
+                for (int c = 0; c < nch; ++c)
+                    for (int i = 0; i < len; ++i)
+                        ch[c][start + i] = static_cast<Sample> (work[static_cast<std::size_t> (c)][static_cast<std::size_t> (i)]);
+            }
+        }
+
         /** The meters since the last call (audio thread). */
         Meters takeMeters();
 

@@ -334,6 +334,23 @@ int main (int argc, char** argv)
         pump (300);
         check (kick->getLatencySamples() > 0, "Limiter on: the host is told its lookahead (" + juce::String (kick->getLatencySamples()) + " samples)");
 
+        // Bypassed by the host, the track stays in time: a click comes out late by that latency, as the host expects
+        // (JUCE's own bypass passed it on time while the host still moved the track earlier).
+        {
+            juce::AudioBuffer<float> buf (2, block);
+            juce::MidiBuffer midi;
+            int at = -1;
+            for (int b2 = 0; b2 < 4; ++b2)
+            {
+                buf.clear();
+                if (b2 == 2) { buf.setSample (0, 100, 0.25f); buf.setSample (1, 100, 0.25f); }
+                kick->processBlockBypassed (buf, midi);
+                for (int i = 0; i < block && b2 >= 2 && at < 0; ++i)
+                    if (std::abs (buf.getSample (0, i)) > 0.1f) at = (b2 - 2) * block + i;
+            }
+            check (at - 100 == kick->getLatencySamples(), "bypassed, the sound is late by that latency too (" + juce::String (at - 100) + " samples)");
+        }
+
         registry.requestProc (kSlot, kGen, limOn, 0.0f);
         registry.requestProc (kSlot, kGen, eqOn, 0.0f);
         pump (300);

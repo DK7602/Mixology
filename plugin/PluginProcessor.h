@@ -30,6 +30,9 @@ public:
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     void processBlock (juce::AudioBuffer<double>&, juce::MidiBuffer&) override;
+    /** Bypassed by the host: the mix passes, late by the latency the host was told (so it stays in time). */
+    void processBlockBypassed (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    void processBlockBypassed (juce::AudioBuffer<double>&, juce::MidiBuffer&) override;
     bool supportsDoublePrecisionProcessing() const override { return true; }
 
     juce::AudioProcessorEditor* createEditor() override;
@@ -120,10 +123,13 @@ private:
 
     template <typename Sample>
     void process (juce::AudioBuffer<Sample>&);
+    template <typename Sample>
+    void bypass (juce::AudioBuffer<Sample>&);
 
     mixology::LoudnessMeter loudness;
     mixology::proc::host::Raw procRaw;
     mixology::proc::Chain chain;
+    std::atomic<int> latencyTold { 0 };   // what setLatencySamples last told the host (the bypass keeps to it)
     std::array<std::atomic<float>, mixology::proc::kMeterValues> procMeters {};
     std::atomic<std::uint32_t> procRunning { 0 };
     juce::CriticalSection stateLock;

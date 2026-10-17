@@ -46,6 +46,9 @@ public:
     bool isBusesLayoutSupported (const BusesLayout&) const override;
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     void processBlock (juce::AudioBuffer<double>&, juce::MidiBuffer&) override;
+    /** Bypassed by the host: the track passes, late by the latency the host was told (so it stays in time). */
+    void processBlockBypassed (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    void processBlockBypassed (juce::AudioBuffer<double>&, juce::MidiBuffer&) override;
     bool supportsDoublePrecisionProcessing() const override { return true; }
 
     juce::AudioProcessorEditor* createEditor() override;
@@ -104,6 +107,8 @@ public:
 private:
     template <typename Sample>
     void process (juce::AudioBuffer<Sample>&);
+    template <typename Sample>
+    void bypass (juce::AudioBuffer<Sample>&);
     void timerCallback() override;
     int useTimeSlice() override;   // analysis thread
     void publishIdentity();
@@ -133,6 +138,7 @@ private:
     mixology::AssistEq assist;
     mixology::proc::host::Raw procRaw;
     mixology::proc::Chain chain;
+    std::atomic<int> latencyTold { 0 };   // what setLatencySamples last told the host (the bypass keeps to it)
     std::atomic<std::uint32_t> running { 0 };
     std::array<std::uint32_t, mixology::link::kProcSlots> procRequestSeen {};
     juce::SmoothedValue<double, juce::ValueSmoothingTypes::Multiplicative> trimGain;

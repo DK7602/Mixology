@@ -555,6 +555,51 @@ TEST_CASE ("Processing: switching the Limiter on or off never clicks (its sound 
     CHECK (maxStep < 1.2 * natural);
 }
 
+TEST_CASE ("Processing: bypassed by the host, the track stays in time (late by the latency the host was told)", "[proc]")
+{
+    // JUCE's own bypass passed the sound on time while the host still moved the track earlier by the Limiter's
+    // latency: a bypassed track played 5 ms early. The bypass now delays it by that latency, and the Limiter's
+    // delay line keeps filling, so going between bypass and the Limiter carries on without a gap.
+    const double sr = 48000.0;
+    Chain chain;
+    chain.prepare (sr, 2);
+    const auto on = with ({ { limOn, 1.0f } });
+    chain.setValues (on);
+    const auto latency = static_cast<std::size_t> (chain.latencyFor (on));
+    Stereo silence (4800);
+    run (chain, silence);   // the Limiter faded in
+    auto s = sine (200.0, 0.1, 1.0, sr);   // -20 dBFS: the Limiter leaves it alone
+    const auto in = s;
+    for (std::size_t start = 0, k = 0; start < s.size(); start += 480, ++k)
+    {
+        const int n = static_cast<int> (std::min<std::size_t> (480, s.size() - start));
+        double* ch[2] = { s.l.data() + start, s.r.data() + start };
+        if (k % 4 >= 2) chain.bypass (ch, 2, n, static_cast<int> (latency));   // 20 ms on, 20 ms bypassed, ...
+        else chain.process (ch, 2, n);
+    }
+    bool inTime = true;
+    for (std::size_t i = 0; i < s.size(); ++i)
+    {
+        const double expect = i >= latency ? in.l[i - latency] : 0.0;
+        inTime = inTime && s.l[i] == expect && s.r[i] == expect;
+    }
+    CHECK (inTime);
+
+    // Nothing to line up (no Limiter, no latency): bypassed, the sound is not touched at all.
+    std::mt19937 rng (5);
+    std::uniform_real_distribution<float> d (-1.0f, 1.0f);
+    std::vector<float> l (4096), r (4096);
+    for (auto& x : l) x = d (rng);
+    for (auto& x : r) x = d (rng);
+    const auto l0 = l, r0 = r;
+    Chain plain;
+    plain.prepare (sr, 2);
+    plain.setValues (defaults());
+    float* ch[2] = { l.data(), r.data() };
+    plain.bypass (ch, 2, 4096, plain.latencyFor (defaults()));
+    CHECK ((l == l0 && r == r0));
+}
+
 TEST_CASE ("Processing: any settings, any audio: always finite, never blows up", "[proc]")
 {
     std::mt19937 rng (11);

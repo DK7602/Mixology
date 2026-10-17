@@ -200,6 +200,9 @@ namespace mixology::dsp
         /** Feeds the delay line without limiting (while the limiter is off), so switching it on continues
             the audio instead of playing old samples. */
         void feed (const double* const* x, int nch, int n);
+        /** Like feed(), and puts the audio out `delay` samples late (0 .. latency()), untouched: the host bypasses
+            the plug-in but still counts on its latency. */
+        void pass (double* const* x, int nch, int n, int delay);
         /** In place: input gain, delay, limiting. w (0..1, per block start / end) crossfades from the sound as it
             comes in (w = 0, what passes while the limiter is off) to the delayed, limited sound (w = 1). */
         void process (double* const* x, int nch, int n, double w0, double w1);

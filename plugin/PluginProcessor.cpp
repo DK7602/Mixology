@@ -55,6 +55,7 @@ void MixologyAudioProcessor::timerCallback()
     const auto values = procRaw.read();
     const int latency = chain.latencyFor (values);
     if (latency != getLatencySamples()) setLatencySamples (latency);   // the Limiter's lookahead, while it is on
+    latencyTold.store (latency);
     if (mixology::proc::isOn (values, mixology::proc::Module::space)) chain.ensureSpace();   // never on the audio thread
     if (--handoffCountdown <= 0)
     {
@@ -146,6 +147,7 @@ void MixologyAudioProcessor::prepareToPlay (double sampleRate, int)
     if (mixology::proc::isOn (values, mixology::proc::Module::space)) chain.ensureSpace();
     chain.setValues (values);
     setLatencySamples (chain.latencyFor (values));
+    latencyTold.store (getLatencySamples());
 }
 
 template <typename Sample>
@@ -229,6 +231,24 @@ void MixologyAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
 void MixologyAudioProcessor::processBlock (juce::AudioBuffer<double>& buffer, juce::MidiBuffer&)
 {
     process (buffer);
+}
+
+template <typename Sample>
+void MixologyAudioProcessor::bypass (juce::AudioBuffer<Sample>& buffer)
+{
+    // JUCE's own bypass passes the sound on time while the host still moves it earlier by the latency it was told.
+    chain.bypass (buffer.getArrayOfWritePointers(), buffer.getNumChannels(), buffer.getNumSamples(),
+                  latencyTold.load (std::memory_order_relaxed));
+}
+
+void MixologyAudioProcessor::processBlockBypassed (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+{
+    bypass (buffer);
+}
+
+void MixologyAudioProcessor::processBlockBypassed (juce::AudioBuffer<double>& buffer, juce::MidiBuffer&)
+{
+    bypass (buffer);
 }
 
 void MixologyAudioProcessor::getStateInformation (juce::MemoryBlock& destData)

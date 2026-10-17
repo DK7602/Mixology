@@ -122,6 +122,7 @@ void MixologyLinkProcessor::prepareToPlay (double sampleRate, int)
     if (mixology::proc::isOn (values, mixology::proc::Module::space)) chain.ensureSpace();
     chain.setValues (values);
     setLatencySamples (chain.latencyFor (values));
+    latencyTold.store (getLatencySamples());
     keyEnv = 0.0;
 }
 
@@ -239,6 +240,17 @@ void MixologyLinkProcessor::process (juce::AudioBuffer<Sample>& buffer)
 void MixologyLinkProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&) { process (buffer); }
 void MixologyLinkProcessor::processBlock (juce::AudioBuffer<double>& buffer, juce::MidiBuffer&) { process (buffer); }
 
+// JUCE's own bypass passes the sound on time while the host still moves the track earlier by the latency it was told.
+template <typename Sample>
+void MixologyLinkProcessor::bypass (juce::AudioBuffer<Sample>& buffer)
+{
+    chain.bypass (buffer.getArrayOfWritePointers(), juce::jmin (buffer.getNumChannels(), getTotalNumOutputChannels()),
+                  buffer.getNumSamples(), latencyTold.load (std::memory_order_relaxed));
+}
+
+void MixologyLinkProcessor::processBlockBypassed (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&) { bypass (buffer); }
+void MixologyLinkProcessor::processBlockBypassed (juce::AudioBuffer<double>& buffer, juce::MidiBuffer&) { bypass (buffer); }
+
 void MixologyLinkProcessor::updateTrackProperties (const TrackProperties& p)
 {
     trackIdentity.hasName = p.name.has_value() && p.name->isNotEmpty();
@@ -307,6 +319,7 @@ void MixologyLinkProcessor::timerCallback()
     const auto now = procRaw.read();
     const int latency = chain.latencyFor (now);
     if (latency != getLatencySamples()) setLatencySamples (latency);   // the Limiter's lookahead, while it is on
+    latencyTold.store (latency);
     registry.publishProc (slot, now, static_cast<float> (currentRate.load()), latency);
 
     // Space: its delay lines are made the first time it is switched on (never on the audio thread).
