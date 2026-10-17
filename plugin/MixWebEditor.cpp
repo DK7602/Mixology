@@ -431,15 +431,10 @@ void MixWebEditor::timerCallback()
         frame->setProperty ("proc", makeProc());
     }
 
-    // Analyze Mix and the analyzer's track colours: five times a second.
+    // The analyzer's track colours: five times a second (Analyze Mix itself runs in the plug-in, window or not).
     if (++frameCount % 6 == 0)
     {
-        const double rate = juce::jmax (8000.0, processor.getSampleRate());
-        mixL.resize (static_cast<std::size_t> (mixology::TrackAnalyzer::kMaxSize));
-        mixR.resize (mixL.size());
-        processor.analysisRing.copyLatest (mixL.data(), mixR.data(), mixology::TrackAnalyzer::sizeFor (rate));
-        const auto mixFrame = mixAnalyzer.analyse (mixL.data(), mixR.data(), rate);
-        hub.analysisTick (mixFrame, processor.transportPlaying.load(), processor.getTotalNumOutputChannels());
+        if (isShowing()) processor.lastSeenMs.store (juce::Time::currentTimeMillis());   // this project is on screen
         if (currentPage == "overview")
             frame->setProperty ("roleCurves", hub.roleCurves (processor.getSampleRate()));
     }
@@ -697,7 +692,8 @@ juce::var MixWebEditor::presetSave (const juce::String& key, const juce::String&
         if (x.name == name) return result (false, q (juce::String::fromUTF8 (name.c_str())) + " is one of Mixology's presets: pick another name.");
     const auto t = readPresetTarget (key);
     if (! t.ok) return result (false, "This track's Mixology Link isn't answering: pick the track again.");
-    hub.saveUserPreset (capture (name, t.kind, t.role, t.values));
+    if (! hub.saveUserPreset (capture (name, t.kind, t.role, t.values)))
+        return result (false, "Mixology couldn't save its presets file (is the disk full?): nothing was saved.");
     return result (true, "Saved " + q (juce::String::fromUTF8 (name.c_str())) + " from " + q (t.name) + " (My presets, for every song).");
 }
 

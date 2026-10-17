@@ -53,16 +53,49 @@ public:
         Mixology as a Mackie Control surface (mixology::mcu::McuBridge); the others run a bridge script. */
     void setDaw (const std::string& key);
 
-    /** Mixology's own Full Mix processing, for Polish / Auto Mix (the plug-in on the Stereo Out registers itself;
-        message thread). */
+    /** Mixology's own Full Mix processing, for Polish / Auto Mix. */
     struct MixProcessing
     {
         std::function<mixology::proc::Values()> get;
         std::function<void (int, float)> set;
     };
-    void setMixProcessing (const void* owner, MixProcessing);
-    void clearMixProcessing (const void* owner);
+
+    /** Every Mixology in the host registers itself (message thread). One of them is the hub's Full Mix (Polish /
+        Auto Mix work on its processing, it feeds Analyze Mix and publishes to Masterology): one on a channel called
+        like the master ("Stereo Out", "Master"...), else the oldest, of the project on screen. When it goes, the
+        next one takes over. */
+    struct Instance
+    {
+        MixProcessing processing;
+        std::function<std::uint64_t()> project;           // the project it belongs to
+        std::function<void (std::uint64_t)> adopt;        // it belongs to this project after all
+        std::function<juce::int64()> lastAudioMs;         // when it last processed audio (ms since 1970)
+        std::function<juce::int64()> lastSeenMs;          // when its window was last on screen
+        std::function<juce::String()> trackName;          // its channel's name, when the DAW tells it
+    };
+    void registerInstance (const void* owner, Instance);
+    void unregisterInstance (const void* owner);
     bool isMixOwner (const void* owner) const { return owner != nullptr && owner == mixOwner; }
+
+    /** A channel name that is most likely the master / main output. */
+    static bool looksLikeMaster (const juce::String& trackName);
+
+    // ---- Projects: each Mixology saves the id of its project with it. The hub holds one project at a time (the
+    // one playing or on screen: a DAW plays one project at a time); another open project's padlocks, roles, History,
+    // advice and restore points wait here and come back when you switch to it, so two projects never mix.
+    struct ProjectState
+    {
+        juce::String protectedText, tracks, prefs, session;
+        bool empty() const { return protectedText.isEmpty() && tracks.isEmpty() && prefs.isEmpty() && session.isEmpty(); }
+    };
+    /** The project a new Mixology belongs to: the one on screen when it is added there, else a new one. */
+    std::uint64_t idForNewInstance();
+    /** A project's saved state (setStateInformation, any thread): into the hub when it is the project on screen,
+        else kept until you switch to it. `previous` is the id the instance had (a new one's own). */
+    void loadProject (const void* owner, std::uint64_t previous, std::uint64_t id, const ProjectState&);
+    /** What to save for a project (getStateInformation, any thread). known = false: the hub has nothing for it
+        (the instance keeps the copy it loaded). */
+    ProjectState saveProject (std::uint64_t id, bool& known);
 
     // ---- M6: the suite link (Voxology on the vocals, Masterology after Mixology) ---------------------------
     /** What Analyze Mix knows for Masterology (the style it analysed against, its tone against it, a mono mix);
@@ -73,7 +106,7 @@ public:
 
     /** Everything the Tracks page and Settings > Cubase Bridge show. */
     juce::var getState (bool includeLog);
-    std::uint64_t stateVersion() const { return bridge.stateVersion() + linkVersion + analysisVersion + applyVersion + suiteVersion + setupVersion + history.version() + doneVersion; }
+    std::uint64_t stateVersion() const { return bridge.stateVersion() + linkVersion + analysisVersion + applyVersion + suiteVersion + setupVersion + history.version() + doneVersion + projectEpoch * 1000003ull; }
 
     /** The setup check's issues right now (a mono group, vocals without a Link...), as Mix Assistant suggestions. */
     const std::vector<mixology::mix::Suggestion>& setupIssues() const { return setupNow; }
@@ -122,7 +155,7 @@ public:
 
     // ---- Presets: yours live in one small file beside the settings (the same for every project). Message thread.
     const std::vector<mixology::presets::Preset>& userPresets();
-    void saveUserPreset (const mixology::presets::Preset&);   // replaces one of the same name
+    bool saveUserPreset (const mixology::presets::Preset&);   // replaces one of the same name; false: the file couldn't be written
     bool deleteUserPreset (const std::string& name);
     /** Loading a preset can be undone (one step per target): what it replaced. */
     void rememberPresetUndo (const juce::String& targetKey, const std::string& presetName, const mixology::proc::Values& before);
@@ -151,6 +184,8 @@ private:
 
     std::vector<mixology::presets::Preset> userPresetList;
     bool userPresetsLoaded = false;
+    juce::int64 userPresetsModified = 0;   // the file's time when it was last read or written
+    bool writeUserPresets();
     juce::File userPresetFile() const;
     struct PresetUndo { std::string name; mixology::proc::Values before {}; };
     std::map<juce::String, PresetUndo> presetUndo;
@@ -189,11 +224,22 @@ private:
     std::uint64_t doneVersion = 0;
     double doneCheckedAt = -1.0;
     void updateDonePoints();
-    std::string changedSinceAnalysis (const std::vector<std::string>& names, bool anyFader) const;
+    std::string changedSinceAnalysis (const std::vector<std::string>& names, bool anyFader, bool fadersOnly = false) const;
     bool mixProcAtAnalysisKnown = false;
     mixology::proc::Values mixProcAtAnalysis {};
     const void* mixOwner = nullptr;
     MixProcessing mixProc;
+    std::vector<std::pair<const void*, Instance>> instances;   // guarded by protectedLock (state calls come from any thread)
+    std::uint64_t activeProject = 0;                          // the project the hub holds (0: none yet); protectedLock
+    std::map<std::uint64_t, ProjectState> parked;             // the other open projects; protectedLock
+    std::uint64_t projectEpoch = 0;                           // the hub switched project (the interface shows it all again)
+    double lastProjectCheck = 0.0;
+    void updateProjects();
+    void chooseMixOwner();
+    void switchProject (std::uint64_t to);
+    void resetProject();
+    ProjectState liveProject();
+    void mergeProject (const ProjectState&);   // a second id for the project on screen: fills only what is empty
     mixology::mix::MixNow mixNow() const;
     void reevaluate();         // the report again (after a role / setting change), without listening again
     // tells an analysis where the music group's fader was while it listened
@@ -285,12 +331,15 @@ private:
     SavedPart savedHistory, savedAdvice, savedRestore;
     juce::String sessionCache, sessionPending;
     bool hasPendingSession = false;
+    bool sessionDirty = false;
     double lastSessionCache = 0.0;
     std::uint64_t adviceSerial = 0;     // the advice's moments changed (Analyze Mix finished, Auto Analyze updated it)
     double analyzedMs = 0.0;            // when the advice on screen was made (ms since 1970)
     bool adviceFromProject = false;     // it came back with the project (until Mixology hears the mix again)
     mixology::mix::Analysis adviceAnalysis;   // the moments behind the advice while a new Analyze Mix listens
-    void updateSessionCache();
+    void updateSessionCache (bool forSave = false);
+    std::uint64_t historySeen = 0;
+    double historyChangedAt = 0.0, historyPackedAt = 0.0;
     void applyPendingSession();
     std::string adviceBlock() const;
     bool loadAdvice (const std::string&);

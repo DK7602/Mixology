@@ -174,7 +174,7 @@
       return { ok: true };
     }
     if (name === "autoStyle") return { ok: true };
-    if (name === "autoAnalyze") { B.an.auto = { on: !!value, pause: "", seconds: 0, checked: 0, updated: 0 }; B.version++; return { ok: true, info: value && !B.an.report ? "Auto Analyze starts after your first Analyze Mix." : undefined }; }
+    if (name === "autoAnalyze") { B.an.auto = { on: !!value, pause: "", seconds: 0, checked: 0, updated: 0 }; B.version++; return { ok: true, info: value && !B.an.report ? "Auto Analyze is on: press play and it listens by itself." : undefined }; }
     if (name === "analyzeFinish") { if (B.an.seconds < 1) return fail("Nothing heard yet: press play in Cubase."); B.an.state = "done"; B.an.report = fakeReport(); B.version++; return { ok: true }; }
     if (name === "analyzeCancel") { B.an.state = B.an.report ? "done" : "idle"; B.version++; return { ok: true }; }
     if (name === "plan") {

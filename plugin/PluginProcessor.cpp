@@ -24,6 +24,24 @@ namespace
     }
 
     float meterDefault (int i) { return i < 4 || i == 13 ? -100.0f : 0.0f; }   // peaks (and the Space level), then dB taken off
+
+    // The DAWs Mixology moves faders in: there it opens its bridge as soon as the project plays, window or not.
+    bool bridgeDaw (const std::string& key) { return key == "cubase" || key == "fl" || key == "ableton" || key == "logic" || key == "cakewalk"; }
+
+    /** The id of a project saved before Mixology kept one: the same for every Mixology of that project (they all
+        saved the same state), a new one when there is nothing to keep apart. */
+    std::uint64_t idFromState (const BridgeHub::ProjectState& ps)
+    {
+        if (ps.empty()) return 0;
+        std::uint64_t h = 14695981039346656037ull;
+        for (const auto* text : { &ps.protectedText, &ps.tracks, &ps.prefs, &ps.session })
+        {
+            for (const auto c : text->toStdString()) { h ^= static_cast<unsigned char> (c); h *= 1099511628211ull; }
+            h ^= 0xFF;
+            h *= 1099511628211ull;
+        }
+        return h | 1u;
+    }
 }
 
 MixologyAudioProcessor::MixologyAudioProcessor()
@@ -35,14 +53,25 @@ MixologyAudioProcessor::MixologyAudioProcessor()
     procRaw.bind (parameters);
     daw.setUnpicked (detectedDaw, suite::dawName (detectedDaw));   // until you pick one (here or in Voxology / Masterology)
     for (int i = 0; i < mixology::proc::kMeterValues; ++i) procMeters[static_cast<std::size_t> (i)].store (meterDefault (i));
+    mixL.resize (static_cast<std::size_t> (mixology::TrackAnalyzer::kMaxSize));
+    mixR.resize (mixL.size());
+    projectId.store (bridgeHub->idForNewInstance());
     // Polish / Auto Mix can propose the Full Mix's tone: they read and set it through the hub.
-    bridgeHub->setMixProcessing (this, { [this] { return procRaw.read(); }, [this] (int index, float value) { setProc (index, value); } });
+    BridgeHub::Instance me;
+    me.processing = { [this] { return procRaw.read(); }, [this] (int index, float value) { setProc (index, value); } };
+    me.project = [this] { return projectId.load(); };
+    me.adopt = [this] (std::uint64_t id) { projectId.store (id); };
+    me.lastAudioMs = [this] { return lastAudioMs.load (std::memory_order_relaxed); };
+    me.lastSeenMs = [this] { return lastSeenMs.load (std::memory_order_relaxed); };
+    me.trackName = [this] { const juce::ScopedLock sl (stateLock); return trackName; };
+    bridgeHub->registerInstance (this, std::move (me));
     startTimerHz (10);
 }
 
 MixologyAudioProcessor::~MixologyAudioProcessor()
 {
-    bridgeHub->clearMixProcessing (this);
+    stopTimer();
+    bridgeHub->unregisterInstance (this);
     {
         const juce::ScopedLock sl (stateLock);
         songStyle.leave (suite::Link::process(), instanceId);
@@ -66,8 +95,36 @@ void MixologyAudioProcessor::timerCallback()
         handoffCountdown = 4;
         syncStyle();
         publishHandoff();
-        bridgeHub->setDaw (dawNow().key);   // Logic Pro / Cakewalk: Mixology is their Mackie Control surface
+        // The bridge speaks to the DAW this really is (Logic Pro / Cakewalk: Mixology is their Mackie Control
+        // surface); a DAW picked in Voxology or Masterology only changes the words, unless the host isn't known.
+        bridgeHub->setDaw (detectedDaw != "other" ? detectedDaw : dawNow().key);
+        if (prepared.load() && ! bridgeHub->isEnabled() && bridgeDaw (detectedDaw))
+            bridgeHub->enable();   // the bridge connects with the project, before the window first opens
     }
+    if (--analysisCountdown <= 0)
+    {
+        analysisCountdown = 2;
+        feedAnalysis();
+    }
+}
+
+void MixologyAudioProcessor::feedAnalysis()
+{
+    // Analyze Mix and the setup check hear the hub's Full Mix (the Mixology on the master), window open or not.
+    if (! bridgeHub->isMixOwner (this) || ! bridgeHub->isEnabled()) return;
+    const double rate = juce::jmax (8000.0, getSampleRate());
+    analysisRing.copyLatest (mixL.data(), mixR.data(), mixology::TrackAnalyzer::sizeFor (rate));
+    const auto frame = mixAnalyzer.analyse (mixL.data(), mixR.data(), rate);
+    bridgeHub->analysisTick (frame, transportPlaying.load(), getTotalNumOutputChannels());
+}
+
+void MixologyAudioProcessor::updateTrackProperties (const TrackProperties& properties)
+{
+    {
+        const juce::ScopedLock sl (stateLock);
+        trackName = properties.name.value_or (juce::String());
+    }
+    // the hub picks the Mixology on the master again on its next look (message thread)
 }
 
 void MixologyAudioProcessor::pickStyle (const std::string& key, const std::string& name, bool byYou)
@@ -152,6 +209,7 @@ void MixologyAudioProcessor::prepareToPlay (double sampleRate, int)
     chain.setValues (values);
     setLatencySamples (chain.latencyFor (values));
     tailTold.store (mixology::proc::host::reportedTail (values));
+    prepared.store (true);
 }
 
 template <typename Sample>
@@ -186,9 +244,13 @@ void MixologyAudioProcessor::process (juce::AudioBuffer<Sample>& buffer)
     loudness.process (data, channels, n);
     spectrumTap.push (data, channels, n);
     stereoTap.push (data, channels, n);
+    lastAudioMs.store (juce::Time::currentTimeMillis(), std::memory_order_relaxed);
     if (auto* ph = getPlayHead())
         if (auto pos = ph->getPosition())
         {
+            // Peaks and loudness count from the moment you press play (a clip before a fix doesn't stay forever).
+            if (pos->getIsPlaying() && ! wasPlaying) loudness.resetStatistics();
+            wasPlaying = pos->getIsPlaying();
             transportPlaying.store (pos->getIsPlaying(), std::memory_order_relaxed);
             if (auto bpm = pos->getBpm()) beat.bpm.store (*bpm, std::memory_order_relaxed);
             if (auto ppq = pos->getPpqPosition()) beat.ppq.store (*ppq, std::memory_order_relaxed);
@@ -241,11 +303,20 @@ void MixologyAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     juce::XmlElement xml ("MixologyState");
     xml.setAttribute ("version", JucePlugin_VersionString);
     xml.setAttribute ("ui", getUiState());
-    xml.setAttribute ("protected", bridgeHub->protectedState());   // the padlocks on the Tracks page
-    xml.setAttribute ("tracks", bridgeHub->trackSettingsState());  // your track roles, tracks left out of Analyze Mix
-    xml.setAttribute ("prefs", bridgeHub->mixPrefsState());         // how you like your vocal
-    xml.setAttribute ("session", bridgeHub->sessionState());        // the History, the advice, the restore points
-    xml.setAttribute ("session", bridgeHub->sessionState());        // the History, the advice, the restore points
+    // This project's part of the hub (another open project's is kept apart): as the hub has it, else as loaded.
+    const auto id = projectId.load();
+    bool known = false;
+    auto ps = bridgeHub->saveProject (id, known);
+    {
+        const juce::ScopedLock sl (stateLock);
+        if (known) projectCopy = ps;
+        else ps = projectCopy;
+    }
+    xml.setAttribute ("project", juce::String::toHexString (static_cast<juce::int64> (id)));
+    xml.setAttribute ("protected", ps.protectedText);   // the padlocks on the Tracks page
+    xml.setAttribute ("tracks", ps.tracks);             // your track roles, tracks left out of Analyze Mix
+    xml.setAttribute ("prefs", ps.prefs);               // how you like your vocal
+    xml.setAttribute ("session", ps.session);           // the History, the advice, the restore points
     {
         const juce::ScopedLock sl (stateLock);
         xml.setAttribute ("songStyle", juce::String::fromUTF8 (songStyle.save().c_str()));   // + when you picked it
@@ -279,11 +350,17 @@ void MixologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
                     daw.setUnpicked (detectedDaw, suite::dawName (detectedDaw));
                 ++styleVersion;   // an open interface shows it
             }
-            bridgeHub->setProtectedState (xml->getStringAttribute ("protected"));
-            bridgeHub->setTrackSettingsState (xml->getStringAttribute ("tracks"));
-            bridgeHub->setMixPrefsState (xml->getStringAttribute ("prefs"));
-            bridgeHub->setSessionState (xml->getStringAttribute ("session"));
-            bridgeHub->setSessionState (xml->getStringAttribute ("session"));
+            const BridgeHub::ProjectState ps { xml->getStringAttribute ("protected"), xml->getStringAttribute ("tracks"),
+                                               xml->getStringAttribute ("prefs"), xml->getStringAttribute ("session") };
+            auto id = static_cast<std::uint64_t> (xml->getStringAttribute ("project").getHexValue64());
+            if (id == 0) id = idFromState (ps);   // a project saved before Mixology kept its id
+            if (id == 0) id = projectId.load();   // nothing to keep apart: this Mixology's own
+            const auto previous = projectId.exchange (id);
+            {
+                const juce::ScopedLock sl (stateLock);
+                projectCopy = ps;
+            }
+            bridgeHub->loadProject (this, previous, id, ps);
             if (auto* params = xml->getChildByName (parameters.state.getType()))
                 parameters.replaceState (juce::ValueTree::fromXml (*params));
         }

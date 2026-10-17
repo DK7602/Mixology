@@ -526,11 +526,65 @@ def live_suite(exe):
     return 'Ableton Live', make, 10, scen + [('return tracks are strips too', returns), ('a reordered Set: stale strips refused', reorder)]
 
 
+def core_race_checks():
+    """A move that arrives before the script's next look at the mixer (Live looks every 100 ms, FL every 20 ms)
+    must never land on the neighbour of a track that was just deleted, or on a track that moved into its strip."""
+    sys.path.insert(0, os.path.join(ROOT, 'bridge', 'common'))
+    try:
+        sys.modules.pop('mixology_bridge_core', None)
+        core = importlib.import_module('mixology_bridge_core')
+    finally:
+        sys.path.pop(0)
+
+    class Mixer(object):   # Live-style: the channels are track indexes
+        def __init__(self):
+            self.t = [['Bass', 0.85], ['Keys', 0.85], ['Vox', 0.85]]
+            self.out = []
+        def channels(self): return list(range(len(self.t)))
+        def name(self, i): return self.t[i][0] if i < len(self.t) else ''
+        def volume(self, i): return self.t[i][1], 0.0
+        def pan(self, i): return 0.0
+        def mute(self, i): return False
+        def solo(self, i): return False
+        def colour(self, i): return None
+        def writing(self, i): return False
+        def set_volume(self, i, v): self.t[i][1] = v
+        def set_pan(self, i, p): pass
+        def set_mute(self, i, on): pass
+        def set_solo(self, i, on): pass
+        def send(self, f): self.out.append(f)
+
+    def move(b, d, slot, name):
+        d.out = []
+        b.on_sysex(core.encode(core.CMD_SET_VOLUME, {'slot': slot, 'token': 7, 'hash': core.name_hash(name), 'id': 0, 'value': 0.2}))
+        acks = [core.decode(f) for f in d.out if core.decode(f)['cmd'] == core.CMD_ACK]
+        return acks[-1]['flag'] if acks else None
+
+    d = Mixer()
+    b = core.BridgeCore(d, 'Live')
+    b.flush(True)
+    del d.t[0]   # 'Bass' deleted; the next look is still to come
+    check(move(b, d, 0, 'Bass') == core.ACK_MISMATCH, 'a move for a deleted track is refused')
+    check(d.t[0] == ['Keys', 0.85], "the neighbour 'Keys' is untouched: %s" % d.t[0])
+
+    d = Mixer()
+    b = core.BridgeCore(d, 'Live')
+    b.flush(True)
+    d.t.insert(0, ['New', 0.85])   # a track inserted before: every index moves
+    check(move(b, d, 1, 'Keys') == core.ACK_MISMATCH, 'a move for a track that moved out of its strip is refused')
+    check(d.t[1] == ['Bass', 0.85], "'Bass', now in that strip, is untouched: %s" % d.t[1])
+    check(move(b, d, 2, 'Keys') == core.ACK_APPLIED, "'Keys' in the strip it moved to")
+    check(d.t[2][0] == 'Keys' and near(d.t[2][1], 0.2, 1e-5), "'Keys' moved: %s" % d.t[2])
+
+
 def main():
     exe = sys.argv[1] if len(sys.argv) > 1 else None
     if not exe:
         print('usage: run_py.py <session_cli>')
         return 2
+    before = failures
+    core_race_checks()
+    print(('PASS ' if failures == before else 'FAIL ') + 'core: moves arriving before the next look')
     for name, make, idle_every, scenarios in (fl_suite(exe), live_suite(exe)):
         for title, fn in scenarios:
             before = failures

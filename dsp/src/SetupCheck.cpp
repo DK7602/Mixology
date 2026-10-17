@@ -168,6 +168,20 @@ namespace mixology::setup
             s.tracks = c.sharedNames;
             out.push_back (std::move (s));
         }
+
+        if (c.otherProjects > 0)
+        {
+            mix::Suggestion s;
+            s.id = "setup-other-project";
+            s.kind = "info";
+            s.icon = "link";
+            s.title = c.otherProjects == 1 ? "Another project with Mixology is open" : std::to_string (c.otherProjects) + " other projects with Mixology are open";
+            s.text = "Mixology keeps each project's History, advice and padlocks apart, but it hears the Mixology Links of every open "
+                     "project: a track with the same name in both counts as two tracks with one name, and Auto Mix leaves it alone.";
+            s.need = "Only if Mixology says two tracks share a name. Closing the projects you're done with keeps it simple.";
+            s.steps = { "Close the other project in {daw} when you're done with it (saving it keeps its own Mixology state)." };
+            out.push_back (std::move (s));
+        }
         return out;
     }
 }

@@ -5,6 +5,7 @@
 #include "mixology/AudioRing.h"
 #include "mixology/LoudnessMeter.h"
 #include "mixology/ProcChain.h"
+#include "mixology/TrackAnalyzer.h"
 #include "BridgeHub.h"
 #include "ProcHost.h"
 #include "SpectrumTap.h"
@@ -49,6 +50,7 @@ public:
 
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
+    void updateTrackProperties (const TrackProperties&) override;
 
     juce::AudioProcessorValueTreeState parameters;
 
@@ -64,8 +66,9 @@ public:
     Meters meters;
     SpectrumTap spectrumTap;
     StereoTap stereoTap;
-    mixology::AudioRing analysisRing;              // for Analyze Mix (the editor analyses it 5 times a second)
+    mixology::AudioRing analysisRing;              // for Analyze Mix (analysed 5 times a second on the message thread)
     std::atomic<bool> transportPlaying { false };
+    std::atomic<juce::int64> lastSeenMs { 0 };     // the window was on screen (the editor says so)
 
     /** The song's tempo and position from the host (the Space pictures move with the beat). */
     struct Beat
@@ -117,6 +120,21 @@ private:
     suite::SharedChoice daw { suite::StyleInfo::From::mixology, suite::Choice::daw };   // under stateLock
     const std::uint64_t instanceId = (static_cast<std::uint64_t> (juce::Random::getSystemRandom().nextInt64()) | 1u);
     void syncStyle();
+
+    // The project this Mixology belongs to (the hub keeps each open project's state apart), and what it last
+    // loaded or saved for it.
+    std::atomic<std::uint64_t> projectId { 0 };
+    BridgeHub::ProjectState projectCopy;   // under stateLock
+    juce::String trackName;                // under stateLock: the channel it sits on, when the DAW says
+    std::atomic<juce::int64> lastAudioMs { 0 };
+    std::atomic<bool> prepared { false };
+    bool wasPlaying = false;               // audio thread
+
+    // Analyze Mix hears the mix through the Full Mix's Mixology (the hub's), five times a second.
+    mixology::TrackAnalyzer mixAnalyzer;
+    std::vector<float> mixL, mixR;
+    int analysisCountdown = 0;
+    void feedAnalysis();
 
     template <typename Sample>
     void process (juce::AudioBuffer<Sample>&);

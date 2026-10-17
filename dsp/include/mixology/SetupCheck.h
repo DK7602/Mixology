@@ -15,6 +15,7 @@
     - Vocals with Voxology but without Mixology Link (Mixology can't hear them on their own).
     - Mixology itself on a mono channel.
     - Two tracks with the same name (Mixology tells tracks, their faders and their Links apart by name).
+    - Another project with Mixology open in the DAW (its Mixology Links are heard too).
 
     Framework-free and unit-tested; the hub feeds it five times a second. */
 namespace mixology::setup
@@ -78,6 +79,7 @@ namespace mixology::setup
         std::vector<std::string> busCandidates;      // channels that are most likely the mono group, best first
         std::vector<std::string> vocalsWithoutLink;  // Voxology on them, no Mixology Link
         std::vector<std::string> sharedNames;        // names more than one track has (Mixology can't tell them apart)
+        int otherProjects = 0;                       // other open projects with Mixology in this DAW
     };
 
     /** The issues, worst first, as Mix Assistant suggestions (id "setup-..."). */

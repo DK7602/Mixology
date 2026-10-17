@@ -88,8 +88,6 @@ private:
     float correlationSmoothed = 0.0f;
     juce::String currentPage { "overview" };
 
-    mixology::TrackAnalyzer mixAnalyzer;
-    std::vector<float> mixL, mixR;
     int frameCount = 0;
 
     juce::String procKey { "mix" };

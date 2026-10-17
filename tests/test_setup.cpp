@@ -127,6 +127,21 @@ TEST_CASE ("Setup: two tracks with one name are flagged, with the fix", "[setup]
     CHECK (issues (c)[0].title == "2 names are used by more than one track");
 }
 
+TEST_CASE ("Setup: another open project with Mixology is mentioned, calmly", "[setup]")
+{
+    Context c;
+    CHECK (issues (c).empty());
+    c.otherProjects = 1;
+    const auto one = issues (c);
+    REQUIRE (one.size() == 1);
+    CHECK (one[0].id == "setup-other-project");
+    CHECK (one[0].kind == "info");
+    CHECK (one[0].title == "Another project with Mixology is open");
+    CHECK (one[0].steps[0].find ("Close the other project") != std::string::npos);
+    c.otherProjects = 2;
+    CHECK (issues (c)[0].title == "2 other projects with Mixology are open");
+}
+
 TEST_CASE ("Setup: the issues name the likely group and the vocals without a Link", "[setup]")
 {
     Context c;

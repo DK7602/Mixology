@@ -292,21 +292,25 @@ class BridgeCore(object):
 
     # ---- receiving -----------------------------------------------------------------------------------------
     def target(self, m):
+        """The channel a move is for, or None (refused). Looked up in the mixer as it is NOW: a track deleted or
+        moved since the last look must never pass the move on to its neighbour."""
         if m['slot'] < 0 or m['slot'] >= BANK_SIZE:
             self.send(CMD_ACK, {'token': m['token'], 'flag': ACK_EMPTY_SLOT})
             return None
-        s = self.strips[m['slot']]
-        if s.channel is None or not s.title:
+        _, view = self.bank_channels()
+        ch = view[m['slot']] if m['slot'] < len(view) else None
+        title = self.daw.name(ch) if ch is not None else ''
+        if ch is None or not title:
             self.send(CMD_ACK, {'token': m['token'], 'flag': ACK_EMPTY_SLOT})
             return None
-        if s.hash != m['hash'] or m['id'] != 0:
-            self.log('Refused: slot %d holds "%s" now' % (m['slot'] + 1, s.title))
+        if name_hash(title) != m['hash'] or m['id'] != 0:
+            self.log('Refused: slot %d holds "%s" now' % (m['slot'] + 1, title))
             self.send(CMD_ACK, {'token': m['token'], 'flag': ACK_MISMATCH})
             return None
-        if self.daw.writing(s.channel):
+        if self.daw.writing(ch):
             self.send(CMD_ACK, {'token': m['token'], 'flag': ACK_AUTOMATION_WRITE})
             return None
-        return s
+        return ch
 
     def on_sysex(self, data):
         """A SysEx frame from Mixology. True when it was ours."""
@@ -325,16 +329,16 @@ class BridgeCore(object):
         elif cmd == CMD_PING:
             self.send(CMD_PONG, {'token': m['token']})
         elif cmd in (CMD_SET_VOLUME, CMD_SET_PAN, CMD_SET_MUTE, CMD_SET_SOLO):
-            s = self.target(m)
-            if s is not None:
+            ch = self.target(m)
+            if ch is not None:
                 if cmd == CMD_SET_VOLUME:
-                    self.daw.set_volume(s.channel, m['value'])
+                    self.daw.set_volume(ch, m['value'])
                 elif cmd == CMD_SET_PAN:
-                    self.daw.set_pan(s.channel, m['value'] * 2.0 - 1.0)
+                    self.daw.set_pan(ch, m['value'] * 2.0 - 1.0)
                 elif cmd == CMD_SET_MUTE:
-                    self.daw.set_mute(s.channel, bool(m['flag']))
+                    self.daw.set_mute(ch, bool(m['flag']))
                 else:
-                    self.daw.set_solo(s.channel, bool(m['flag']))
+                    self.daw.set_solo(ch, bool(m['flag']))
                 self.send(CMD_ACK, {'token': m['token'], 'flag': ACK_APPLIED})
         elif cmd == CMD_BANK:
             self.move_bank(m['flag'])

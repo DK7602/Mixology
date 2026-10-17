@@ -1,6 +1,7 @@
 #include "BridgeHub.h"
 
 #include "mixology/Pack.h"
+#include "mixology/ProcChain.h"
 
 #include <algorithm>
 #include <array>
@@ -157,6 +158,13 @@ namespace
         return "";
     }
 
+    // Studio One, REAPER and Bitwig have no Mixology bridge: Mixology lists the moves and you set the faders.
+    bool dawHasBridge (const std::string& key) { return key != "studioone" && key != "reaper" && key != "bitwig"; }
+
+    // Each DAW's fader has its own curve (0 dB sits at a different place on each): learned and kept per DAW.
+    // Cubase keeps the name it always had.
+    juce::String lawKey (const std::string& daw) { return daw.empty() || daw == "cubase" ? juce::String ("faderLaw") : "faderLaw." + juce::String (daw); }
+
     constexpr const char* kSessionMagic = "MXS1";
     constexpr std::uint32_t kAdviceMagic = 0x3150584du;   // "MXP1"
 
@@ -206,7 +214,13 @@ void BridgeHub::setDaw (const std::string& key)
     const bool wasMcu = mcu != nullptr;
     const auto oldDialect = wasMcu ? mcu->dialect() : Dialect::logic;
     saveMcuLaw();
+    settingsFile->setValue (lawKey (dawKey), juce::String (bridge.faderLaw().serialise()));
     dawKey = key;
+    bridge.faderLaw().deserialise (settingsFile->getValue (lawKey (key)).toStdString());
+    lawPointsSaved = bridge.faderLaw().size();
+    settingsFile->saveIfNeeded();
+    if (! dawHasBridge (key))
+        closePorts ("Moving faders isn't available in " + juce::String (suite::dawName (key)) + ": Mixology lists each move for you to set");
     const bool known = ! key.empty() && key != "other";
     bridge.setDaw (known ? suite::dawName (key) : std::string ("your DAW"), key == "logic" || key == "cakewalk");
     const bool wantMcu = key == "logic" || key == "cakewalk";
@@ -244,7 +258,7 @@ BridgeHub::~BridgeHub()
     stopTimer();
     saveMcuLaw();
     closePorts ("Mixology closed");
-    settingsFile->setValue ("faderLaw", juce::String (bridge.faderLaw().serialise()));
+    settingsFile->setValue (lawKey (dawKey), juce::String (bridge.faderLaw().serialise()));
     settingsFile->saveIfNeeded();
 }
 
@@ -257,7 +271,7 @@ void BridgeHub::enable()
 {
     if (enabled) return;
     enabled = true;
-    openPorts();
+    if (dawHasBridge (dawKey)) openPorts();
     startTimerHz (100);
 }
 
@@ -351,6 +365,11 @@ void BridgeHub::handleIncomingMidiMessage (juce::MidiInput*, const juce::MidiMes
 void BridgeHub::timerCallback()
 {
     const double t = now();
+    if (t - lastProjectCheck >= 0.5)
+    {
+        lastProjectCheck = t;
+        updateProjects();   // you switched to another open project, or a Mixology joined this one
+    }
     applyPendingProtected();   // a project loaded its padlocks off the message thread
     {
         juce::String pending;
@@ -422,7 +441,7 @@ void BridgeHub::timerCallback()
         updateDonePoints();
     }
 
-    if (toCubase == nullptr && t - lastOpenAttempt > kReopenInterval)
+    if (toCubase == nullptr && dawHasBridge (dawKey) && t - lastOpenAttempt > kReopenInterval)
         openPorts();
 
     std::vector<std::vector<std::uint8_t>> received;
@@ -448,6 +467,16 @@ void BridgeHub::timerCallback()
     }
 
     bridge.tick (t);
+    if (hearingReference && ! bridge.applying())
+    {
+        // Back to the mix by other means (unsoloed in the DAW, or the bridge went): Auto Analyze listens again.
+        const auto kf = bridge.knownFaders().find (report.reference.hash);
+        if (bridge.link() != mixology::BridgeSession::Link::connected || (kf != bridge.knownFaders().end() && ! kf->second.solo))
+        {
+            hearingReference = false;
+            ++applyVersion;
+        }
+    }
     if (bridge.planProgress().serial != seenPlanSerial)
     {
         seenPlanSerial = bridge.planProgress().serial;
@@ -492,7 +521,7 @@ void BridgeHub::timerCallback()
     {
         lawPointsSaved = bridge.faderLaw().size();
         lastLawSave = t;
-        settingsFile->setValue ("faderLaw", juce::String (bridge.faderLaw().serialise()));
+        settingsFile->setValue (lawKey (dawKey), juce::String (bridge.faderLaw().serialise()));
         settingsFile->saveIfNeeded();
     }
 }
@@ -507,25 +536,36 @@ juce::File BridgeHub::userPresetFile() const
 
 const std::vector<mixology::presets::Preset>& BridgeHub::userPresets()
 {
-    if (! userPresetsLoaded)
+    // Read again when the file changed (another Mixology window, or the same DAW open twice, saved one).
+    const auto file = userPresetFile();
+    const auto modified = file.existsAsFile() ? file.getLastModificationTime().toMilliseconds() : 0;
+    if (! userPresetsLoaded || modified != userPresetsModified)
     {
         userPresetsLoaded = true;
-        const auto file = userPresetFile();
-        if (file.existsAsFile()) userPresetList = mixology::presets::parse (file.loadFileAsString().toStdString());
+        userPresetsModified = modified;
+        userPresetList = file.existsAsFile() ? mixology::presets::parse (file.loadFileAsString().toStdString())
+                                             : std::vector<mixology::presets::Preset> {};
     }
     return userPresetList;
 }
 
-void BridgeHub::saveUserPreset (const mixology::presets::Preset& p)
+bool BridgeHub::writeUserPresets()
+{
+    const auto file = userPresetFile();
+    file.getParentDirectory().createDirectory();
+    const bool ok = file.replaceWithText (juce::String::fromUTF8 (mixology::presets::serialise (userPresetList).c_str()));
+    userPresetsModified = file.existsAsFile() ? file.getLastModificationTime().toMilliseconds() : 0;
+    return ok;
+}
+
+bool BridgeHub::saveUserPreset (const mixology::presets::Preset& p)
 {
     userPresets();
     auto it = std::find_if (userPresetList.begin(), userPresetList.end(), [&p] (const auto& q) { return q.name == p.name; });
     if (it != userPresetList.end()) *it = p;
     else userPresetList.push_back (p);
     std::sort (userPresetList.begin(), userPresetList.end(), [] (const auto& a, const auto& b) { return juce::String (a.name).compareNatural (b.name) < 0; });
-    const auto file = userPresetFile();
-    file.getParentDirectory().createDirectory();
-    file.replaceWithText (juce::String::fromUTF8 (mixology::presets::serialise (userPresetList).c_str()));
+    return writeUserPresets();
 }
 
 bool BridgeHub::deleteUserPreset (const std::string& name)
@@ -534,8 +574,7 @@ bool BridgeHub::deleteUserPreset (const std::string& name)
     const auto before = userPresetList.size();
     userPresetList.erase (std::remove_if (userPresetList.begin(), userPresetList.end(), [&name] (const auto& q) { return q.name == name; }), userPresetList.end());
     if (userPresetList.size() == before) return false;
-    userPresetFile().replaceWithText (juce::String::fromUTF8 (mixology::presets::serialise (userPresetList).c_str()));
-    return true;
+    return writeUserPresets();
 }
 
 void BridgeHub::rememberPresetUndo (const juce::String& key, const std::string& name, const mixology::proc::Values& before)
@@ -738,7 +777,7 @@ void BridgeHub::cachePrefs()
 
 juce::String BridgeHub::sessionState()
 {
-    if (juce::MessageManager::existsAndIsCurrentThread()) updateSessionCache();
+    if (juce::MessageManager::existsAndIsCurrentThread()) updateSessionCache (true);
     const juce::ScopedLock sl (protectedLock);
     return hasPendingSession ? sessionPending : sessionCache;
 }
@@ -750,17 +789,26 @@ void BridgeHub::setSessionState (const juce::String& text)
     hasPendingSession = true;   // applied on the message thread (next timer tick), after the track settings
 }
 
-void BridgeHub::updateSessionCache()
+void BridgeHub::updateSessionCache (bool forSave)
 {
     {
         const juce::ScopedLock sl (protectedLock);
         if (hasPendingSession) return;   // the project's copy isn't read yet: saving keeps it as it is
     }
-    bool changed = false;
+    bool changed = sessionDirty;   // a project's parts came in: the text to save is made again
+    sessionDirty = false;
     if (savedHistory.key != history.version())
     {
-        savedHistory = { history.version(), history.steps().empty() ? juce::String() : packText (history.save()) };
-        changed = true;
+        // Packing a long History takes a moment: not while a knob is being turned (it changes many times a
+        // second), but once it rests, every 10 s at the latest, and always when the project is saved.
+        const double t = now();
+        if (history.version() != historySeen) { historySeen = history.version(); historyChangedAt = t; }
+        if (forSave || t - historyChangedAt >= 1.5 || t - historyPackedAt >= 10.0)
+        {
+            savedHistory = { history.version(), history.steps().empty() ? juce::String() : packText (history.save()) };
+            historyPackedAt = t;
+            changed = true;
+        }
     }
     // While Analyze Mix listens again, the moments aren't the advice's: the advice saved stays the one on screen.
     const bool adviceSteady = analyzeState == Analyze::done || analyzeState == Analyze::idle;
@@ -827,6 +875,7 @@ void BridgeHub::applyPendingSession()
             }
         }
     }
+    sessionDirty = true;
     ++analysisVersion;
 }
 
@@ -838,7 +887,7 @@ void BridgeHub::guessAssistAtAnalysis()
             assistAtAnalysis[l.nameHash] = l.assist;
 }
 
-std::string BridgeHub::changedSinceAnalysis (const std::vector<std::string>& names, bool anyFader) const
+std::string BridgeHub::changedSinceAnalysis (const std::vector<std::string>& names, bool anyFader, bool fadersOnly) const
 {
     // What changed on these tracks (or on any fader) since Mixology listened: the advice doesn't know it yet.
     std::vector<std::string> parts;
@@ -861,6 +910,7 @@ std::string BridgeHub::changedSinceAnalysis (const std::vector<std::string>& nam
         const auto hash = mixology::bridge::nameHash (n);
         if (! anyFader)
             if (const double d = faderMove (hash); d != 0.0) parts.push_back ("'" + n + "' fader " + db (d));
+        if (fadersOnly) continue;
         const auto* l = uniqueLink (links, hash);
         if (l == nullptr) continue;
         if (auto it = assistAtAnalysis.find (hash); it != assistAtAnalysis.end() && ! mixology::AssistRestore::same (it->second, l->assist))
@@ -896,8 +946,20 @@ void BridgeHub::updateDonePoints()
             const auto& p = plans[tool];
             const bool nothingLeft = p.valid && (sg.id == "headroom" ? p.headroomDb == 0.0 : p.changes.empty());
             if (! nothingLeft) continue;
+            // A level point is only done by faders, and only when Balance could have moved its tracks (in a DAW
+            // without a bridge, or with them padlocked, its plan is empty because it can't act, not because it's done).
+            const bool levels = tool == "balance";
+            if (levels)
+            {
+                bool movable = false;
+                for (const auto& c : chans)
+                    if (c.faderKnown && ! c.locked && ! c.sharedName
+                        && (sg.tracks.empty() || std::find (sg.tracks.begin(), sg.tracks.end(), c.name) != sg.tracks.end()))
+                        movable = true;
+                if (! movable) continue;
+            }
             DonePoint d;
-            d.what = changedSinceAnalysis (sg.tracks, tool == "balance");
+            d.what = changedSinceAnalysis (sg.tracks, levels, levels);
             d.done = ! d.what.empty();
             if (d.done) found[sg.id] = d;
         }
@@ -1280,6 +1342,13 @@ void BridgeHub::updateSetup()
             c.vocalsWithoutLink.push_back (titleOf (hash, sv.info.trackName));
     for (const auto& [hash, name] : sharedNames())
         c.sharedNames.push_back (titleOf (hash, name));
+    {
+        const juce::ScopedLock sl (protectedLock);
+        std::set<std::uint64_t> others;
+        for (const auto& [o, i] : instances)
+            if (i.project() != activeProject) others.insert (i.project());
+        c.otherProjects = static_cast<int> (others.size());
+    }
 
     setupNow = setup::issues (c);
     std::string key;
@@ -1321,15 +1390,38 @@ std::map<std::uint32_t, mixology::mix::TrackSettings> BridgeHub::settingsForAnal
 
 bool BridgeHub::handoffTone (const std::string& styleKey, suite::MixInfo& m) const
 {
+    using namespace mixology;
+    // A mono mix as the setup check hears it right now (else as Analyze Mix heard it).
+    if (enabled ? monoWatch.monoFold() : (report.valid && report.monoMix)) m.flags |= suite::MixInfo::monoMix;
     if (! report.valid || report.style.key != styleKey) return false;
-    const auto tone = mixology::mix::toneAgainstStyle (report);
+    const auto tone = mix::toneAgainstStyle (report);
     if (! tone.valid) return false;
+    // Analyze Mix hears the mix before the Full Mix's processing; Masterology hears it after: add what Mixology's
+    // own EQ and Tone Balance do in each region.
+    const auto v = mixProc.get ? mixProc.get() : proc::Values {};
+    auto added = [&v] (int from, int to) {
+        constexpr double rate = 48000.0;
+        double sum = 0.0;
+        for (int b = from; b <= to; ++b)
+        {
+            const double hz = bandHz (b);
+            double db = 0.0;
+            if (proc::isOn (v, proc::Module::eq)) db += proc::Chain::eqResponseDb (v, hz, rate);
+            if (proc::isOn (v, proc::Module::tone))
+            {
+                db += dsp::magnitudeDb (dsp::design (dsp::Shape::lowShelf, 220.0, v[proc::tbWarmth], 0.6, rate), hz, rate);
+                db += dsp::magnitudeDb (dsp::design (dsp::Shape::bell, 3200.0, v[proc::tbPresence], 0.8, rate), hz, rate);
+                db += dsp::magnitudeDb (dsp::design (dsp::Shape::highShelf, 11000.0, v[proc::tbAir], 0.6, rate), hz, rate);
+            }
+            sum += db;
+        }
+        return sum / (to - from + 1);
+    };
     m.flags |= suite::MixInfo::analysed;
-    if (report.monoMix) m.flags |= suite::MixInfo::monoMix;
-    m.lowDb = static_cast<float> (tone.low);
-    m.lowMidDb = static_cast<float> (tone.lowMid);
-    m.presenceDb = static_cast<float> (tone.presence);
-    m.airDb = static_cast<float> (tone.air);
+    m.lowDb = static_cast<float> (tone.low + added (3, 8));
+    m.lowMidDb = static_cast<float> (tone.lowMid + added (10, 14));
+    m.presenceDb = static_cast<float> (tone.presence + added (21, 23));
+    m.airDb = static_cast<float> (tone.air + added (26, 29));
     return true;
 }
 
@@ -1744,7 +1836,7 @@ juce::var BridgeHub::getState (bool includeLog)
             so->setProperty ("linkAudio", sl.audio);
             // A stereo track reading exactly L100: Cubase's Stereo Combined Panner, whose left edge is all the
             // MIDI Remote reports (full width = "L100"). Its real position is unknown to Mixology.
-            so->setProperty ("stereoPanner", sl.channels == 2 && s.hasPan && s.pan <= 0.0005);
+            so->setProperty ("stereoPanner", dawKey == "cubase" && sl.channels == 2 && s.hasPan && s.pan <= 0.0005);
         }
         // Cubase didn't follow a pan move here: no working pan (mono track into a mono group / output).
         so->setProperty ("noPan", s.present && bridge.panIgnored (s.hash));
@@ -1913,9 +2005,11 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
         // The channel's fader / pan / mute / solo, and the Assist EQ Mixology set on its Link.
         int eqBack = 0, eqKept = 0;
         const bool valid = ref.slot >= 0 && ref.slot < bridge.slotCount() && bridge.slot (ref.slot).present && bridge.slot (ref.slot).hash == ref.hash;
-        if (valid && ! bridge.isProtected (ref.hash)) restoreAssist (ref.hash, eqBack, eqKept, &hist);
         const bool hadFaderPoint = bridge.restorePoints().count (ref.hash) != 0;
-        if (hadFaderPoint || eqBack + eqKept == 0) r = bridge.restoreChannel (ref, t);
+        if (hadFaderPoint) r = bridge.restoreChannel (ref, t);
+        // The Assist EQ only when the fader part went through (else nothing changes and the History stays right).
+        if ((! hadFaderPoint || r.ok) && valid && ! bridge.isProtected (ref.hash)) restoreAssist (ref.hash, eqBack, eqKept, &hist);
+        if (! hadFaderPoint && eqBack + eqKept == 0) r = bridge.restoreChannel (ref, t);   // nothing to restore: its own answer
         if (eqBack > 0) info = "Assist EQ back to how it was.";
         else if (eqKept > 0) info = "Its Assist EQ was changed since Mixology set it: left as you set it.";
         if (! hadFaderPoint && eqBack + eqKept > 0) r = { true, {} };
@@ -1984,11 +2078,12 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
         autoSecondsShown = -1;
         cachePrefs();
         ++analysisVersion;
-        if (autoAnalyze && ! report.valid) info = "Auto Analyze starts after your first Analyze Mix.";
+        if (autoAnalyze && ! report.valid) info = "Auto Analyze is on: press play and it listens by itself.";
     }
     else if (name == "analyzeFinish")
     {
-        if (! analysis.hasMoments()) r = { false, "Nothing heard yet: press play in {daw}." };
+        if (analyzeState != Analyze::listening) r = { false, "Analyze Mix isn't listening right now." };
+        else if (! analysis.hasMoments()) r = { false, "Nothing heard yet: press play in {daw}." };
         else finishAnalysis();
     }
     else if (name == "analyzeCancel")
@@ -2031,6 +2126,7 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
             const auto wanted = arg.getProperty ("name", "").toString().toStdString();
             for (const auto& [h, f] : bridge.knownFaders())
                 if (f.title == wanted) hash = h;
+            if (hash == 0 && ! wanted.empty()) hash = mixology::bridge::nameHash (wanted);   // not read from the DAW (yet)
         }
         if (hash == 0) r = { false, "That channel has no name Mixology can keep track of." };
         else
@@ -2210,17 +2306,280 @@ mixology::mix::MixNow BridgeHub::mixNow() const
     return m;
 }
 
-void BridgeHub::setMixProcessing (const void* owner, MixProcessing p)
+// ---------------------------------------------------------------------------------------------
+// The Mixology instances, and the project each belongs to
+
+bool BridgeHub::looksLikeMaster (const juce::String& trackName)
 {
-    mixOwner = owner;
-    mixProc = std::move (p);
+    static const std::regex master (R"(^\s*(stereo\s*out(put)?|master|main(\s*out(put)?)?|mix\s*bus|2[\s-]*bus|output(\s*1)?)\b)", std::regex::icase);
+    return std::regex_search (trackName.toStdString(), master);
 }
 
-void BridgeHub::clearMixProcessing (const void* owner)
+void BridgeHub::registerInstance (const void* owner, Instance in)
 {
-    if (owner != mixOwner) return;   // another Mixology registered since
-    mixOwner = nullptr;
-    mixProc = {};
+    {
+        const juce::ScopedLock sl (protectedLock);
+        instances.emplace_back (owner, std::move (in));
+    }
+    chooseMixOwner();
+}
+
+void BridgeHub::unregisterInstance (const void* owner)
+{
+    std::uint64_t next = 0;
+    bool activeGone = false;
+    {
+        const juce::ScopedLock sl (protectedLock);
+        instances.erase (std::remove_if (instances.begin(), instances.end(), [owner] (const auto& i) { return i.first == owner; }), instances.end());
+        auto alive = [this] (std::uint64_t id) {
+            return std::any_of (instances.begin(), instances.end(), [id] (const auto& i) { return i.second.project() == id; });
+        };
+        for (auto it = parked.begin(); it != parked.end();)   // a project closed: nothing of it to keep
+            it = alive (it->first) ? std::next (it) : parked.erase (it);
+        if (activeProject != 0 && ! alive (activeProject))
+        {
+            activeGone = true;
+            juce::int64 latest = -1;
+            for (const auto& [o, i] : instances)   // the open project used most recently comes back
+                if (const auto when = std::max (i.lastAudioMs(), i.lastSeenMs()); when > latest) { latest = when; next = i.project(); }
+        }
+    }
+    if (owner == mixOwner) { mixOwner = nullptr; mixProc = {}; }
+    if (activeGone)
+    {
+        if (next != 0) switchProject (next);
+        else
+        {
+            resetProject();
+            const juce::ScopedLock sl (protectedLock);
+            activeProject = 0;
+        }
+    }
+    chooseMixOwner();
+}
+
+void BridgeHub::chooseMixOwner()
+{
+    const void* best = nullptr;
+    MixProcessing proc;
+    {
+        const juce::ScopedLock sl (protectedLock);
+        int bestScore = -1;
+        for (const auto& [o, i] : instances)   // oldest first: the first with the best score wins
+        {
+            const int score = (activeProject == 0 || i.project() == activeProject ? 2 : 0) + (looksLikeMaster (i.trackName()) ? 1 : 0);
+            if (score > bestScore) { bestScore = score; best = o; proc = i.processing; }
+        }
+    }
+    if (best == mixOwner) return;
+    mixOwner = best;
+    mixProc = std::move (proc);
+    ++analysisVersion;
+}
+
+std::uint64_t BridgeHub::idForNewInstance()
+{
+    const auto t = juce::Time::currentTimeMillis();
+    const juce::ScopedLock sl (protectedLock);
+    // Added to the project playing or on screen right now: it is part of it.
+    if (activeProject != 0)
+        for (const auto& [o, i] : instances)
+            if (i.project() == activeProject && t - std::max (i.lastAudioMs(), i.lastSeenMs()) < 2000) return activeProject;
+    std::uint64_t id = 0;
+    while (id == 0 || id == activeProject || parked.count (id) != 0)
+        id = (static_cast<std::uint64_t> (static_cast<std::uint32_t> (juce::Random::getSystemRandom().nextInt())) << 32)
+             ^ static_cast<std::uint32_t> (juce::Random::getSystemRandom().nextInt()) ^ static_cast<std::uint64_t> (t);
+    if (activeProject == 0) activeProject = id;   // the first Mixology: its project is the one on screen
+    return id;
+}
+
+void BridgeHub::loadProject (const void* owner, std::uint64_t previous, std::uint64_t id, const ProjectState& ps)
+{
+    bool apply = false;
+    {
+        const juce::ScopedLock sl (protectedLock);
+        // A new Mixology was the only one of its (new) project: its project is the one it loads now.
+        if (previous != id && activeProject == previous
+            && std::none_of (instances.begin(), instances.end(), [&] (const auto& i) { return i.first != owner && i.second.project() == previous; }))
+            activeProject = id;
+        if (activeProject == 0) activeProject = id;
+        apply = activeProject == id;
+        if (! apply) parked[id] = ps;   // another project is on screen: this one waits until you switch to it
+        else parked.erase (id);
+    }
+    if (! apply) return;
+    setProtectedState (ps.protectedText);
+    setTrackSettingsState (ps.tracks);
+    setMixPrefsState (ps.prefs);
+    setSessionState (ps.session);
+}
+
+BridgeHub::ProjectState BridgeHub::saveProject (std::uint64_t id, bool& known)
+{
+    {
+        const juce::ScopedLock sl (protectedLock);
+        known = true;
+        if (id != activeProject)
+        {
+            if (const auto it = parked.find (id); it != parked.end()) return it->second;
+            if (activeProject != 0) { known = false; return {}; }
+        }
+    }
+    return liveProject();
+}
+
+BridgeHub::ProjectState BridgeHub::liveProject()
+{
+    return { protectedState(), trackSettingsState(), mixPrefsState(), sessionState() };
+}
+
+void BridgeHub::updateProjects()
+{
+    const auto t = juce::Time::currentTimeMillis();
+    std::uint64_t switchTo = 0;
+    std::vector<ProjectState> merges;
+    {
+        const juce::ScopedLock sl (protectedLock);
+        if (activeProject == 0 || instances.empty()) return;
+        juce::int64 activeAudio = 0;
+        for (const auto& [o, i] : instances)
+            if (i.project() == activeProject) activeAudio = std::max (activeAudio, i.lastAudioMs());
+
+        if (t - activeAudio < 500)
+        {
+            // A DAW plays one project at a time: a Mixology with another id that plays right now belongs to the
+            // project on screen (one added while the song played, or two from a project saved before 0.20).
+            for (auto& [o, i] : instances)
+            {
+                const auto old = i.project();
+                if (old == activeProject || t - i.lastAudioMs() >= 500) continue;
+                i.adopt (activeProject);
+                const bool last = std::none_of (instances.begin(), instances.end(), [old] (const auto& x) { return x.second.project() == old; });
+                if (const auto it = parked.find (old); last && it != parked.end())
+                {
+                    merges.push_back (it->second);
+                    parked.erase (it);
+                }
+            }
+        }
+        else if (t - activeAudio > 1500)
+        {
+            // The project on screen went quiet and another one plays: you switched project. (Audio only: a window
+            // opened while the song is stopped may be a second Mixology in this same project.)
+            juce::int64 latest = t - 500;
+            for (const auto& [o, i] : instances)
+                if (i.project() != activeProject && i.lastAudioMs() > latest) { latest = i.lastAudioMs(); switchTo = i.project(); }
+        }
+    }
+    for (const auto& ps : merges) mergeProject (ps);
+    if (switchTo != 0) switchProject (switchTo);
+    chooseMixOwner();
+}
+
+void BridgeHub::mergeProject (const ProjectState& ps)
+{
+    // Only what the project on screen doesn't have yet (it is the same project under another id).
+    if (protectedState().isEmpty() && ps.protectedText.isNotEmpty()) setProtectedState (ps.protectedText);
+    if (trackSettingsState().isEmpty() && ps.tracks.isNotEmpty()) setTrackSettingsState (ps.tracks);
+    if (! vocalFromYou && ! autoAnalyze && ps.prefs.isNotEmpty()) setMixPrefsState (ps.prefs);
+    if (ps.session.isNotEmpty()) setSessionState (ps.session);   // each part only fills what is empty
+}
+
+void BridgeHub::switchProject (std::uint64_t to)
+{
+    const auto live = liveProject();
+    ProjectState next;
+    bool found = false;
+    {
+        const juce::ScopedLock sl (protectedLock);
+        const auto from = activeProject;
+        if (from != 0 && std::any_of (instances.begin(), instances.end(), [from] (const auto& i) { return i.second.project() == from; }))
+            parked[from] = live;
+        if (const auto it = parked.find (to); it != parked.end())
+        {
+            next = it->second;
+            found = true;
+            parked.erase (it);
+        }
+        activeProject = to;
+    }
+    resetProject();
+    if (found)
+    {
+        setProtectedState (next.protectedText);
+        setTrackSettingsState (next.tracks);
+        setMixPrefsState (next.prefs);
+        setSessionState (next.session);
+    }
+    bridge.note (now(), "Another project is on screen: Mixology shows its own History, advice and padlocks.");
+}
+
+void BridgeHub::resetProject()
+{
+    // Everything that belongs to one project goes; what belongs to the host (the bridge, the Links, the suite,
+    // the learned fader curve, your presets) stays.
+    {
+        const juce::ScopedLock sl (protectedLock);
+        hasPendingProtected = hasPendingTrackSettings = hasPendingPrefs = hasPendingSession = false;
+    }
+    bridge.setProtectedList ({});
+    cacheProtected();
+    trackSettings.clear();
+    bridge.setNoPanList ({});
+    seenNoPanVersion = bridge.noPanVersion();
+    cacheTrackSettings();
+    vocalOffset = 0.0;
+    vocalFromYou = false;
+    autoAnalyze = false;
+    cachePrefs();
+
+    history.clear();
+    pendingPlans.clear();
+    projectHistoryUpTo = 0;
+    lastApply = {};
+    currentPlan = {};
+    presetUndo.clear();
+    bridge.forgetRestorePoints (now());
+    eqRestore.clear();
+
+    analyzeState = Analyze::idle;
+    analysis.clear();
+    analysis.setVocalOffset (0.0, false);
+    adviceAnalysis = {};
+    report = {};
+    tracksHeard = 0;
+    fadersAtAnalysis.clear();
+    procAtAnalysis.clear();
+    assistAtAnalysis.clear();
+    assistGuessed = false;
+    mixProcAtAnalysisKnown = false;
+    mixProcAtAnalysis = {};
+    donePoints.clear();
+    doneShown.clear();
+    ++doneVersion;
+    autoListen.reset();
+    autoSnapshot = {};
+    autoScanAsked = false;
+    autoCheckedMs = autoUpdatedMs = 0.0;
+    autoPause.clear();
+    autoSecondsShown = -1;
+    hearingReference = false;
+    monoWatch.reset();
+    ++adviceSerial;
+    analyzedMs = 0.0;
+    adviceFromProject = false;
+
+    savedHistory = {};
+    savedAdvice = {};
+    savedRestore = {};
+    {
+        const juce::ScopedLock sl (protectedLock);
+        sessionCache.clear();
+    }
+    ++analysisVersion;
+    ++applyVersion;
+    ++setupVersion;
+    ++projectEpoch;
 }
 
 void BridgeHub::fillVoxology (mixology::mix::ChannelNow& c) const
@@ -2280,7 +2639,7 @@ std::vector<mixology::mix::ChannelNow> BridgeHub::channelsNow() const
             c.assist = l->assist;
             if (auto it = assistAtAnalysis.find (hash); it != assistAtAnalysis.end()) { c.assistAtAnalysisKnown = true; c.assistAtAnalysis = it->second; }
             c.channels = l->channels;
-            c.panUnknown = l->channels == 2 && f.hasPan && f.pan <= 0.0005;   // Stereo Combined Panner (see getState)
+            c.panUnknown = dawKey == "cubase" && l->channels == 2 && f.hasPan && f.pan <= 0.0005;   // Stereo Combined Panner (see getState)
             fillProc (c, *l);
         }
         if (bridge.panIgnored (hash)) c.panUnknown = true;   // Cubase doesn't pan it (mono group / output)
