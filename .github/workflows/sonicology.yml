@@ -29,8 +29,43 @@ permissions:
   actions: read   # reuse_run: read another run's artifacts
 
 jobs:
+  # The three plug-ins only see each other when their shared files are the same: stop before building a suite
+  # that can't talk (a branch that missed a sync).
+  shared:
+    name: Shared files match
+    if: inputs.reuse_run == ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: mixology
+      - uses: actions/checkout@v4
+        with:
+          repository: DK7602/Voxology
+          ref: ${{ inputs.voxology_ref }}
+          path: voxology
+      - uses: actions/checkout@v4
+        with:
+          repository: DK7602/polisher
+          ref: ${{ inputs.masterology_ref }}
+          path: masterology
+      - name: Compare
+        run: |
+          bad=0
+          for f in dsp/include/suite/SuiteLink.h dsp/src/SuiteLink.cpp plugin/ui/daws.js plugin/ui/mixstyles.js; do
+            if [ "$(md5sum mixology/$f voxology/$f masterology/$f | cut -d' ' -f1 | sort -u | wc -l)" = 1 ]; then
+              echo "same in all three: $f"
+            else
+              echo "::error::$f is not the same in Mixology, Voxology and Masterology"
+              md5sum mixology/$f voxology/$f masterology/$f
+              bad=1
+            fi
+          done
+          exit $bad
+
   build:
     name: ${{ matrix.plugin }} (${{ matrix.name }})
+    needs: shared
     if: inputs.reuse_run == ''
     runs-on: ${{ matrix.os }}
     strategy:
@@ -105,8 +140,8 @@ jobs:
 
   windows:
     name: Windows installer
-    needs: build
-    if: ${{ !cancelled() && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
+    needs: [shared, build]
+    if: ${{ !cancelled() && (needs.shared.result == 'success' || needs.shared.result == 'skipped') && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -142,8 +177,8 @@ jobs:
 
   macos:
     name: macOS installer
-    needs: build
-    if: ${{ !cancelled() && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
+    needs: [shared, build]
+    if: ${{ !cancelled() && (needs.shared.result == 'success' || needs.shared.result == 'skipped') && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -176,7 +211,12 @@ jobs:
           killall -9 AudioComponentRegistrar || true
           failed=0
           for id in "aumf Vox1 Voxa" "aufx Hny1 Voxa" "aufx Mxl1 Mxlg" "aufx Mxk1 Mxlg" "aufx Pls1 Plsh"; do
-            if auval -v $id > auval.log 2>&1; then echo "auval $id: PASS"; else echo "auval $id: FAIL"; tail -30 auval.log; failed=1; fi
+            # (passes only with Apple's own success line: an exit code of 0 alone isn't trusted)
+            if auval -v $id > auval.log 2>&1 && grep -q "AU VALIDATION SUCCEEDED" auval.log; then
+              echo "auval $id: PASS ($(grep -c "PASS" auval.log) checks passed)"
+            else
+              echo "auval $id: FAIL"; tail -30 auval.log; failed=1
+            fi
           done
           exit $failed
 

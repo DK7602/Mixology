@@ -131,8 +131,11 @@ jobs:
           cp -R build/plugin/Mixology_artefacts/Release/AU/Mixology.component ~/Library/Audio/Plug-Ins/Components/
           cp -R "build/link/MixologyLink_artefacts/Release/AU/Mixology Link.component" ~/Library/Audio/Plug-Ins/Components/
           killall -9 AudioComponentRegistrar || true
-          auval -v aufx Mxl1 Mxlg
-          auval -v aufx Mxk1 Mxlg
+          # (Apple's own success line is required: an exit code of 0 alone isn't trusted)
+          for id in "aufx Mxl1 Mxlg" "aufx Mxk1 Mxlg"; do
+            auval -v $id | tee auval.log
+            grep -q "AU VALIDATION SUCCEEDED" auval.log
+          done
 
       # Steinberg's own VST3 validator, built from the VST3 SDK (cached by SDK commit).
       - name: Find VST3 SDK version (Windows)

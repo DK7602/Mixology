@@ -172,10 +172,13 @@ void MixologyAudioProcessor::publishHandoff()
     suite::MixInfo m;
     m.styleKey = styleKey;
     m.styleName = styleName;
-    m.peakDbtp = meters.truePeak.load();
-    m.integratedLufs = meters.integrated.load();
-    m.shortTermLufs = meters.shortTerm.load();
-    if (mixology::proc::isOn (procRaw.read(), mixology::proc::Module::limit)) m.flags |= suite::MixInfo::limited;
+    // Bypassed, or the host stopped calling it (an inactive project): its last readings aren't this mix any more,
+    // so Masterology gets none (the style still goes).
+    const bool hearing = juce::Time::currentTimeMillis() - lastAudioMs.load (std::memory_order_relaxed) < 2000;
+    m.peakDbtp = hearing ? meters.truePeak.load() : -100.0f;
+    m.integratedLufs = hearing ? meters.integrated.load() : -100.0f;
+    m.shortTermLufs = hearing ? meters.shortTerm.load() : -100.0f;
+    if (hearing && mixology::proc::isOn (procRaw.read(), mixology::proc::Module::limit)) m.flags |= suite::MixInfo::limited;
     bridgeHub->handoffTone (styleKey, m);   // after Analyze Mix: the mix's tone against the style, a mono mix
     m.version = static_cast<std::uint32_t> (JucePlugin_VersionCode);
     suite::Link::process().publishMix (m, suite::nowMs());

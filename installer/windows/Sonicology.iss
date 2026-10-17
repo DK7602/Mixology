@@ -79,6 +79,11 @@ Name: "{autoprograms}\Sonicology\Uninstall Sonicology"; Filename: "{uninstallexe
 Filename: "{app}\Read Me First.txt"; Description: "Open the Read Me"; Flags: postinstall shellexec skipifsilent
 Filename: "https://www.tobias-erichsen.de/software/loopmidi.html"; Description: "Get loopMIDI (free): Mixology needs it to move faders in Cubase, FL Studio, Live and Cakewalk"; Flags: postinstall shellexec skipifsilent unchecked
 
+[InstallDelete]
+; Masterology's first name was Polisher, with the same plug-in IDs: an old Polisher.vst3 is the same plug-in to the
+; DAW (it might load the old one), so it goes.
+Type: filesandordirs; Name: "{commoncf64}\VST3\Polisher.vst3"; Components: masterology
+
 [UninstallDelete]
 ; FL Studio and Live leave compiled copies of the Python scripts next to them.
 Type: filesandordirs; Name: "{userdocs}\Image-Line\FL Studio\Settings\Hardware\Mixology Bridge\__pycache__"; Components: flstudio

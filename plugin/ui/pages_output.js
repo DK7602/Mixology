@@ -425,10 +425,16 @@ export function buildMaster(root, app) {
         rsub.textContent = g ? `Masterology: ${fmt.num(g.target, 0)} LUFS · ${fmt.num(g.ceiling, 1)} dBTP` : "Is the mix ready for Masterology?";
         rsub.title = g ? `Masterology aims for ${fmt.num(g.target, 0)} LUFS with peaks up to ${fmt.num(g.ceiling, 1)} dBTP` + (g.goal || g.genre ? ` (${[g.goal, g.genre].filter(Boolean).join(", ")})` : "") : "";
       }
+      // The peaks need room under Masterology's ceiling (3 dB, more when its ceiling is lower), and a mix 3 dB louder
+      // than Masterology's target was squashed for nothing (Masterology turns it down): say so with its own numbers.
+      const room = g && Number.isFinite(g.ceiling) ? Math.min(-3, g.ceiling - 2) : -3, st = f.shortTerm ?? -100;
+      const loudLimit = g && Number.isFinite(g.target) ? Math.min(-8, g.target + 3) : -8;
       const items = [
-        [silent ? null : tp <= -3, tp <= -3 ? "Peaks leave 3 dB+ for Masterology" : "Peaks are above −3 dBTP: pull the mix down"],
+        [silent ? null : tp <= room, tp <= room ? `Peaks leave ${fmt.num(-room, 0)} dB+ for Masterology` : `Peaks are above ${fmt.num(room, 0)} dBTP: pull the mix down`],
         f.master && f.master.limOn ? [false, "Mixology's Limiter is on the mix: switch it off and let Masterology limit"] : [true, "No limiter on the mix bus (Masterology does that)"],
-        [silent ? null : (f.shortTerm ?? -100) < -8, (f.shortTerm ?? -100) < -8 ? "Mix isn't squashed (short-term under −8 LUFS)" : "Mix is already very loud: ease off bus processing"],
+        [silent ? null : st < loudLimit, st < loudLimit ? `Mix isn't squashed (short-term under ${fmt.num(loudLimit, 0)} LUFS)`
+          : g && st < -8 ? `Mix is louder than Masterology's ${fmt.num(g.target, 0)} LUFS target: Masterology would only turn it down. Ease off bus compression and limiting`
+          : "Mix is already very loud: ease off bus processing"],
       ];
       if (f.master) items.push(g
         ? [true, `Masterology is on${g.goal ? " (" + g.goal + ")" : ""}: it gets this mix's style and tone`]

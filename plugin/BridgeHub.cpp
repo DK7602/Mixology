@@ -1480,6 +1480,9 @@ bool BridgeHub::handoffTone (const std::string& styleKey, suite::MixInfo& m) con
 std::optional<suite::MasterInfo> BridgeHub::masterology() const
 {
     if (suiteMasters.empty()) return std::nullopt;
+    // Two Masterologys (one on a group, one left in another project): the one that hears music, else the first.
+    for (const auto& m : suiteMasters)
+        if (m.inputLufs > -70.0f) return m;
     return suiteMasters.front();
 }
 

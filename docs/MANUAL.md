@@ -603,7 +603,8 @@ Good to know:
 2. Mixology on the Stereo Out: balance all tracks against each other (levels first, then masking and width).
 3. Masterology after Mixology on the Stereo Out (or in a mastering project): final EQ, loudness and limiting.
 
-Leave Masterology 3 to 6 dB of headroom: the Master page tells you when the mix peaks are in the right place.
+Leave Masterology room: mix peaks between −6 and −3 dBTP, and the mix no louder than about 3 dB over Masterology's
+target. The Master page's HAND-OFF checks tell you (with Masterology's own target and ceiling when it's there).
 Final limiting is Masterology's job: keep Mixology's Limiter off on the Full Mix (or use it only as a safety).
 
 ### The three talk to each other (the suite link)
@@ -626,7 +627,9 @@ other); the Sonicology installer always has matching ones.
     NAME**: the DAW doesn't give it; **NOT A VOCAL THERE**: you set another role). After Analyze Mix it also says how
     loud the vocal sits against the beat, and Voxology's level tips say so when Mixology's bridge moves that fader.
 - **Masterology after Mixology.** The Master page's HAND-OFF panel shows what Masterology aims for (for example
-  "Masterology: −14 LUFS · −1.0 dBTP"; hover it for the goal and genre) and a check that it is there.
+  "Masterology: −14 LUFS · −1.0 dBTP"; hover it for the goal and genre) and a check that it is there. Its checks
+  use those numbers: peaks under −3 dBTP (2 dB under Masterology's ceiling when it's lower), and a mix more than 3 dB louder
+  than the target is flagged (Masterology would only turn it down: ease off the bus compression and limiting).
 - **Mixology's hand-off to Masterology.** Mixology tells Masterology the mix style you picked, the mix's peaks
   and loudness since you last pressed play, whether the mix is mono right now, and (after Analyze Mix) how its tone
   sits against the style, including what Mixology's own Full Mix EQ and Tone Balance add. Masterology shows it and

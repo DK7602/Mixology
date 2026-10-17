@@ -32,7 +32,7 @@ component () {
 }
 
 plugins () {   # the plug-ins of one product, signed ad hoc, laid out as they install
-  local name="$1" id="$2"
+  local name="$1" id="$2" scripts="${3:-$WORK/scripts-au}"
   local root="$WORK/root-$id"   # its own line: "local" expands every word before it sets any
   mkdir -p "$root/Library/Audio/Plug-Ins/VST3" "$root/Library/Audio/Plug-Ins/Components"
   cp -R "$STAGE/$name/VST3/"*.vst3 "$root/Library/Audio/Plug-Ins/VST3/"
@@ -41,7 +41,7 @@ plugins () {   # the plug-ins of one product, signed ad hoc, laid out as they in
   find "$root/Library/Audio/Plug-Ins" -path "*/Contents/MacOS/*" -type f -exec chmod 755 {} +
   find "$root/Library/Audio/Plug-Ins" -maxdepth 2 \( -name "*.vst3" -o -name "*.component" \) -print0 |
     while IFS= read -r -d '' b; do codesign --force --deep --sign - "$b"; done
-  component "$id" "$root" "$WORK/scripts-au"
+  component "$id" "$root" "$scripts"
 }
 
 # After the plug-ins: macOS rereads the Audio Units (Logic finds them at its next start).
@@ -53,9 +53,24 @@ exit 0
 EOF
 chmod +x "$WORK/scripts-au/postinstall"
 
+# Masterology's first name was Polisher, with the same plug-in IDs: an old Polisher bundle is the same plug-in to
+# the DAW (it might load the old one), so it goes.
+mkdir -p "$WORK/scripts-masterology"
+cat > "$WORK/scripts-masterology/postinstall" <<'SCRIPT'
+#!/bin/sh
+user=$(stat -f%Su /dev/console 2>/dev/null)
+home=$(dscl . -read "/Users/$user" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+for d in "/Library/Audio/Plug-Ins" "${home:+$home/Library/Audio/Plug-Ins}"; do
+  [ -n "$d" ] && rm -rf "$d/VST3/Polisher.vst3" "$d/Components/Polisher.component" 2>/dev/null
+done
+killall -9 AudioComponentRegistrar 2>/dev/null || true
+exit 0
+SCRIPT
+chmod +x "$WORK/scripts-masterology/postinstall"
+
 plugins Voxology voxology
 plugins Mixology mixology
-plugins Masterology masterology
+plugins Masterology masterology "$WORK/scripts-masterology"
 
 # The bridge scripts: kept in /Library/Application Support/Sonicology, copied into the user's DAW folders
 # (they live in the user's own Documents / Music folder, which an installer running as root only reaches this way).
