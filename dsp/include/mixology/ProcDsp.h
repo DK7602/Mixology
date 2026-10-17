@@ -200,7 +200,8 @@ namespace mixology::dsp
         /** Feeds the delay line without limiting (while the limiter is off), so switching it on continues
             the audio instead of playing old samples. */
         void feed (const double* const* x, int nch, int n);
-        /** In place: input gain, delay, limiting. w (0..1, per block start / end) blends the limiting in. */
+        /** In place: input gain, delay, limiting. w (0..1, per block start / end) crossfades from the sound as it
+            comes in (w = 0, what passes while the limiter is off) to the delayed, limited sound (w = 1). */
         void process (double* const* x, int nch, int n, double w0, double w1);
         double reductionDb() const { return lastGr; }
 

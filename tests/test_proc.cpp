@@ -522,6 +522,35 @@ TEST_CASE ("Processing: switching a module on or off never clicks", "[proc]")
     CHECK (maxStep < natural);
 }
 
+TEST_CASE ("Processing: switching the Limiter on or off never clicks (its sound is 5 ms late)", "[proc]")
+{
+    // On, the Limiter plays the sound late by its lookahead; off, the sound passes on time. Its fade used to blend
+    // only the gain, so at the switch the sound jumped 5 ms (here a step nine times the sine's own); now the late
+    // sound crossfades with the on-time one. The host is told the latency only while it is on.
+    const double sr = 48000.0;
+    Chain chain;
+    chain.prepare (sr, 2);
+    const auto off = defaults();
+    const auto on = with ({ { limOn, 1.0f } });
+    CHECK (chain.latencyFor (on) > 0);
+    CHECK (chain.latencyFor (off) == 0);
+    auto s = sine (200.0, 0.1, 2.0, sr);   // -20 dBFS: never limited
+    const double natural = 2.0 * kPi * 200.0 / sr * 0.1;   // the sine's own steepest step
+    double maxStep = 0.0, prev = 0.0;
+    for (std::size_t start = 0; start < s.size(); start += 256)
+    {
+        chain.setValues ((start / 12000) % 2 == 1 ? on : off);   // on, off, on ... every quarter second
+        double* ch[2] = { s.l.data() + start, s.r.data() + start };
+        chain.process (ch, 2, 256);
+        for (std::size_t i = start; i < start + 256; ++i)
+        {
+            maxStep = std::max (maxStep, std::abs (s.l[i] - prev));
+            prev = s.l[i];
+        }
+    }
+    CHECK (maxStep < 1.2 * natural);
+}
+
 TEST_CASE ("Processing: any settings, any audio: always finite, never blows up", "[proc]")
 {
     std::mt19937 rng (11);

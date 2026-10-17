@@ -520,8 +520,10 @@ namespace mixology::dsp
             const auto rd = static_cast<std::size_t> (((pos - D) % ringSize + ringSize) % ringSize);
             for (int c = 0; c < nch; ++c)
             {
-                const double delayed = audio[static_cast<std::size_t> (c)][rd];
-                double y = delayed * (1.0 + w * (inGain * g - 1.0));
+                // Fading in or out, the limited sound (late by the lookahead) crossfades with the sound as it came
+                // in (not late); blending only the gain would jump between the two in time (a click).
+                const double limited = audio[static_cast<std::size_t> (c)][rd] * inGain * g;
+                double y = (1.0 - w) * in[c] + w * limited;
                 if (w >= 0.999) y = std::clamp (y, -ceiling, ceiling);   // safety: never past the ceiling
                 x[c][i] = y;
             }
