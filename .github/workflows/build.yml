@@ -90,12 +90,12 @@ jobs:
           exe=$(find build/tools/cpucheck -type f \( -name MixologyCpuCheck.exe -o -name MixologyCpuCheck \) | head -1)
           "$exe" "build/link/MixologyLink_artefacts/Release/VST3/Mixology Link.vst3" "build/plugin/Mixology_artefacts/Release/VST3/Mixology.vst3" 48 256 --strict --modules
 
-      # One folder with everything to install: the plug-in, the Cubase script, the manual and the test steps.
+      # One folder with everything to install: the plug-ins, every DAW's bridge script and the manual.
       - name: Package
         shell: bash
         run: |
           P="Mixology-${{ matrix.name }}"
-          mkdir -p "$P/Cubase MIDI Remote"
+          mkdir -p "$P/Cubase MIDI Remote" "$P/FL Studio" "$P/Ableton"
           mkdir -p "$P/VST3"   # only the two plug-ins (no linker leftovers like Mixology.exp / .lib)
           cp -R build/plugin/Mixology_artefacts/Release/VST3/Mixology.vst3 "$P/VST3/"
           cp -R "build/link/MixologyLink_artefacts/Release/VST3/Mixology Link.vst3" "$P/VST3/"
@@ -103,7 +103,10 @@ jobs:
           cp -R build/plugin/Mixology_artefacts/Release/AU "$P/" 2>/dev/null || true
           cp -R build/link/MixologyLink_artefacts/Release/AU/* "$P/AU/" 2>/dev/null || true
           cp -R bridge/cubase/Mixology "$P/Cubase MIDI Remote/"
-          cp docs/MANUAL.md docs/M6_TEST.md "$P/"
+          cp -R "bridge/flstudio/Mixology Bridge" "$P/FL Studio/"
+          cp -R bridge/ableton/MixologyBridge "$P/Ableton/"
+          find "$P" -name __pycache__ -prune -exec rm -rf {} +
+          cp docs/MANUAL.md "$P/"
           cp docs/INSTALL.txt "$P/INSTALL.txt"
 
       - name: Upload

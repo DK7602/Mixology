@@ -1,18 +1,48 @@
-MIXOLOGY - install (Windows, Cubase)
+MIXOLOGY - install by hand (this download holds Mixology only; the Sonicology installer does all of this for you)
 
-1. Copy  VST3\Mixology.vst3  and  VST3\Mixology Link.vst3  to  C:\Program Files\Common Files\VST3\
-   (Chrome may call the zip "dangerous" because it isn't code-signed yet: choose Keep.)
-2. Install loopMIDI (free, Tobias Erichsen) and add two ports named exactly:
-     Mixology to Cubase
-     Cubase to Mixology
-3. Copy the folder  "Cubase MIDI Remote\Mixology"  into
-     Documents\Steinberg\Cubase\MIDI Remote\Driver Scripts\Local\
-   so you end up with  ...\Local\Mixology\Bridge\Mixology_Bridge.js
-4. Start Cubase. Studio > Studio Setup > MIDI Port Setup: untick "In 'All MIDI Inputs'" for both
-   Mixology ports. Studio > VST Plug-in Manager: rescan if Mixology doesn't show up.
-5. Insert Mixology on the Stereo Out. Settings (gear) > Cubase Bridge should turn green.
-6. Insert Mixology Link on the tracks you want to see in Mixology (after the track's other plug-ins).
+1. THE PLUG-INS
+   Windows  Copy  VST3\Mixology.vst3  and  VST3\Mixology Link.vst3  to  C:\Program Files\Common Files\VST3\
+            (Chrome may call the zip "dangerous" because it isn't code-signed yet: choose Keep.)
+   Mac      Copy the two .vst3 to /Library/Audio/Plug-Ins/VST3/ and the two .component (AU, for Logic) to
+            /Library/Audio/Plug-Ins/Components/.
+   Rescan the plug-ins in your DAW. Mixology goes on the Stereo Out / master, Mixology Link on every track you
+   want Mixology to hear (the last plug-in on the track).
 
-Already set up? Only step 1 again: copy BOTH plug-ins from this download (the Cubase script is unchanged, v3).
-Then follow M5_TEST.md and send back the results.
+2. THE TWO MIDI PORTS (only to let Mixology move your DAW's faders)
+   Windows  Install loopMIDI (free, tobias-erichsen.de) and add two ports named exactly
+              Mixology to Cubase
+              Cubase to Mixology
+            (the names say Cubase; they work for every DAW).
+   Mac      Nothing to do: Mixology makes the two ports itself once its window has been open.
+
+3. THE BRIDGE FOR YOUR DAW
+   Cubase / Nuendo
+            Copy the folder  "Cubase MIDI Remote\Mixology"  into
+              Documents\Steinberg\Cubase\MIDI Remote\Driver Scripts\Local\
+            so you end up with  ...\Local\Mixology\Bridge\Mixology_Bridge.js
+            Studio > Studio Setup > MIDI Port Setup: untick "In 'All MIDI Inputs'" for both Mixology ports.
+   FL Studio
+            Copy the folder  "FL Studio\Mixology Bridge"  into  Documents\Image-Line\FL Studio\Settings\Hardware\
+            Options > MIDI settings. Input: pick "Mixology to Cubase", tick Enable, Controller type
+            "Mixology Bridge", Port 200. Output: pick "Cubase to Mixology", Port 200 (the same number).
+   Ableton Live
+            Copy the folder  "Ableton\MixologyBridge"  into  Documents\Ableton\User Library\Remote Scripts\
+            (Mac: ~/Music/Ableton/User Library/Remote Scripts/). Restart Live. Settings > Link, Tempo & MIDI: in a
+            free Control Surface row pick "MixologyBridge", Input "Mixology to Cubase", Output "Cubase to Mixology".
+   Logic Pro
+            Nothing to copy: Mixology acts as a Mackie Control. Open Mixology's window once; Logic often finds it by
+            itself. If not: Logic Pro > Control Surfaces > Setup > New > Install > Mackie Control > Add, then Output
+            Port "Cubase to Mixology", Input Port "Mixology to Cubase".
+   Cakewalk
+            Nothing to copy: Mixology acts as a Mackie Control. Preferences > MIDI > Devices: tick "Mixology to
+            Cubase" (Inputs) and "Cubase to Mixology" (Outputs). MIDI > Control Surfaces > Add (the star) > Mackie
+            Control, Input "Mixology to Cubase", Output "Cubase to Mixology", OK.
+   Other DAWs
+            No bridge: Mixology lists every fader move with the exact dB and you set the faders.
+
+4. Open Mixology. In Settings (the gear) pick your DAW; its Bridge tab turns green ("Connected to ...").
+   It doesn't? Press Copy log in that tab and send what it says, with a screenshot of the DAW's fader.
+
+Already set up? Only step 1 again: copy BOTH plug-ins from this download. Copy the bridge script again too
+when this version's notes say it changed.
 The full manual is MANUAL.md (also inside Mixology: the ? button).
