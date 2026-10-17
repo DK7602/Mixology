@@ -23,7 +23,7 @@ juce_add_plugin(MixologyLink
     VST3_CATEGORIES             Fx Tools
     AU_MAIN_TYPE                kAudioUnitType_Effect)
 
-# The window shares Mixology's stylesheet, building blocks, fonts and logo (served flat by file name).
+# The window shares Mixology's stylesheet, building blocks, DAW words, fonts and logo (served flat by file name).
 set(MIX_UI "${CMAKE_SOURCE_DIR}/plugin/ui")
 file(GLOB LINK_FONTS CONFIGURE_DEPENDS "${MIX_UI}/fonts/*.ttf")
 juce_add_binary_data(MixologyLinkUIData
@@ -36,6 +36,7 @@ juce_add_binary_data(MixologyLinkUIData
         ui/link_mock.js
         "${MIX_UI}/styles.css"
         "${MIX_UI}/ui.js"
+        "${MIX_UI}/daws.js"
         "${MIX_UI}/assets/logo.png"
         "${MIX_UI}/assets/wordmark.png"
         ${LINK_FONTS}

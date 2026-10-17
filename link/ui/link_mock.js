@@ -14,7 +14,7 @@
       const { eventId, payload } = JSON.parse(message);
       if (eventId !== "__juce__invoke") return;
       let result = true;
-      if (payload.name === "getLinkInfo") result = { theme: new URLSearchParams(location.search).get("theme") || "dark", version: "preview", trim };
+      if (payload.name === "getLinkInfo") result = { theme: new URLSearchParams(location.search).get("theme") || "dark", version: "preview", trim, daw: location.hash.slice(1) || "cubase" };   // #fl, #logic...
       if (payload.name === "setTrim") trim = payload.params[0];
       if (payload.name === "setProcessing") procOn = !!payload.params[0];
       if (payload.name === "clearAssist") assist = { lowCut: 0, mudHz: 300, mudDb: 0, pocketHz: 2500, pocketDb: 0 };

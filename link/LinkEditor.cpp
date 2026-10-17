@@ -1,6 +1,7 @@
 #include "LinkEditor.h"
 
 #include "MixologyLinkUIData.h"
+#include "suite/SuiteLink.h"
 
 #include <cstring>
 
@@ -64,6 +65,8 @@ juce::WebBrowserComponent::Options LinkEditor::makeEditorOptions()
                                  o->setProperty ("theme", savedTheme());
                                  o->setProperty ("version", JucePlugin_VersionString);
                                  o->setProperty ("trim", processor.trimDb());
+                                 // The DAW it runs in (found from the host): the window names its master channel in its words.
+                                 o->setProperty ("daw", juce::String (suite::dawFromHostPath (juce::PluginHostType::getHostPath().toStdString())));
                                  complete (juce::var (o));
                              })
         .withNativeFunction ("setTrim", [this] (const juce::Array<juce::var>& args, auto complete)

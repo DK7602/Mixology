@@ -1,7 +1,8 @@
 // Mixology Link window: the track this Link sits on, its meters, Trim and Assist EQ, and whether Mixology sees it.
 
 import * as Juce from "./juce/index.js";
-import { $, el, Knob, Meter, fmt, setRenderScale } from "./ui.js";
+import { $, el, Knob, Meter, fmt, esc, setRenderScale } from "./ui.js";
+import { say } from "./daws.js";
 
 const stage = $("lstage");
 function fit() {
@@ -36,14 +37,19 @@ const rPeak = el("div", "lreading", meters, { top: "38px" });
 const rMom = el("div", "lreading", meters, { top: "92px" });
 const rShort = el("div", "lreading", meters, { top: "146px" });
 
-// Trim knob
+// Trim knob. Every change is inside a host gesture, so automation records it (Touch / Latch): a drag is one gesture;
+// a wheel turn, an arrow key or a double-click is one too, ending a moment after the last step.
 const trimCard = $("ltrim");
-let dragging = false;
+let dragging = false, nudgeTimer = null;
+const nudge = () => {
+  if (nudgeTimer) clearTimeout(nudgeTimer); else native.trimGesture(true);
+  nudgeTimer = setTimeout(() => { nudgeTimer = null; native.trimGesture(false); }, 400);
+};
 const trim = new Knob(trimCard, {
   x: 38, y: 8, w: 180, size: 100, label: "TRIM", min: -24, max: 24, def: 0, value: 0, bipolar: true, step: 0.1,
   format: (v) => fmt.db(v, 1),
-  onChange: (v) => native.setTrim(v),
-  onDragStart: () => { dragging = true; native.trimGesture(true); },
+  onChange: (v) => { if (!dragging) nudge(); native.setTrim(v); },
+  onDragStart: () => { dragging = true; if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = null; } else native.trimGesture(true); },
   onDragEnd: () => { dragging = false; native.trimGesture(false); },
 });
 const note = el("div", "lnote", trimCard);
@@ -110,7 +116,6 @@ let procOn = true, procKey = "";
 procBtn.addEventListener("click", () => native.setProcessing(!procOn));
 const MODULE_NAMES = { gate: "Gate", eq: "EQ", comp: "Compressor", multi: "Multiband", trans: "Transient", balance: "Tone Balance",
   loud: "Loudness", harm: "Harmonics", analog: "Analog", clip: "Clip", width: "Stereo", final: "Final Touch", limit: "Limiter", space: "Space" };
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 function drawProc(p) {
   procOn = !!p.on;
   procBtn.textContent = procOn ? "On" : "Off";
@@ -118,13 +123,14 @@ function drawProc(p) {
   procBtn.style.color = procOn ? "var(--green)" : "var(--text-dim)";
   if (!p.modules.length) { procText.textContent = "Nothing on. Mixology's EQ, Dynamics, Tone, Stereo and Space pages work here."; procText.style.color = "var(--text-dim)"; return; }
   procText.style.color = procOn ? "var(--text)" : "var(--text-dim)";
-  const name = (m) => m === "space" && p.space ? `${esc(p.space.type)}${p.space.fx ? " (FX, 100 % wet)" : ""}` : MODULE_NAMES[m] || m;
+  const name = (m) => m === "space" && p.space ? `${esc(p.space.type)}${p.space.fx ? " (FX, 100 % wet)" : ""}` : MODULE_NAMES[m] || esc(m);
   procText.innerHTML = p.modules.map((m) => `<span class="lchip${p.running.includes(m) ? " live" : ""}">${name(m)}</span>`).join("")
     + (p.latencyMs > 0 ? `<span style="color:var(--text-dim)">${fmt.num(p.latencyMs, 1)} ms lookahead</span>` : "")
     + (p.space && p.space.duck && p.space.duck.length ? `<span style="color:var(--text-dim)">ducks under ${p.space.duck.map(esc).join(", ")}</span>` : "");
 }
 
 let peakHold = -100, peakTime = 0;
+let daw = "other";   // the DAW this Link runs in (found from the host): its name for the master channel
 function frame(f) {
   mL.set(f.peakL);
   mR.set(f.channels === 1 ? f.peakL : f.peakR);
@@ -154,7 +160,7 @@ function frame(f) {
 
   const st = $("lstatus");
   const [colour, text] = !f.shared ? ["var(--red)", "Can't share data with Mixology on this computer"]
-    : !f.mixology ? ["var(--amber)", "Mixology isn't open. Insert it on the Stereo Out"]
+    : !f.mixology ? ["var(--amber)", `Mixology isn't open. Insert it on the ${say(daw, "master")} channel`]
     : f.paired === "matched" ? ["var(--green)", "Paired: live on Mixology's Tracks page"]
     : f.paired === "ambiguous" ? ["var(--amber)", "Two tracks have this name: rename one so Mixology can pair it"]
     : ["var(--cyan)", "Mixology is open. Pairs when this track is in its Tracks view"];
@@ -164,6 +170,7 @@ function frame(f) {
 async function start() {
   const info = (await native.getLinkInfo()) || {};
   applyTheme(info.theme === "light" ? "light" : "dark");
+  if (info.daw) daw = info.daw;
   if (typeof info.trim === "number") trim.set(info.trim);
   fit();
   window.__JUCE__.backend.addEventListener("linkFrame", frame);
