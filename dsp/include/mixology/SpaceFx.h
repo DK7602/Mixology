@@ -19,27 +19,29 @@
     Framework-free, double precision, allocation only in prepare(). */
 namespace mixology::dsp
 {
-    /** A delay line read at fractional delays (linear interpolation). */
+    /** A delay line read at fractional delays (linear interpolation). reset() is instant: it forgets what was
+        written (it reads as silence) instead of clearing seconds of memory, so the audio thread may call it. */
     class DelayLine
     {
     public:
         void prepare (int maxDelaySamples);
         void reset();
-        void push (double x) { buf[pos & mask] = x; ++pos; }
+        void push (double x) { buf[pos & mask] = x; ++pos; filled += filled <= mask ? 1 : 0; }
         /** The sample written `delay` samples before the latest one (0 = the latest). */
         double read (double delay) const
         {
             const double d = delay < 0.0 ? 0.0 : (delay > maxDelay ? maxDelay : delay);
             const auto whole = static_cast<std::size_t> (d);
             const double frac = d - static_cast<double> (whole);
-            const double a = buf[(pos - 1 - whole) & mask], b = buf[(pos - 2 - whole) & mask];
+            const double a = whole < filled ? buf[(pos - 1 - whole) & mask] : 0.0;
+            const double b = whole + 1 < filled ? buf[(pos - 2 - whole) & mask] : 0.0;
             return a + (b - a) * frac;
         }
         double maxDelaySamples() const { return maxDelay; }
 
     private:
         std::vector<double> buf;
-        std::size_t mask = 0, pos = 0;
+        std::size_t mask = 0, pos = 0, filled = 0;   // filled: samples written since the last reset (up to the size)
         double maxDelay = 0.0;
     };
 

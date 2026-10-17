@@ -60,6 +60,7 @@ namespace mixology::proc
             shifter.prepare (sr);
             resetAll();
         }
+        /** Instant (the delay lines forget what they hold, nothing is cleared), so the audio thread may call it. */
         void resetType (int t)
         {
             switch (static_cast<SpaceType> (t))

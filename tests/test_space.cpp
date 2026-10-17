@@ -63,6 +63,14 @@ namespace
         return c;
     }
 
+    double peak (const std::vector<double>& x, std::size_t from = 0, std::size_t to = 0)
+    {
+        if (to == 0) to = x.size();
+        double p = 0.0;
+        for (std::size_t i = from; i < to; ++i) p = std::max (p, std::abs (x[i]));
+        return p;
+    }
+
     double rmsDb (const std::vector<double>& x, std::size_t from, std::size_t to)
     {
         double s = 0.0;
@@ -263,6 +271,49 @@ TEST_CASE ("Space: switching effects and settings never clicks; off is untouched
     CHECK_FALSE (early.spaceReady());
     const auto passed = play (early, tone);
     CHECK (passed.l == tone);
+}
+
+TEST_CASE ("Space: switched on again, or back to an effect, it starts from silence (nothing cleared on the audio thread)", "[space]")
+{
+    // A delay line forgets what it held on reset (instantly), and fills again from there.
+    dsp::DelayLine line;
+    line.prepare (1000);
+    for (int i = 0; i < 3000; ++i) line.push (1.0);
+    line.reset();
+    bool silent = true;
+    for (double d : { 0.0, 0.5, 1.0, 10.0, 999.0, 1000.0 }) silent = silent && line.read (d) == 0.0;
+    CHECK (silent);
+    line.push (0.5);
+    CHECK (line.read (0.0) == 0.5);
+    CHECK (line.read (0.5) == 0.25);   // half way to the silence before it
+    CHECK (line.read (1.0) == 0.0);
+
+    // A loud Hall tail, then Space off and on again: the new effect starts from silence (no old tail).
+    std::mt19937 rng (13);
+    std::normal_distribution<double> nd (0.0, 0.5);
+    std::vector<double> noise (static_cast<std::size_t> (kSr));
+    for (auto& x : noise) x = nd (rng);
+    auto hall = space (SpaceType::hall, { { hallDecay, 12.0f }, { hallMix, 100.0f } });
+    auto chain = makeChain (hall);
+    play (*chain, noise);
+    auto off = hall;
+    off[spOn] = 0.0f;
+    chain->setValues (off);
+    play (*chain, std::vector<double> (4800, 0.0));   // faded out
+    chain->setValues (hall);
+    const auto again = play (*chain, std::vector<double> (9600, 0.0));
+    CHECK (peak (again.l) == 0.0);
+
+    // Hall -> Reverb -> Hall: the Reverb's 60 ms crossfade carries the old tail away, then the Hall starts afresh.
+    play (*chain, noise);
+    auto plate = hall;
+    plate[spType] = static_cast<float> (SpaceType::reverb);
+    chain->setValues (plate);
+    const auto handover = play (*chain, std::vector<double> (9600, 0.0));
+    CHECK (peak (handover.l, 0, 480) > 0.05);   // the Hall still fading out
+    chain->setValues (hall);
+    const auto back = play (*chain, std::vector<double> (9600, 0.0));
+    CHECK (peak (back.l) < 1.0e-4);   // only the wet EQ's last ringing; the old 12 s tail would still be loud
 }
 
 TEST_CASE ("Space: any settings, any audio: finite and bounded", "[space]")
