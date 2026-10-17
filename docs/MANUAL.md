@@ -225,8 +225,9 @@ Safety rules (always on):
 - Every move names the channel you were looking at. If the bank moved or tracks were reordered or renamed in
   between, the move is refused (in Mixology, and again by the bridge script) instead of landing on another channel.
 - A channel with automation **Write (W)** on is never moved (red **W** on the strip), so no automation gets
-  recorded by accident (Cubase; FL Studio, Live, Logic and Cakewalk don't tell Mixology: keep Mixology's tracks in
-  Read or Off while it moves faders). With **Read (R)** on (green **R**) you get a warning: if that channel has volume
+  recorded by accident (Cubase). FL Studio: no moves while it records. Live: no moves while it records with
+  Automation Arm on. Logic and Cakewalk don't tell Mixology: keep Mixology's tracks in Read or Off while it moves
+  faders. With **Read (R)** on (green **R**) you get a warning: if that channel has volume
   automation, playback moves the fader back.
 - The Stereo Out (FL Studio's Master, Live's Main) is never part of the bank.
 - Two channels with the same name: you can move them on the Tracks page, but Restore, Mixology Link and Auto Mix

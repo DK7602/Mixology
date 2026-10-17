@@ -62,7 +62,11 @@ class Live(object):
             return None
 
     def writing(self, key):
-        return False   # Live arms automation for the whole Set, not per track: nothing to refuse
+        # Live records automation for the whole Set: Automation Arm on while it records (Arrangement or Session).
+        s = self.song()
+        armed = getattr(s, 'session_automation_record', False)
+        recording = getattr(s, 'record_mode', False) or getattr(s, 'session_record', False)
+        return bool(armed and recording and getattr(s, 'is_playing', False))
 
     def set_volume(self, key, n):
         p = self.track(key).mixer_device.volume

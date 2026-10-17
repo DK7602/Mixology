@@ -1,4 +1,5 @@
 # name=Mixology Bridge
+# supportedDevices=Mixology to Cubase
 # Mixology Bridge for FL Studio: lets the Mixology plug-in (Sonicology) read and move FL's mixer faders, pans,
 # mute and solo, the way it does in Cubase.
 #
@@ -23,6 +24,11 @@ try:
     import plugins
 except ImportError:   # older FL Studio: inserts count when renamed
     plugins = None
+
+try:
+    import transport
+except ImportError:
+    transport = None
 
 FIRST_INSERT = 1
 RESCAN_TICKS = 25        # OnIdle runs about every 20 ms: the list of inserts in use again every half second
@@ -117,7 +123,11 @@ class FLStudio(object):
             return None
 
     def writing(self, i):
-        return False   # FL records automation per control, not per track: nothing to refuse
+        # While FL records, a fader Mixology moves could be recorded as automation: Mixology waits.
+        try:
+            return transport is not None and bool(transport.isRecording()) and bool(transport.isPlaying())
+        except Exception:
+            return False
 
     def set_volume(self, i, v):
         v = min(max(v, 0.0), 1.0)

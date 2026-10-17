@@ -133,7 +133,12 @@ class FakeFL(object):
         plugins = types.ModuleType('plugins')
         plugins.isValid = lambda i, slot=-1, useGlobalIndex=False: slot < fl.tracks[i]['fx']
 
-        for m in (mixer, device, midi, plugins):
+        fl.recording = False
+        transport = types.ModuleType('transport')
+        transport.isRecording = lambda: fl.recording
+        transport.isPlaying = lambda: fl.recording
+
+        for m in (mixer, device, midi, plugins, transport):
             sys.modules[m.__name__] = m
 
     def load(self):
@@ -500,7 +505,18 @@ def fl_suite(exe):
         check(not r.cmd_ref('setDb', ref, -9)['ok'], 'renamed: the old strip is refused')
         check(r.state['slots'][2]['title'] == 'Hats Open', 'the new name shows: ' + r.state['slots'][2]['title'])
 
-    return 'FL Studio', make, 2, scen + [('only inserts in use are strips', unused), ('a rename is seen', rename)]
+    def recording(r):
+        r.run(0.5)
+        r.daw.recording = True
+        r.run(0.3)
+        res = r.cmd('setDb', 0, -6)
+        check(not res['ok'] and 'automation' in res.get('message', ''), 'no fader moves while FL records: %s' % res.get('message'))
+        r.daw.recording = False
+        r.run(0.3)
+        check(r.cmd('setDb', 0, -6)['ok'], 'moves again once FL stops recording')
+
+    return 'FL Studio', make, 2, scen + [('only inserts in use are strips', unused), ('a rename is seen', rename),
+                                         ('no moves while FL records', recording)]
 
 
 def live_suite(exe):
@@ -536,7 +552,20 @@ def live_suite(exe):
         r.run(1.5)
         check(near(db(r, 'Hats'), -6, 0.06), 'Hats moved: %.3f' % db(r, 'Hats'))
 
-    return 'Ableton Live', make, 10, scen + [('return tracks are strips too', returns), ('a reordered Set: stale strips refused', reorder)]
+    def automation_arm(r):
+        r.run(0.5)
+        r.daw.song.session_automation_record = True
+        r.daw.song.record_mode = True
+        r.daw.song.is_playing = True
+        r.run(0.5)
+        res = r.cmd('setDb', 0, -6)
+        check(not res['ok'] and 'automation' in res.get('message', ''), 'no fader moves while Live records automation: %s' % res.get('message'))
+        r.daw.song.record_mode = False
+        r.run(0.5)
+        check(r.cmd('setDb', 0, -6)['ok'], 'moves again once Live stops recording')
+
+    return 'Ableton Live', make, 10, scen + [('return tracks are strips too', returns), ('a reordered Set: stale strips refused', reorder),
+                                             ('no moves while Live records automation', automation_arm)]
 
 
 def core_race_checks():
