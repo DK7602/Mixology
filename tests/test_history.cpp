@@ -166,6 +166,10 @@ TEST_CASE ("History: plain words for each change and step", "[history]")
     CHECK (summary (one).find ("'Bass' EQ 1 Gain") == 0);
     CHECK (std::string (pageOf (proc::compThr)) == "Dynamics");
     CHECK (std::string (pageOf (proc::spLevel)) == "Space");
+    CHECK (std::string (pageOf (proc::spxOn)) == "Space");   // Space layers: each effect's own switch
+    Step layer;
+    layer.changes = { control (5, "Adlibs", proc::phaOn, 0, 1) };
+    CHECK (summary (layer) == "'Adlibs' Phaser on");
 }
 
 TEST_CASE ("History: saved with the project and back, the same steps, undone ones too", "[history]")

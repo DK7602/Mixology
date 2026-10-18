@@ -105,3 +105,32 @@ TEST_CASE ("Presets: names are one tidy line of at most 60 characters", "[preset
     const auto longName = cleanName (std::string (59, 'x') + "\xC3\xA9" + "yyy");
     CHECK (longName.size() == 59);   // "é" would be cut in half: left out
 }
+
+TEST_CASE ("Presets with Space layers: saved and loaded with all their effects; an older preset plays its one effect", "[presets][layers]")
+{
+    using proc::SpaceType;
+    auto layered = proc::defaults();   // Phaser + Hall on a synth
+    layered[proc::spOn] = 1.0f;
+    layered[proc::spType] = static_cast<float> (SpaceType::hall);
+    layered[static_cast<std::size_t> (proc::effectOn (SpaceType::phaser))] = 1.0f;
+    layered[static_cast<std::size_t> (proc::effectOn (SpaceType::hall))] = 1.0f;
+    layered[proc::hallMix] = 25.0f;
+    const auto mine = capture ("Phased Hall", Kind::track, "synth", layered);
+    const auto back = parse (serialise ({ mine }));
+    REQUIRE (back.size() == 1);
+    const auto loaded = forTarget (back[0], proc::defaults());
+    CHECK (proc::spaceEffects (loaded) == (proc::bitOf (SpaceType::phaser) | proc::bitOf (SpaceType::hall)));
+    CHECK (loaded[proc::hallMix] == Catch::Approx (25.0f));
+
+    // A preset from before layers (Space on, Space Effect = Room, no switches) loaded on that layered track: Room
+    // alone, nothing of the Phaser + Hall left (every control it doesn't name goes back to its default).
+    const auto old = parse ("Mixology presets 1\n\n[preset]\nname=Old Room\nkind=track\nroles=\nsp_on=1\nsp_type=5\nroom_mix=18\n");
+    REQUIRE (old.size() == 1);
+    CHECK (proc::spaceEffects (forTarget (old[0], layered)) == proc::bitOf (SpaceType::room));
+    for (const auto& p : factory())
+        if (proc::spaceEffects (valuesOf (p)) != 0u)
+        {
+            INFO (p.name);
+            CHECK (proc::effectCount (proc::spaceEffects (valuesOf (p))) == 1);   // Mixology's own: one effect each
+        }
+}
