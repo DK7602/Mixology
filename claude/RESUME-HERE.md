@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-17, v0.21.0)
+# Mixology: resume here (updated 2026-10-18, v0.21.1)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,20 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## v0.21.1: with the Masterology audit (2026-10-18, session "Mixology audit")
+- Released with Masterology 0.29.4 and Voxology 0.52.1. SuiteLink.h (layout stays 4) gains suite::Presence and
+  suite::dawFromHost (from Masterology's shell fixes): Mixology joins the link at prepareToPlay and leaves at
+  releaseResources (an inactive project neither shares nor takes the style / DAW nor publishes the hand-off), syncs
+  again 500 ms after joining; "Found: <DAW>" is a fresh pick (pickDaw); followLiveChoice in setStateInformation (a
+  preset follows the project's style); the DAW also from JUCE's host name. Tests in test_suite.cpp.
+- HAND-OFF checks use Masterology's target / ceiling (peaks under -3 dBTP or 2 dB under its ceiling; flagged when > 3
+  dB louder than its target); a bypassed Mixology publishes no readings (lastAudioMs > 2 s); with two Masterologys the
+  one that hears music is shown; "No Masterology playing" when it's missing or bypassed (Masterology releases its slot
+  after 8 s bypassed).
+- JUCE's index.js served with its private class method renamed (macOS 11 / Safari 14 couldn't parse it: no UI there).
+- daws.js: realtimeExport. Suite workflow: a "Shared files match" job first, auval needs "AU VALIDATION SUCCEEDED",
+  installers delete an old Polisher.vst3 / .component.
 
 ## v0.21.0: suite link 4, with the Voxology audit (2026-10-17, session "Mixology audit")
 - Released together with Voxology 0.52.0 and Masterology 0.29.3 (kLayout 4: older ones don't see these).

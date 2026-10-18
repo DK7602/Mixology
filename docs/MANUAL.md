@@ -3,7 +3,7 @@
 Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list all three are under Sonicology.
 
-Manual for version 0.21.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
+Manual for version 0.21.1 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -635,7 +635,10 @@ other); the Sonicology installer always has matching ones.
   sits against the style, including what Mixology's own Full Mix EQ and Tone Balance add. Masterology shows it and
   can start from the matching genre. The Mixology on your master channel does this (with Mixology on a group too,
   the one on the channel called Stereo Out / Master / Main; when it goes, another takes over).
-- **One song style** for all three (see Mix styles): pick it in any of them, the others follow.
+- **One song style** for all three (see Mix styles): pick it in any of them, the others follow. Only the project that
+  plays takes part: with two projects open, the one that isn't active doesn't change the other's style or DAW, and
+  loading a preset doesn't switch the song's style when the project already has one. Settings > DAW "Found: ..."
+  picks the DAW Mixology found for all three.
 
 The link only works inside one program: Voxology, Mixology and Masterology must run in the same DAW, in the same
 process (they do, unless you mix in one project and master in another; then Masterology simply works on its own as
