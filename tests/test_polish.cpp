@@ -254,7 +254,7 @@ TEST_CASE ("Polish: the lead vocal's reverb on an FX channel (ducking under it),
     const auto p3 = makePlan (Tool::polish, report ({ lead, dbl, adlibs }), chans);
     CHECK (change (p3, "FX 1-Vox Verb", "space") == nullptr);
     CHECK (change (p3, "Lead Vox", "space") == nullptr);
-    CHECK (noted (p3, "has a Space effect already"));
+    CHECK (noted (p3, "has its Space already (reverb)"));   // a project from before layers: its one effect
 }
 
 TEST_CASE ("Polish: a boxy kick gets a dip, a stereo 808's lows go to the middle", "[polish]")
@@ -459,4 +459,68 @@ TEST_CASE ("Analysis: the mix's tone against the style, for Polish and the hand-
     CHECK (t.air == Catch::Approx (-3.0));
     CHECK (t.low == Catch::Approx (2.0));
     CHECK (t.presence == Catch::Approx (0.0));
+}
+
+TEST_CASE ("Polish with Space layers: several effects on a track understood, two spaces get a tip", "[polish][layers]")
+{
+    using proc::SpaceType;
+    const auto on = [] (ChannelNow& c, std::initializer_list<SpaceType> types) {
+        c.proc[proc::spOn] = 1.0f;
+        for (auto t : types) c.proc[static_cast<std::size_t> (proc::effectOn (t))] = 1.0f;
+    };
+    const auto lead = track ("Lead Vox", Role::vox, vocalBands (-14.0, 5.0, 2.0));
+    const auto adlibs = track ("Adlibs", Role::adlibs, vocalBands (-20.0, 5.0, 2.0));
+    const auto keys = track ("Keys", Role::keys, vocalBands (-18.0, 3.0, 0.0));
+
+    // The lead's own Space with Phaser + Hall: named, left alone (and no second reverb on the FX channel). A track
+    // with Hall + Room gets the tip: stacking two spaces can wash the sound out. A single reverb doesn't.
+    auto chans = std::vector<ChannelNow> { link ("Lead Vox"), link ("Adlibs"), link ("Keys", 2), link ("FX 1-Vox Verb", 2) };
+    on (chans[0], { SpaceType::phaser, SpaceType::hall });
+    on (chans[2], { SpaceType::room, SpaceType::hall, SpaceType::chorus });
+    const auto p = makePlan (Tool::polish, report ({ lead, adlibs, keys }), chans);
+    CHECK (noted (p, "'Lead Vox' has its own Space already (phaser + hall): Mixology leaves it."));
+    CHECK (change (p, "Lead Vox", "space") == nullptr);
+    CHECK (change (p, "FX 1-Vox Verb", "space") == nullptr);
+    CHECK (noted (p, "Tip: 'Keys' plays hall + room together: stacking two spaces can wash the sound out"));
+    CHECK_FALSE (noted (p, "Tip: 'Lead Vox'"));
+    const auto autoMix = makePlan (Tool::autoMix, report ({ lead, adlibs, keys }), chans);
+    CHECK (noted (autoMix, "Tip: 'Keys' plays hall + room together"));
+
+    // What Polish proposes plays exactly that effect, whatever switches were left on with Space off.
+    auto fresh = std::vector<ChannelNow> { link ("Lead Vox"), link ("Adlibs"), link ("FX 1-Vox Verb", 2) };
+    on (fresh[2], { SpaceType::chorus, SpaceType::special });
+    fresh[2].proc[proc::spOn] = 0.0f;   // switched off, its switches still set
+    const auto p2 = makePlan (Tool::polish, report ({ lead, adlibs }), fresh);
+    const auto* fx = change (p2, "FX 1-Vox Verb", "space");
+    REQUIRE (fx != nullptr);
+    auto after = fresh[2].proc;
+    for (const auto& [id, v] : fx->proc) after[static_cast<std::size_t> (id)] = v;
+    CHECK (proc::spaceEffects (after) == proc::bitOf (SpaceType::reverb));
+    const auto* ad = change (p2, "Adlibs", "space");
+    REQUIRE (ad != nullptr);
+    CHECK (value (*ad, proc::effectOn (SpaceType::delay)) == 1.0f);
+    CHECK (value (*ad, proc::effectOn (SpaceType::hall)) == 0.0f);
+
+    // Voxology's reverb on the lead: a reverb in the lead's own Space is a second reverb (a Phaser alone isn't) ...
+    auto vox = std::vector<ChannelNow> { link ("Lead Vox"), link ("Adlibs"), link ("FX 1-Vox Verb", 2) };
+    vox[0].voxology.on = vox[0].voxology.reverb = true;
+    on (vox[0], { SpaceType::chorus, SpaceType::reverb });
+    CHECK (noted (makePlan (Tool::polish, report ({ lead, adlibs }), vox), "'Lead Vox' gets reverb from Voxology and from its own Space (reverb)"));
+    vox[0].proc = proc::defaults();
+    // ... and so is a reverb type on the FX channel, but not a Delay alone there.
+    on (vox[2], { SpaceType::delay });
+    vox[2].proc[proc::spRoute] = 1.0f;
+    const auto delayOnly = makePlan (Tool::polish, report ({ lead, adlibs }), vox);
+    CHECK_FALSE (noted (delayOnly, "gets reverb from Voxology and from the FX channel"));
+    CHECK (noted (delayOnly, "has Voxology's reverb"));
+    on (vox[2], { SpaceType::chorus, SpaceType::hall });
+    CHECK (noted (makePlan (Tool::polish, report ({ lead, adlibs }), vox), "gets reverb from Voxology and from the FX channel 'FX 1-Vox Verb' (hall)"));
+
+    // Ad-libs with a Delay in their own Space while Voxology adds its delay: two delays.
+    auto ads = std::vector<ChannelNow> { link ("Lead Vox"), link ("Adlibs") };
+    ads[1].voxology.on = ads[1].voxology.delay = true;
+    on (ads[1], { SpaceType::chorus, SpaceType::delay });
+    const auto p3 = makePlan (Tool::polish, report ({ lead, adlibs }), ads);
+    CHECK (noted (p3, "'Adlibs' gets a delay from Voxology and from its own Space"));
+    CHECK (change (p3, "Adlibs", "space") == nullptr);
 }
