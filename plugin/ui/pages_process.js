@@ -2,7 +2,7 @@
 // Link, Milestone 5); Space on a track or an FX channel (Milestone 5, round 2).
 
 import { el, box, icon, fmt, clamp, Knob, Meter, select, graph, freqToX, xToFreq, moduleList, store, cssVar, wheelSteps } from "./ui.js";
-import { knobFor, eqBand, magnitudeDb, EQ_SHAPES, MODULE_NAMES } from "./proc.js";
+import { knobFor, eqBand, magnitudeDb, EQ_SHAPES, MODULE_NAMES, SPACE_ON, MAX_SPACE_EFFECTS, spaceLayers } from "./proc.js";
 import { createScene } from "./space_scene.js";
 import { dawName, say } from "./daws.js";
 import { guessRole } from "./roles.js";
@@ -508,10 +508,11 @@ export function buildDynamics(root, app) {
 }
 
 // =============================================================================================
-// SPACE (Milestone 5, round 2): one effect per track. Pick it on the left (its picture moves with the beat
-// while the effect is in use), set it with the knobs below, how it's used (on the track, or 100 % wet on an
-// FX channel), its EQ, and what it ducks under (the vocal) on the right. Space works on tracks (their
-// Mixology Link) and FX channels, never on the Full Mix.
+// SPACE (Milestone 5, round 2; layers): up to three effects per track. Pick one on the left (its picture moves
+// with the beat while the effect is in use) and press ON to add it (ON on a lit one switches only that one off),
+// set it with the knobs below, how they're used (on the track, or 100 % wet on an FX channel), their EQ, and
+// what they duck under (the vocal) on the right. Space works on tracks (their Mixology Link) and FX channels,
+// never on the Full Mix.
 
 const DELAY_NOTES = ["1/32", "1/16", "1/8T", "1/8", "1/8D", "1/4T", "1/4", "1/4D", "1/2"];
 const DELAY_BEATS = [0.125, 0.25, 1 / 3, 0.5, 0.75, 2 / 3, 1, 1.5, 2];   // the engine's kDelayBeats
@@ -567,22 +568,41 @@ export function buildSpace(root, app) {
   // ---- what the target does now ----------------------------------------------------------------
   const onTrack = () => proc.key !== "mix" && proc.ok;
   const spaceOn = () => proc.switchedOn("space");
-  const usedType = () => SPACE[clamp(Math.round(proc.get("sp_type")), 0, SPACE.length - 1)].id;
-  const inUseHere = (id) => onTrack() && spaceOn() && usedType() === id;
+  // The effects it plays (ids, in the order they run): the engine's rule (procspec.js spaceLayers): each effect's
+  // own switch, at most 3; none switched on (a project from before layers) = Space Effect's alone.
+  const layered = () => spaceLayers(proc.get).map((t) => SPACE[t].id);
+  const used = () => (spaceOn() ? layered() : []);
+  const usedType = () => SPACE[clamp(Math.round(proc.get("sp_type")), 0, SPACE.length - 1)].id;   // the newest one
+  const inUseHere = (id) => onTrack() && used().includes(id);
   const fxRoute = () => proc.get("sp_route") > 0.5;
   const target = () => proc.targets.find((t) => t.key === proc.key);
-  const usedElsewhere = (id) => proc.targets.filter((t) => t.key !== "mix" && t.key !== proc.key && (t.on || []).includes("space") && SPACE[t.spaceType] && SPACE[t.spaceType].id === id);
+  const typesOf = (t) => (t.spaceTypes || [t.spaceType]).map((k) => SPACE[k] && SPACE[k].id);
+  const usedElsewhere = (id) => proc.targets.filter((t) => t.key !== "mix" && t.key !== proc.key && (t.on || []).includes("space") && typesOf(t).includes(id));
+  const label = (id) => SPACE[typeIndex(id)].label.toLowerCase();
+  const names = (ids) => (ids.length > 1 ? ids.slice(0, -1).map(label).join(", ") + " and " + label(ids[ids.length - 1]) : ids.map(label).join(""));
+  const REVERB_TYPES = ["reverb", "hall", "room", "special"];   // the engine's isReverbType: two of them can wash it out
+  const stacked = () => used().filter((id) => REVERB_TYPES.includes(id));
+  const FULL = `Up to ${MAX_SPACE_EFFECTS} effects at once: switch one off first`;
+
+  /** What makes exactly these effects play: every effect's switch, Space on when any, Space Effect = the newest. */
+  function layersTo(ids, newest) {
+    const changes = { sp_on: ids.length ? 1 : 0 };
+    SPACE.forEach((s, t) => { changes[SPACE_ON[t]] = ids.includes(s.id) ? 1 : 0; });
+    if (newest && ids.includes(newest)) changes.sp_type = typeIndex(newest);
+    else if (ids.length && !ids.includes(usedType())) changes.sp_type = typeIndex(ids[0]);
+    return changes;
+  }
 
   // Space works on a track or an FX channel: with Full Mix picked, a move says so (and the control goes back).
   const needTrack = () => { if (onTrack()) return false; app.toast("Pick a track or an FX channel first (top right)"); return true; };
 
-  /** Your move on this effect. Space off: it switches on with this effect (an FX channel's name sets it to 100 % wet). */
+  /** Your move on this effect. Space off: it switches on with this effect alone (an FX channel's name sets it to
+      100 % wet). Space on with other effects: only this effect's knobs move (press ON to add it). */
   let routeNote = "";
   function apply(changes) {
     if (needTrack()) { sync(); return false; }
     if (!spaceOn()) {
-      changes.sp_on = 1;
-      changes.sp_type = typeIndex(view);
+      Object.assign(changes, layersTo([view], view));
       if (proc.get("sp_route") < 0.5 && looksLikeFxChannel(proc.name)) {
         changes.sp_route = 1;
         routeNote = `Set to FX channel (100 % wet): '${proc.name}' looks like an FX channel. Change it above if it isn't.`;
@@ -598,11 +618,15 @@ export function buildSpace(root, app) {
   const power = el("button", "power-btn", centre, { left: "200px", top: "20px" });
   power.innerHTML = icon("power", 'stroke-width="2.6"');
   const powerLabel = el("span", "", power);
+  // ON adds this effect to the ones playing (up to 3); on a lit one it switches only that one off (the last one:
+  // Space off).
   power.addEventListener("click", () => {
     if (needTrack()) return;
-    if (inUseHere(view)) proc.setMany({ sp_on: 0 });
-    else if (spaceOn()) proc.setMany({ sp_type: typeIndex(view) });   // this effect instead of the other one
-    else apply({});
+    const now = used();
+    if (now.includes(view)) proc.setMany(layersTo(now.filter((id) => id !== view)));
+    else if (!spaceOn()) apply({});
+    else if (now.length >= MAX_SPACE_EFFECTS) app.toast(FULL);
+    else proc.setMany(layersTo(now.concat([view]), view));
     sync();
   });
   proc.targetSelect(centre, 318, 16, 210, { tracksOnly: true, placeholder: "Pick a track" });
@@ -789,8 +813,11 @@ export function buildSpace(root, app) {
     powerLabel.textContent = here ? "ON" : "OFF";
     power.classList.toggle("on", here);
     power.style.opacity = onTrack() ? "1" : "0.45";
-    power.title = !onTrack() ? "Pick a track or an FX channel first" : here ? `Switch ${d.label.toLowerCase()} off on ${proc.name}`
-      : spaceOn() ? `Use ${d.label.toLowerCase()} on ${proc.name} instead of ${usedType()}` : `Switch ${d.label.toLowerCase()} on for ${proc.name}`;
+    const now = used();
+    power.title = !onTrack() ? "Pick a track or an FX channel first"
+      : here ? `Switch ${label(d.id)} off on ${proc.name}` + (now.length > 1 ? ` (${names(now.filter((id) => id !== d.id))} ${now.length > 2 ? "play" : "plays"} on)` : "")
+      : !spaceOn() ? `Switch ${label(d.id)} on for ${proc.name}`
+      : now.length >= MAX_SPACE_EFFECTS ? FULL : `Add ${label(d.id)} to ${names(now)} on ${proc.name}`;
     if (renderedFx !== fxRoute()) renderKnobs();
     knobs.forEach((k) => { const v = proc.get(k.o.pid); if (!k.dragging && Math.abs(k.value - v) > 1e-3) k.set(v); });
     const mode = Math.round(proc.get("spx_mode"));
@@ -805,18 +832,21 @@ export function buildSpace(root, app) {
     syncNote();
     syncDuck();
   }
-  // The lamps: the effect this track uses (green), pulsing while it plays.
+  // The lamps: every effect this track uses (green), pulsing while they play.
   const lamps = () => list.lamps((id) => inUseHere(id), (id) => inUseHere(id) && proc.running("space"));
   let bpmNow = 0;
   function syncNote() {
     const d = def();
     let text = routeNote;
+    const spaces = stacked();
+    if (!text && spaces.length > 1 && spaces.includes(d.id))
+      text = `Tip: ${names(spaces)} together: stacking ${spaces.length > 2 ? "three" : "two"} spaces can wash the sound out. One is usually enough.`;
     if (!text && d.id === "delay") {
       const bpm = bpmNow > 0 ? bpmNow : 120;
       const ms = DELAY_BEATS[Math.round(proc.get("dly_time"))] * 60000 / bpm;
       text = `${DELAY_NOTES[Math.round(proc.get("dly_time"))]} = ${Math.round(ms)} ms at ${Math.round(bpm)} BPM${bpmNow > 0 ? "" : ` (play the song: it follows ${dawName(app.daw)}'s tempo)`}`;
     } else if (!text && d.id === "special") text = MODE_HELP[d.modes[Math.round(proc.get("spx_mode"))]];
-    if (!text) text = fxRoute() ? `FX channel: LEVEL is how loud the effect comes back. Send the tracks to it in ${dawName(app.daw)} (${say(app.daw, "sendHow")}).` : "MIX: how much of the effect is blended into the track.";
+    if (!text) text = fxRoute() ? `FX channel: LEVEL is how loud ${used().length > 1 ? "its effects come" : "the effect comes"} back. Send the tracks to it in ${dawName(app.daw)} (${say(app.daw, "sendHow")}).` : "MIX: how much of the effect is blended into the track.";
     note.textContent = text;
   }
   function syncDuck() {
@@ -838,9 +868,11 @@ export function buildSpace(root, app) {
     else if (elsewhere.some((t) => (t.running || []).includes("space"))) level = 0.7;
     picture.setActive(level);
     const where = elsewhere.length ? ` · in use on ${elsewhere.map((t) => t.name).slice(0, 3).join(", ")}${elsewhere.length > 3 ? "…" : ""}` : "";
+    const now = used(), others = now.filter((id) => id !== d.id);
     badge.textContent = !onTrack() ? "Space works on one track or an FX channel: pick it top right"
       : here ? `In use on ${proc.name}` + (fxRoute() ? ` · FX channel, level ${fmt.db(proc.get("sp_level"))}` : ` · MIX ${Math.round(proc.get(d.knobs[4][0]))} %`)
-      : spaceOn() ? `${proc.name} uses ${SPACE[typeIndex(usedType())].label.toLowerCase()} · press ON to use ${d.label.toLowerCase()} instead` + where
+        + (others.length ? ` · with ${names(others)}` : "")
+      : spaceOn() ? `${proc.name} uses ${names(now)} · ` + (now.length >= MAX_SPACE_EFFECTS ? `${MAX_SPACE_EFFECTS} at once: switch one off to add ${label(d.id)}` : `press ON to add ${label(d.id)}`) + where
       : `Off on ${proc.name} · press ON or turn a knob to use it` + where;
   }
 
@@ -855,9 +887,10 @@ export function buildSpace(root, app) {
     onShow() { picture.show(true); followTarget = true; sync(); },
     onHide() { picture.show(false); },
     onFrame(f) {
-      if (followTarget && proc.loadedKey === proc.key) {   // a track just picked: show the effect it uses
+      if (followTarget && proc.loadedKey === proc.key) {   // a track just picked: show the effect it uses (the newest)
         followTarget = false;
-        if (onTrack() && spaceOn() && usedType() !== view) show(usedType());
+        const now = used();
+        if (onTrack() && now.length && !now.includes(view)) show(now.includes(usedType()) ? usedType() : now[0]);
       }
       if (f.beat) bpmNow = f.beat.playing ? f.beat.bpm || 0 : bpmNow;
       picture.onFrame(f);

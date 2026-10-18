@@ -1185,6 +1185,31 @@ namespace mixology::mix
             return -5.0;
         }
 
+        /** The Space effects a channel's Link plays now (bit per proc::SpaceType; Space layers: up to three). */
+        std::uint32_t spaceNow (const ChannelNow& c) { return c.hasProc ? proc::spaceEffects (c.proc) : 0u; }
+        std::uint32_t reverbsOf (std::uint32_t bits)
+        {
+            std::uint32_t out = 0;
+            for (auto t : proc::kSpaceOrder)
+                if ((bits & proc::bitOf (t)) != 0 && proc::isReverbType (t)) out |= proc::bitOf (t);
+            return out;
+        }
+        std::string lowerNames (std::uint32_t bits)
+        {
+            auto s = proc::effectNames (bits, " + ");
+            for (auto& ch : s) ch = static_cast<char> (std::tolower (static_cast<unsigned char> (ch)));
+            return s;
+        }
+        /** A Space change that makes exactly this effect play there (every effect's switch set: nothing switched on
+            before comes back with it), plus its settings. */
+        std::vector<std::pair<int, float>> spaceAlone (proc::SpaceType t, std::vector<std::pair<int, float>> more)
+        {
+            std::vector<std::pair<int, float>> out;
+            for (const auto& c : proc::spaceControls (proc::bitOf (t), t)) out.push_back (c);
+            out.insert (out.end(), more.begin(), more.end());
+            return out;
+        }
+
         const TrackReport* reportOf (const Report& r, std::uint32_t hash)
         {
             for (const auto& t : r.tracks)
@@ -1299,7 +1324,7 @@ namespace mixology::mix
                 if (pn.explicitPair || pn.order != 0) continue;
                 if (lead == nullptr || t.loudness + 10.0 * std::log10 (std::max (0.01, t.activity)) > lead->loudness + 10.0 * std::log10 (std::max (0.01, lead->activity))) lead = &t;
             }
-            auto spaceOn = [] (const ChannelNow& c) { return c.hasProc && pv (c.proc, proc::chainOn) > 0.5f && pv (c.proc, proc::spOn) > 0.5f; };
+            auto spaceOn = [] (const ChannelNow& c) { return spaceNow (c) != 0; };
             if (lead != nullptr)
             {
                 const auto* leadCh = look.of (*lead);
@@ -1311,11 +1336,16 @@ namespace mixology::mix
                 const double under = reverbUnderVocal (r.style.key);
                 const bool leadHeard = counts (*lead);
                 const bool voxReverb = leadCh != nullptr && leadCh->voxology.on && leadCh->voxology.reverb;
-                if (leadCh != nullptr && spaceOn (*leadCh))
-                    plan.notes.push_back (quoted (lead->name) + " has its own Space effect already: Mixology leaves it.");
-                else if (voxReverb && busy != nullptr)
+                const auto leadSpace = leadCh != nullptr ? spaceNow (*leadCh) : 0u;
+                const auto busyReverbs = busy != nullptr ? reverbsOf (spaceNow (*busy)) : 0u;
+                if (leadSpace != 0 && voxReverb && reverbsOf (leadSpace) != 0)
+                    plan.notes.push_back (quoted (lead->name) + " gets reverb from Voxology and from its own Space (" + lowerNames (reverbsOf (leadSpace))
+                                          + "): one space is usually enough. Switch one of them off.");
+                else if (leadSpace != 0)
+                    plan.notes.push_back (quoted (lead->name) + " has its own Space already (" + lowerNames (leadSpace) + "): Mixology leaves it.");
+                else if (voxReverb && busyReverbs != 0)
                     plan.notes.push_back (quoted (lead->name) + " gets reverb from Voxology and from the FX channel " + quoted (busy->name)
-                                          + ": one space is usually enough. Switch one of them off.");
+                                          + " (" + lowerNames (busyReverbs) + "): one space is usually enough. Switch one of them off.");
                 else if (voxReverb)
                     plan.notes.push_back (quoted (lead->name) + " has Voxology's reverb: Mixology adds no second reverb.");
                 else if (busy != nullptr)
@@ -1345,10 +1375,12 @@ namespace mixology::mix
                             ++spaces;
                         }
                         else
-                            plan.notes.push_back ("The FX channel " + quoted (busy->name) + " has a Space effect already, at a good level under the vocal: Mixology leaves it.");
+                            plan.notes.push_back ("The FX channel " + quoted (busy->name) + " has its Space already (" + lowerNames (spaceNow (*busy))
+                                                  + "), at a good level under the vocal: Mixology leaves it.");
                     }
                     else
-                        plan.notes.push_back ("The FX channel " + quoted (busy->name) + " has a Space effect already: Mixology leaves your effects alone.");
+                        plan.notes.push_back ("The FX channel " + quoted (busy->name) + " has its Space already (" + lowerNames (spaceNow (*busy))
+                                              + "): Mixology leaves your effects alone.");
                 }
                 else if (! fx.empty())
                 {
@@ -1361,8 +1393,8 @@ namespace mixology::mix
                     c.name = target->name;
                     c.role = Role::fx;
                     c.kind = "space";
-                    c.proc = { { proc::spOn, 1.0f }, { proc::spType, static_cast<float> (snd.type) }, { proc::spRoute, 1.0f },
-                               { proc::spLowCut, 200.0f }, { proc::spHighCut, 9000.0f }, { proc::duckAmount, 6.0f } };
+                    c.proc = spaceAlone (static_cast<proc::SpaceType> (snd.type),
+                                         { { proc::spRoute, 1.0f }, { proc::spLowCut, 200.0f }, { proc::spHighCut, 9000.0f }, { proc::duckAmount, 6.0f } });
                     c.proc.insert (c.proc.end(), snd.params.begin(), snd.params.end());
                     c.setDuck = true;
                     c.duck = { lead->hash };
@@ -1391,8 +1423,7 @@ namespace mixology::mix
                     c.name = lead->name;
                     c.role = lead->role;
                     c.kind = "space";
-                    c.proc = { { proc::spOn, 1.0f }, { proc::spType, static_cast<float> (snd.type) }, { proc::spRoute, 0.0f },
-                               { proc::spLowCut, 200.0f }, { proc::spHighCut, 9000.0f } };
+                    c.proc = spaceAlone (static_cast<proc::SpaceType> (snd.type), { { proc::spRoute, 0.0f }, { proc::spLowCut, 200.0f }, { proc::spHighCut, 9000.0f } });
                     c.proc.insert (c.proc.end(), snd.params.begin(), snd.params.end());
                     c.fromText = "Dry";
                     c.toText = snd.type == static_cast<int> (proc::SpaceType::hall) ? "Hall, mix 10 %" : "Vocal Plate, mix 12 %";
@@ -1411,7 +1442,14 @@ namespace mixology::mix
             {
                 if (! urban || ! counts (t) || t.role != Role::adlibs || adlibDelays >= 3) continue;
                 const auto* ch = procChannel (t, look, plan, "its delay");
-                if (ch == nullptr || spaceOn (*ch)) continue;
+                if (ch == nullptr) continue;
+                if (spaceOn (*ch))
+                {
+                    // Its own Space already (yours): left alone. A delay there too while Voxology adds one: two delays.
+                    if (ch->voxology.on && ch->voxology.delay && (spaceNow (*ch) & proc::bitOf (proc::SpaceType::delay)) != 0)
+                        plan.notes.push_back (quoted (t.name) + " gets a delay from Voxology and from its own Space: one is usually enough. Switch one of them off.");
+                    continue;
+                }
                 if (ch->voxology.on && ch->voxology.delay)
                 {
                     plan.notes.push_back (quoted (t.name) + " has Voxology's delay already: Mixology adds no second one.");
@@ -1422,15 +1460,29 @@ namespace mixology::mix
                 c.name = t.name;
                 c.role = t.role;
                 c.kind = "space";
-                c.proc = { { proc::spOn, 1.0f }, { proc::spType, static_cast<float> (proc::SpaceType::delay) }, { proc::spRoute, 0.0f },
-                           { proc::spLowCut, 300.0f }, { proc::spHighCut, 8000.0f }, { proc::dlyTime, 3.0f }, { proc::dlyFeedback, 30.0f },
-                           { proc::dlyTone, 5000.0f }, { proc::dlyPingPong, 100.0f }, { proc::dlyMix, 15.0f } };
+                c.proc = spaceAlone (proc::SpaceType::delay, { { proc::spRoute, 0.0f }, { proc::spLowCut, 300.0f }, { proc::spHighCut, 8000.0f },
+                                                               { proc::dlyTime, 3.0f }, { proc::dlyFeedback, 30.0f }, { proc::dlyTone, 5000.0f },
+                                                               { proc::dlyPingPong, 100.0f }, { proc::dlyMix, 15.0f } });
                 c.fromText = "Dry";
                 c.toText = "Ping-pong 1/8, mix 15 %";
                 c.why = "ad-libs that echo left and right on the beat fill the gaps around the lead without covering it";
                 plan.changes.push_back (c);
                 ++spaces;
                 ++adlibDelays;
+            }
+
+            // ---- Space layers: two reverb types on one track (Reverb, Hall, Room, Special FX) can wash it out
+            {
+                int shown = 0, more = 0;
+                for (const auto& ch : channels)
+                {
+                    const auto rv = reverbsOf (spaceNow (ch));
+                    if (! ch.hasLink || ch.sharedName || proc::effectCount (rv) < 2) continue;
+                    if (shown++ >= 3) { ++more; continue; }
+                    plan.notes.push_back ("Tip: " + quoted (ch.name) + " plays " + lowerNames (rv) + " together: stacking "
+                                          + (proc::effectCount (rv) > 2 ? "three" : "two") + " spaces can wash the sound out. One is usually enough.");
+                }
+                if (more > 0) plan.notes.push_back (std::to_string (more) + (more == 1 ? " more track stacks" : " more tracks stack") + " spaces the same way.");
             }
 
             // ---- the Full Mix's tone against the style (Tone Balance on Mixology itself)

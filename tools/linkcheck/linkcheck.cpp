@@ -460,6 +460,63 @@ int main (int argc, char** argv)
         registry.requestProc (bSlot, bGen, spOn, 0.0f);
         pump (300);
         check (sameTail (*bass) && sameTail (*kick), "Space off: the same tail");
+
+        // Space layers: Chorus and Hall on the Kick's Link at once (the Hall rings on after the sound), then a state
+        // saved before layers (no effect switched on, Space Effect = Room) loaded on that same Link: Room alone again,
+        // nothing of the layers left (the host parameters a state doesn't name go back to their defaults).
+        registry.requestProc (kSlot, kGen, spOn, 1.0f);
+        registry.requestProc (kSlot, kGen, effectOn (SpaceType::chorus), 1.0f);
+        registry.requestProc (kSlot, kGen, effectOn (SpaceType::hall), 1.0f);
+        registry.requestProc (kSlot, kGen, hallMix, 60.0f);
+        pump (300);
+        Values kv {};
+        const bool layersRead = registry.readProc (kSlot, kGen, kv);
+        check (layersRead && spaceEffects (kv) == (bitOf (SpaceType::chorus) | bitOf (SpaceType::hall)),
+               "Space layers: Chorus + Hall on one Link (" + juce::String (effectNames (spaceEffects (kv)).c_str()) + ")");
+        play (*kick, sr, block, 0.5, 0.5f);
+        float hallTail = 0.0f;
+        for (int b2 = 0; b2 < static_cast<int> (0.3 * sr / block); ++b2)
+        {
+            silence.clear();
+            kick->processBlock (silence, midi);
+            if (b2 > 10) hallTail = std::max (hallTail, silence.getMagnitude (0, 0, block));
+        }
+        check (hallTail > 1.0e-3f, "... the Hall rings on after the sound stops (" + juce::String (juce::Decibels::gainToDecibels (hallTail), 1) + " dBFS)");
+        // The host's copy of a VST3's state wraps the plug-in's own (its parameters as XML) in base64 ("IComponent").
+        juce::MemoryBlock layered;
+        kick->getStateInformation (layered);
+        bool edited = false;
+        if (auto host = juce::AudioProcessor::getXmlFromBinary (layered.getData(), static_cast<int> (layered.getSize())))
+            if (auto* component = host->getChildByName ("IComponent"))
+            {
+                juce::MemoryBlock inner;
+                if (inner.fromBase64Encoding (component->getAllSubText()))
+                    if (auto xml = juce::AudioProcessor::getXmlFromBinary (inner.getData(), static_cast<int> (inner.getSize())))
+                    {
+                        for (int i = xml->getNumChildElements(); --i >= 0;)
+                            if (auto* e = xml->getChildElement (i); e != nullptr && indexOf (e->getStringAttribute ("id").toStdString()) >= revOn)
+                                xml->removeChildElement (e, true);
+                        for (auto* e : xml->getChildIterator())
+                            if (e->getStringAttribute ("id") == "sp_type") { e->setAttribute ("value", static_cast<int> (SpaceType::room)); edited = true; }
+                        juce::MemoryBlock old;
+                        juce::AudioProcessor::copyXmlToBinary (*xml, old);
+                        component->deleteAllTextElements();
+                        component->addTextElement (old.toBase64Encoding());
+                        juce::MemoryBlock oldHost;
+                        juce::AudioProcessor::copyXmlToBinary (*host, oldHost);
+                        kick->setStateInformation (oldHost.getData(), static_cast<int> (oldHost.getSize()));
+                    }
+            }
+        check (edited, "... a state without the layers' switches made from it");
+        pump (300);
+        bool switchesOff = registry.readProc (kSlot, kGen, kv);
+        for (int t = 0; t < kSpaceTypes; ++t) switchesOff = switchesOff && kv[static_cast<std::size_t> (revOn + t)] < 0.5f;
+        juce::String got;
+        for (int t = 0; t < kSpaceTypes; ++t) got << kv[static_cast<std::size_t> (revOn + t)];
+        check (switchesOff && spaceEffects (kv) == bitOf (SpaceType::room), "a project from before layers loaded on it plays its one effect (Room: "
+               + juce::String (effectNames (spaceEffects (kv)).c_str()) + ", switches " + got + ", Space Effect " + juce::String (kv[spType]) + ")");
+        registry.requestProc (kSlot, kGen, spOn, 0.0f);
+        pump (300);
     }
 
     // A renamed track is seen under its new name.

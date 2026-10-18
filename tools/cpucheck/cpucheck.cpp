@@ -2,7 +2,8 @@
 // real "Mixology.vst3" on the Stereo Out, plays music-like audio through them and measures:
 //   - the audio thread: the time each block takes for all the Links plus Mixology, against the block's length
 //     (mean and the worst 0.1 %), in three setups: everything off (as inserted), typical after Auto Mix (EQ and a
-//     compressor on every track, a reverb on two FX tracks), and everything on (every module of every Link);
+//     compressor on every track, a reverb on two FX tracks), and everything on (every module of every Link); with
+//     --modules also each module alone, and Space with two or three effects at once (Space layers);
 //   - the rest: the Links' analysis thread and their timers (the message thread), while the audio plays in real time.
 // Usage: MixologyCpuCheck <Mixology Link.vst3> <Mixology.vst3> [tracks = 48] [block = 256] [--strict]
 // Prints a table; with --strict it fails when a budget below is exceeded (CI runs it so).
@@ -344,6 +345,21 @@ int main (int argc, char** argv)
             allLinks (s, [&] (juce::AudioPluginInstance& p, std::size_t) { for (const char* m : modules) setOrFail (p, m, std::string (m) == only ? 1.0f : 0.0f); });
             const auto r = measureAudio (s, 3.0);
             std::printf ("  %-14s %6.2f %% per Link\n", only, r.perLinkPct - off.perLinkPct);
+        }
+
+        // Space layers: two or three effects at once on every Link ("Space" above is one: the plate).
+        std::printf ("\nSpace layers on every Link (cost per Link, on top of 'off'):\n");
+        struct Layers { const char* name; std::vector<juce::String> on; };
+        for (const auto& l : { Layers { "Phaser + Hall", { "Phaser", "Hall" } }, Layers { "Chorus + Delay + Hall", { "Chorus", "Delay", "Hall" } },
+                               Layers { "Hall + Room + Special FX", { "Hall", "Room", "Special FX" } } })
+        {
+            allLinks (s, [&] (juce::AudioPluginInstance& p, std::size_t) {
+                for (const char* m : modules) setOrFail (p, m, std::string (m) == "Space" ? 1.0f : 0.0f);
+                for (const char* e : { "Reverb", "Delay", "Chorus", "Phaser", "Hall", "Room", "Special FX" })
+                    setOrFail (p, e, std::find (l.on.begin(), l.on.end(), juce::String (e)) != l.on.end() ? 1.0f : 0.0f);
+            });
+            const auto r = measureAudio (s, 3.0);
+            std::printf ("  %-26s %6.2f %% per Link (worst block %.1f %% for all)\n", l.name, r.perLinkPct - off.perLinkPct, r.worstPct);
         }
     }
 

@@ -28,8 +28,8 @@
     - Processing (Milestone 5): Gate, EQ, Dynamics, Tone and Stereo after the Assist EQ (mixology::proc::Chain),
       controlled from Mixology's pages through the registry, every control a host parameter. All modules
       start off (audio untouched, bit for bit).
-    - Space (Milestone 5, round 2): reverbs, delay, chorus, phaser and special effects at the end of the chain,
-      on the track itself or (on an FX channel) 100 % wet. The effect can duck under other tracks (the vocal):
+    - Space (Milestone 5, round 2): reverbs, delay, chorus, phaser and special effects (up to three at once: Space
+      layers) at the end of the chain, on the track itself or (on an FX channel) 100 % wet. They can duck under other tracks (the vocal):
       every Link publishes its track's level each block, and a Link told to duck reads those tracks' levels.
       The host is always told about a long tail (a minute), so it never cuts a reverb off, however late Space goes on.
     No latency, except while the Limiter is on (its lookahead; the host is told). */

@@ -40,7 +40,7 @@ fix):
 | Auto Mix, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match | Live |
 | EQ, Dynamics, Tone, Stereo pages: processing on the track you pick (in its Mixology Link) or on the full mix | Live |
 | Mono Check (Stereo page) | Live |
-| Space page: reverbs, delay, chorus, phaser, special effects on a track or an FX channel, ducking | Live |
+| Space page: reverbs, delay, chorus, phaser, special effects on a track or an FX channel (up to three at once), ducking | Live |
 | Polish (and Auto Mix): EQ, compression, vocal reverb / delay and the mix's tone proposed for you | Live |
 | Master page's finishing knobs (Glue, Tilt, Width, Trim on the Full Mix) | Live |
 | Suite link: Voxology on your vocals (VOX tag, no second compressor / reverb / delay), Masterology's goal on the Master page, the hand-off to Masterology | Live (needs Voxology 0.52 and Masterology 0.29.3 or newer) |
@@ -98,9 +98,9 @@ Mixology remembers your choice.
 - **EQ**: six bands on the track you pick (or the full mix). Drag a point to change frequency and gain; scroll on
   it to change the width (Q); double-click it to make that band flat again.
 - **Dynamics**: Compressor, Multiband, Transient, Gate / Expand, Limiter, with in / out meters and gain reduction.
-- **Space**: Reverb, Delay, Chorus, Phaser, Hall, Room, Special FX on a track or an FX channel, each with its
-  own controls, plus the effect's EQ and Ducking (the effect gets quieter while the vocal sings). See "Space"
-  below. While an effect is in use and the song plays, its picture comes alive with the beat (Cubase's tempo):
+- **Space**: Reverb, Delay, Chorus, Phaser, Hall, Room, Special FX on a track or an FX channel (up to three at
+  once), each with its own controls, plus the effects' EQ and Ducking (they get quieter while the vocal sings). See
+  "Space" below. While an effect is in use and the song plays, its picture comes alive with the beat (Cubase's tempo):
   lights bloom and fade with the reverb's Decay, echoes run down the delay's tunnel at its Time, the phaser's
   rings swirl at its Rate, a wave of light rolls through the hall, the Special FX crystal turns on every beat with
   shock waves and sparks. An effect nobody uses stands still.
@@ -383,8 +383,9 @@ dip outside 1.6 - 4 kHz (e.g. at 5 kHz, from Mixology before 0.16) doesn't count
     goes in and allows for it. If a reverb on an FX channel is already there, Polish checks its level and offers to
     turn it down (or up) when it's more than 3 dB off. When the vocal needs no EQ, the list says why ("already
     sounds balanced"). Without one, a little plate on the vocal itself (12 %). Hip hop, trap, R&B: a short plate;
-    gospel, worship, cinematic: a hall. Ad-libs get a ping-pong delay (in the urban and pop styles). An effect you
-    set up yourself is left alone.
+    gospel, worship, cinematic: a hall. Ad-libs get a ping-pong delay (in the urban and pop styles). Effects you
+    set up yourself are left alone (the notes name them, all of a track's layers), and a track playing two reverb
+    types at once gets a tip: stacking two spaces can wash the sound out.
   - **The mix's tone**: when the whole mix is clearly short of (or has too much) low end, presence or air against
     your style, a gentle Tone Balance on the Full Mix.
   Apply and open it again: it finds nothing more to do. Undo puts every setting back.
@@ -466,28 +467,58 @@ CPU: a module that's off costs nothing. An EQ and a compressor on a track cost a
 
 ## Space (reverb, delay and effects)
 
-Space gives a track (or an FX channel) one effect: **Reverb** (a plate), **Delay**, **Chorus**, **Phaser**,
-**Hall**, **Room** or **Special FX**. It runs inside that track's Mixology Link, at the end of its processing.
+Space gives a track (or an FX channel) up to **three effects at once**: **Reverb** (a plate), **Delay**,
+**Chorus**, **Phaser**, **Hall**, **Room** and **Special FX**. It runs inside that track's Mixology Link, at the end
+of its processing.
 
 1. Top of the Space page: pick the **track** (Space never works on the Full Mix: a reverb on everything washes
    the mix out).
-2. Pick the effect on the left and press **ON** (or turn one of its knobs, or pick a preset). One effect per
-   track: press ON on another effect and it takes over (the old one fades out, no click). The green lamp on the
-   left shows the effect this track uses. Each effect keeps its own knob settings.
-3. **USED AS**:
-   - **On this track**: **MIX** blends the effect into the track. Good for a touch of room or chorus on one sound.
-   - **FX channel (100 % wet)**: only the effect comes out, and **MIX** becomes **LEVEL**: how loud the effect
-     comes back (how much of each track goes in is its Send in Cubase). This is how pros do vocal reverb and delay: in
-     Cubase, add an **FX channel** (Project > Add Track > Effect, or any FX channel you have), put **Mixology Link**
-     on it, pick it here, and send your vocals to it with their **Sends** in the MixConsole. One reverb for all
-     the vocals sounds like one room. A track whose name looks like an FX channel ("FX 1-...", "Verb", "Delay",
-     "Return") is set to FX channel by itself the first time you switch Space on (not one whose name says it plays
-     something, like "Space Pad").
-4. **EFFECT EQ** (right): the effect's low cut and high cut (200 Hz and 9 kHz to start: a reverb without boomy
-   lows or hissy highs sits better). Double-click: back to the start.
-5. **DUCKING**: pick the track(s) to duck under (usually your lead vocal, or All vocals) and the **AMOUNT**. The
-   effect dips while they play and blooms in the gaps, so the vocal stays clear. The bar shows how much it is
-   ducked right now. The tracks it ducks under need Mixology Link (each Link tells the others how loud its track is).
+2. Pick the effect on the left and press **ON** (or turn one of its knobs, or pick a preset).
+3. **Layers**: pick another effect and press **ON** to add it. Up to three play together (try a fourth and Mixology
+   says "Up to 3 effects at once: switch one off first"). **ON** on a lit effect switches only that one off (the
+   last one switches Space off). The green lamps on the left show every effect that is on. Each effect keeps its
+   own knobs, its own **MIX** too, so you set how much of each you hear. Switching one on or off fades it in or out
+   (no click); one you switch off fades out quickly, its tail with it.
+4. **The order is always the same**, whichever you switched on first:
+   - **Chorus** and **Phaser** first, one after the other, each blended in by its MIX;
+   - then **Delay**, **Reverb**, **Hall**, **Room** and **Special FX** side by side on that sound, each at its MIX
+     (as with one effect, the dry sound makes room for each).
+
+   So a Chorus or Phaser in front of a Hall gives a chorused or phased hall, and a Delay's echoes and a Reverb's
+   tail sit next to each other instead of piling into each other.
+5. **USED AS** (for all of its effects):
+   - **On this track**: **MIX** blends each effect into the track. Good for a touch of room or chorus on one sound.
+   - **FX channel (100 % wet)**: only the effects come out, and **MIX** becomes **LEVEL**: how loud they come back
+     (all of them together; each plays at full). How much of each track goes in is its Send in Cubase. This is
+     how pros do vocal reverb and delay: in Cubase, add an **FX channel** (Project > Add Track > Effect, or any FX
+     channel you have), put **Mixology Link** on it, pick it here, and send your vocals to it with their **Sends**
+     in the MixConsole. A track whose name looks like an FX channel ("FX 1-...", "Verb", "Delay", "Return") is set to
+     FX channel by itself the first time you switch Space on (not one whose name says it plays something, like
+     "Space Pad").
+   - An FX channel never plays the dry sound a second time. With only **Chorus** / **Phaser** on there, you hear
+     their own sound without the dry part (the track already plays that): the chorus voices, or the Phaser's
+     sweeping copy, whose sweep forms where the FX channel meets the track in the mix. With a Delay, Reverb, Hall,
+     Room or Special FX on as well, Chorus / Phaser only shape what that effect hears, and only that effect comes
+     back.
+6. **EFFECT EQ** (right): the low cut and high cut on the sound of all the effects (200 Hz and 9 kHz to start: a
+   reverb without boomy lows or hissy highs sits better). Double-click: back to the start.
+7. **DUCKING**: pick the track(s) to duck under (usually your lead vocal, or All vocals) and the **AMOUNT**. All
+   the effects dip while they play and bloom in the gaps, so the vocal stays clear. The bar shows how much they are
+   ducked right now. The tracks they duck under need Mixology Link (each Link tells the others how loud its track
+   is).
+
+Good layers: **Phaser + Hall** on a synth or guitar (a phased hall); **Chorus + Delay** on ad-libs or background
+vocals (wide echoes); **Delay + Reverb** on a lead vocal, each at a low MIX. Two reverb types together (Reverb,
+Hall, Room, Special FX: say Hall + Room) stack two spaces and can wash the sound out; the note under the knobs and
+Polish say so. One is usually enough.
+
+**When an FX channel is still better**: the reverb all your vocals share. One reverb on an FX channel, with every
+vocal sent to it, sounds like one room, and costs one reverb instead of one per track. Layers are for one track's
+own sound (a phased hall on a synth, a chorus into a delay on the ad-libs).
+
+Projects and presets from before layers open exactly as they were saved: their one effect plays (and its lamp
+lights). The one change: an FX channel playing a Phaser alone no longer sends half of the dry sound back (it now
+sends only the sweeping copy).
 
 | Effect | Knobs |
 | --- | --- |
@@ -504,8 +535,9 @@ delay, both ducking under the lead vocal. Adlibs: **Ping-Pong 1/8**. Drums: **Dr
 
 Your DAW is told that each Mixology Link and Mixology can ring on for up to a minute (their "tail"), so a reverb or
 delay is never cut off when the track goes quiet, and switching Space on or off never interrupts the sound. A Space
-effect uses 0.3 - 2.3 % of one CPU core (Delay the least, Hall the most). Every feedback (Shimmer, Drift, Delay)
-always dies away once the sound stops, at any setting.
+effect uses 0.3 - 2.3 % of one CPU core (Delay the least, Hall the most); layers add up: two effects on a track
+about 1.5 - 2.3 %, three about 2.5 - 4.5 % (Hall + Room + Special FX the most). Every feedback (Shimmer, Drift,
+Delay) always dies away once the sound stops, at any setting, with layers too.
 
 ## Mix styles
 
@@ -620,7 +652,8 @@ other); the Sonicology installer always has matching ones.
   - never stacks a second compressor where Voxology compresses, a second reverb on the lead vocal where Voxology
     adds its reverb, or a ping-pong delay on ad-libs where Voxology adds its delay. Auto Mix and Polish say so in
     their notes ("Voxology compresses it already").
-  - warns when the lead gets reverb from Voxology **and** from an FX channel: one space is usually enough.
+  - warns when the lead gets reverb from Voxology **and** from an FX channel or its own Space (a reverb type
+    among its effects; a Delay alone there doesn't count): one space is usually enough.
   - A **BEAT** tag: Voxology in Beat mode on that track (it only listens to the beat for the key).
   - answers each Voxology: Voxology's bottom bar says **MIXOLOGY ✓** only when Mixology found that track, and
     otherwise why not (**ADD LINK**: no Mixology Link on it; **RENAME TRACK**: two tracks share the name; **NO TRACK
@@ -661,13 +694,15 @@ Cubase spreads the tracks over all your CPU's cores, so a typical session uses a
 analysis (Analyze Mix's ears) adds about 3 % of a core in the background.
 
 What costs the most, per track: Multiband, Space (reverb / delay), Harmonics, Clip Control and Analog Touch (up to
-about 1 % of a core each). EQ, Tone Balance, Loudness, Final Touch and Stereo are nearly free.
+about 1 % of a core each). EQ, Tone Balance, Loudness, Final Touch and Stereo are nearly free. Space with three
+effects at once costs about three effects (up to about 4.5 % of a core for three reverb types on one track).
 
 If Cubase crackles or the performance meter peaks:
 - While mixing, use a bigger buffer (Studio > Studio Setup > your audio device > Control Panel: 256 or 512 samples). Small buffers (64)
   are for recording.
 - Keep ASIO-Guard on (Studio > Studio Setup > VST Audio System): it lets Cubase process tracks ahead on all cores.
-- One reverb on an FX channel (with Sends) instead of Space on every track.
+- One reverb on an FX channel (with Sends) instead of Space on every track, and layers only where a track needs
+  them.
 - Mixology's window draws moving meters and pictures: close it when you don't need it.
 
 ## Troubleshooting
@@ -741,6 +776,10 @@ If Cubase crackles or the performance meter peaks:
   the sent vocal through). Set **USED AS** to FX channel (100 % wet).
 - **Space: ducking does nothing**: the track it ducks under needs Mixology Link (and must be playing); AMOUNT must
   be above Off.
+- **Space: ON doesn't add a fourth effect**: three play at once at most. Switch one off (ON on a lit effect), then
+  add the other.
+- **Space: the track sounds washed out**: two reverb types are on together (say Hall + Room), or the MIXes add up
+  too high. Keep one reverb, or lower each MIX.
 - **Space: the delay doesn't follow the tempo**: it follows Cubase's tempo while the song plays (120 BPM until it
   has heard one).
 - **No VOX tag on a vocal with Voxology**: update all three to matching versions (Voxology 0.52, Masterology 0.29.3).

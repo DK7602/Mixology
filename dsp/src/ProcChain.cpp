@@ -35,21 +35,29 @@ namespace mixology::proc
 
     struct Chain::SpaceBank
     {
+        static constexpr int kDirect = kSpaceTypes;   // EQ slot of an FX channel's Chorus / Phaser sound on its own
+        using Chunk = std::array<std::array<double, Chain::kChunk>, 2>;
+
         FdnReverb plate, hall, room, special;
         StereoDelay delay;
         Chorus chorus;
         Phaser phaser;
         PitchShifter shifter;
-        Filter2 lowCut, highCut, toneLp;   // the wet sound's EQ, and Special FX's Tone
+        // The wet sound's EQ (one setting for all): every effect filters its own sound, so each one alone sounds as
+        // it always did (the filters remember the sound that went through them).
+        std::array<Filter2, kSpaceTypes + 1> lowCut, highCut;
+        Filter2 toneLp;                     // Special FX's Tone
         Filter2 shimmerHp;                  // no lows in the shimmer's feedback
         float lcHz = -1.0f, hcHz = -1.0f, toneHz = -1.0f;
-        int type = -1, prevType = -1;
-        double fade = 1.0;                  // from the previous effect to this one (a switch never clicks)
+        std::array<double, kSpaceTypes> fade {};   // each effect: 0 off .. 1 on (switching one on or off never clicks)
+        bool fresh = true;                  // just reset: the effects start as they are set (Space's own fade covers it)
+        bool modulating = false;            // Chorus or Phaser ran in the last chunk
         double keyEnv = 0.0, duckDb = 0.0;
         double swell = 1.0, swellFast = 0.0, swellSlow = 0.0;
         double rate = 48000.0;
         std::array<double, Chain::kChunk> shimmer {};   // last chunk's wet sound, pitched and fed back
-        std::array<std::array<double, Chain::kChunk>, 2> a {}, b {};
+        Chunk heard {}, wet {}, sum {}, direct {};      // what the effects hear, one effect's wet sound, theirs added up
+        std::array<double, Chain::kChunk> duckGain {}, dryGain {}, keep {}, straight {};
 
         void prepare (double sr)
         {
@@ -75,14 +83,17 @@ namespace mixology::proc
                 case SpaceType::room: room.reset(); break;
                 case SpaceType::special: special.reset(); shifter.reset(); shimmerHp.reset(); shimmer = {}; swell = 1.0; break;
             }
+            lowCut[static_cast<std::size_t> (t)].reset();
+            highCut[static_cast<std::size_t> (t)].reset();
         }
         void resetAll()
         {
-            for (int t = 0; t < 7; ++t) resetType (t);
-            lowCut.reset(); highCut.reset(); toneLp.reset();
+            for (int t = 0; t < kSpaceTypes; ++t) resetType (t);
+            lowCut[kDirect].reset(); highCut[kDirect].reset(); toneLp.reset();
             lcHz = hcHz = toneHz = -1.0f;
-            type = prevType = -1;
-            fade = 1.0;
+            fade = {};
+            fresh = true;
+            modulating = false;
             keyEnv = duckDb = 0.0;
         }
     };
@@ -102,24 +113,36 @@ namespace mixology::proc
 
     double Chain::tailSecondsFor (const Values& v)
     {
-        if (! isOn (v, Module::space)) return 0.0;
         const auto f = [&v] (int id) { return static_cast<double> (v[ix (id)]); };
-        switch (static_cast<SpaceType> (std::clamp (static_cast<int> (f (spType)), 0, 6)))
-        {
-            case SpaceType::reverb: return f (revPre) / 1000.0 + f (revDecay) * 1.3;
-            case SpaceType::hall: return f (hallPre) / 1000.0 + f (hallDecay) * 1.3;
-            case SpaceType::room: return f (roomPre) / 1000.0 + f (roomDecay) * 1.3;
-            case SpaceType::delay:
+        const auto tailOf = [&f] (SpaceType t) {
+            switch (t)
             {
-                const double fb = std::max (0.01, f (dlyFeedback) / 100.0);
-                const double repeats = std::log (0.001) / std::log (fb) + 1.0;
-                return std::min (30.0, repeats * kDelayBeats[std::clamp (static_cast<int> (f (dlyTime)), 0, 8)] * 1.0);   // ~60 BPM or faster
+                case SpaceType::reverb: return f (revPre) / 1000.0 + f (revDecay) * 1.3;
+                case SpaceType::hall: return f (hallPre) / 1000.0 + f (hallDecay) * 1.3;
+                case SpaceType::room: return f (roomPre) / 1000.0 + f (roomDecay) * 1.3;
+                case SpaceType::delay:
+                {
+                    const double fb = std::max (0.01, f (dlyFeedback) / 100.0);
+                    const double repeats = std::log (0.001) / std::log (fb) + 1.0;
+                    return std::min (30.0, repeats * kDelayBeats[std::clamp (static_cast<int> (f (dlyTime)), 0, 8)] * 1.0);   // ~60 BPM or faster
+                }
+                case SpaceType::special: return static_cast<SpecialMode> (static_cast<int> (f (spxMode))) == SpecialMode::freeze ? 45.0 : 12.0 + 10.0 * f (spxFeedback) / 100.0;
+                case SpaceType::chorus:
+                case SpaceType::phaser: return 0.1;
             }
-            case SpaceType::special: return static_cast<SpecialMode> (static_cast<int> (f (spxMode))) == SpecialMode::freeze ? 45.0 : 12.0 + 10.0 * f (spxFeedback) / 100.0;
-            case SpaceType::chorus:
-            case SpaceType::phaser: return 0.1;
-        }
-        return 0.0;
+            return 0.0;
+        };
+        // Chorus and Phaser come first, one after the other (their small tails add up); the others ring side by
+        // side, so the longest of them counts.
+        const auto bits = spaceEffects (v);
+        double first = 0.0, longest = 0.0;
+        for (auto t : kSpaceOrder)
+            if ((bits & bitOf (t)) != 0)
+            {
+                if (isModulation (t)) first += tailOf (t);
+                else longest = std::max (longest, tailOf (t));
+            }
+        return first + longest;
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -789,21 +812,76 @@ namespace mixology::proc
             return;                   // on a track the sound passes
         }
         auto& bank = *sb;
-        const int type = std::clamp (static_cast<int> (v (spType)), 0, 6);
-        if (type != bank.type)
-        {
-            bank.resetType (type);
-            bank.prevType = bank.type;
-            bank.fade = bank.type < 0 ? 1.0 : 0.0;
-            bank.type = type;
-        }
-
-        const double* inL = work[0].data();
-        const double* inR = nch > 1 ? work[1].data() : work[0].data();
+        using Chunk = SpaceBank::Chunk;
+        const bool fx = v (spRoute) > 0.5;
         static constexpr int kMixIds[] = { revMix, dlyMix, choMix, phaMix, hallMix, roomMix, spxMix };
 
-        // One effect's wet sound into out (L, R).
-        auto run = [&] (int t, std::array<std::array<double, kChunk>, 2>& out) {
+        // Which effects play (up to three), each fading in or out on its own over 60 ms, as a change of effect
+        // always did: switching one on or off never clicks. One that starts starts from silence (its delay lines
+        // forget at once); one switched off fades out quickly, its tail with it.
+        const auto layers = spaceLayers (cur);
+        const double step = static_cast<double> (n) / (0.06 * rate);
+        std::array<double, kSpaceTypes> f0 {}, f1 {};
+        for (int t = 0; t < kSpaceTypes; ++t)
+        {
+            const bool on = (layers & (1u << t)) != 0;
+            auto& fd = bank.fade[ix (t)];
+            if (bank.fresh) fd = on ? 1.0 : 0.0;   // Space itself just switched on (it fades in as a whole)
+            else if (on && fd <= 0.0) bank.resetType (t);
+            f0[ix (t)] = fd;
+            f1[ix (t)] = fd = on ? std::min (1.0, fd + step) : std::max (0.0, fd - step);
+        }
+        bank.fresh = false;
+        const auto active = [&] (SpaceType t) { return f0[ix (static_cast<int> (t))] > 0.0 || f1[ix (static_cast<int> (t))] > 0.0; };
+        const auto fadeAt = [&] (int t, int i) { return f0[ix (t)] + (f1[ix (t)] - f0[ix (t)]) * (i + 1) / n; };
+
+        // The wet sound's EQ: low cut and high cut (12 dB / octave), the same for every effect.
+        if (bank.lcHz != cur[spLowCut])
+        {
+            bank.lcHz = cur[spLowCut];
+            const auto k = design (Shape::highPass, bank.lcHz, 0.0, 0.7071, rate);
+            for (auto& f : bank.lowCut) f.k = k;
+        }
+        if (bank.hcHz != cur[spHighCut])
+        {
+            bank.hcHz = cur[spHighCut];
+            const auto k = design (Shape::lowPass, bank.hcHz, 0.0, 0.7071, rate);
+            for (auto& f : bank.highCut) f.k = k;
+        }
+
+        // Ducking: quieter while the key (the vocal) is there, back up in the gaps. One amount for all the effects.
+        const double chunkSec = static_cast<double> (n) / rate;
+        double duck0 = bank.duckDb, duck1 = 0.0;
+        if (hostKey >= 0.0)
+        {
+            const double key = hostKey;
+            bank.keyEnv = key > bank.keyEnv ? key + (bank.keyEnv - key) * std::exp (-chunkSec / 0.005) : key + (bank.keyEnv - key) * std::exp (-chunkSec / 0.12);
+            const double keyDb = gainToDb (bank.keyEnv);
+            const double want = v (duckAmount) * std::clamp ((keyDb + 50.0) / 18.0, 0.0, 1.0);
+            duck1 = want + (bank.duckDb - want) * std::exp (-chunkSec / (want > bank.duckDb ? 0.015 : 0.3));
+        }
+        else
+            duck1 = bank.duckDb * std::exp (-chunkSec / 0.3);
+        bank.duckDb = duck1;
+        for (int i = 0; i < n; ++i) bank.duckGain[ix (i)] = dbToGain (-(duck0 + (duck1 - duck0) * (i + 1) / n));
+
+        // One effect's wet sound as the Effect EQ, the ducking and the safety rounding leave it (in place).
+        const auto finish = [&] (int slot, Chunk& sound) {
+            auto& lc = bank.lowCut[ix (slot)];
+            auto& hc = bank.highCut[ix (slot)];
+            for (int i = 0; i < n; ++i)
+                for (int c = 0; c < nch; ++c)
+                {
+                    double x = hc.process (c, lc.process (c, sound[ix (c)][ix (i)])) * bank.duckGain[ix (i)];
+                    // Safety: a runaway tail (huge feedback) is rounded off instead of exploding.
+                    const double ax = std::abs (x);
+                    if (ax > 0.8) x = std::copysign (0.8 + 0.4 * std::tanh ((ax - 0.8) / 0.4), x);
+                    sound[ix (c)][ix (i)] = x;
+                }
+        };
+
+        // One effect's wet sound (stereo) from what it hears.
+        auto run = [&] (int t, const double* inL, const double* inR, Chunk& out) {
             double* oL = out[0].data();
             double* oR = out[1].data();
             FdnReverb::Settings rs;
@@ -909,60 +987,106 @@ namespace mixology::proc
             }
         };
 
-        run (type, bank.a);
-        double mixAmt = v (kMixIds[type]) / 100.0;
-        if (bank.fade < 1.0 && bank.prevType >= 0)
+        // 1. Chorus, then Phaser, on the track's sound, one after the other. On a track each is blended in by its
+        //    Mix. On an FX channel each plays at full (Mix doesn't apply there), and what still passes straight
+        //    through them (the Phaser's dry half) is counted, so that it can be left out of what comes back.
+        auto& heard = bank.heard;
+        for (int c = 0; c < 2; ++c) std::copy_n (work[ix (std::min (c, nch - 1))].begin(), n, heard[ix (c)].begin());
+        const double* heardR = (nch > 1 ? heard[1] : heard[0]).data();
+        std::fill_n (bank.straight.begin(), n, 1.0);
+        double wetPeak = 0.0;
+        bool modulated = false;
+        for (auto t : { SpaceType::chorus, SpaceType::phaser })
         {
-            run (bank.prevType, bank.b);
-            const double f0 = bank.fade, f1 = std::min (1.0, bank.fade + n / (0.06 * rate));
-            for (int c = 0; c < 2; ++c)
+            if (! active (t)) continue;
+            const int k = static_cast<int> (t);
+            if (fx && ! bank.modulating && ! modulated) { bank.lowCut[SpaceBank::kDirect].reset(); bank.highCut[SpaceBank::kDirect].reset(); }
+            modulated = true;
+            run (k, heard[0].data(), heardR, bank.wet);
+            if (fx)
+            {
+                const double through = t == SpaceType::phaser ? 0.5 : 0.0;
                 for (int i = 0; i < n; ++i)
                 {
-                    const double f = f0 + (f1 - f0) * (i + 1) / n;
-                    bank.a[ix (c)][ix (i)] = f * bank.a[ix (c)][ix (i)] + (1.0 - f) * bank.b[ix (c)][ix (i)];
+                    const double g = fadeAt (k, i);
+                    for (int c = 0; c < nch; ++c)
+                    {
+                        auto& x = heard[ix (c)][ix (i)];
+                        x = (1.0 - g) * x + g * bank.wet[ix (c)][ix (i)];
+                    }
+                    bank.straight[ix (i)] *= 1.0 - g * (1.0 - through);
                 }
-            mixAmt = f1 * mixAmt + (1.0 - f1) * v (kMixIds[bank.prevType]) / 100.0;
-            bank.fade = f1;
-        }
-
-        // The wet sound's EQ: low cut and high cut (12 dB / octave).
-        if (bank.lcHz != cur[spLowCut]) { bank.lcHz = cur[spLowCut]; bank.lowCut.k = design (Shape::highPass, bank.lcHz, 0.0, 0.7071, rate); }
-        if (bank.hcHz != cur[spHighCut]) { bank.hcHz = cur[spHighCut]; bank.highCut.k = design (Shape::lowPass, bank.hcHz, 0.0, 0.7071, rate); }
-
-        // Ducking: quieter while the key (the vocal) is there, back up in the gaps.
-        const double chunkSec = static_cast<double> (n) / rate;
-        double duck0 = bank.duckDb, duck1 = 0.0;
-        if (hostKey >= 0.0)
-        {
-            const double key = hostKey;
-            bank.keyEnv = key > bank.keyEnv ? key + (bank.keyEnv - key) * std::exp (-chunkSec / 0.005) : key + (bank.keyEnv - key) * std::exp (-chunkSec / 0.12);
-            const double keyDb = gainToDb (bank.keyEnv);
-            const double want = v (duckAmount) * std::clamp ((keyDb + 50.0) / 18.0, 0.0, 1.0);
-            duck1 = want + (bank.duckDb - want) * std::exp (-chunkSec / (want > bank.duckDb ? 0.015 : 0.3));
-        }
-        else
-            duck1 = bank.duckDb * std::exp (-chunkSec / 0.3);
-        bank.duckDb = duck1;
-
-        const bool fx = v (spRoute) > 0.5;
-        const double level = fx ? dbToGain (v (spLevel)) : 1.0;   // FX channel: how loud the effect comes back
-        double peak = 0.0;
-        for (int i = 0; i < n; ++i)
-        {
-            const double dg = dbToGain (-(duck0 + (duck1 - duck0) * (i + 1) / n));
-            for (int c = 0; c < nch; ++c)
+                continue;
+            }
+            finish (k, bank.wet);
+            const double mix = v (kMixIds[k]) / 100.0;
+            for (int i = 0; i < n; ++i)
             {
-                double wet = bank.a[ix (c)][ix (i)];
-                wet = bank.highCut.process (c, bank.lowCut.process (c, wet)) * dg;
-                // Safety: a runaway tail (huge feedback) is rounded off instead of exploding.
-                const double aw = std::abs (wet);
-                if (aw > 0.8) wet = std::copysign (0.8 + 0.4 * std::tanh ((aw - 0.8) / 0.4), wet);
-                auto& x = work[ix (c)][ix (i)];
-                x = fx ? wet * level : x + mixAmt * (wet - x);
-                peak = std::max (peak, std::abs (fx ? x : wet));
+                const double g = fadeAt (k, i), a = g * mix;
+                for (int c = 0; c < nch; ++c)
+                {
+                    auto& x = heard[ix (c)][ix (i)];
+                    const double e = bank.wet[ix (c)][ix (i)];
+                    x = x + a * (e - x);
+                    wetPeak = std::max (wetPeak, g * std::abs (e));
+                }
             }
         }
-        meters.spaceWet = metric (meters.spaceWet, static_cast<float> (gainToDb (peak)));
+        bank.modulating = modulated;
+
+        // 2. Delay, Reverb, Hall, Room and Special FX side by side on that sound, each scaled by its Mix (on an FX
+        //    channel each at full: LEVEL sets them all), added up. The dry sound makes room for each as one effect's
+        //    MIX always did (one effect: dry x (1 - MIX) + effect x MIX, exactly as before).
+        for (int c = 0; c < nch; ++c) std::fill_n (bank.sum[ix (c)].begin(), n, 0.0);
+        std::fill_n (bank.dryGain.begin(), n, 1.0);
+        std::fill_n (bank.keep.begin(), n, 1.0);
+        for (auto t : { SpaceType::delay, SpaceType::reverb, SpaceType::hall, SpaceType::room, SpaceType::special })
+        {
+            if (! active (t)) continue;
+            const int k = static_cast<int> (t);
+            run (k, heard[0].data(), heardR, bank.wet);
+            finish (k, bank.wet);
+            const double mix = fx ? 1.0 : v (kMixIds[k]) / 100.0;
+            for (int i = 0; i < n; ++i)
+            {
+                const double g = fadeAt (k, i), a = g * mix;
+                for (int c = 0; c < nch; ++c)
+                {
+                    const double e = bank.wet[ix (c)][ix (i)];
+                    bank.sum[ix (c)][ix (i)] += a * e;
+                    wetPeak = std::max (wetPeak, g * std::abs (e));
+                }
+                bank.dryGain[ix (i)] *= 1.0 - a;
+                bank.keep[ix (i)] *= 1.0 - g;
+            }
+        }
+
+        // 3. What comes out. A track: its (modulated) sound, room made for the effects, plus the effects. An FX channel:
+        //    the effects only, at LEVEL. With Chorus / Phaser there, their own sound (without what passed straight
+        //    through: the track plays its dry sound itself) comes back while no other effect is on; with one on,
+        //    only that effect's sound does (Chorus / Phaser then shape what it hears). Never the dry sound twice.
+        if (fx && modulated)
+        {
+            for (int i = 0; i < n; ++i)
+                for (int c = 0; c < nch; ++c)
+                    bank.direct[ix (c)][ix (i)] = heard[ix (c)][ix (i)] - bank.straight[ix (i)] * work[ix (c)][ix (i)];
+            finish (SpaceBank::kDirect, bank.direct);
+        }
+        const double level = fx ? dbToGain (v (spLevel)) : 1.0;   // FX channel: how loud the effects come back
+        double peak = 0.0;
+        for (int i = 0; i < n; ++i)
+            for (int c = 0; c < nch; ++c)
+            {
+                auto& x = work[ix (c)][ix (i)];
+                if (fx)
+                {
+                    x = level * (bank.sum[ix (c)][ix (i)] + (modulated ? bank.keep[ix (i)] * bank.direct[ix (c)][ix (i)] : 0.0));
+                    peak = std::max (peak, std::abs (x));
+                }
+                else
+                    x = bank.dryGain[ix (i)] * heard[ix (c)][ix (i)] + bank.sum[ix (c)][ix (i)];
+            }
+        meters.spaceWet = metric (meters.spaceWet, static_cast<float> (gainToDb (fx ? peak : wetPeak)));
         meters.duck = metric (meters.duck, static_cast<float> (duck1));
     }
 }

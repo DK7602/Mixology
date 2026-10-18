@@ -478,6 +478,11 @@ juce::var MixWebEditor::makeProcTargets()
         o->setProperty ("on", moduleKeys (v, false, 0));
         o->setProperty ("running", moduleKeys (v, true, running));
         o->setProperty ("spaceType", juce::roundToInt (v[static_cast<std::size_t> (proc::spType)]));
+        juce::Array<juce::var> spaceTypes;   // every effect it plays (Space layers), in the order they run
+        const auto layers = proc::spaceLayers (v);
+        for (auto t : proc::kSpaceOrder)
+            if ((layers & proc::bitOf (t)) != 0) spaceTypes.add (static_cast<int> (t));
+        o->setProperty ("spaceTypes", spaceTypes);
         o->setProperty ("spaceRoute", juce::roundToInt (v[static_cast<std::size_t> (proc::spRoute)]));
         list.add (juce::var (o));
         targetInfo[key] = info;

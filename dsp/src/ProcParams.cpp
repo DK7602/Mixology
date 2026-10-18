@@ -192,6 +192,15 @@ namespace mixology::proc
             num ("spx_mix", "Special Mix", 0.0f, 100.0f, 25.0f, L, 1.0f, "%"),
             choice ("spx_mode", "Special Mode", "Shimmer|Drift|Swell|Freeze", 4, 0),
             num ("sp_level", "Space Level", -30.0f, 6.0f, 0.0f, L, 0.1f, "dB"),
+
+            // Space layers: each effect's own on switch (in SpaceType order)
+            toggle ("rev_on", "Reverb"),
+            toggle ("dly_on", "Delay"),
+            toggle ("cho_on", "Chorus"),
+            toggle ("pha_on", "Phaser"),
+            toggle ("hall_on", "Hall"),
+            toggle ("room_on", "Room"),
+            toggle ("spx_on", "Special FX"),
         }};
         // clang-format on
 
@@ -199,6 +208,9 @@ namespace mixology::proc
         constexpr const char* kModuleKeys[] = { "gate", "eq", "comp", "multi", "trans", "balance", "loud", "harm", "analog", "clip", "width", "final", "limit", "space" };
         static_assert (std::size (kOnParams) == kModules);
         static_assert (std::size (kModuleKeys) == kModules);
+        static_assert (spxOn - revOn + 1 == kSpaceTypes && spxOn == count - 1);
+
+        constexpr const char* kSpaceNames[] = { "Reverb", "Delay", "Chorus", "Phaser", "Hall", "Room", "Special FX" };
     }
 
     const std::array<ParamSpec, count>& specs() { return kSpecs; }
@@ -234,6 +246,60 @@ namespace mixology::proc
     bool isOn (const Values& v, Module m)
     {
         return v[chainOn] > 0.5f && v[static_cast<std::size_t> (onParam (m))] > 0.5f;
+    }
+
+    std::uint32_t spaceLayers (const Values& v)
+    {
+        std::uint32_t bits = 0;
+        int n = 0;
+        for (auto t : kSpaceOrder)
+            if (v[static_cast<std::size_t> (effectOn (t))] > 0.5f && n < kMaxSpaceEffects)
+            {
+                bits |= bitOf (t);
+                ++n;
+            }
+        if (bits != 0) return bits;
+        const float type = v[spType];   // none switched on: the one effect Space had before layers
+        const float last = static_cast<float> (kSpaceTypes - 1);
+        return bitOf (static_cast<SpaceType> (std::isfinite (type) ? std::lround (std::clamp (type, 0.0f, last)) : 0));
+    }
+
+    std::uint32_t spaceEffects (const Values& v) { return isOn (v, Module::space) ? spaceLayers (v) : 0u; }
+
+    int effectCount (std::uint32_t bits)
+    {
+        int n = 0;
+        for (auto t : kSpaceOrder) n += (bits & bitOf (t)) != 0 ? 1 : 0;
+        return n;
+    }
+
+    int reverbTypeCount (std::uint32_t bits)
+    {
+        int n = 0;
+        for (auto t : kSpaceOrder) n += (bits & bitOf (t)) != 0 && isReverbType (t) ? 1 : 0;
+        return n;
+    }
+
+    std::string effectNames (std::uint32_t bits, const char* joiner)
+    {
+        std::string out;
+        for (auto t : kSpaceOrder)
+            if ((bits & bitOf (t)) != 0) out += (out.empty() ? "" : joiner) + std::string (kSpaceNames[static_cast<int> (t)]);
+        return out;
+    }
+
+    std::array<std::pair<int, float>, kSpaceTypes + 2> spaceControls (std::uint32_t bits, SpaceType main)
+    {
+        std::array<std::pair<int, float>, kSpaceTypes + 2> out {};
+        SpaceType shown = main;
+        if ((bits & bitOf (main)) == 0)
+            for (auto t : kSpaceOrder)
+                if ((bits & bitOf (t)) != 0) { shown = t; break; }
+        for (int t = 0; t < kSpaceTypes; ++t)
+            out[static_cast<std::size_t> (t)] = { revOn + t, (bits & (1u << t)) != 0 ? 1.0f : 0.0f };
+        out[kSpaceTypes] = { spOn, bits != 0 ? 1.0f : 0.0f };
+        out[kSpaceTypes + 1] = { spType, static_cast<float> (shown) };
+        return out;
     }
 
     void meterValues (const Meters& m, float* out)

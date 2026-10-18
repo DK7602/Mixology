@@ -2,7 +2,9 @@
 
 #include <array>
 #include <cstdint>
+#include <string>
 #include <string_view>
+#include <utility>
 
 /** Milestone 5: the processing every Mixology Link runs on its track (and Mixology on the full mix).
 
@@ -57,7 +59,7 @@ namespace mixology::proc
         finOn, finWidth, finAir, finGlue, finOut,
         // Stereo
         stOn, stWidth, stLow, stMid, stHigh, stLowX, stHighX,
-        // Space (round 2): one effect at a time, its wet sound filtered and ducked
+        // Space (round 2): its effects, their wet sound filtered and ducked together (spaceLayers() below)
         spOn, spType, spRoute, spLowCut, spHighCut, duckAmount,
         revPre, revDecay, revDamp, revWidth, revMix,
         dlyTime, dlyFeedback, dlyTone, dlyPingPong, dlyMix,
@@ -67,10 +69,13 @@ namespace mixology::proc
         roomPre, roomDecay, roomSize, roomLate, roomMix,
         spxShift, spxFeedback, spxMotion, spxTone, spxMix, spxMode,
         spLevel,   // v0.7.1: the effect's level on an FX channel (there MIX doesn't apply: only the effect comes out)
+        // Space layers: each effect's own on switch, in SpaceType order (revOn + type). See spaceLayers().
+        revOn, dlyOn, choOn, phaOn, hallOn, roomOn, spxOn,
         count
     };
     enum class SpaceType : int { reverb = 0, delay = 1, chorus = 2, phaser = 3, hall = 4, room = 5, special = 6 };
     enum class SpecialMode : int { shimmer = 0, drift = 1, swell = 2, freeze = 3 };
+    constexpr int kSpaceTypes = 7;
     /** The Delay's Time choices, in beats (quarter notes). */
     constexpr double kDelayBeats[] = { 0.125, 0.25, 1.0 / 3.0, 0.5, 0.75, 2.0 / 3.0, 1.0, 1.5, 2.0 };
     // clang-format on
@@ -92,6 +97,33 @@ namespace mixology::proc
     const char* moduleKey (Module);       // "gate", "eq", ... (the interface's module ids)
 
     using Values = std::array<float, count>;
+
+    /** Space layers: up to three of the seven effects at once on one track, each with its own on switch
+        (revOn + type) and its own knobs (its Mix too). They always run in this order: Chorus and Phaser first, one
+        after the other (each blended in by its Mix), then Delay, Reverb, Hall, Room and Special FX side by side on
+        that sound, each scaled by its Mix, added up. The Effect EQ and Ducking work on all of their wet sound. */
+    constexpr int kMaxSpaceEffects = 3;
+    constexpr SpaceType kSpaceOrder[kSpaceTypes] = { SpaceType::chorus, SpaceType::phaser, SpaceType::delay, SpaceType::reverb,
+                                                     SpaceType::hall, SpaceType::room, SpaceType::special };
+    constexpr int effectOn (SpaceType t) { return revOn + static_cast<int> (t); }
+    constexpr std::uint32_t bitOf (SpaceType t) { return 1u << static_cast<int> (t); }
+    constexpr bool isModulation (SpaceType t) { return t == SpaceType::chorus || t == SpaceType::phaser; }
+    /** The effects that make a space of their own (a room around the sound): two of them at once can wash it out. */
+    constexpr bool isReverbType (SpaceType t) { return t == SpaceType::reverb || t == SpaceType::hall || t == SpaceType::room || t == SpaceType::special; }
+    /** The effects Space plays (bit per SpaceType), whether Space is on or not: those switched on, at most three
+        (the first three in the order above, so automation or a damaged project can't run all seven). None switched
+        on (a project, preset or plan from before layers) = Space Effect's (spType) alone, as it always was. */
+    std::uint32_t spaceLayers (const Values&);
+    /** What is playing: spaceLayers() while Space (and the processing) is on, else 0. */
+    std::uint32_t spaceEffects (const Values&);
+    /** How many effects, and how many of them reverb types, in a set of bits. */
+    int effectCount (std::uint32_t bits);
+    int reverbTypeCount (std::uint32_t bits);
+    /** Their names in the order they run ("Phaser + Hall"); "" for none. */
+    std::string effectNames (std::uint32_t bits, const char* joiner = " + ");
+    /** The controls that make exactly these effects play (every on switch, Space on when any, Space Effect = `main`
+        if it is one of them, else the first): what plans and presets write, so nothing switched on before stays. */
+    std::array<std::pair<int, float>, kSpaceTypes + 2> spaceControls (std::uint32_t bits, SpaceType main);
 
     const std::array<ParamSpec, count>& specs();
     int indexOf (std::string_view id);    // -1 when there is no such control

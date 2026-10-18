@@ -25,7 +25,9 @@
     - Polish (Milestone 5, round 3): processing in each track's Mixology Link: EQ (a dull or harsh vocal, its air,
       a boxy kick), a compressor where a vocal or the bass swings a lot in level, the low end of stereo kicks /
       basses in the middle, a reverb for the lead vocal (on an FX channel with a Link, ducking under the vocal,
-      else a little on the vocal itself), a delay on the ad-libs, and the Full Mix's tone against the style.
+      else a little on the vocal itself), a delay on the ad-libs, and the Full Mix's tone against the style. A track
+      whose Space already plays (up to three effects: Space layers) is left alone and its effects are named; two
+      reverb types on one track (Reverb, Hall, Room, Special FX) get a tip: stacking spaces can wash it out.
       Settings are worked out from what the processing was when Analyze Mix listened, so applying and opening it
       again finds nothing more to do.
     - Auto Mix: all of them together.

@@ -69,3 +69,9 @@ add_executable(procspec ../tools/procspec/procspec.cpp)
 target_link_libraries(procspec PRIVATE mixology_dsp)
 set_target_properties(procspec PROPERTIES FOLDER "Mixology")
 add_test(NAME procspec_in_sync COMMAND procspec ${CMAKE_CURRENT_SOURCE_DIR}/../plugin/ui/procspec.js)
+if(NODE_EXECUTABLE)
+    # ... and its Space layers rule (which effects play) must give what the engine's gives.
+    add_test(NAME space_layers_rule_in_sync
+             COMMAND ${NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../tools/procspec/spacecheck.mjs
+                     ${CMAKE_CURRENT_SOURCE_DIR}/../plugin/ui/procspec.js)
+endif()

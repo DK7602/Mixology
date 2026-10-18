@@ -2,11 +2,11 @@
 // "Full Mix" (Mixology's own processing on the Stereo Out) or a track (its Mixology Link). Every control comes
 // from procspec.js (generated from the engine's table), so ranges and defaults always match the plug-ins.
 
-import { PROC, PROC_INDEX, MODULE_ON } from "./procspec.js";
+import { PROC, PROC_INDEX, MODULE_ON, SPACE_ON, MAX_SPACE_EFFECTS, spaceLayers } from "./procspec.js";
 import { el, icon, select, store } from "./ui.js";
 import { say } from "./daws.js";
 
-export { PROC, PROC_INDEX, MODULE_ON };
+export { PROC, PROC_INDEX, MODULE_ON, SPACE_ON, MAX_SPACE_EFFECTS, spaceLayers };
 
 // Which controls belong to which module (the interface's module ids).
 const PREFIX = { gate: "gate_", eq: "eq", comp: "comp_", multi: "multi_", trans: "trans_", limit: "lim_", balance: "tb_", loud: "ld_",

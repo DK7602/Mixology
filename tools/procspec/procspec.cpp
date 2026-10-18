@@ -57,6 +57,21 @@ namespace
         for (int m = 0; m < kModules; ++m)
             js << (m ? ", " : " ") << moduleKey (static_cast<Module> (m)) << ": \"" << specs()[static_cast<std::size_t> (onParam (static_cast<Module> (m)))].id << "\"";
         js << " };\n";
+
+        // Space layers: the engine's spaceLayers() rule, so the Space page lights what the plug-in plays.
+        js << "\n// Space layers: each effect's on switch (by Space Effect number), the order they run in, how many at once.\n"
+              "export const SPACE_ON = [";
+        for (int t = 0; t < kSpaceTypes; ++t) js << (t ? ", " : "") << "\"" << specs()[static_cast<std::size_t> (effectOn (static_cast<SpaceType> (t)))].id << "\"";
+        js << "];\nexport const SPACE_ORDER = [";
+        for (int k = 0; k < kSpaceTypes; ++k) js << (k ? ", " : "") << static_cast<int> (kSpaceOrder[k]);
+        js << "];\nexport const MAX_SPACE_EFFECTS = " << kMaxSpaceEffects << ";\n"
+              "/** The effects Space plays (Space Effect numbers, in the order they run), whether Space is on or not: those\n"
+              "    switched on, at most MAX_SPACE_EFFECTS (the first in that order); none switched on (a project from before\n"
+              "    layers) = Space Effect's alone. get(id) reads a control. Same rule as the engine's proc::spaceLayers(). */\n"
+              "export function spaceLayers(get) {\n"
+              "  const on = SPACE_ORDER.filter((t) => get(SPACE_ON[t]) > 0.5).slice(0, MAX_SPACE_EFFECTS);\n"
+              "  return on.length ? on : [Math.min(SPACE_ON.length - 1, Math.max(0, Math.round(get(\"sp_type\")) || 0))];\n"
+              "}\n";
         return js.str();
     }
 

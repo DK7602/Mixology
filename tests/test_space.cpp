@@ -7,6 +7,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <string>
 #include <memory>
 #include <random>
 #include <thread>
@@ -515,5 +517,377 @@ TEST_CASE ("Space before its engine is made: a track passes the sound, an FX cha
         const double level = rmsDb (out.l, 4800, 9600);
         if (route == 0) CHECK (level == Catch::Approx (rmsDb (tone, 4800, 9600)).margin (0.01));
         else CHECK (level < -200.0);
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Space layers: up to three effects at once on one track.
+
+namespace
+{
+    /** Space on with exactly these effects switched on (FX channel unless `route` says otherwise, wet EQ wide open). */
+    Values layers (std::initializer_list<SpaceType> on, std::initializer_list<std::pair<Id, float>> changes = {}, float route = 1.0f)
+    {
+        auto v = space (SpaceType::reverb, changes);
+        v[spRoute] = route;
+        for (auto t : on) v[static_cast<std::size_t> (effectOn (t))] = 1.0f;
+        for (auto [id, value] : changes) v[static_cast<std::size_t> (id)] = value;
+        return v;
+    }
+
+    std::vector<double> noiseOf (double seconds, double sd, unsigned seed)
+    {
+        std::mt19937 rng (seed);
+        std::normal_distribution<double> nd (0.0, sd);
+        std::vector<double> x (static_cast<std::size_t> (seconds * kSr));
+        for (auto& s : x) s = nd (rng);
+        return x;
+    }
+
+    double largestDifference (const std::vector<double>& a, const std::vector<double>& b)
+    {
+        double d = 0.0;
+        for (std::size_t i = 0; i < std::min (a.size(), b.size()); ++i) d = std::max (d, std::abs (a[i] - b[i]));
+        return d;
+    }
+}
+
+TEST_CASE ("Space layers: two effects at once are both heard, Chorus / Phaser first, the others side by side", "[space][layers]")
+{
+    const auto noise = noiseOf (1.0, 0.1, 31);
+
+    // Side by side: Delay + Hall on an FX channel is exactly Delay alone plus Hall alone (each at full, same input).
+    {
+        const auto both = play (*makeChain (layers ({ SpaceType::delay, SpaceType::hall })), noise);
+        const auto delay = play (*makeChain (layers ({ SpaceType::delay })), noise);
+        const auto hall = play (*makeChain (layers ({ SpaceType::hall })), noise);
+        std::vector<double> sum (noise.size());
+        for (std::size_t i = 0; i < sum.size(); ++i) sum[i] = delay.l[i] + hall.l[i];
+        CHECK (largestDifference (both.l, sum) < 1.0e-9);
+        CHECK (rmsDb (delay.l, 24000, 48000) > -40.0);   // both really play
+        CHECK (rmsDb (hall.l, 24000, 48000) > -40.0);
+
+        // On a track each is scaled by its own Mix and the dry sound makes room for each, as one effect's MIX always
+        // did: dry x (1 - 30 %) x (1 - 20 %) + Delay x 30 % + Hall x 20 %.
+        auto track = layers ({ SpaceType::delay, SpaceType::hall }, { { dlyMix, 30.0f }, { hallMix, 20.0f } }, 0.0f);
+        const auto mixed = play (*makeChain (track), noise);
+        std::vector<double> want (noise.size());
+        for (std::size_t i = 0; i < want.size(); ++i) want[i] = 0.7 * 0.8 * noise[i] + 0.3 * delay.l[i] + 0.2 * hall.l[i];
+        CHECK (largestDifference (mixed.l, want) < 1.0e-9);
+    }
+
+    // The user's Phaser + Hall on one track: the Phaser changes the sound while it plays, the Hall rings on after.
+    {
+        std::vector<double> burst (static_cast<std::size_t> (1.5 * kSr));
+        std::copy (noise.begin(), noise.begin() + 24000, burst.begin());
+        const auto onTrack = [] (std::initializer_list<SpaceType> on) { return layers (on, { { phaMix, 50.0f }, { hallMix, 30.0f } }, 0.0f); };
+        const auto both = play (*makeChain (onTrack ({ SpaceType::phaser, SpaceType::hall })), burst);
+        const auto phaser = play (*makeChain (onTrack ({ SpaceType::phaser })), burst);
+        const auto hall = play (*makeChain (onTrack ({ SpaceType::hall })), burst);
+        std::vector<double> diff (24000);
+        for (std::size_t i = 0; i < diff.size(); ++i) diff[i] = both.l[i] - hall.l[i];
+        CHECK (rmsDb (diff, 4800, 24000) > rmsDb (burst, 4800, 24000) - 20.0);   // the Phaser is heard ...
+        CHECK (rmsDb (both.l, 36000, 60000) > -70.0);                            // ... and the Hall's tail
+        CHECK (rmsDb (phaser.l, 36000, 60000) < -150.0);                         // (a Phaser alone has none)
+    }
+
+    // The order: Chorus comes first, so the Delay repeats the chorused sound (its echo arrives the Chorus's 12 ms
+    // later than the Delay's own 1/8). With the Delay on, an FX channel plays only the Delay: no Chorus of its own.
+    {
+        const auto click = impulse (0.5);
+        const auto delayOnly = layers ({ SpaceType::delay }, { { dlyFeedback, 0.0f }, { dlyPingPong, 0.0f }, { dlyTone, 20000.0f } });
+        auto chorusFirst = delayOnly;
+        chorusFirst[static_cast<std::size_t> (effectOn (SpaceType::chorus))] = 1.0f;
+        const auto plain = play (*makeChain (delayOnly), click);
+        const auto layered = play (*makeChain (chorusFirst), click);
+        const auto at = [] (double t) { return static_cast<std::size_t> (t * kSr); };
+        CHECK (peak (plain.l, at (0.249), at (0.251)) > 0.3);                  // the Delay alone: right on the 1/8
+        CHECK (peak (layered.l, at (0.249), at (0.251)) < 1.0e-6);             // after the Chorus: later
+        CHECK (peak (layered.l, at (0.258), at (0.28)) > 0.02);
+        CHECK (peak (layered.l, 0, at (0.2)) < 1.0e-9);                        // no Chorus sound of its own, no dry
+    }
+}
+
+TEST_CASE ("Space layers: at most three effects play, the first three in the chain's order", "[space][layers]")
+{
+    auto all = layers ({ SpaceType::reverb, SpaceType::delay, SpaceType::chorus, SpaceType::phaser, SpaceType::hall, SpaceType::room, SpaceType::special });
+    CHECK (spaceLayers (all) == (bitOf (SpaceType::chorus) | bitOf (SpaceType::phaser) | bitOf (SpaceType::delay)));
+    CHECK (effectNames (spaceLayers (all)) == "Chorus + Phaser + Delay");
+    auto spaces = layers ({ SpaceType::special, SpaceType::room, SpaceType::hall, SpaceType::reverb });
+    CHECK (spaceLayers (spaces) == (bitOf (SpaceType::reverb) | bitOf (SpaceType::hall) | bitOf (SpaceType::room)));
+    CHECK (reverbTypeCount (spaceLayers (spaces)) == 3);
+    CHECK (effectCount (spaceLayers (spaces)) == 3);
+
+    // The chain plays what spaceLayers() says, nothing more (a damaged project or automation can't run all seven).
+    const auto noise = noiseOf (0.5, 0.1, 41);
+    const auto seven = play (*makeChain (all), noise);
+    const auto three = play (*makeChain (layers ({ SpaceType::chorus, SpaceType::phaser, SpaceType::delay })), noise);
+    CHECK (seven.l == three.l);
+    CHECK (Chain::tailSecondsFor (all) == Chain::tailSecondsFor (layers ({ SpaceType::chorus, SpaceType::phaser, SpaceType::delay })));
+
+    // Off is off: Space switched off, or all processing.
+    auto off = all;
+    off[spOn] = 0.0f;
+    CHECK (spaceEffects (off) == 0u);
+    CHECK (spaceLayers (off) != 0u);   // what it would play
+    auto chainOff = all;
+    chainOff[chainOn] = 0.0f;
+    CHECK (spaceEffects (chainOff) == 0u);
+    CHECK (Chain::tailSecondsFor (off) == 0.0);
+
+    // The tail: Chorus and Phaser first (their short tails add), the rest side by side (the longest counts).
+    const auto longHall = layers ({ SpaceType::chorus, SpaceType::delay, SpaceType::hall }, { { hallDecay, 10.0f }, { hallPre, 100.0f } });
+    CHECK (Chain::tailSecondsFor (longHall) == Catch::Approx (0.1 + 0.1 + 13.0));
+    const auto longest = layers ({ SpaceType::chorus, SpaceType::phaser, SpaceType::special }, { { spxMode, 3.0f }, { spxFeedback, 95.0f } });
+    CHECK (Chain::tailSecondsFor (longest) <= Chain::kTailSeconds);
+
+    // What plans and presets write to get exactly these effects: every switch, Space on, Space Effect one of them.
+    const auto c = spaceControls (bitOf (SpaceType::chorus) | bitOf (SpaceType::hall), SpaceType::reverb);
+    auto v = all;
+    for (auto [id, value] : c) v[static_cast<std::size_t> (id)] = value;
+    CHECK (spaceEffects (v) == (bitOf (SpaceType::chorus) | bitOf (SpaceType::hall)));
+    CHECK (v[spType] == static_cast<float> (SpaceType::chorus));
+    for (auto [id, value] : spaceControls (bitOf (SpaceType::hall), SpaceType::hall)) v[static_cast<std::size_t> (id)] = value;
+    CHECK (spaceEffects (v) == bitOf (SpaceType::hall));
+    CHECK (v[spType] == static_cast<float> (SpaceType::hall));
+    for (auto [id, value] : spaceControls (0u, SpaceType::hall)) v[static_cast<std::size_t> (id)] = value;
+    CHECK (spaceEffects (v) == 0u);
+}
+
+TEST_CASE ("Space layers: a project or preset from before (no effect switched on) plays Space Effect's effect alone", "[space][layers]")
+{
+    // The on switches are new controls at the end of the table: everything before them keeps its place.
+    CHECK (indexOf ("sp_level") == spLevel);
+    CHECK (spLevel == revOn - 1);
+    CHECK (std::string (specs()[static_cast<std::size_t> (revOn)].id) == "rev_on");
+    CHECK (std::string (specs()[static_cast<std::size_t> (spxOn)].id) == "spx_on");
+    for (int t = 0; t < kSpaceTypes; ++t) CHECK (defaults()[static_cast<std::size_t> (revOn + t)] == 0.0f);
+
+    const auto noise = noiseOf (0.6, 0.15, 51);
+    for (int route : { 0, 1 })
+        for (int t = 0; t < kSpaceTypes; ++t)
+        {
+            INFO ("type " << t << ", route " << route);
+            auto old = space (static_cast<SpaceType> (t));   // Space on, Space Effect = t, no switch on
+            old[spRoute] = static_cast<float> (route);
+            CHECK (spaceLayers (old) == (1u << t));
+            CHECK (spaceEffects (old) == (1u << t));
+            auto now = old;
+            now[static_cast<std::size_t> (revOn + t)] = 1.0f;
+            const auto a = play (*makeChain (old), noise);
+            const auto b = play (*makeChain (now), noise);
+            CHECK (a.l == b.l);
+            CHECK (a.r == b.r);
+            CHECK (Chain::tailSecondsFor (old) == Chain::tailSecondsFor (now));
+        }
+
+    // A switch that is on wins over Space Effect (which then only says which effect the page shows).
+    auto v = space (SpaceType::hall);
+    v[static_cast<std::size_t> (effectOn (SpaceType::delay))] = 1.0f;
+    CHECK (spaceLayers (v) == bitOf (SpaceType::delay));
+    v[static_cast<std::size_t> (effectOn (SpaceType::delay))] = 0.0f;
+    v[spType] = 9.0f;
+    CHECK (spaceLayers (v) == bitOf (SpaceType::special));   // out of range: the last one
+    v[spType] = std::numeric_limits<float>::quiet_NaN();
+    CHECK (spaceLayers (v) == bitOf (SpaceType::reverb));    // a damaged value: the first effect, never nothing
+}
+
+TEST_CASE ("Space layers: adding or removing an effect never clicks; one switched off fades out quickly", "[space][layers]")
+{
+    std::vector<double> tone (static_cast<std::size_t> (4.0 * kSr));
+    for (std::size_t i = 0; i < tone.size(); ++i) tone[i] = 0.25 * std::sin (2.0 * kPi * 227.3 * static_cast<double> (i) / kSr);   // never at 0 when a switch comes
+    // A track (Mix blends each in) and an FX channel (only the effects come out): every quarter second one effect
+    // goes on or off, never more than three on.
+    const std::vector<std::vector<SpaceType>> steps {
+        { SpaceType::hall }, { SpaceType::hall, SpaceType::chorus }, { SpaceType::hall, SpaceType::chorus, SpaceType::delay },
+        { SpaceType::chorus, SpaceType::delay }, { SpaceType::chorus, SpaceType::delay, SpaceType::phaser }, { SpaceType::delay, SpaceType::phaser },
+        { SpaceType::delay, SpaceType::phaser, SpaceType::room }, { SpaceType::phaser, SpaceType::room }, { SpaceType::room },
+        { SpaceType::room, SpaceType::special }, { SpaceType::room, SpaceType::special, SpaceType::reverb }, { SpaceType::special, SpaceType::reverb },
+        { SpaceType::reverb }, { SpaceType::reverb, SpaceType::chorus }, { SpaceType::chorus }, { SpaceType::chorus, SpaceType::hall },
+    };
+    for (int route : { 0, 1 })
+    {
+        INFO ("route " << route);
+        const auto mixes = { std::pair { revMix, 40.0f }, std::pair { dlyMix, 40.0f }, std::pair { choMix, 50.0f }, std::pair { phaMix, 50.0f },
+                             std::pair { hallMix, 40.0f }, std::pair { roomMix, 40.0f }, std::pair { spxMix, 40.0f } };
+        Chain chain;
+        chain.prepare (kSr, 2);
+        chain.ensureSpace();
+        Run out { tone, tone };
+        std::size_t step = 0;
+        for (std::size_t start = 0; start < tone.size(); start += 256)
+        {
+            if (start % 12000 == 0 && step < steps.size())
+            {
+                auto v = layers ({}, {}, static_cast<float> (route));
+                for (auto [id, value] : mixes) v[static_cast<std::size_t> (id)] = value;
+                for (auto t : steps[step]) v[static_cast<std::size_t> (effectOn (t))] = 1.0f;
+                ++step;
+                chain.setValues (v);
+            }
+            chain.setHost (120.0, -1.0);
+            double* ch[2] = { out.l.data() + start, out.r.data() + start };
+            chain.process (ch, 2, static_cast<int> (std::min<std::size_t> (256, tone.size() - start)));
+        }
+        // A click is a sudden step: it shows in the second difference, which stays small for these smooth sounds
+        // (a switch without the fade: about 0.04 on the track, 0.008 on the FX channel).
+        double bend = 0.0;
+        for (std::size_t i = 4800; i < out.l.size(); ++i)
+            for (const auto* x : { &out.l, &out.r })
+                bend = std::max (bend, std::abs ((*x)[i] - 2.0 * (*x)[i - 1] + (*x)[i - 2]));
+        CHECK (bend < (route == 0 ? 0.01 : 0.002));
+    }
+
+    // Switched off, an effect fades out within 60 ms, its tail with it (as a change of effect always did): a 12 s
+    // Hall on an FX channel (with a Chorus left on), the sound stops and the Hall goes off at the same moment.
+    const auto hallChorus = layers ({ SpaceType::hall, SpaceType::chorus }, { { hallDecay, 12.0f } });
+    auto chorusOnly = hallChorus;
+    chorusOnly[static_cast<std::size_t> (effectOn (SpaceType::hall))] = 0.0f;
+    const auto burst = noiseOf (0.5, 0.3, 61);
+    auto kept = makeChain (hallChorus);
+    auto dropped = makeChain (hallChorus);
+    play (*kept, burst);
+    play (*dropped, burst);
+    dropped->setValues (chorusOnly);
+    const auto ringing = play (*kept, std::vector<double> (9600, 0.0));
+    const auto gone = play (*dropped, std::vector<double> (9600, 0.0));
+    CHECK (peak (ringing.l, 4800, 9600) > 1.0e-2);   // left on, the Hall rings on
+    CHECK (peak (gone.l, 4800, 9600) < 1.0e-4);      // switched off, gone 100 ms later (the Chorus's last ringing)
+}
+
+TEST_CASE ("Space layers: an FX channel never plays the dry sound", "[space][layers]")
+{
+    // An FX channel with a song playing (quiet noise) while its effects change every half second. A click added to
+    // that song, during a change (20 ms in, while effects fade) or after it: what the click adds to the output (this
+    // run against the run without it; the effects are linear at this level) must stay silent for the first 5 ms
+    // (the earliest any effect answers is the Room's 8 ms pre-delay), so no dry sound comes through. (A Phaser whose
+    // own sound comes back answers at once, with its sweeping copy: checked below.)
+    const std::vector<std::vector<SpaceType>> sets {
+        { SpaceType::chorus }, { SpaceType::chorus, SpaceType::hall }, { SpaceType::phaser, SpaceType::hall },
+        { SpaceType::phaser, SpaceType::hall, SpaceType::delay }, { SpaceType::chorus, SpaceType::delay, SpaceType::reverb },
+        { SpaceType::delay, SpaceType::reverb, SpaceType::room }, { SpaceType::chorus, SpaceType::room, SpaceType::special },
+        { SpaceType::chorus, SpaceType::special }, { SpaceType::chorus }, { SpaceType::hall }, { SpaceType::chorus },
+        { SpaceType::chorus, SpaceType::phaser },
+    };
+    const auto valuesFor = [] (const std::vector<SpaceType>& on) {
+        auto v = layers ({});
+        for (auto t : on) v[static_cast<std::size_t> (effectOn (t))] = 1.0f;
+        return v;
+    };
+    const auto song = noiseOf (static_cast<double> (sets.size()) * 0.5, 0.03, 81);
+    const auto run = [&] (std::size_t clickAt) {
+        auto in = song;
+        if (clickAt < in.size()) in[clickAt] += 0.5;
+        auto chain = makeChain (valuesFor (sets[0]));
+        Run out { in, in };
+        for (std::size_t start = 0; start < in.size(); start += 240)
+        {
+            if (start % 24000 == 0) chain->setValues (valuesFor (sets[start / 24000]));
+            chain->setHost (120.0, -1.0);
+            double* ch[2] = { out.l.data() + start, out.r.data() + start };
+            chain->process (ch, 2, 240);
+        }
+        return out;
+    };
+    const auto without = run (song.size());
+    double dry = 0.0, answer = 1.0;
+    for (std::size_t k = 0; k < sets.size(); ++k)
+        for (std::size_t at : { k * 24000 + 960, k * 24000 + 14400 })
+        {
+            INFO ("set " << k << ", click at " << at);
+            const auto with = run (at);
+            double early = 0.0, later = 0.0;
+            for (std::size_t i = at; i < std::min (song.size(), at + 19200); ++i)
+                (i < at + 240 ? early : later) = std::max (i < at + 240 ? early : later, std::max (std::abs (with.l[i] - without.l[i]), std::abs (with.r[i] - without.r[i])));
+            dry = std::max (dry, early);
+            answer = std::min (answer, later);
+            CHECK (early < 1.0e-9);
+        }
+    CHECK (dry < 1.0e-9);
+    CHECK (answer > 1.0e-3);   // and every click is answered by the effects
+
+    // A Phaser alone there plays its sweeping copy only: what it plays on a track at Mix 100 %, minus the dry half
+    // the track already plays (before layers an FX channel's Phaser sent that half back too: the dry sound twice).
+    const auto noise = noiseOf (0.5, 0.1, 71);
+    auto onTrack = layers ({ SpaceType::phaser }, { { phaMix, 100.0f } }, 0.0f);
+    auto onFx = layers ({ SpaceType::phaser });
+    const auto t = play (*makeChain (onTrack), noise);
+    const auto f = play (*makeChain (onFx), noise);
+    dsp::Filter2 lc, hc;   // the wet EQ (wide open, still a filter)
+    lc.k = dsp::design (dsp::Shape::highPass, 20.0, 0.0, 0.7071, kSr);
+    hc.k = dsp::design (dsp::Shape::lowPass, 20000.0, 0.0, 0.7071, kSr);
+    double worst = 0.0;
+    for (std::size_t i = 0; i < noise.size(); ++i)
+        worst = std::max (worst, std::abs ((t.l[i] - f.l[i]) - 0.5 * hc.process (0, lc.process (0, noise[i]))));
+    CHECK (worst < 1.0e-9);
+    CHECK (rmsDb (f.l, 4800, 24000) > rmsDb (noise, 4800, 24000) - 10.0);   // and it does play
+}
+
+TEST_CASE ("Space layers: every feedback still dies away with three effects at their most", "[space][layers]")
+{
+    // As the single-effect test above, with three effects at their longest / most feedback together (Chorus and
+    // Phaser feed the others, which ring side by side): a second of quiet noise with a DC offset, then silence. The
+    // tail fades the whole time (5 s windows), ends at least 40 dB below where it started, stays finite.
+    struct Case
+    {
+        const char* name;
+        Values v;
+        double seconds;
+    };
+    const std::vector<Case> cases {
+        { "chorus + phaser + delay", layers ({ SpaceType::chorus, SpaceType::phaser, SpaceType::delay },
+                                             { { phaFeedback, 90.0f }, { phaDepth, 100.0f }, { dlyFeedback, 95.0f }, { dlyTime, 1.0f }, { dlyTone, 20000.0f } }), 20.0 },
+        { "phaser + delay + shimmer", layers ({ SpaceType::phaser, SpaceType::delay, SpaceType::special },
+                                              { { phaFeedback, 90.0f }, { dlyFeedback, 95.0f }, { dlyTime, 1.0f }, { dlyTone, 20000.0f }, { spxFeedback, 95.0f }, { spxShift, 12.0f }, { spxTone, 20000.0f } }), 20.0 },
+        { "delay + hall + drift", layers ({ SpaceType::delay, SpaceType::hall, SpaceType::special },
+                                          { { dlyFeedback, 95.0f }, { dlyTime, 1.0f }, { hallDecay, 12.0f }, { hallSize, 100.0f }, { hallDamp, 20000.0f }, { spxMode, 1.0f }, { spxFeedback, 95.0f } }), 20.0 },
+        { "reverb + room + shimmer 0", layers ({ SpaceType::reverb, SpaceType::room, SpaceType::special },
+                                               { { revDecay, 10.0f }, { revDamp, 20000.0f }, { roomDecay, 3.0f }, { roomSize, 100.0f }, { spxFeedback, 95.0f }, { spxShift, 0.0f }, { spxMotion, 0.0f } }), 20.0 },
+        { "on a track: chorus + phaser + shimmer", layers ({ SpaceType::chorus, SpaceType::phaser, SpaceType::special },
+                                                         { { choMix, 100.0f }, { phaMix, 100.0f }, { phaFeedback, 90.0f }, { spxMix, 100.0f }, { spxFeedback, 95.0f }, { spxShift, -12.0f } }, 0.0f), 20.0 },
+    };
+    for (const auto& c : cases)
+    {
+        INFO (c.name);
+        auto chain = makeChain (c.v);
+        std::mt19937 rng (4);
+        std::normal_distribution<double> nd (0.0, 0.035);
+        constexpr std::size_t kBlock = 1024;
+        const auto window = static_cast<std::size_t> (5.0 * kSr);
+        const auto inputEnd = static_cast<std::size_t> (kSr);
+        const auto total = inputEnd + static_cast<std::size_t> (c.seconds * kSr);
+        std::vector<double> l (kBlock), r (kBlock), peaks;
+        bool finite = true;
+        double windowPeak = 0.0;
+        for (std::size_t done = 0; done < total; done += kBlock)
+        {
+            for (std::size_t i = 0; i < kBlock; ++i)
+            {
+                const bool playing = done + i < inputEnd;
+                l[i] = playing ? 0.035 + nd (rng) : 0.0;
+                r[i] = playing ? 0.035 + nd (rng) : 0.0;
+            }
+            chain->setHost (120.0, -1.0);
+            double* ch[2] = { l.data(), r.data() };
+            chain->process (ch, 2, static_cast<int> (kBlock));
+            for (std::size_t i = 0; i < kBlock; ++i)
+            {
+                finite = finite && std::isfinite (l[i]) && std::isfinite (r[i]);
+                if (done + i < inputEnd) continue;
+                windowPeak = std::max ({ windowPeak, std::abs (l[i]), std::abs (r[i]) });
+                if ((done + i + 1 - inputEnd) % window == 0)
+                {
+                    peaks.push_back (windowPeak);
+                    windowPeak = 0.0;
+                }
+            }
+        }
+        REQUIRE (finite);
+        REQUIRE (peaks.size() >= 2);
+        CHECK (peaks.front() < 0.8 * effectCount (spaceLayers (c.v)));   // each under its safety rounding
+        bool fading = true;
+        for (std::size_t k = 1; k < peaks.size(); ++k) fading = fading && peaks[k] <= peaks[k - 1];
+        CHECK (fading);
+        CHECK (peaks.back() < 0.01 * peaks.front());
     }
 }
