@@ -29,7 +29,7 @@
       peakL: +lvl.toFixed(1), peakR: +(lvl - 1).toFixed(1), momentary: +(lvl - 9).toFixed(1), shortTerm: +(-17 + trim).toFixed(1),
       trim, name: "Lead Vox", colour: "#4fd66b", mixology: true, paired: "matched", shared: true, note: "", channels: 2, assist,
       proc: { on: procOn, modules: ["eq", "comp", "balance", "space"], running: procOn ? ["eq", "comp", "balance", "space"] : [], latencyMs: 0,
-        space: { type: "Delay", fx: false, duck: ["Lead Vox"], wet: -18 } },
+        space: { type: "Chorus + Delay", fx: false, duck: ["Lead Vox"], wet: -18 } },
     }));
   }, 1000 / 30);
 })();

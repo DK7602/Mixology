@@ -453,7 +453,7 @@
     const onList = (v) => MODULES.filter((m) => v[PROC_INDEX[MODULE_ON[m]]] > 0.5);
     if (P.listIn-- <= 0) {
       P.listIn = 15;
-      const sp = (v) => ({ spaceType: Math.round(v[PROC_INDEX.sp_type]), spaceRoute: Math.round(v[PROC_INDEX.sp_route]) });
+      const sp = (v) => ({ spaceType: Math.round(v[PROC_INDEX.sp_type]), spaceTypes: P.spec.spaceLayers((id) => v[PROC_INDEX[id]]), spaceRoute: Math.round(v[PROC_INDEX.sp_route]) });
       frame.procTargets = [Object.assign({ key: "mix", name: "Full Mix", colour: "", channels: 2, on: onList(P.values.mix), running: onList(P.values.mix) }, sp(P.values.mix))]
         .concat(chans.map((c, i) => c.link ? Object.assign({ key: keyOf(i), name: c.name, colour: c.colour, channels: c.name === "Lead Vox" || c.name === "808" ? 1 : 2,
           on: onList(P.values[keyOf(i)]), running: onList(P.values[keyOf(i)]), hash: c.hash, role: roleOf(c), duck: P.duck[keyOf(i)] || [] }, sp(P.values[keyOf(i)])) : null).filter(Boolean));

@@ -194,12 +194,11 @@ void LinkEditor::timerCallback()
     po->setProperty ("modules", on);
     po->setProperty ("running", live);
     po->setProperty ("latencyMs", roundTo (static_cast<float> (processor.getLatencySamples() * 1000.0 / juce::jmax (8000.0, processor.getSampleRate())), 0.1f));
-    if (v[mixology::proc::spOn] > 0.5f)   // Space: which effect, where it plays, what it ducks under
+    if (v[mixology::proc::spOn] > 0.5f)   // Space: which effects (up to three), where they play, what they duck under
     {
         using namespace mixology::proc;
         auto* so = new juce::DynamicObject();
-        const auto types = juce::StringArray::fromTokens (specs()[static_cast<std::size_t> (spType)].choices, "|", "");
-        so->setProperty ("type", types[juce::jlimit (0, types.size() - 1, juce::roundToInt (v[spType]))]);
+        so->setProperty ("type", juce::String (effectNames (spaceLayers (v)).c_str()));
         so->setProperty ("fx", v[spRoute] > 0.5f);
         juce::Array<juce::var> duckNames;
         if (v[duckAmount] > 0.05f)
