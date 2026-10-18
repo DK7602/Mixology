@@ -26,7 +26,7 @@ public:
     ~MixologyAudioProcessor() override;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
-    void releaseResources() override {}
+    void releaseResources() override;   // off the suite link (an inactive project, an insert switched off)
     /** The host stops or jumps (AU Reset, VST3 processing off): reverb and delay tails stop, at the start of the
         next block (instant, so any thread may call this). */
     void reset() override { resetWanted.store (true); }
@@ -122,10 +122,12 @@ private:
     int handoffCountdown = 0;
     suite::SongStyle songStyle { suite::StyleInfo::From::mixology };   // under stateLock
     std::atomic<std::uint32_t> styleVersion { 0 };
-    const std::string detectedDaw = suite::dawFromHostPath (juce::PluginHostType::getHostPath().toStdString());
+    const std::string detectedDaw = suite::dawFromHost (juce::PluginHostType::getHostPath().toStdString(),
+                                                        juce::PluginHostType().getHostDescription());
     suite::SharedChoice daw { suite::StyleInfo::From::mixology, suite::Choice::daw };   // under stateLock
     const std::uint64_t instanceId = (static_cast<std::uint64_t> (juce::Random::getSystemRandom().nextInt64()) | 1u);
     void syncStyle();
+    suite::Presence suitePresence;   // taking part in the suite link (prepareToPlay .. releaseResources)
 
     // The project this Mixology belongs to (the hub keeps each open project's state apart), and what it last
     // loaded or saved for it.

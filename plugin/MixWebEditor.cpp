@@ -348,7 +348,7 @@ void MixWebEditor::timerCallback()
         const auto d = processor.dawNow();
         auto* dw = new juce::DynamicObject();
         dw->setProperty ("key", juce::String::fromUTF8 (d.key.c_str()));
-        dw->setProperty ("picked", d.pickedAt != 0);   // false: found from the host
+        dw->setProperty ("picked", d.pickedAt != 0 && d.key != processor.dawDetected());   // false: the one found from the host
         dw->setProperty ("from", static_cast<int> (d.from));
         dw->setProperty ("detected", juce::String::fromUTF8 (processor.dawDetected().c_str()));
         frame->setProperty ("daw", juce::var (dw));

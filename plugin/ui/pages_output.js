@@ -438,7 +438,7 @@ export function buildMaster(root, app) {
       ];
       if (f.master) items.push(g
         ? [true, `Masterology is on${g.goal ? " (" + g.goal + ")" : ""}: it gets this mix's style and tone`]
-        : [null, `Open Masterology after Mixology on the ${say(app.daw, "master")} channel: it picks up this mix's style and tone`]);
+        : [null, `No Masterology playing after Mixology on the ${say(app.daw, "master")} channel (not loaded, or bypassed): there it picks up this mix's style and tone`]);
       checks.innerHTML = items.map(([ok, text]) => `<div style="display:flex;gap:10px;align-items:flex-start"><span style="width:22px;height:22px;flex:none;color:${ok === null ? "var(--text-faint)" : ok ? "var(--green)" : "var(--amber)"}">${icon(ok === false ? "headroom" : "check", 'stroke-width="2.4"')}</span><span>${esc(text)}</span></div>`).join("");
     },
   };

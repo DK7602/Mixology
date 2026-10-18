@@ -44,6 +44,18 @@ namespace
     }
 }
 
+namespace
+{
+    // A state loaded while a different style (or DAW) is already live in the project (a preset, A / B compare) comes
+    // back as not picked, so it follows the project instead of switching all three plug-ins.
+    void followLiveChoice (suite::SharedChoice& c, suite::Choice which)
+    {
+        suite::StyleInfo live;
+        if (c.style().pickedAt != 0 && suite::Link::process().readChoice (which, live, suite::nowMs()) && live.key != c.style().key)
+            c.setUnpicked (c.style().key, c.style().name);
+    }
+}
+
 MixologyAudioProcessor::MixologyAudioProcessor()
     : AudioProcessor (BusesProperties()
                           .withInput ("Input", juce::AudioChannelSet::stereo(), true)
@@ -89,8 +101,20 @@ void MixologyAudioProcessor::timerCallback()
     if (--handoffCountdown <= 0)
     {
         handoffCountdown = 4;
-        syncStyle();
-        publishHandoff();
+        // Only while the host runs this Mixology: a project that is open but not active keeps its timer running,
+        // and must neither take another song's style nor hand Masterology its mix.
+        const auto now = suite::nowMs();
+        if (suitePresence.update (now) == suite::Presence::Step::leave)
+        {
+            const juce::ScopedLock sl (stateLock);
+            songStyle.leave (suite::Link::process(), instanceId);
+            daw.leave (suite::Link::process(), instanceId);
+        }
+        if (suitePresence.takingPart())
+        {
+            syncStyle();
+            publishHandoff();
+        }
         // The bridge speaks to the DAW this really is (Logic Pro / Cakewalk: Mixology is their Mackie Control
         // surface); a DAW picked in Voxology or Masterology only changes the words, unless the host isn't known.
         bridgeHub->setDaw (detectedDaw != "other" ? detectedDaw : dawNow().key);
@@ -141,7 +165,10 @@ void MixologyAudioProcessor::pickStyle (const std::string& key, const std::strin
 
 void MixologyAudioProcessor::syncStyle()
 {
-    // The song's style: the newest choice in Voxology, Mixology or Masterology wins; the interface follows.
+    // The song's style: the newest choice in Voxology, Mixology or Masterology wins; the interface follows. (From a
+    // moment after joining, so the plug-ins of a project just switched away from have left first; a pick made while
+    // away is offered then.)
+    if (! suitePresence.settled (suite::nowMs())) return;
     const juce::ScopedLock sl (stateLock);
     if (songStyle.sync (suite::Link::process(), instanceId, suite::nowMs())) ++styleVersion;
     if (daw.sync (suite::Link::process(), instanceId, suite::nowMs())) ++styleVersion;
@@ -151,9 +178,11 @@ void MixologyAudioProcessor::pickDaw (const std::string& key)
 {
     {
         const juce::ScopedLock sl (stateLock);
-        if (key == daw.style().key && daw.style().pickedAt != 0) return;
-        if (key.empty()) daw.setUnpicked (detectedDaw, suite::dawName (detectedDaw));   // back to the one found
-        else daw.pick (key, suite::dawName (key));
+        // "Found: <your DAW>" ("") is a fresh pick of the DAW found from the host, so every plug-in follows it.
+        // (Going back to "not picked" was undone at once: this instance itself kept the earlier pick alive.)
+        const auto& wanted = key.empty() ? detectedDaw : key;
+        if (wanted == daw.style().key && daw.style().pickedAt != 0) return;
+        daw.pick (wanted, suite::dawName (wanted));
         ++styleVersion;
     }
     syncStyle();
@@ -210,6 +239,12 @@ void MixologyAudioProcessor::prepareToPlay (double sampleRate, int)
     setLatencySamples (chain.latencyFor (values));
     latencyTold.store (getLatencySamples());
     prepared.store (true);
+    suitePresence.start();   // on the suite link from the next look (timerCallback)
+}
+
+void MixologyAudioProcessor::releaseResources()
+{
+    suitePresence.stop();
 }
 
 template <typename Sample>
@@ -369,6 +404,8 @@ void MixologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
                 daw = suite::SharedChoice { suite::StyleInfo::From::mixology, suite::Choice::daw };
                 if (! daw.restore (xml->getStringAttribute ("daw").toStdString()))
                     daw.setUnpicked (detectedDaw, suite::dawName (detectedDaw));
+                followLiveChoice (songStyle, suite::Choice::style);
+                followLiveChoice (daw, suite::Choice::daw);
                 ++styleVersion;   // an open interface shows it
             }
             const BridgeHub::ProjectState ps { xml->getStringAttribute ("protected"), xml->getStringAttribute ("tracks"),
