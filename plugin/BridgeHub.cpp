@@ -1022,15 +1022,20 @@ bool BridgeHub::loadAdvice (const std::string& bytes)
     const auto procs = r.count (4);
     const auto size = r.u32();
     constexpr auto kValues = std::tuple_size<mixology::proc::Values>::value;
-    if (size != kValues) return false;   // saved by a Mixology with other controls: don't guess
+    // New controls only ever go at the end of the table, so an older Mixology's values are the first ones and the
+    // rest start at their defaults (the Space layers' switches off: its one effect, as it played). A newer one's: don't guess.
+    if (size == 0 || size > kValues) return false;
+    const auto readValues = [&r, size] (mixology::proc::Values& v) {
+        v = mixology::proc::defaults();
+        for (std::uint32_t k = 0; k < size; ++k) v[k] = r.f32();
+    };
     for (std::uint32_t i = 0; i < procs && r.ok(); ++i)
     {
         const auto hash = r.u32();
-        auto& v = snap.procs[hash];
-        for (float& x : v) x = r.f32();
+        readValues (snap.procs[hash]);
     }
     snap.mixKnown = r.flag();
-    for (float& x : snap.mix) x = r.f32();
+    readValues (snap.mix);
     const bool assistKept = ! r.atEnd();
     if (assistKept)
         for (std::uint32_t i = 0, n = r.count (24); i < n && r.ok(); ++i)

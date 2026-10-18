@@ -145,6 +145,13 @@ export const PROC = [
   { id: "spx_mix", name: "Special Mix", kind: "number", min: 0, max: 100, def: 25, curve: "lin", step: 1, unit: "%" },
   { id: "spx_mode", name: "Special Mode", kind: "choice", min: 0, max: 3, def: 0, curve: "lin", step: 1, unit: "", choices: ["Shimmer", "Drift", "Swell", "Freeze"] },
   { id: "sp_level", name: "Space Level", kind: "number", min: -30, max: 6, def: 0, curve: "lin", step: 0.1, unit: "dB" },
+  { id: "rev_on", name: "Reverb", kind: "toggle", min: 0, max: 1, def: 0, curve: "lin", step: 1, unit: "", choices: ["Off", "On"] },
+  { id: "dly_on", name: "Delay", kind: "toggle", min: 0, max: 1, def: 0, curve: "lin", step: 1, unit: "", choices: ["Off", "On"] },
+  { id: "cho_on", name: "Chorus", kind: "toggle", min: 0, max: 1, def: 0, curve: "lin", step: 1, unit: "", choices: ["Off", "On"] },
+  { id: "pha_on", name: "Phaser", kind: "toggle", min: 0, max: 1, def: 0, curve: "lin", step: 1, unit: "", choices: ["Off", "On"] },
+  { id: "hall_on", name: "Hall", kind: "toggle", min: 0, max: 1, def: 0, curve: "lin", step: 1, unit: "", choices: ["Off", "On"] },
+  { id: "room_on", name: "Room", kind: "toggle", min: 0, max: 1, def: 0, curve: "lin", step: 1, unit: "", choices: ["Off", "On"] },
+  { id: "spx_on", name: "Special FX", kind: "toggle", min: 0, max: 1, def: 0, curve: "lin", step: 1, unit: "", choices: ["Off", "On"] },
 ];
 
 export const PROC_INDEX = Object.fromEntries(PROC.map((p, i) => [p.id, i]));
@@ -152,3 +159,15 @@ export const PROC_INDEX = Object.fromEntries(PROC.map((p, i) => [p.id, i]));
 // Modules in the order the audio runs through them; bit i of the meters' "running" is MODULES[i].
 export const MODULES = ["gate", "eq", "comp", "multi", "trans", "balance", "loud", "harm", "analog", "clip", "width", "final", "limit", "space"];
 export const MODULE_ON = { gate: "gate_on", eq: "eq_on", comp: "comp_on", multi: "multi_on", trans: "trans_on", balance: "tb_on", loud: "ld_on", harm: "harm_on", analog: "an_on", clip: "clip_on", width: "st_on", final: "fin_on", limit: "lim_on", space: "sp_on" };
+
+// Space layers: each effect's on switch (by Space Effect number), the order they run in, how many at once.
+export const SPACE_ON = ["rev_on", "dly_on", "cho_on", "pha_on", "hall_on", "room_on", "spx_on"];
+export const SPACE_ORDER = [2, 3, 1, 0, 4, 5, 6];
+export const MAX_SPACE_EFFECTS = 3;
+/** The effects Space plays (Space Effect numbers, in the order they run), whether Space is on or not: those
+    switched on, at most MAX_SPACE_EFFECTS (the first in that order); none switched on (a project from before
+    layers) = Space Effect's alone. get(id) reads a control. Same rule as the engine's proc::spaceLayers(). */
+export function spaceLayers(get) {
+  const on = SPACE_ORDER.filter((t) => get(SPACE_ON[t]) > 0.5).slice(0, MAX_SPACE_EFFECTS);
+  return on.length ? on : [Math.min(SPACE_ON.length - 1, Math.max(0, Math.round(get("sp_type")) || 0))];
+}
