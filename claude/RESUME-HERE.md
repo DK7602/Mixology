@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-18, v0.21.1)
+# Mixology: resume here (updated 2026-10-18, v0.22.0)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,26 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## v0.22.0: Space layers (2026-10-18, session "Mixology audit")
+- User: "I can only add one Space effect... I tried phaser and hall and it only allows one at a time." Agreed design:
+  up to 3 effects per track, ON adds / removes, the look unchanged.
+- 7 new switches at the END of the control list (rev_on, dly_on, cho_on, pha_on, hall_on, room_on, spx_on: 143 -> 150;
+  registry room for 192). One shared rule (proc::spaceLayers / spaceEffects, JS copy generated into procspec.js,
+  test space_layers_rule_in_sync): the switches that are on, at most 3 (first in chain order); none on -> spType alone
+  (legacy states bit-identical); spOn stays the power switch.
+- Order: Chorus -> Phaser in series (each blended by its Mix), then Delay / Reverb / Hall / Room / Special FX in
+  parallel on that, each at its Mix; dry = product of (1 - mix); Effect EQ + Ducking per effect wet. Each effect
+  fades 60 ms on / off (tails don't ring on). FX channel: only effect sound at LEVEL; a lone Chorus / Phaser there now
+  sends only its own sound (before: half the dry sound came back too - the one sound change for old projects).
+- Page: ON on another effect adds it, a 4th -> toast "Up to 3 effects at once: switch one off first", two reverb types
+  -> stacking tip; the Link window shows "Chorus + Delay". Polish / Auto Mix name every effect, count only reverb
+  types for the Voxology-reverb warnings, propose with all 7 switches set. Saved advice from older versions loads.
+- CPU (48 Links, cloud VM): Space off 0.13 % / track; one effect 0.8-0.9 %; Phaser + Hall 1.5-2.3 %; three 2.5-4.4 %.
+- Mixology and Mixology Link must be updated together (control count changed).
+- Before it: Beta 4 suite installers = run 39098727832 (Mixology 0.21.1, Voxology 0.52.1, Masterology 0.29.4; all
+  CI green: Mixology 39093367699, Voxology 39093370258, Masterology 39098724843). Beta 4's first run 39093988262 had
+  a Masterology UI bug (the FROM MIXOLOGY 'not this mix' note was dropped by the frame check): don't use it.
 
 ## v0.21.1: with the Masterology audit (2026-10-18, session "Mixology audit")
 - Released with Masterology 0.29.4 and Voxology 0.52.1. SuiteLink.h (layout stays 4) gains suite::Presence and

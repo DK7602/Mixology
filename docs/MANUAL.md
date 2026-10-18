@@ -3,7 +3,7 @@
 Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list all three are under Sonicology.
 
-Manual for version 0.21.1 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
+Manual for version 0.22.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
