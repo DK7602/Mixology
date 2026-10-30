@@ -50,6 +50,9 @@ struct FakeMcuHost
     int ignoredButtons = 0;
     std::vector<std::vector<std::uint8_t>> toSurface;
     double dbOffset = 0.4;         // how far the real curve is from the translator's built-in guess (mid-way)
+    // Faders that move together: a group with its volume linked (Logic, Cakewalk), or several channel strips selected.
+    // Moving one (from the surface or by hand) moves the others by the same dB; the DAW sends their new positions.
+    std::vector<int> linked;
 
     explicit FakeMcuHost (Dialect d) : dialect (d) { if (d == Dialect::cakewalk) showDbOnTouch = false; }
 
@@ -147,6 +150,29 @@ struct FakeMcuHost
         if (t == nullptr) return "";
         if (dialect == Dialect::logic) return helpTag (i) ? dbTextOf (*t) : panTextOf (*t);
         return cakewalkValues ? panTextOf (*t) : "Pan";
+    }
+
+    void moveLinked (int index, int from, int to)
+    {
+        if (from == to || std::find (linked.begin(), linked.end(), index) == linked.end()) return;
+        const bool inDb = trueDb (from) > -144.0 && trueDb (to) > -144.0;
+        for (int l : linked)
+        {
+            if (l == index || l < 0 || l >= static_cast<int> (tracks.size())) continue;
+            auto& t = tracks[static_cast<std::size_t> (l)];
+            int pb = t.fader + (to - from);
+            if (inDb && trueDb (t.fader) > -144.0)
+            {
+                const double want = trueDb (t.fader) + trueDb (to) - trueDb (from);
+                int lo = 0, hi = 16383;
+                while (lo < hi) { const int mid = (lo + hi) / 2; if (trueDb (mid) < want) lo = mid + 1; else hi = mid; }
+                pb = lo;
+            }
+            pb = std::clamp (pb, 0, 16383);
+            if (dialect == Dialect::cakewalk) pb = (pb >> 4) << 4;
+            t.fader = pb;
+            if (l >= offset && l < offset + 8) sendFader (l - offset, pb);   // its motor fader follows
+        }
     }
 
     // ---- what the DAW sends ----
@@ -270,9 +296,11 @@ struct FakeMcuHost
             {
                 int pb = (m[2] << 7) | m[1];
                 if (dialect == Dialect::cakewalk) pb = (pb >> 4) << 4;   // 10 bits
+                const int before = t->fader;
                 t->fader = pb;
                 ++t->faderMoves;
                 if (helpTag (ch)) lcdStrip (ch, 1, bottomOf (ch));
+                moveLinked (offset + ch, before, pb);
             }
         }
         else if (status == 0x90 && m.size() >= 3)
@@ -336,8 +364,10 @@ struct FakeMcuHost
     void userMovesFader (const std::string& name, int pb)
     {
         const int i = indexOf (name);
+        const int before = tracks[static_cast<std::size_t> (i)].fader;
         tracks[static_cast<std::size_t> (i)].fader = pb;
         if (i >= offset && i < offset + 8) sendFader (i - offset, pb);
+        moveLinked (i, before, pb);
     }
     void rename (const std::string& from, const std::string& to)
     {

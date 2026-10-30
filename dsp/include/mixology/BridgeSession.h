@@ -28,7 +28,13 @@
       is refined until Cubase shows the requested value (exactly, or within 0.05 dB when its fader steps
       can't land on it). A new move on the same channel replaces the old one (latest wins).
     - The fader curve (FaderLaw) only learns pairs that have settled: while a fader moves, Cubase may report
-      the new position with the old text, and one such pair would bend the curve (seen in Cubase Artist 14). */
+      the new position with the old text, and one such pair would bend the curve (seen in Cubase Artist 14).
+    - Linked faders (Cubase's Q-Link with several channels selected, linked channels, FL Studio / Live with several
+      tracks selected, a group with its volume linked in Logic or Cakewalk): when a channel Mixology didn't write moves
+      right after Mixology wrote another one, by about the same amount, it is moving with it. On evidence (two such
+      moves, never one coincidence; channels moving on their own around then, a hand or automation, and channels
+      playing automation (R) don't count), a running plan stops, what it moved goes back (moving those back moves the
+      linked ones back too), and linkedFaders() says which channels move together. */
 namespace mixology
 {
     struct BridgeSlot
@@ -240,6 +246,26 @@ namespace mixology
         bool busy() const { return scan.active; }
         const PlanProgress& planProgress() const { return plan; }
 
+        // ---- linked faders ------------------------------------------------------------------------
+        /** Faders that move together in the DAW (see the safety rules above): once per occurrence. */
+        struct LinkedFaders
+        {
+            std::uint64_t serial = 0;         // bumps each time Mixology finds faders moving together
+            std::vector<std::string> names;   // the channels that moved together (the one Mixology moved first)
+            std::string stopped;              // the plan it stopped ("Auto Mix"); empty when no plan was running
+            int putBack = 0;                  // channels it is putting (or put) back
+            bool puttingBack = false;
+        };
+        const LinkedFaders& linkedFaders() const { return linked; }
+        static constexpr double kFollowSeconds = 0.3;    // a linked channel answers within this of Mixology's write
+        static constexpr double kJudgeAfter = 0.35;      // a move is judged once the writes' read-backs are in
+        static constexpr double kMinFollowDb = 0.5;      // smaller moves prove nothing
+        static constexpr double kOwnMoveSeconds = 0.5;   // a channel that also moves on its own around then (a hand, automation) doesn't count
+        static constexpr double kEvidenceSeconds = 8.0;  // matches count this long ...
+        static constexpr int kEvidenceNeeded = 2;        // ... and it takes two
+        static constexpr double kLinkQuietSeconds = 3.0; // after an occurrence (and its put-back), new evidence only from then
+        static constexpr double kProbeDb = 1.5;          // one match while a plan runs: a test move this big on that channel, then back
+
         // ---- commands --------------------------------------------------------------------------
         Result setVolumeDb (ChannelRef, double db, double now);
         Result nudgeDb (ChannelRef, double deltaDb, double now);
@@ -300,7 +326,52 @@ namespace mixology
             std::string loggedText;         // the last volume text logged for this slot
             double learnAt = -1.0;          // a reported (position, dB) pair waiting to settle before it is learned
             double learnValue = 0.0, learnDb = 0.0;
+            std::deque<std::pair<double, double>> sent;   // volumes Mixology sent this slot lately (value, when): their read-backs
         };
+
+        // Linked faders: Mixology's volume writes, and moves it didn't make, for a few seconds.
+        struct OwnWrite
+        {
+            std::uint64_t id = 0;
+            int slot = -1;
+            std::uint32_t hash = 0;
+            std::string title;
+            double at = 0.0;
+            double fromValue = 0.0, toValue = 0.0, fromDb = 0.0, toDb = 0.0;
+            bool readBack = false;    // its read-back came: from / to are where the DAW really moved it from / to
+        };
+        struct HostMove
+        {
+            int slot = -1;
+            std::uint32_t hash = 0;
+            std::string title;
+            double at = 0.0;
+            double fromValue = 0.0, toValue = 0.0, fromDb = 0.0, toDb = 0.0;
+            bool explained = false;   // Mixology wrote another channel just before
+            bool judged = false;
+            bool automation = false;  // its automation is on Read: playback may move it
+        };
+        struct LinkMatch { double at = 0.0; std::uint64_t write = 0; std::uint32_t follower = 0; std::string leader, name; };
+        std::deque<OwnWrite> ownWrites;
+        std::deque<HostMove> hostMoves;
+        std::vector<LinkMatch> linkEvidence;
+        std::uint64_t writeIds = 0;
+        double linkQuietUntil = -1.0;
+        double linkedAt = -1.0e9;             // when the last occurrence was raised
+        LinkedFaders linked;
+        std::vector<PlanStep> putBackSteps;   // what a plan stopped for linked faders had moved, to go back
+        std::string putBackOf;                // ... and which plan that was
+        bool putBackPlan = false;             // the plan running now is that put-back
+        // One match while a plan runs (a coincidence, or faders that move together?): the channel Mixology moved gets a
+        // small test move and goes back; a linked one moves with it both times (two more matches).
+        struct Probe { int stage = 0; int slot = -1; std::uint32_t hash = 0; double backTo = 0.0; std::uint64_t evidence = 0; };
+        Probe probe;
+        std::uint64_t probedWrite = 0;        // the match last checked this way (each once)
+        bool probeStep (double now);          // true while the test move is under way
+        void noteOwnWrite (int slotIndex, double value, double now);
+        void noteHostMove (int slotIndex, double fromValue, double fromDb, double now);
+        void judgeLinks (double now);
+        void raiseLinked (double now);
 
         enum class Field { volume, pan, mute, solo };
 

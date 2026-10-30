@@ -57,6 +57,10 @@ namespace
           << ",\"plan\":{\"done\":" << s.planProgress().done << ",\"skipped\":" << s.planProgress().skipped
           << ",\"serial\":" << s.planProgress().serial << ",\"undo\":" << s.planProgress().undo.size() << "}"
           << ",\"moving\":" << (s.moveInProgress() ? "true" : "false")
+          << ",\"linked\":{\"serial\":" << s.linkedFaders().serial << ",\"stopped\":" << esc (s.linkedFaders().stopped)
+          << ",\"puttingBack\":" << (s.linkedFaders().puttingBack ? "true" : "false") << ",\"names\":[";
+        for (std::size_t i = 0; i < s.linkedFaders().names.size(); ++i) j << (i ? "," : "") << esc (s.linkedFaders().names[i]);
+        j << "]}"
           << ",\"lastMove\":" << esc (s.lastMoveResult())
           << ",\"slots\":[";
         for (int i = 0; i < s.slotCount(); ++i)

@@ -2,6 +2,7 @@
 
 #include "mixology/BridgeProtocol.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -34,6 +35,11 @@ struct FakeCubase
     bool alive = true;
     std::vector<std::vector<std::uint8_t>> toPlugin;
     int setVolumeCount = 0;
+    // Faders that move together: Q-Link on in the MixConsole with these channels selected (or Link Channels). A volume
+    // set on one (by Mixology or by hand) moves the others by the same dB, or by the same fader travel.
+    std::vector<int> linked;
+    bool linkInDb = true;
+    bool linkedReportFirst = false;   // Cubase reports the linked channels before the one that was set
 
     // Some made-up but realistic curve: +6 dB at 1, 0 dB near 0.78, -inf at 0.
     static double lawDb (double n)
@@ -54,6 +60,27 @@ struct FakeCubase
         const int v = static_cast<int> (std::lround ((p - 0.5) * 200.0));
         if (v == 0) return "C";
         return (v < 0 ? "L" : "R") + std::to_string (std::abs (v));
+    }
+
+    static double normOf (double db)   // the fader position for a dB value (lawDb rises all the way)
+    {
+        double lo = 0.0, hi = 1.0;
+        for (int i = 0; i < 50; ++i) { const double mid = 0.5 * (lo + hi); (lawDb (mid) < db ? lo : hi) = mid; }
+        return 0.5 * (lo + hi);
+    }
+    void moveLinked (int channel, double from, double to)
+    {
+        if (from == to || std::find (linked.begin(), linked.end(), channel) == linked.end()) return;
+        for (int l : linked)
+        {
+            if (l == channel || l < 0 || l >= static_cast<int> (channels.size())) continue;
+            auto& c = channels[static_cast<std::size_t> (l)];
+            if (linkInDb && from > 0.0 && to > 0.0 && c.volume > 0.0) c.volume = normOf (lawDb (c.volume) + lawDb (to) - lawDb (from));
+            else c.volume += to - from;
+            c.volume = std::clamp (std::round (c.volume / quantum) * quantum, 0.0, 1.0);
+            const int slot = l - bankOffset;
+            if (slot >= 0 && slot < bankSize) sendVolume (slot);
+        }
     }
 
     Channel* inSlot (int slot)
@@ -131,8 +158,11 @@ struct FakeCubase
                 if (m->cmd == Cmd::setVolume)
                 {
                     ++setVolumeCount;
+                    const double before = c->volume;
                     c->volume = std::round (m->value / quantum) * quantum;
-                    sendVolume (m->slot);
+                    if (! linkedReportFirst) sendVolume (m->slot);
+                    moveLinked (bankOffset + m->slot, before, c->volume);
+                    if (linkedReportFirst) sendVolume (m->slot);
                 }
                 else if (m->cmd == Cmd::setPan)
                 {
@@ -159,9 +189,11 @@ struct FakeCubase
     // User actions inside Cubase
     void userMovesFader (int channel, double n)
     {
+        const double before = channels[static_cast<std::size_t> (channel)].volume;
         channels[static_cast<std::size_t> (channel)].volume = n;
         const int slot = channel - bankOffset;
         if (slot >= 0 && slot < bankSize) sendVolume (slot);
+        moveLinked (channel, before, n);   // Q-Link moves the others with it in Cubase too
     }
     // What Cubase Artist 14 can do while a fader is dragged: report the new position with the previous
     // position's text; the matching text only comes with the next report.

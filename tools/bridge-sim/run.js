@@ -28,6 +28,11 @@ function volumeText(n) {
   const db = lawDb(n);
   return db < -96 ? '-oo' : db.toFixed(2);
 }
+function normOf(db) {   // the fader position for a dB value
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 50; i++) { const m = (lo + hi) / 2; if (lawDb(m) < db) lo = m; else hi = m; }
+  return (lo + hi) / 2;
+}
 function panText(p) {
   const v = Math.round((p - 0.5) * 200);
   return v === 0 ? 'C' : (v < 0 ? 'L' : 'R') + Math.abs(v);
@@ -74,6 +79,19 @@ function makeCubase(names) {
     if (!sim.reversedOrder) values();
   }
   sim.fireAll = () => sim.bankChannels.forEach((_, k) => fireSlot(k));
+  // Q-Link on with these channels selected (or Link Channels): a volume set on one moves the others by the same dB, and
+  // Cubase reports each of them (those in the bank).
+  sim.linked = [];
+  sim.moveLinked = (ch, from, to) => {
+    if (from === to || !sim.linked.includes(sim.channels.indexOf(ch))) return;
+    for (const i of sim.linked) {
+      const other = sim.channels[i];
+      if (!other || other === ch) continue;
+      other.volume = Math.min(1, Math.max(0, Math.round(normOf(lawDb(other.volume) + lawDb(to) - lawDb(from)) * 16384) / 16384));
+      const slot = sim.visible().indexOf(other) - sim.bankOffset;
+      if (slot >= 0 && slot < sim.bankChannels.length) sim.bankChannels[slot].mValue.mVolume._fire();
+    }
+  };
   sim.fireChannel = (ch) => {
     const slot = sim.visible().indexOf(ch) - sim.bankOffset;   // (respects followVisibility)
     if (slot >= 0 && slot < sim.bankChannels.length) fireSlot(slot);
@@ -113,8 +131,10 @@ function makeCubase(names) {
           return;
         }
         if (prop === 'volume') sim.setCalls++;
+        const before = ch[prop];
         ch[prop] = prop === 'volume' || prop === 'pan' ? Math.round(v * 16384) / 16384 : v > 0.5 ? 1 : 0;
         hv._fire();
+        if (prop === 'volume') sim.moveLinked(ch, before, ch.volume);
       },
     };
     return hv;
@@ -554,6 +574,39 @@ const scenarios = {
     await r.run(6.0);
     check(r.cubase.channels.every((c, i) => Math.abs(c.volume - before[i][0]) < 1e-4 && Math.abs(c.pan - before[i][1]) < 1e-4), 'undo puts every fader and pan back');
     check(r.state.slots[0].title === 'Perc', 'still at Perc');
+  },
+
+  async 'linked faders (Q-Link left on): a plan stops, puts back what it moved, and says so'(r) {
+    r.cubase.channels.forEach((c, i) => { c.volume = 0.62 + 0.012 * i; });
+    r.cubase.linked = [0, 2];   // Kick and Hats selected with Q-Link on
+    await r.run(0.3);
+    const before = r.cubase.channels.map((c) => c.volume);
+    const res = r.parse(await r.session.request(`plan ${r.now.toFixed(3)} Kick|-9|-;Hats|-1|-;Keys|-12|-`));
+    check(res.ok, 'plan starts');
+    await r.run(6.0);
+    check(!r.state.applying, 'plan finished');
+    check(r.state.linked.serial === 1, 'linked faders raised once, got ' + r.state.linked.serial);
+    check(r.state.linked.stopped === 'Plan', 'it stopped the plan: ' + r.state.linked.stopped);
+    check(r.state.linked.names.includes('Kick') && r.state.linked.names.includes('Hats') && !r.state.linked.names.includes('Keys'), 'names: ' + r.state.linked.names);
+    r.cubase.channels.forEach((c, i) => check(near(lawDb(c.volume), lawDb(before[i]), 0.05), `${c.name} back at ${lawDb(before[i]).toFixed(2)} dB, got ${lawDb(c.volume).toFixed(2)}`));
+    check(r.state.log.some((l) => l.includes('Faders move together in Cubase')), 'logged');
+    r.cubase.linked = [];   // Q-Link off: the same plan works
+    await r.run(4.0);
+    r.parse(await r.session.request(`plan ${r.now.toFixed(3)} Kick|-9|-;Hats|-1|-;Keys|-12|-`));
+    await r.run(6.0);
+    check(near(r.cubase.db(r.cubase.channels[0]), -9, 0.006) && near(r.cubase.db(r.cubase.channels[2]), -1, 0.006), 'applied once Q-Link is off');
+    check(r.state.linked.serial === 1, 'no second alarm');
+  },
+
+  async 'linked faders: no false alarm (a plan while you move a fader, the same move on several channels)'(r) {
+    r.cubase.channels.forEach((c, i) => { c.volume = 0.62 + 0.012 * i; });
+    await r.run(0.3);
+    r.parse(await r.session.request(`plan ${r.now.toFixed(3)} Kick|-6|-;Snare|-6|-;Hats|-6|-;Lead Vox|-3|-;Adlibs|-9|-`));
+    for (let i = 0; i < 40; i++) { r.cubase.channels[5].volume = 0.7 - 0.004 * i; r.cubase.fireChannel(r.cubase.channels[5]); await r.run(0.02); }
+    await r.run(6.0);
+    check(!r.state.applying, 'plan finished');
+    check(r.state.linked.serial === 0, 'no linked faders: ' + JSON.stringify(r.state.linked));
+    check(near(r.cubase.db(r.cubase.channels[1]), -6, 0.006), 'Snare at -6');
   },
 
   async 'script restart mid-session: writing works right after'(r) {

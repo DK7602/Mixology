@@ -72,6 +72,7 @@ class FakeFL(object):
             self.tracks[i + 1]['name'] = n
         self.sent = []
         self.set_calls = 0
+        self.linked = []   # several mixer tracks selected: moving one moves the others by the same fader travel
 
     def db(self, i):
         return fl_db(self.tracks[i]['vol'])
@@ -89,7 +90,12 @@ class FakeFL(object):
 
         def setTrackVolume(i, v, pickup=0):
             fl.set_calls += 1
+            before = fl.tracks[i]['vol']
             fl.tracks[i]['vol'] = round(min(max(v, 0.0), 1.0), 9)
+            if i in fl.linked:
+                for k in fl.linked:
+                    if k != i:
+                        fl.tracks[k]['vol'] = round(min(max(fl.tracks[k]['vol'] + fl.tracks[i]['vol'] - before, 0.0), 1.0), 9)
         mixer.setTrackVolume = setTrackVolume
         mixer.getTrackPan = lambda i: fl.tracks[i]['pan']
 
@@ -199,6 +205,14 @@ class Param(object):
         if k == 'value' and hasattr(self, 'kind'):
             self.__dict__['sets'] += 1
             v = min(max(v, self.min), self.max)
+            before = self.__dict__.get('value')
+            object.__setattr__(self, k, v)
+            # Several tracks selected: moving one moves the others by the same dB.
+            for other in self.__dict__.get('group', []):
+                if other is not self and before and v > 0.0 and other.value > 0.0:
+                    db = live_db(other.value) + live_db(v) - live_db(before)
+                    object.__setattr__(other, 'value', min(max(10.0 ** ((db - 6.0) / 85.0), 0.0), 1.0))
+            return
         object.__setattr__(self, k, v)
 
 
@@ -363,7 +377,7 @@ def near(a, b, tol):
 NAMES = ['Kick', 'Snare', 'Hats', 'Perc', '808', 'Keys', 'Synth', 'Guitar', 'Lead Vox', 'FX', 'Adlibs', 'Vocal été ✓']
 
 
-def common_scenarios(daw_db, vol_of, names_in_order, tol):
+def common_scenarios(daw_db, vol_of, names_in_order, tol, link):
     """The same checks for both DAWs. daw_db(name) = that channel's dB in the DAW; vol_of(name) its fader; tol = how
     close a move lands (Live shows its faders to 0.1 dB, so Mixology can't do better than about 0.05 there)."""
 
@@ -458,6 +472,35 @@ def common_scenarios(daw_db, vol_of, names_in_order, tol):
         for n in ('Kick', last, 'Perc'):
             check(near(daw_db(r, n), 0.0, tol), '%s back to 0 dB: %.3f' % (n, daw_db(r, n)))
 
+    def linked(r):
+        # Faders that move together (tracks selected together): a plan stops, puts back what it moved, and says so.
+        link(r, ['Kick', 'Hats'])
+        r.run(0.5)
+        names = names_in_order(r)[:12]
+        before = dict((n, daw_db(r, n)) for n in names)
+        check(r.plan('Kick|-9|-;Hats|-1|-;Keys|-12|-')['ok'], 'plan starts')
+        r.run(8.0)
+        check(not r.state['applying'], 'plan finished')
+        lk = r.state['linked']
+        check(lk['serial'] == 1, 'linked faders raised once: %s' % lk)
+        check(lk['stopped'] == 'Plan', 'it stopped the plan: %s' % lk)
+        check('Kick' in lk['names'] and 'Hats' in lk['names'] and 'Keys' not in lk['names'], 'names: %s' % lk['names'])
+        for n in names:
+            check(near(daw_db(r, n), before[n], max(tol, 0.1)), '%s back at %.2f dB: %.2f' % (n, before[n], daw_db(r, n)))
+
+    def no_false_alarm(r):
+        r.run(0.5)
+        check(r.plan('Kick|-6|-;Snare|-6|-;Hats|-6|-;Lead Vox|-3|-;Adlibs|-9|-')['ok'], 'plan starts')
+        for i in range(30):   # you move another fader meanwhile
+            vol_set(r, 'Keys', 0.75 - 0.005 * i)
+            r.run(0.02)
+        r.run(8.0)
+        check(r.state['linked']['serial'] == 0, 'no linked faders: %s' % r.state['linked'])
+        check(near(daw_db(r, 'Snare'), -6, tol), 'Snare at -6: %.3f' % daw_db(r, 'Snare'))
+
+    def vol_set(r, name, v):
+        link(r, [], name, v)
+
     def ping_and_dump(r):
         r.run(0.5)
         r.cmd('refresh')
@@ -467,7 +510,8 @@ def common_scenarios(daw_db, vol_of, names_in_order, tol):
 
     return [('connects and mirrors the bank', connects), ('sets exact dB values', exact_db), ('all twelve faders at once', twelve),
             ('a bank change never moves the wrong channel', bank), ('pan, mute, solo and restore', pan_mute_solo),
-            ('reads every fader across the pages, a plan everywhere, undo', scan_and_plan), ('diagnostics', ping_and_dump)]
+            ('reads every fader across the pages, a plan everywhere, undo', scan_and_plan), ('diagnostics', ping_and_dump),
+            ('linked faders: a plan stops, puts back what it moved, and says so', linked), ('linked faders: no false alarm', no_false_alarm)]
 
 
 def fl_suite(exe):
@@ -483,7 +527,13 @@ def fl_suite(exe):
 
     db = lambda r, name: r.daw.db(r.daw.index(name))
     vol = lambda r, name: r.daw.volume_of(name)
-    scen = common_scenarios(db, vol, order, 0.02)
+
+    def link(r, names, move=None, value=None):
+        if move is not None:   # a hand on that fader
+            r.daw.tracks[r.daw.index(move)]['vol'] = value
+            return
+        r.daw.linked = [r.daw.index(n) for n in names]
+    scen = common_scenarios(db, vol, order, 0.02, link)
 
     def unused(r):
         r.run(0.5)
@@ -532,7 +582,15 @@ def live_suite(exe):
 
     db = lambda r, name: r.daw.db(track(r, name))
     vol = lambda r, name: track(r, name).mixer_device.volume.value
-    scen = common_scenarios(db, vol, order, 0.06)
+
+    def link(r, names, move=None, value=None):
+        if move is not None:   # a hand on that fader
+            track(r, move).mixer_device.volume.value = value
+            return
+        params = [track(r, n).mixer_device.volume for n in names]
+        for p in params:
+            p.__dict__['group'] = params
+    scen = common_scenarios(db, vol, order, 0.06, link)
 
     def returns(r):
         r.run(0.5)

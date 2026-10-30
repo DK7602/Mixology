@@ -982,3 +982,220 @@ TEST_CASE ("Bridge: a host whose last bank stops short still lands on the channe
     CHECK (r.session.viewOffset() == 20);
     CHECK (r.session.slot (0).title == "Track 21");
 }
+
+// ---------------------------------------------------------------------------------------------
+// Linked faders: Q-Link left on with channels selected (the user added Mixology Link to many tracks with it), Link
+// Channels. Mixology moving one fader moved all the linked ones, and Auto Mix "sounded awful".
+
+namespace
+{
+    BridgeSession::PlanStep levelStep (const char* name, double db)
+    {
+        BridgeSession::PlanStep st;
+        st.hash = nameHash (name);
+        st.title = name;
+        st.setVolume = true;
+        st.db = db;
+        return st;
+    }
+
+    // Each channel starts somewhere else (so a move can't land where it was by chance).
+    void spreadFaders (Rig& r)
+    {
+        for (std::size_t i = 0; i < r.cubase.channels.size(); ++i) r.cubase.channels[i].volume = 0.62 + 0.012 * static_cast<double> (i);
+    }
+}
+
+TEST_CASE ("Linked faders: a plan on two linked channels stops, puts back what it moved, and says so", "[bridge][linked]")
+{
+    for (const int variant : { 0, 1, 2 })
+    {
+        // Cubase moves linked faders by the same dB; another DAW may move them by the same fader travel, or report the
+        // linked channel before the one that was set.
+        const bool inDb = variant != 1;
+        INFO ((variant == 0 ? "linked in dB" : variant == 1 ? "linked in fader travel" : "linked channel reported first"));
+        Rig r;
+        spreadFaders (r);
+        r.cubase.linked = { 0, 2 };   // Kick and Hats selected with Q-Link on
+        r.cubase.linkInDb = inDb;
+        r.cubase.linkedReportFirst = variant == 2;
+        r.run (0.3);
+        std::vector<double> before;
+        for (const auto& c : r.cubase.channels) before.push_back (c.volume);
+
+        REQUIRE (r.session.applyPlan ("Auto Mix", { levelStep ("Kick", -9.0), levelStep ("Hats", -1.0), levelStep ("Keys", -12.0) }, r.now).ok);
+        r.run (6.0);
+        REQUIRE_FALSE (r.session.applying());
+
+        const auto& lf = r.session.linkedFaders();
+        CHECK (lf.serial == 1);
+        CHECK (lf.stopped == "Auto Mix");
+        CHECK (std::find (lf.names.begin(), lf.names.end(), "Kick") != lf.names.end());
+        CHECK (std::find (lf.names.begin(), lf.names.end(), "Hats") != lf.names.end());
+        CHECK (std::find (lf.names.begin(), lf.names.end(), "Keys") == lf.names.end());   // not linked
+        CHECK_FALSE (lf.puttingBack);
+        // Everything it moved is back where it was (the linked ones with it); nothing to undo.
+        for (std::size_t i = 0; i < before.size(); ++i)
+        {
+            INFO (r.cubase.channels[i].name);
+            CHECK (FakeCubase::lawDb (r.cubase.channels[i].volume) == Catch::Approx (FakeCubase::lawDb (before[i])).margin (0.05));
+        }
+        CHECK (r.session.planProgress().undo.empty());
+        CHECK (r.logHas ("Faders move together in Cubase"));
+        CHECK (r.logHas ("Put back what Auto Mix had moved"));
+
+        // Once Q-Link is off the same plan just works.
+        r.cubase.linked.clear();
+        r.run (4.0);
+        REQUIRE (r.session.applyPlan ("Auto Mix", { levelStep ("Kick", -9.0), levelStep ("Hats", -1.0), levelStep ("Keys", -12.0) }, r.now).ok);
+        r.run (6.0);
+        CHECK (r.cubaseDb (0) == Catch::Approx (-9.0).margin (0.06));
+        CHECK (r.cubaseDb (2) == Catch::Approx (-1.0).margin (0.06));
+        CHECK (r.session.linkedFaders().serial == 1);   // no second alarm
+    }
+}
+
+TEST_CASE ("Linked faders: a linked channel the plan doesn't touch, across the bank's pages", "[bridge][linked]")
+{
+    Rig r;
+    spreadFaders (r);
+    r.cubase.linked = { 1, 3, 4 };   // Snare, Perc, 808: only Snare and 808 are in the plan, Perc follows both
+    r.run (0.3);
+    r.session.bank (BankAction::shiftRight, r.now);   // the user looks at channels 1 - 8: Kick is outside
+    r.run (0.3);
+    std::vector<double> before;
+    for (const auto& c : r.cubase.channels) before.push_back (c.volume);
+    REQUIRE (r.session.applyPlan ("Balance", { levelStep ("Kick", -4.0), levelStep ("Snare", -8.0), levelStep ("808", -2.0) }, r.now).ok);
+    r.run (8.0);
+    REQUIRE_FALSE (r.session.applying());
+    CHECK (r.session.linkedFaders().serial == 1);
+    CHECK (r.session.linkedFaders().stopped == "Balance");
+    for (std::size_t i = 1; i < before.size(); ++i)   // in view: back where they were (Kick wasn't reached: the plan stopped)
+    {
+        INFO (r.cubase.channels[i].name);
+        CHECK (FakeCubase::lawDb (r.cubase.channels[i].volume) == Catch::Approx (FakeCubase::lawDb (before[i])).margin (0.05));
+    }
+    CHECK (r.cubase.bankOffset == 1);   // and the bank where the user left it
+}
+
+TEST_CASE ("Linked faders: moves on the Tracks page raise it too (nothing to put back)", "[bridge][linked]")
+{
+    Rig r;
+    spreadFaders (r);
+    r.cubase.linked = { 5, 6 };
+    r.run (0.3);
+    REQUIRE (r.session.nudgeDb (r.ref ("Keys"), -2.0, r.now).ok);
+    r.run (0.6);
+    CHECK (r.session.linkedFaders().serial == 0);   // one move proves nothing yet
+    REQUIRE (r.session.nudgeDb (r.ref ("Keys"), -2.0, r.now).ok);
+    r.run (0.6);
+    CHECK (r.session.linkedFaders().serial == 1);
+    CHECK (r.session.linkedFaders().stopped.empty());
+    CHECK (r.session.linkedFaders().putBack == 0);
+    // More nudges on the same channels: the same occurrence, said once.
+    r.run (3.5);
+    for (int i = 0; i < 3; ++i) { REQUIRE (r.session.nudgeDb (r.ref ("Keys"), 1.0, r.now).ok); r.run (0.6); }
+    CHECK (r.session.linkedFaders().serial == 1);
+    // A plan always stops (and puts back), even right after.
+    REQUIRE (r.session.applyPlan ("Auto Mix", { levelStep ("Keys", -12.0), levelStep ("Kick", -3.0) }, r.now).ok);
+    r.run (6.0);
+    CHECK (r.session.linkedFaders().serial == 2);
+    CHECK (r.session.linkedFaders().stopped == "Auto Mix");
+}
+
+TEST_CASE ("Linked faders: no false alarm", "[bridge][linked]")
+{
+    auto plan = [] (Rig& r) {
+        return r.session.applyPlan ("Auto Mix", { levelStep ("Kick", -9.0), levelStep ("Snare", -9.0), levelStep ("Hats", -1.0), levelStep ("Keys", -12.0),
+                                                  levelStep ("Lead Vox", -3.0), levelStep ("Adlibs", -5.0) }, r.now).ok;
+    };
+    SECTION ("an ordinary plan, two channels moving by the same amount, across pages and back")
+    {
+        Rig r;
+        spreadFaders (r);
+        r.run (0.3);
+        REQUIRE (plan (r));
+        r.run (8.0);
+        CHECK (r.session.linkedFaders().serial == 0);
+        CHECK (r.cubaseDb (0) == Catch::Approx (-9.0).margin (0.06));
+        CHECK (r.cubaseDb (10) == Catch::Approx (-5.0).margin (0.06));
+    }
+    SECTION ("you move a fader in Cubase while the plan runs")
+    {
+        Rig r;
+        spreadFaders (r);
+        r.run (0.3);
+        REQUIRE (plan (r));
+        for (int i = 0; i < 40; ++i) { r.cubase.userMovesFader (7, 0.70 - 0.004 * i); r.run (0.02); }
+        r.run (8.0);
+        CHECK (r.session.linkedFaders().serial == 0);
+    }
+    SECTION ("automation (Read) moves a fader while the plan runs")
+    {
+        Rig r;
+        spreadFaders (r);
+        r.cubase.channels[9].read = true;
+        r.run (0.3);
+        r.session.requestDump (r.now);
+        r.run (0.2);
+        REQUIRE (plan (r));
+        for (int i = 0; i < 60; ++i) { r.cubase.userMovesFader (9, 0.6 + 0.1 * std::sin (i * 0.3)); r.run (0.05); }
+        r.run (6.0);
+        CHECK (r.session.linkedFaders().serial == 0);
+    }
+    SECTION ("linked faders you move in Cubase (Mixology moves nothing)")
+    {
+        Rig r;
+        spreadFaders (r);
+        r.cubase.linked = { 0, 1, 2 };
+        r.run (0.3);
+        for (int i = 0; i < 20; ++i) { r.cubase.userMovesFader (0, 0.6 - 0.01 * i); r.run (0.03); }
+        r.cubase.userMovesFader (1, 0.5);
+        r.run (1.0);
+        CHECK (r.session.linkedFaders().serial == 0);
+    }
+}
+
+TEST_CASE ("Linked faders: one channel in the plan, its linked partner not: a test move makes sure", "[bridge][linked]")
+{
+    Rig r;
+    spreadFaders (r);
+    r.cubase.linked = { 3, 6 };   // Perc and Synth: only Perc is in the plan
+    r.run (0.3);
+    std::vector<double> before;
+    for (const auto& c : r.cubase.channels) before.push_back (c.volume);
+    // Inside the fader curve Mixology has learned (the faders it saw): Perc lands in one step, so Synth moves once.
+    REQUIRE (r.session.applyPlan ("Balance", { levelStep ("Perc", -1.0), levelStep ("Lead Vox", -2.0) }, r.now).ok);
+    r.run (8.0);
+    REQUIRE_FALSE (r.session.applying());
+    CHECK (r.logHas ("Checking whether 'Synth' moves with 'Perc'"));
+    CHECK (r.session.linkedFaders().serial == 1);
+    for (std::size_t i = 0; i < before.size(); ++i)
+    {
+        INFO (r.cubase.channels[i].name);
+        CHECK (FakeCubase::lawDb (r.cubase.channels[i].volume) == Catch::Approx (FakeCubase::lawDb (before[i])).margin (0.05));
+    }
+}
+
+TEST_CASE ("Linked faders: a coincidence is checked and the plan carries on", "[bridge][linked]")
+{
+    // You move another fader by exactly the plan's amount right after Mixology moved Kick: the test move finds nothing.
+    Rig r;
+    spreadFaders (r);
+    r.run (0.3);
+    const double kickFrom = r.cubaseDb (0), percFrom = r.cubaseDb (3);
+    // Where Mixology's first step lands (its fader curve still the built-in guess): the move Perc copies by chance.
+    const double firstStep = FakeCubase::lawDb (std::round (r.session.faderLaw().toNormalised (-9.0) * 16384.0) / 16384.0) - kickFrom;
+    REQUIRE (std::abs (firstStep) > 1.0);
+    REQUIRE (r.session.applyPlan ("Balance", { levelStep ("Kick", -9.0), levelStep ("Lead Vox", -2.0) }, r.now).ok);
+    r.run (0.01);
+    r.cubase.userMovesFader (3, FakeCubase::normOf (percFrom + firstStep));
+    r.run (8.0);
+    REQUIRE_FALSE (r.session.applying());
+    CHECK (r.logHas ("Checking whether 'Perc' moves with 'Kick'"));
+    CHECK (r.logHas ("Nothing moved with it"));
+    CHECK (r.session.linkedFaders().serial == 0);
+    CHECK (r.cubaseDb (0) == Catch::Approx (-9.0).margin (0.06));   // the plan's move stands
+    CHECK (r.cubaseDb (8) == Catch::Approx (-2.0).margin (0.06));
+    CHECK (r.cubaseDb (3) == Catch::Approx (percFrom + firstStep).margin (0.06));   // and yours
+}

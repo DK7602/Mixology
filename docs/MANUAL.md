@@ -233,6 +233,26 @@ Safety rules (always on):
 - The Stereo Out (FL Studio's Master, Live's Main) is never part of the bank.
 - Two channels with the same name: you can move them on the Tracks page, but Restore, Mixology Link and Auto Mix
   can't tell them apart (the name shows in amber, and the Mix Assistant says which name). Give one a different name.
+- **Faders that move together** (Cubase's Q-Link left on with several channels selected, linked channels, tracks
+  selected together in FL Studio or Live, a group with its volume linked in Logic or Cakewalk): when Mixology moves
+  one fader, your DAW moves the others too, so every move lands on several channels. Mixology notices it from the
+  faders themselves (a channel it didn't touch moving right after it moved another one, by the same amount, twice;
+  after one such move it makes a small test move on that channel, 1.5 dB, and back). Then it stops what it was
+  doing (Auto Mix, Balance, an Undo...), puts back the faders it had already moved (moving those back moves the
+  linked ones back too), and a window says which channels move together and how to stop it in your DAW:
+  - Cubase: Q-Link is on in the MixConsole (the Q-Link button at the top left) with several channels selected, or
+    the channels are linked (Link Channels): switch Q-Link off, or click one channel so only it is selected (linked
+    channels: right-click one > Unlink Channels).
+  - FL Studio: several mixer tracks are selected in the Mixer: click one mixer track so only it is selected.
+  - Ableton Live: several tracks are selected: click one track's title bar so only it is selected.
+  - Logic Pro: several channel strips are selected in the Mixer, or they are in a group with Volume linked: click
+    one channel strip so only it is selected, or untick Volume in the group's settings (Group Settings).
+  - Cakewalk: the tracks are in a Quick Group or a fader group: click one track so only it is selected, and take
+    the faders out of the group (right-click a fader > Remove from Group).
+  - Studio One, REAPER, Bitwig (no fader bridge yet): selected tracks and groups move together there too, worth
+    knowing when you set the faders from Mixology's list by hand.
+  Once it's off, run Auto Mix (or the tool it stopped) again. A fader you move yourself, or automation playing
+  (Read), never counts as linked.
 
 ## Mixology Link
 
@@ -810,6 +830,11 @@ If Cubase crackles or the performance meter peaks:
   Voxology and the Tracks page must see the same name (rename the track in Cubase if two tracks share one).
 - **The Master page doesn't show Masterology**: update Masterology to 0.29.3 or newer, and put it in the same project
   (after Mixology on the Stereo Out). It appears a moment after Masterology is inserted.
+- **Auto Mix sounds awful / faders I didn't ask for moved**: probably faders that move together in your DAW (Cubase:
+  Q-Link left on with several channels selected, for example after adding Mixology Link to many tracks at once).
+  Mixology now stops and puts the faders back by itself and says so ("Faders are linked"); switch Q-Link off (or
+  click one channel so only it is selected) and run Auto Mix again. With an older Mixology: Undo, or Restore on the
+  Tracks page, then switch Q-Link off.
 - **Stereo Architect doesn't spread my doubles**: the list says why. "Sing at different times" or "not the same line":
   Mixology heard them as different parts. "Didn't hear them sing together": play the part of the song where both
   play, then Analyze Mix again. Doubles that are loose on purpose may not count as doubles: pan them yourself, or put

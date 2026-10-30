@@ -179,6 +179,7 @@ namespace mixology
         }
 
         if (scan.active && now >= scan.nextAt) scanStep (now);
+        judgeLinks (now);
 
         for (int i = 0; i < static_cast<int> (meta.size()); ++i)
         {
@@ -433,6 +434,7 @@ namespace mixology
         auto& s = slotRef (m.slot);
         auto& mt = metaRef (m.slot);
         const bool first = ! s.hasVolume;
+        const double prevValue = s.volume, prevDb = s.volumeDb;
         s.hasVolume = true;
         s.volume = m.value;
         s.volumeText = m.text;
@@ -468,6 +470,26 @@ namespace mixology
             mt.loggedText = s.volumeText;   // where the fader started: not a move
             return;
         }
+
+        // The read-back of a volume Mixology sent lately (any of them: drags and refinements overlap), or a move it
+        // didn't make: watched for faders that move together (linked faders).
+        bool readBack = false;
+        for (const auto& [value, at] : mt.sent) readBack = readBack || (now - at <= kEchoWindow && std::abs (m.value - value) <= 0.004);
+        if (readBack)
+        {
+            // Where the DAW really moved it from (a linked channel may have moved it after Mixology sent this), and its own dB.
+            for (auto it = ownWrites.rbegin(); it != ownWrites.rend(); ++it)
+                if (it->hash == s.hash && ! it->readBack && std::abs (it->toValue - m.value) <= 0.004)
+                {
+                    it->readBack = true;
+                    it->fromValue = prevValue;
+                    it->fromDb = prevDb;
+                    if (FaderLaw::parseDb (m.text)) it->toDb = s.volumeDb;
+                    break;
+                }
+        }
+        else if (s.present && std::abs (m.value - prevValue) > 1.0e-6)
+            noteHostMove (m.slot, prevValue, prevDb, now);
 
         // Our move's readback is the first report near the position we sent. Anything else while a move is
         // running (a stale report, someone grabbing the fader) is not taken as the result.
@@ -630,6 +652,7 @@ namespace mixology
         auto m = writeMessage (Cmd::setVolume, slotIndex);
         m.value = std::clamp (value, 0.0, 1.0);
         send (m);
+        noteOwnWrite (slotIndex, m.value, now);
 
         auto& mt = metaRef (slotIndex);
         mt.lastOwnWrite = now;
@@ -1091,9 +1114,17 @@ namespace mixology
 
         if (scan.waiting)
         {
-            // A plan's moves on this page land before the bank moves on (a bank change would cut them off).
-            if (moveInProgress (-1) && now < scan.waitUntil)
+            // A plan's moves on this page land before the bank moves on (a bank change would cut them off), and a channel
+            // that moved with them is judged first (linked faders stop the plan right here).
+            const bool linkPending = std::any_of (hostMoves.begin(), hostMoves.end(), [] (const HostMove& h) { return h.explained && ! h.judged; });
+            if ((moveInProgress (-1) || linkPending) && now < scan.waitUntil)
             {
+                scan.nextAt = now + kPlanPollSeconds;
+                return;
+            }
+            if (probeStep (now))
+            {
+                scan.waitUntil = now + kPlanSettleSeconds;
                 scan.nextAt = now + kPlanPollSeconds;
                 return;
             }
@@ -1338,12 +1369,226 @@ namespace mixology
         }
         planPending.clear();
 
-        plan.message = plan.what + ": changed " + std::to_string (plan.done) + " channel" + (plan.done == 1 ? "" : "s") + ".";
-        if (plan.skipped > 0)
-            plan.message += " " + std::to_string (plan.skipped) + " skipped.";
+        if (putBackPlan)
+        {
+            plan.message = "Put back what " + putBackOf + " had moved (" + std::to_string (plan.done) + " channel" + (plan.done == 1 ? "" : "s")
+                           + "): faders move together in " + dawLabel + ".";
+            putBackPlan = false;
+            plan.undo.clear();   // nothing to undo: the faders are where they were before the stopped plan
+            linked.puttingBack = false;
+            linkQuietUntil = now + kLinkQuietSeconds;
+        }
+        else if (! putBackSteps.empty())
+            plan.message = plan.what + ": stopped, faders move together in " + dawLabel + " (linked). Putting back what it had moved...";
+        else
+        {
+            plan.message = plan.what + ": changed " + std::to_string (plan.done) + " channel" + (plan.done == 1 ? "" : "s") + ".";
+            if (plan.skipped > 0)
+                plan.message += " " + std::to_string (plan.skipped) + " skipped.";
+        }
         addLog (now, plan.message);
         for (const auto& n : plan.notes) addLog (now, "  " + n);
         ++plan.serial;
+        changed();
+
+        // A plan stopped for linked faders: what it moved goes back now (moving those back moves the linked ones back too).
+        if (! putBackSteps.empty())
+        {
+            auto steps = std::move (putBackSteps);
+            putBackSteps.clear();
+            if (applyPlan ("Putting back " + putBackOf, std::move (steps), now).ok)
+                putBackPlan = true;
+            else
+            {
+                linked.puttingBack = false;
+                linkQuietUntil = now + kLinkQuietSeconds;
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Linked faders: a channel Mixology didn't write, moving right after it wrote another one, by about the same amount
+
+    void BridgeSession::noteOwnWrite (int slotIndex, double value, double now)
+    {
+        const auto& s = slot (slotIndex);
+        auto& mt = metaRef (slotIndex);
+        OwnWrite w;
+        w.id = ++writeIds;
+        w.slot = slotIndex;
+        w.hash = s.hash;
+        w.title = s.title;
+        w.at = now;
+        // Where the DAW has it just before this write lands: the last value sent, while its read-back hasn't come.
+        const bool inFlight = ! mt.sent.empty() && now - mt.sent.back().second < kEchoWindow && std::abs (s.volume - mt.sent.back().first) > 0.004;
+        w.fromValue = inFlight ? mt.sent.back().first : s.volume;
+        w.fromDb = inFlight ? law.toDb (w.fromValue) : s.volumeDb;
+        w.toValue = value;
+        w.toDb = law.toDb (value);   // the DAW's own dB replaces it when the read-back comes
+        ownWrites.push_back (std::move (w));
+        while (! ownWrites.empty() && now - ownWrites.front().at > kEvidenceSeconds) ownWrites.pop_front();
+        mt.sent.push_back ({ value, now });
+        while (mt.sent.size() > 32 || (! mt.sent.empty() && now - mt.sent.front().second > kEchoWindow)) mt.sent.pop_front();
+    }
+
+    void BridgeSession::noteHostMove (int slotIndex, double fromValue, double fromDb, double now)
+    {
+        if (now < linkQuietUntil) return;
+        const auto& s = slot (slotIndex);
+        HostMove h;
+        h.slot = slotIndex;
+        h.hash = s.hash;
+        h.title = s.title;
+        h.at = now;
+        h.fromValue = fromValue;
+        h.toValue = s.volume;
+        h.fromDb = fromDb;
+        h.toDb = s.volumeDb;
+        h.automation = s.automationRead;
+        for (const auto& w : ownWrites) h.explained = h.explained || (w.hash != h.hash && now >= w.at && now - w.at <= kFollowSeconds);
+        hostMoves.push_back (std::move (h));
+    }
+
+    void BridgeSession::judgeLinks (double now)
+    {
+        while (! hostMoves.empty() && now - hostMoves.front().at > kEvidenceSeconds) hostMoves.pop_front();
+        linkEvidence.erase (std::remove_if (linkEvidence.begin(), linkEvidence.end(), [now] (const LinkMatch& e) { return now - e.at > kEvidenceSeconds; }),
+                            linkEvidence.end());
+        if (now < linkQuietUntil) return;
+        auto known = [] (double db) { return std::isfinite (db) && ! isMinusInf (db); };
+        for (auto& h : hostMoves)
+        {
+            if (h.judged || now - h.at < kJudgeAfter) continue;
+            h.judged = true;
+            if (! h.explained) continue;   // no write of Mixology's just before: a move made in the DAW
+            // The same channel also moving on its own around then (a hand on the fader, automation playing; longer for a
+            // channel on Read): this proves nothing.
+            const double around = h.automation ? 3.0 * kOwnMoveSeconds : kOwnMoveSeconds;
+            if (std::any_of (hostMoves.begin(), hostMoves.end(), [&] (const HostMove& o) { return o.hash == h.hash && ! o.explained && std::abs (o.at - h.at) <= around; }))
+                continue;
+            const double dPos = h.toValue - h.fromValue, dDb = h.toDb - h.fromDb;
+            for (const auto& w : ownWrites)
+            {
+                if (w.hash == h.hash || h.at < w.at || h.at - w.at > kFollowSeconds) continue;
+                const double wPos = w.toValue - w.fromValue, wDb = w.toDb - w.fromDb;
+                if (! known (w.toDb) || ! known (w.fromDb) || std::abs (wDb) < kMinFollowDb) continue;
+                if ((wPos > 0.0) != (dPos > 0.0)) continue;
+                const bool sameDb = known (h.toDb) && known (h.fromDb) && std::abs (dDb - wDb) <= std::max (0.15, 0.1 * std::abs (wDb));
+                const bool samePos = std::abs (dPos - wPos) <= std::max (0.003, 0.08 * std::abs (wPos));
+                if (! sameDb && ! samePos) continue;
+                if (std::none_of (linkEvidence.begin(), linkEvidence.end(), [&] (const LinkMatch& e) { return e.write == w.id && e.follower == h.hash; }))
+                    linkEvidence.push_back ({ now, w.id, h.hash, w.title, h.title });
+                break;
+            }
+        }
+        if (static_cast<int> (linkEvidence.size()) < kEvidenceNeeded) return;
+        // Moves on the Tracks page (no plan): the same channels again within a minute are the same occurrence (a drag
+        // goes on, more nudges): said once. A plan always stops (and its moves go back).
+        if (! (scan.active && scan.plan) && now - linkedAt < 60.0
+            && std::all_of (linkEvidence.begin(), linkEvidence.end(), [this] (const LinkMatch& e) {
+                   return std::find (linked.names.begin(), linked.names.end(), e.leader) != linked.names.end()
+                          && std::find (linked.names.begin(), linked.names.end(), e.name) != linked.names.end(); }))
+        {
+            linkEvidence.clear();
+            return;
+        }
+        raiseLinked (now);
+    }
+
+    bool BridgeSession::probeStep (double now)
+    {
+        // Stage 1: the test move landed and what moved with it was judged: back to where it was.
+        if (probe.stage == 1)
+        {
+            probe.stage = 2;
+            if (probe.slot >= 0 && probe.slot < slotCount() && slot (probe.slot).present && slot (probe.slot).hash == probe.hash)
+            {
+                auto& mv = metaRef (probe.slot).move;
+                mv = {};
+                mv.kind = MoveKind::restore;
+                mv.logResult = false;
+                mv.targetDb = law.toDb (probe.backTo);
+                sendVolume (probe.slot, probe.backTo, now);
+                return true;
+            }
+        }
+        if (probe.stage == 2)
+        {
+            if (linkEvidence.size() <= 1)
+            {
+                addLog (now, "  Nothing moved with it: the faders aren't linked.");
+                linkEvidence.clear();   // it was a coincidence
+            }
+            probe = {};
+            return false;
+        }
+        // One match on this page: was it a coincidence? A small test move on the channel Mixology moved, then back.
+        if (linkEvidence.size() != 1 || linkEvidence.front().write == probedWrite || now < linkQuietUntil) return false;
+        const auto& e = linkEvidence.front();
+        probedWrite = e.write;
+        const auto w = std::find_if (ownWrites.begin(), ownWrites.end(), [&e] (const OwnWrite& x) { return x.id == e.write; });
+        if (w == ownWrites.end() || w->slot < 0 || w->slot >= slotCount()) return false;
+        const auto& s = slot (w->slot);
+        if (! s.present || s.hash != w->hash || ! s.hasVolume || isMinusInf (s.volumeDb) || isProtected (s.hash) || s.automationWrite) return false;
+        probe.stage = 1;
+        probe.slot = w->slot;
+        probe.hash = s.hash;
+        probe.backTo = s.volume;
+        probe.evidence = e.write;
+        addLog (now, "Checking whether " + quoted (e.name) + " moves with " + quoted (s.title) + ": a " + formatDb (-kProbeDb).substr (1)
+                         + " test move on " + quoted (s.title) + ", then back.");
+        auto& mv = metaRef (w->slot).move;
+        mv = {};
+        mv.kind = MoveKind::restore;
+        mv.logResult = false;
+        mv.targetDb = s.volumeDb - kProbeDb;
+        sendVolume (w->slot, law.toNormalised (s.volumeDb - kProbeDb), now);
+        return true;
+    }
+
+    void BridgeSession::raiseLinked (double now)
+    {
+        std::vector<std::string> names;
+        for (const auto& e : linkEvidence)
+            for (const auto* n : { &e.leader, &e.name })
+                if (std::find (names.begin(), names.end(), *n) == names.end()) names.push_back (*n);
+        linkEvidence.clear();
+        hostMoves.clear();
+        probe = {};
+        ++linked.serial;
+        linkedAt = now;
+        linked.names = names;
+        linked.stopped.clear();
+        linked.putBack = 0;
+        linked.puttingBack = false;
+        linkQuietUntil = now + kLinkQuietSeconds;
+        std::string list;
+        for (std::size_t i = 0; i < names.size() && i < 4; ++i)
+            list += (i == 0 ? "" : i + 1 == std::min<std::size_t> (names.size(), 4) ? " and " : ", ") + quoted (names[i]);
+        if (names.size() > 4) list += " and " + std::to_string (names.size() - 4) + " more";
+        addLog (now, "Faders move together in " + dawLabel + ": " + list + " (when Mixology moves one, " + dawLabel + " moves the other"
+                         + (names.size() > 2 ? "s" : "") + " too: linked or selected together).");
+        if (scan.active && scan.plan && ! putBackPlan)
+        {
+            // Stop the plan, and put back what it moved: each channel exactly as it was just before (moving those back
+            // moves the linked ones back too).
+            linked.stopped = plan.what;
+            putBackOf = plan.what;
+            putBackSteps.clear();
+            for (auto st : plan.undo)
+            {
+                st.checkFrom = false;
+                st.checkPan = false;
+                putBackSteps.push_back (std::move (st));
+            }
+            linked.putBack = static_cast<int> (putBackSteps.size());
+            linked.puttingBack = ! putBackSteps.empty();
+            plan.notes.push_back ("Stopped: " + list + " move together in " + dawLabel + " (linked faders). Mixology puts back what it had moved.");
+            plan.undo.clear();
+            planPending.clear();
+            for (auto& mt : meta) mt.move.active = false;
+            if (linked.puttingBack) linkQuietUntil = 1.0e18;   // quiet until the put-back has finished
+        }
         changed();
     }
 

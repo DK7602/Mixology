@@ -366,6 +366,61 @@ TEST_CASE ("Mackie Control: a plan across every channel, its undo, and Restore a
     }
 }
 
+TEST_CASE ("Mackie Control: linked faders (a group with its volume linked) stop a plan, which puts back what it moved", "[mcu][linked]")
+{
+    for (const auto dialect : { Dialect::logic, Dialect::cakewalk })
+    {
+        INFO (nameOf (dialect));
+        Rig r (dialect);
+        r.host.linked = { 0, 1, 7 };   // Kick, Snare and Bass in a group with Volume linked
+        r.run (2.5);
+        std::vector<int> before;
+        for (const auto& t : r.host.tracks) before.push_back (t.fader);
+        auto step = [] (const char* name, double db) {
+            BridgeSession::PlanStep st;
+            st.hash = bridge::nameHash (name);
+            st.title = name;
+            st.setVolume = true;
+            st.db = db;
+            return st;
+        };
+        REQUIRE (r.session.applyPlan ("Auto Mix", { step ("Kick", -12.0), step ("Snare", -2.0), step ("Hats", -9.0) }, r.now).ok);
+        r.run (12.0);
+        REQUIRE_FALSE (r.session.applying());
+        const auto& lf = r.session.linkedFaders();
+        CHECK (lf.serial == 1);
+        CHECK (lf.stopped == "Auto Mix");
+        CHECK (std::find (lf.names.begin(), lf.names.end(), "Hats") == lf.names.end());
+        for (std::size_t i = 0; i < r.host.tracks.size(); ++i)
+        {
+            INFO (r.host.tracks[i].name);
+            CHECK (r.host.trueDb (r.host.tracks[i].fader) == Catch::Approx (r.host.trueDb (before[i])).margin (0.15));
+        }
+        CHECK (r.logHas ("Faders move together in"));
+    }
+}
+
+TEST_CASE ("Mackie Control: an ordinary plan, and a fader you move, are no linked faders", "[mcu][linked]")
+{
+    Rig r (Dialect::logic);
+    r.run (2.5);
+    std::vector<BridgeSession::PlanStep> steps;
+    for (const char* n : { "Kick", "Snare", "Hats", "Bass" })
+    {
+        BridgeSession::PlanStep st;
+        st.hash = bridge::nameHash (n);
+        st.title = n;
+        st.setVolume = true;
+        st.db = -6.0;   // the same move on four channels
+        steps.push_back (st);
+    }
+    REQUIRE (r.session.applyPlan ("Balance", steps, r.now).ok);
+    for (int i = 0; i < 30; ++i) { r.host.userMovesFader ("Piano", 9000 + 40 * i); r.run (0.03); }
+    r.run (10.0);
+    CHECK (r.session.linkedFaders().serial == 0);
+    CHECK (r.host.dbOf ("Kick") == Catch::Approx (-6.0).margin (0.06));
+}
+
 TEST_CASE ("Mackie Control: moves made in the DAW, and renames, are seen", "[mcu]")
 {
     Rig r;

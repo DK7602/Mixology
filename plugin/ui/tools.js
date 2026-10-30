@@ -5,7 +5,7 @@
 import { $, el, icon, fmt, esc, graph, freqToX, cssVar } from "./ui.js";
 import { ROLES, roleIcon } from "./roles.js";
 import { sheet, sheetNow, stillOpen, TOOL_NAMES } from "./sheets.js";
-import { dawName } from "./daws.js";
+import { dawName, say } from "./daws.js";
 
 const TOOL_ICON = { auto: "wand", balance: "sliders", clean: "wave", pocket: "mic", stereo: "rings", polish: "star" };
 const TOOL_ABOUT = {
@@ -28,9 +28,38 @@ function valueText(c, v, which) {
 }
 
 let openTool = null;   // re-renders the open tool sheet when the bridge reports progress
+let linkedShown = 0;   // the linked-faders occurrence the pop-up was shown for
 
 export function hookTools(app) {
-  app.on("bridge", () => { if (openTool) openTool(); });
+  app.on("bridge", (b) => {
+    if (b && b.linked && b.linked.serial !== linkedShown) { linkedShown = b.linked.serial; openLinkedFaders(app, b.linked); }
+    if (openTool) openTool();
+  });
+}
+
+// Faders that move together in the DAW (Q-Link left on, tracks selected together, a group): Mixology stopped the plan and
+// put back what it had moved. Once per occurrence, in the sheet every tool uses; the fix in your DAW's words.
+function openLinkedFaders(app, lk) {
+  app.native.bridgeCommand("linkedSeen", { value: lk.serial });   // shown: not again for this occurrence
+  const body = sheet("FADERS ARE LINKED");
+  body.className = "scroll";
+  const dn = dawName(app.daw);
+  const names = (lk.names || []).map((n) => `'${n}'`);
+  const list = names.length <= 1 ? names.join("") : names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+  el("div", "", body, { fontSize: "24px", fontWeight: "600", margin: "0 0 10px" }).textContent = `${list || "Some faders"} move together in ${dn}`;
+  el("p", "", body, { fontSize: "19px", lineHeight: "1.45", margin: "0 0 14px" }).textContent = `When Mixology moved one of them, ${dn} moved the other${names.length > 2 ? "s" : ""} too, so every move landed on several channels.`
+    + (!lk.stopped ? "" : !lk.putBack ? ` Mixology stopped ${lk.stopped} before it had moved anything.`
+      : ` Mixology stopped ${lk.stopped} and ${lk.puttingBack ? "is putting" : "put"} back the faders it had moved (moving those back moves the linked ones back too).`);
+  const fix = el("div", "card", body, { position: "relative", margin: "0 0 14px", padding: "12px 16px 12px 52px", fontSize: "18px", lineHeight: "1.45",
+    border: "1.5px solid #ff8f3c", boxShadow: "0 0 12px rgba(255,120,40,0.25)" });
+  fix.insertAdjacentHTML("beforeend", `<div style="position:absolute;left:14px;top:12px;width:28px;height:28px;color:#ff8f3c">${icon("link")}</div>`);
+  el("div", "", fix, { color: "#ff8f3c", fontSize: "14px", letterSpacing: "0.08em", fontWeight: "600", marginBottom: "4px" }).textContent = `HOW TO FIX IT IN ${dn.toUpperCase()}`;
+  const words = say(app.daw, "linkedFaders");
+  el("div", "", fix).textContent = words.charAt(0).toUpperCase() + words.slice(1) + ".";
+  el("p", "", body, { fontSize: "19px", lineHeight: "1.45", margin: "0 0 16px" }).textContent = `Once it's off, ${lk.stopped ? `run ${lk.stopped} again` : "run Auto Mix (or any tool) again"}: then each move lands only on its own channel.`;
+  const ok = el("button", "small-btn red", body, { height: "48px", fontSize: "20px", minWidth: "160px" });
+  ok.textContent = "OK";
+  ok.addEventListener("click", () => $("overlay").classList.remove("shown"));
 }
 
 export async function openToolSheet(app, tool) {

@@ -484,6 +484,8 @@ void BridgeHub::timerCallback()
         {
             lastApply.waitingForBridge = false;
             lastApply.bridgeUndo = bridge.planProgress().undo;
+            // Nothing of it stayed (stopped for linked faders, and put back; or every channel skipped): nothing to undo.
+            if (lastApply.bridgeUndo.empty() && lastApply.assist.empty() && lastApply.procs.empty()) lastApply = {};
         }
         finishPendingPlans();
         ++applyVersion;
@@ -1940,6 +1942,17 @@ juce::var BridgeHub::getState (bool includeLog)
     o->setProperty ("channelNames", stringList (bridge.channelTitles()));
     o->setProperty ("analysis", analysisState());
     o->setProperty ("apply", applyState());
+    // Faders that move together in the DAW (Q-Link, tracks selected together, a group): the window says so once.
+    if (const auto& lf = bridge.linkedFaders(); lf.serial != 0 && lf.serial != linkedSeen)
+    {
+        auto* lo = new juce::DynamicObject();
+        lo->setProperty ("serial", static_cast<juce::int64> (lf.serial));
+        lo->setProperty ("names", stringList (lf.names));
+        lo->setProperty ("stopped", juce::String::fromUTF8 (lf.stopped.c_str()));
+        lo->setProperty ("putBack", lf.putBack);
+        lo->setProperty ("puttingBack", lf.puttingBack);
+        o->setProperty ("linked", juce::var (lo));
+    }
     o->setProperty ("lawPoints", static_cast<int> (bridge.faderLaw().size()));
 
     // Where the fader scale marks sit on Cubase's fader (learned curve; a rough guess until learned).
@@ -2326,6 +2339,11 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
         openPorts();
     }
     else if (name == "copyLog")   juce::SystemClipboard::copyTextToClipboard (logText());
+    else if (name == "linkedSeen")   // the window showed the linked-faders pop-up for this occurrence
+    {
+        linkedSeen = static_cast<std::uint64_t> (static_cast<juce::int64> (value));
+        ++applyVersion;
+    }
     else if (name == "history")   planResult = historyList();
     else if (name == "historyTo" || name == "historyUndo" || name == "historyRedo")
     {

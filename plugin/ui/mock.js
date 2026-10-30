@@ -31,6 +31,7 @@
   // The setup check (open the preview with ?setup to see it): what the hub reports for the user's song with a mono 'Beat'.
   const SETUP_DEMO = /[?&]setup\b/.test(location.search);
   const REOPENED_DEMO = /[?&]reopened\b/.test(location.search);   // the project opened again: yesterday's advice
+  const LINKED_DEMO = /[?&]linked\b/.test(location.search);       // Q-Link left on: applying a plan finds faders moving together
   const SETUP = [
     { id: "setup-mono-group", kind: "warn", icon: "mono", title: "Your mix arrives in mono",
       text: "Your tracks play in stereo (for example 'Pop Kit 1' and 'HALion Sonic 01'), but at the Stereo Out left and right are exactly the same: every pan and every stereo sound is folded to the middle on the way. Most likely 'Beat' is a mono group: everything that plays through it comes out in the middle.",
@@ -118,6 +119,7 @@
       channelNames: B.channelsRead ? chans.map((c) => c.name) : [], viewOffset: B.channelsRead ? B.offset : -1,
       lastMove: B.lastMove, lawPoints: 37, marks: [6, 0, -6, -12, -24, -36, -48].map((db) => ({ db, pos: toNorm(db) })),
       logVersion: B.log.length, log: withLog ? B.log.slice() : undefined,
+      linked: B.linked && B.linked.serial !== B.linkedSeen ? { ...B.linked } : undefined,
     };
   };
   // The undo history (a few demo steps; going back and forward only flips them here).
@@ -166,6 +168,7 @@
     if (name === "bankTo") { B.offset = Math.max(0, Math.min(Math.max(0, chans.length - 12), Math.round(value))); log(`Bank: showing channel ${B.offset + 1} first.`); return { ok: true }; }
     if (name === "readChannels") { B.channelsRead = true; B.version++; return { ok: true }; }
     if (name === "refresh" || name === "reconnect") { B.version++; return { ok: true }; }
+    if (name === "linkedSeen") { B.linkedSeen = value; return { ok: true }; }
     if (name === "copyLog") { try { navigator.clipboard.writeText(B.log.join("\n")); } catch (e) { /* preview */ } return { ok: true }; }
     if (name === "analyze") {
       window.__mixStyle = value && value.name;
@@ -257,6 +260,13 @@
           return;
         }
         clearInterval(tick);
+        if (LINKED_DEMO && picked.some((c) => c.kind === "level")) {   // Kick, Snare and Hats move together: stopped, put back
+          for (const u of before) { u.c.volume = u.v; u.c.pan = u.p; }
+          B.linked = { serial: ((B.linked && B.linked.serial) || 0) + 1, names: ["Kick", "Snare", "Hats"], stopped: B.plan.title, putBack: 3, puttingBack: false };
+          Object.assign(B.apply, { active: false, message: `Put back what ${B.plan.title} had moved (3 channels): faders move together in Cubase.`, serial: B.apply.serial + 1, canUndo: false });
+          log("Faders move together in Cubase: 'Kick', 'Snare' and 'Hats' (when Mixology moves one, Cubase moves the others too: linked or selected together).");
+          return;
+        }
         Object.assign(B.apply, { active: false, message: `${B.plan.title}: changed ${B.apply.total} channels.`, serial: B.apply.serial + 1, canUndo: true });
         B.undo = before;
         log(B.apply.message);

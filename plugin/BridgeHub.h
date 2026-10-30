@@ -131,6 +131,7 @@ public:
         Analyze Mix: analyze, analyzeFinish, analyzeCancel, setRole, setExcluded, setReference.
         Milestone 4: plan(tool) -> { plan }, planApply { id, picked, allowBig, headroom }, planUndo -> { bridge },
         refListen ("ref" / "mix"), vocalTaste ("right" / "quieter" / "louder" / "style"), setMusicBus { hash, value }.
+        Linked faders: linkedSeen (serial): the window showed its pop-up for that occurrence (getState's "linked" goes).
         Undo history: history -> { history }, historyTo (step id, 0 = the start), historyUndo, historyRedo.
         Returns { ok, message, warning, info }. */
     juce::var command (const juce::String& name, const juce::var& arg);
@@ -355,6 +356,7 @@ private:
     static double wallClock();   // seconds since 1970: when a step happened
     const mixology::link::LinkInfo* linkOf (const std::vector<mixology::link::LinkInfo>&, const mixology::history::Change&) const;
     std::uint64_t applyVersion = 0, seenPlanSerial = 0;
+    std::uint64_t linkedSeen = 0;   // the linked-faders occurrence the window has shown (its pop-up comes once)
     std::uint64_t seenNoPanVersion = 0;   // the bridge's No pan list, as last saved in trackSettings
     void syncNoPan();
     bool hearingReference = false;
