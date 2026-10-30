@@ -62,6 +62,11 @@ sends higher-resolution art, re-run it.
   exactly two linked channels both written in the same instant. Not yet tried in real Cubase / Logic.
 - Tests: 216 engine tests; FakeCubase / FakeMcuHost linked faders; bridge-sim Node (real Cubase script) and FL / Live
   Python sims.
+- v0.23.0 CI green: run 41109557346 (c0ec1b6). Beta 8 suite installers: run 41112154839, label "Beta 8", version 0.8.0
+  (Mixology 0.23.0, Voxology 0.52.1 + daws.js 0c82e95, Masterology 0.29.6 + daws.js 8fb7b74; shared-files job passed).
+- MAC RUNNERS: on 2026-10-30 evening GitHub cancelled every macos-14 job instantly (no runner, no log; run 41109593837,
+  twice). sonicology.yml and build.yml now use macos-15 (aa7ec37); the plug-ins still target macOS 11, universal (CMake).
+  Voxology's and Masterology's build.yml still say macos-14 for their optional Mac builds: switch them if they fail too.
 
 ## v0.22.0: Space layers (2026-10-18, session "Mixology audit")
 - User: "I can only add one Space effect... I tried phaser and hall and it only allows one at a time." Agreed design:
