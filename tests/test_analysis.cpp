@@ -848,18 +848,137 @@ TEST_CASE ("Plans: Balance brings an outlier back, leaves a fitting beat alone",
     CHECK (makePlan (Tool::balance, fits, channelsOf (tracks (0.0) (0))).changes.empty());
 }
 
-TEST_CASE ("Plans: room for Masterology is offered separately", "[plan]")
+namespace
 {
+    // Mixology's Full Mix as the hub reports it: on the master channel, nothing switched on (or Final Touch at `out`).
+    mixology::mix::MixNow fullMix (double finalOut = 0.0, bool finalOn = false)
+    {
+        mixology::mix::MixNow m;
+        m.known = true;
+        m.now = mixology::proc::defaults();
+        m.now[mixology::proc::finOn] = finalOn ? 1.0f : 0.0f;
+        m.now[mixology::proc::finOut] = static_cast<float> (finalOut);
+        m.atAnalysis = m.now;
+        m.atAnalysisKnown = true;
+        return m;
+    }
+
+    double procValue (const mixology::mix::Change& c, int id, double otherwise = -999.0)
+    {
+        for (const auto& [i, v] : c.proc)
+            if (i == id) return v;
+        return otherwise;
+    }
+}
+
+TEST_CASE ("Plans: room for Masterology is one gain on the whole mix (the Full Mix's Final Output)", "[plan]")
+{
+    using namespace mixology::proc;
     auto tracks = [] (int) { return std::vector<TrackSample> { sample ("Kick", kickFrame()), sample ("808", bassFrame()), sample ("Lead Vox", vocalFrame (-12.0)) }; };
     const auto r = listen (tracks, 150, 7.6).evaluate ({});   // peaks at +7.6 dBTP like the first test session
     auto chans = channelsOf (tracks (0));
-    chans[1].locked = true;
-    const auto p = makePlan (Tool::balance, r, chans);
-    CHECK (p.headroomDb < -12.0);
-    CHECK (p.headroomWhy.find ("Masterology") != std::string::npos);
-    CHECK (p.headroomWhy.find ("'808' can't move") != std::string::npos);
-    REQUIRE (p.headroom.size() == 2);   // Kick and Lead Vox; the protected 808 stays
-    for (const auto& c : p.changes) CHECK (std::abs (c.wanted - c.from) < 6.0);   // the level changes stay small
+    chans[1].locked = true;   // a protected channel changes nothing: no fader moves for room
+
+    SECTION ("Final Touch switches on with only its Output moving; every fader stays")
+    {
+        const auto p = makePlan (Tool::balance, r, chans, fullMix());
+        REQUIRE (p.headroomChange.has_value());
+        const auto& c = *p.headroomChange;
+        CHECK (c.fullMix);
+        CHECK (c.kind == "room");
+        CHECK (procValue (c, finOn) == 1.0);
+        CHECK (procValue (c, finWidth) == 100.0);   // neutral: nothing else in the sound changes
+        CHECK (procValue (c, finAir) == 0.0);
+        CHECK (procValue (c, finGlue) == 0.0);
+        CHECK (procValue (c, finOut) == Catch::Approx (-13.6).margin (0.25));   // +7.6 down to about -6
+        CHECK (p.headroomDb == Catch::Approx (procValue (c, finOut)));
+        CHECK (p.headroomWhy.find ("Masterology") != std::string::npos);
+        CHECK (p.headroomWhy.find ("one gain on the whole mix") != std::string::npos);
+        CHECK (p.headroomWhy.find ("13.6 dB quieter until Masterology brings it back") != std::string::npos);
+        CHECK (p.headroomWhy.find ("Auto-Master") != std::string::npos);
+        for (const auto& ch : p.changes) CHECK (std::abs (ch.wanted - ch.from) < 6.0);   // the level changes stay small
+        for (const auto& ch : p.changes) CHECK (ch.kind != "room");                        // offered on its own, unticked
+    }
+    SECTION ("Final Output already set counts: never applied twice")
+    {
+        const auto half = makePlan (Tool::balance, r, chans, fullMix (-8.0, true));
+        REQUIRE (half.headroomChange.has_value());
+        CHECK (half.headroomChange->proc.size() == 1);   // Final Touch is on: only its Output moves
+        CHECK (procValue (*half.headroomChange, finOut) == Catch::Approx (-13.6).margin (0.25));
+        CHECK (half.headroomDb == Catch::Approx (-5.6).margin (0.25));
+        CHECK (half.headroomWhy.find ("from -8.0 dB") != std::string::npos);
+        const auto done = makePlan (Tool::balance, r, chans, fullMix (-13.6, true));
+        CHECK (done.headroomDb == 0.0);
+        CHECK_FALSE (done.headroomChange.has_value());
+        // Final Output set while Final Touch is off doesn't count (it isn't playing).
+        CHECK (makePlan (Tool::balance, r, chans, fullMix (-13.6, false)).headroomDb < -12.0);
+    }
+    SECTION ("the peak where Final Output sits: Mixology's own output since play when it is higher")
+    {
+        auto m = fullMix();
+        m.peakKnown = true;
+        m.peakBeforeFinalDb = 10.2;   // the Full Mix processing adds 2.6 dB on the way
+        CHECK (procValue (*makePlan (Tool::balance, r, chans, m).headroomChange, finOut) == Catch::Approx (-16.2).margin (0.25));
+        m.peakBeforeFinalDb = 3.0;    // a quieter part played since: what Analyze Mix heard is higher, it counts
+        CHECK (procValue (*makePlan (Tool::balance, r, chans, m).headroomChange, finOut) == Catch::Approx (-13.6).margin (0.25));
+    }
+    SECTION ("hotter than Final Output can take: it stops at -24 and says what's left")
+    {
+        auto m = fullMix();
+        m.peakKnown = true;
+        m.peakBeforeFinalDb = 22.0;
+        const auto p = makePlan (Tool::balance, r, chans, m);
+        REQUIRE (p.headroomChange.has_value());
+        CHECK (procValue (*p.headroomChange, finOut) == -24.0);
+        CHECK (p.headroomWhy.find ("hotter than Final Output can take") != std::string::npos);
+        CHECK (p.headroomWhy.find ("still reach about -2.0 dB") != std::string::npos);
+        m.now[finOn] = 1.0f;
+        m.now[finOut] = -24.0f;
+        const auto again = makePlan (Tool::balance, r, chans, m);
+        CHECK_FALSE (again.headroomChange.has_value());
+        CHECK (noted (again, "Final Output is at its lowest"));
+    }
+    SECTION ("no Mixology on the master channel: not offered, and the plan says why")
+    {
+        auto m = fullMix();
+        m.onMaster = false;
+        const auto p = makePlan (Tool::balance, r, chans, m);
+        CHECK (p.headroomDb == 0.0);
+        CHECK_FALSE (p.headroomChange.has_value());
+        CHECK (noted (p, "only on the {daw:master} channel"));
+        const auto none = makePlan (Tool::balance, r, chans);   // no Full Mix at all
+        CHECK_FALSE (none.headroomChange.has_value());
+        CHECK (noted (none, "no Mixology is there"));
+    }
+    SECTION ("the Full Mix processing switched off with other modules on: not offered (they would come on too)")
+    {
+        auto m = fullMix();
+        m.now[chainOn] = 0.0f;
+        m.now[compOn] = 1.0f;
+        const auto p = makePlan (Tool::balance, r, chans, m);
+        CHECK_FALSE (p.headroomChange.has_value());
+        CHECK (noted (p, "Full Mix processing is switched off"));
+        m.now[compOn] = 0.0f;   // nothing else on: the processing comes on for Final Output alone
+        const auto q = makePlan (Tool::balance, r, chans, m);
+        REQUIRE (q.headroomChange.has_value());
+        CHECK (procValue (*q.headroomChange, chainOn) == 1.0);
+    }
+}
+
+TEST_CASE ("Plans: room for Masterology reaches tracks that didn't play while Analyze Mix listened", "[plan]")
+{
+    // The user's song: Analyze Mix heard a verse; the chorus vocals were silent then. Moving every fader that played left
+    // them out (they came back 15.7 dB louder than the rest). One gain on the Full Mix takes every channel down.
+    auto tracks = [] (int) { return std::vector<TrackSample> {
+        sample ("Drums", kickFrame()), sample ("808", bassFrame()), sample ("Vox Verse 1", vocalFrame (-10.0)),
+        sample ("Vox Chorus 1", silentFrame()), sample ("Vox Chorus 2", silentFrame()), sample ("Rhythm 1 Chorus", silentFrame()) }; };
+    const auto r = listen (tracks, 150, 9.7).evaluate ({});
+    REQUIRE (track (r, "Vox Chorus 1")->activity == 0.0);
+    const auto p = makePlan (Tool::autoMix, r, channelsOf (tracks (0)), fullMix());
+    REQUIRE (p.headroomChange.has_value());
+    CHECK (p.headroomChange->fullMix);
+    CHECK (p.headroomDb == Catch::Approx (-15.7).margin (0.25));
+    for (const auto& c : p.changes) CHECK (c.name != "Vox Chorus 1");   // no fader of its own to forget
 }
 
 TEST_CASE ("Plans: Balance moves channels without a Link with the rest of the beat", "[plan]")
@@ -1329,25 +1448,17 @@ TEST_CASE ("Music group: the instruments play through one group fader (Voxology'
         const auto again = makePlan (Tool::balance, r, chans);
         for (const auto& c : again.changes) CHECK (std::abs (c.wanted - c.from) < 1.0);
     }
-    SECTION ("room for Masterology moves the group and the vocals, not the instruments under the group")
+    SECTION ("room for Masterology: one gain on the Full Mix, the music group and the vocals alike")
     {
-        Analysis a = analyse (0.0);
-        Moment hot;
-        const auto r = [&] {
-            auto rr = a.evaluate ({});
-            return rr;
-        }();
-        auto rr = r;
+        auto rr = analyse (0.0).evaluate ({});
         rr.mixPeak = 6.0;
         std::vector<ChannelNow> chans { channel ("Vocals"), channel ("Electric Rhythm"), channel ("Drum Machine 01"), channel ("Beat", 0.0, 0.0, false) };
         chans[3].musicBus = true;
-        const auto p = makePlan (Tool::balance, rr, chans);
+        const auto p = makePlan (Tool::balance, rr, chans, fullMix());
         REQUIRE (p.headroomDb < 0.0);
-        std::vector<std::string> names;
-        for (const auto& h : p.headroom) names.push_back (h.name);
-        CHECK (std::find (names.begin(), names.end(), "Beat") != names.end());
-        CHECK (std::find (names.begin(), names.end(), "Vocals") != names.end());
-        CHECK (std::find (names.begin(), names.end(), "Electric Rhythm") == names.end());
+        REQUIRE (p.headroomChange.has_value());
+        CHECK (p.headroomChange->fullMix);
+        CHECK (p.headroomChange->kind == "room");
     }
 }
 

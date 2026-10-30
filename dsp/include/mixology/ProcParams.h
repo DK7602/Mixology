@@ -18,7 +18,10 @@
 namespace mixology::proc
 {
     enum class Kind : std::uint8_t { number, toggle, choice };
-    enum class Curve : std::uint8_t { linear, log };   // log: knob and glide in octaves / ratios
+    // log: knob and glide in octaves / ratios. zeroMid: 0 sits in the middle of the knob (and of the host's 0..1) and
+    // each half is linear, for a range that reaches further one way than the other (Final Output -24 .. +12 dB keeps
+    // 0 dB at 12 o'clock, and the host's top half means what it meant when the range was -12 .. +12).
+    enum class Curve : std::uint8_t { linear, log, zeroMid };
 
     struct ParamSpec
     {
@@ -130,6 +133,10 @@ namespace mixology::proc
     Values defaults();
     /** Inside the range, on the step, a whole number for toggles and choices. NaN gives the default. */
     float sanitise (int index, float value);
+    /** Where a value sits on its knob / the host's 0..1, and back, for linear and zeroMid controls (log controls use
+        the host's own skew). */
+    float toNormalised (const ParamSpec&, float value);
+    float fromNormalised (const ParamSpec&, float normalised);
     bool isOn (const Values&, Module);    // switched on (and the chain too)
 
     struct Meters

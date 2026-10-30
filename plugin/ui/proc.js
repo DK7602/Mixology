@@ -201,7 +201,7 @@ export function moduleOf(id) {
 /** A knob definition for a control: range, default and curve from the spec, label and format from the page. */
 export function knobFor(proc, id, extra) {
   const p = proc.spec(id);
-  return Object.assign({ min: p.min, max: p.max, def: p.def, curve: p.curve === "log" ? "log" : "lin", step: p.step || undefined, value: proc.get(id) }, extra);
+  return Object.assign({ min: p.min, max: p.max, def: p.def, curve: p.curve === "log" || p.curve === "zero" ? p.curve : "lin", step: p.step || undefined, value: proc.get(id) }, extra);
 }
 
 // ---------------------------------------------------------------------------------------------

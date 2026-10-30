@@ -110,7 +110,8 @@ Mixology remembers your choice.
 - **Master**: loudness over the last minute, a checklist for handing the mix to Masterology (the peaks and overall
   loudness count from the last time you pressed play), and four finishing
   knobs on the Full Mix (before Masterology): **Glue** (gentle bus compression), **Tilt** (+ brighter, − warmer),
-  **Width** and **Trim** (the level going into Masterology). Leave the loudness to Masterology.
+  **Width** and **Trim** (the level going into Masterology, -24 to +12 dB: Final Touch's Output). Leave the loudness to
+  Masterology.
 
 Knobs: drag up / down (hold Shift for fine steps), scroll, or use the arrow keys. Double-click resets.
 
@@ -351,9 +352,20 @@ list: every change it wants to make, **now → new**, and why, in plain words. U
   window stays open for the next one). **All vocals** sets the whole vocal again; **Follow the whole vocal** takes a
   track's own setting away. Balance and Auto Mix then move each vocal track to its own level (the band makes room for
   the average), and the advice checks each one. Saved with the song.
-  **Room for Masterology** is a separate line at the bottom, unticked: every fader that plays goes down together
-  (e.g. -12.8 dB when the mix peaks at about +6.8 dB). The balance stays the same, the mix gets quieter, Masterology
-  brings the level back. Tick it last, once the balance sounds right.
+  **Make room for Masterology** is a separate line at the bottom, unticked: "the whole mix -12.8 dB in one go" when
+  the mix peaks at about +6.8 dB. It turns down Mixology's own **Final Output** on the Full Mix (Final Touch, on the
+  master channel: Cubase's Stereo Out): one gain on the whole mix, after Mixology's own processing and before
+  Masterology. Every track, FX return and group goes down together, also the ones that didn't play while Analyze Mix
+  listened (a chorus while it heard a verse), so the balance stays exactly as it is, and Undo takes it back in one
+  step. If Final Touch
+  was off it switches on with its Width, Air and Glue left neutral. The amount comes from the mix's peaks where that
+  gain sits (Mixology's own output since you last pressed play, or what Analyze Mix heard, whichever is higher), aiming
+  for peaks around -6 dBTP (under -3); a Final Output you already set counts, so it is never applied twice. **The mix
+  then plays that much quieter until Masterology brings it back: run Auto-Master in Masterology afterwards (again, if
+  it already ran).** Best done last, when the balance is right. Very hot mixes: Final Output goes down to -24 dB at
+  most; the line says how much is still left (pull all the track faders down together for the rest). Without
+  Mixology on the master channel it isn't offered (the list says why): pull all the track faders down together
+  instead.
 - **Stereo Architect**: pans. Kick, bass, snare and the lead vocal in the middle. Pairs and doubles
   ("Gtr L" / "Gtr R", "Electric Rhythm" / "Electric Rhythm (D)", "Keys 1" / "Keys 2") spread left and right:
   if one is already out on a side, it stays and its partner mirrors it. A mix that leans to one side is evened
@@ -456,7 +468,7 @@ The modules (the sound runs through them in this order):
 | Tone | Analog Touch | Tape (soft saturation, low bump, softer top), Console (subtle edge, channel bleed), Noise (hiss while it plays), Mix. |
 | Tone | Clip Control | Rounds off peaks over the Threshold; Softness; Oversampling 1x - 8x (cleaner); Mix. |
 | Stereo | Width | Width, Low / Mid / High Width (the side signal split at Low Below / High Above). 100 % = as it is. Mono tracks: nothing to widen (pan them). |
-| Tone | Final Touch | Width, Air, Glue, Output. |
+| Tone | Final Touch | Width, Air, Glue, Output (-24 to +12 dB; on the Full Mix it is the Master page's Trim, and what Make Room turns down). |
 | Dynamics | Limiter | Nothing passes the Ceiling (sample or true peaks). Adds 5 ms of delay while it's on (switching it never clicks); your DAW lines the track up, also while the plug-in is bypassed. On the full mix, leave the final limiting to Masterology. |
 
 **Mono Check** (Stereo page): the whole mix plays in mono while the red badge shows (the scope and meters keep
@@ -787,4 +799,9 @@ If Cubase crackles or the performance meter peaks:
   Voxology and the Tracks page must see the same name (rename the track in Cubase if two tracks share one).
 - **The Master page doesn't show Masterology**: update Masterology to 0.29.3 or newer, and put it in the same project
   (after Mixology on the Stereo Out). It appears a moment after Masterology is inserted.
+- **After "Make room for Masterology" the mix is much quieter**: that is the room. Masterology brings the level back:
+  run Auto-Master in Masterology (again, if it already ran). Undo (or the History) takes it back. If one part of
+  the song suddenly sticks out after making room with an older Mixology (it moved every fader that played while
+  Analyze Mix listened, and left the others where they were), undo that step, then make room again: now it is one
+  gain on the whole mix.
 - **Send us the log**: Settings > Bridge > **Copy log**, then paste it into the chat.

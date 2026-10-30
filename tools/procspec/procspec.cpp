@@ -32,7 +32,7 @@ namespace
         {
             js << "  { id: \"" << s.id << "\", name: \"" << s.name << "\", kind: \""
                << (s.kind == Kind::number ? "number" : s.kind == Kind::toggle ? "toggle" : "choice") << "\", min: " << num (s.min)
-               << ", max: " << num (s.max) << ", def: " << num (s.def) << ", curve: \"" << (s.curve == Curve::log ? "log" : "lin")
+               << ", max: " << num (s.max) << ", def: " << num (s.def) << ", curve: \"" << (s.curve == Curve::log ? "log" : s.curve == Curve::zeroMid ? "zero" : "lin")
                << "\", step: " << num (s.step) << ", unit: \"" << s.unit << "\"";
             if (s.kind != Kind::number)
             {

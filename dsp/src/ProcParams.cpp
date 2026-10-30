@@ -23,6 +23,7 @@ namespace mixology::proc
 
         constexpr auto L = Curve::linear;
         constexpr auto G = Curve::log;
+        constexpr auto Z = Curve::zeroMid;
         constexpr const char* kShapes = "Bell|Low shelf|High shelf|Low cut|High cut";
 
         constexpr ParamSpec band (int b, int field, int shape, float hz, float q)
@@ -132,7 +133,7 @@ namespace mixology::proc
             num ("fin_width", "Final Width", 0.0f, 200.0f, 100.0f, L, 1.0f, "%"),
             num ("fin_air", "Final Air", -6.0f, 6.0f, 0.0f, L, 0.1f, "dB"),
             num ("fin_glue", "Final Glue", 0.0f, 100.0f, 0.0f, L, 1.0f, "%"),
-            num ("fin_out", "Final Output", -12.0f, 12.0f, 0.0f, L, 0.1f, "dB"),
+            num ("fin_out", "Final Output", -24.0f, 12.0f, 0.0f, Z, 0.1f, "dB"),   // -12 .. +12 before 0.23 (Make Room needs more)
 
             toggle ("st_on", "Stereo"),
             num ("st_width", "Width", 0.0f, 200.0f, 100.0f, L, 1.0f, "%"),
@@ -241,6 +242,23 @@ namespace mixology::proc
         if (s.kind != Kind::number) return std::round (value);
         if (s.step > 0.0f) value = std::clamp (s.min + std::round ((value - s.min) / s.step) * s.step, s.min, s.max);
         return value;
+    }
+
+    float toNormalised (const ParamSpec& s, float value)
+    {
+        if (! (s.max > s.min)) return 0.0f;
+        value = std::clamp (value, s.min, s.max);
+        if (s.curve == Curve::zeroMid && s.min < 0.0f && s.max > 0.0f)
+            return value < 0.0f ? 0.5f * (value - s.min) / -s.min : 0.5f + 0.5f * value / s.max;
+        return (value - s.min) / (s.max - s.min);
+    }
+
+    float fromNormalised (const ParamSpec& s, float n)
+    {
+        n = std::clamp (std::isfinite (n) ? n : 0.0f, 0.0f, 1.0f);
+        if (s.curve == Curve::zeroMid && s.min < 0.0f && s.max > 0.0f)
+            return n < 0.5f ? s.min + (-s.min) * (n / 0.5f) : s.max * ((n - 0.5f) / 0.5f);
+        return s.min + n * (s.max - s.min);
     }
 
     bool isOn (const Values& v, Module m)

@@ -1189,12 +1189,16 @@ namespace mixology::mix
                 out.push_back ({ "headroom", "warn", "headroom", "No headroom left for mastering",
                                  "The mix peaks at about " + fmt1 (r.mixPeak) + " dBFS. Masterology (or any mastering) works best with 3 - 6 dB to spare.",
                                  "Yes, before mastering.",
-                                 { "Pull the track faders down together until the loudest parts peak around -6 to -3 dBFS (not the {daw:master} fader: "
-                                   "it comes after Mixology and Masterology, so they would still hear the peaks)." }, {} });
+                                 { "Open Balance and tick 'Also make room for Masterology' (best done last, when the balance is right): Mixology turns the whole "
+                                   "mix down in one go on its Final Output, after its own processing and before Masterology, so the balance stays exactly. "
+                                   "The mix then plays quieter until Masterology brings it back: run Auto-Master in Masterology afterwards.",
+                                   "Without Mixology on the {daw:master} channel: pull all the track faders down together until the loudest parts peak around "
+                                   "-6 to -3 dBFS (not the {daw:master} fader: it comes after Mixology and Masterology, so they would still hear the peaks)." }, {} });
             else if (r.mixPeak > -3.0)
                 out.push_back ({ "headroom", "info", "headroom", "A bit hot for mastering",
                                  "The mix peaks at about " + fmt1 (r.mixPeak) + " dBFS. Aim for peaks around -6 to -3 dBFS.",
-                                 "Only before mastering.", { "Pull all faders down 2 - 3 dB together." }, {} });
+                                 "Only before mastering.", { "Open Balance and tick 'Also make room for Masterology' (the whole mix 2 - 3 dB down in one go, "
+                                                             "on Mixology's Final Output), or pull all faders down 2 - 3 dB together." }, {} });
         }
 
         // ---- order: worth fixing first; a calm word when nothing big stands out ------------------

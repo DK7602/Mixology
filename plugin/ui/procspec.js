@@ -94,7 +94,7 @@ export const PROC = [
   { id: "fin_width", name: "Final Width", kind: "number", min: 0, max: 200, def: 100, curve: "lin", step: 1, unit: "%" },
   { id: "fin_air", name: "Final Air", kind: "number", min: -6, max: 6, def: 0, curve: "lin", step: 0.1, unit: "dB" },
   { id: "fin_glue", name: "Final Glue", kind: "number", min: 0, max: 100, def: 0, curve: "lin", step: 1, unit: "%" },
-  { id: "fin_out", name: "Final Output", kind: "number", min: -12, max: 12, def: 0, curve: "lin", step: 0.1, unit: "dB" },
+  { id: "fin_out", name: "Final Output", kind: "number", min: -24, max: 12, def: 0, curve: "zero", step: 0.1, unit: "dB" },
   { id: "st_on", name: "Stereo", kind: "toggle", min: 0, max: 1, def: 0, curve: "lin", step: 1, unit: "", choices: ["Off", "On"] },
   { id: "st_width", name: "Width", kind: "number", min: 0, max: 200, def: 100, curve: "lin", step: 1, unit: "%" },
   { id: "st_low", name: "Low Width", kind: "number", min: 0, max: 200, def: 100, curve: "lin", step: 1, unit: "%" },

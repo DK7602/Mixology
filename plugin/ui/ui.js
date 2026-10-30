@@ -222,7 +222,8 @@ function arcPath(c, r, a0, a1) {
   return `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 ${hi - lo > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
 }
 
-/** opts: x, y (top-left of the whole control), size (dial px), label, min, max, value, def, curve ("lin" | "log"),
+/** opts: x, y (top-left of the whole control), size (dial px), label, min, max, value, def, curve ("lin" | "log" |
+    "zero": 0 in the middle of the dial, each half linear, for a range like -24 .. +12),
     format(v), bipolar (arc from the middle; red when below centre), colour (override arc colour), step,
     onChange(v), id (saved under this id), labelGap, valueGap. */
 export class Knob {
@@ -284,12 +285,15 @@ export class Knob {
   toNorm(v) {
     const { min, max, curve } = this.o;
     if (curve === "log") return Math.log(v / min) / Math.log(max / min);
+    if (curve === "zero" && min < 0 && max > 0) return v < 0 ? 0.5 * (v - min) / -min : 0.5 + 0.5 * v / max;
     return (v - min) / (max - min);
   }
   fromNorm(n) {
     const { min, max, curve, step } = this.o;
     n = clamp(n, 0, 1);
-    let v = curve === "log" ? min * Math.pow(max / min, n) : min + n * (max - min);
+    let v = curve === "log" ? min * Math.pow(max / min, n)
+      : curve === "zero" && min < 0 && max > 0 ? (n < 0.5 ? min + -min * (n / 0.5) : max * ((n - 0.5) / 0.5))
+      : min + n * (max - min);
     if (step) v = Math.round(v / step) * step;
     return clamp(v, Math.min(min, max), Math.max(min, max));
   }

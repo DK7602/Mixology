@@ -11,7 +11,7 @@ const TOOL_ICON = { auto: "wand", balance: "sliders", clean: "wave", pocket: "mi
 const TOOL_ABOUT = {
   auto: "Everything together: levels, pans, low cuts, mud and vocal pocket dips, EQ, compression, space and the mix's tone.",
   polish: "Processing in each track's Mixology Link: EQ, compression, the vocal's reverb / delay, and the Full Mix's tone. Worked out from what Analyze Mix heard.",
-  balance: "Fader levels: the beat against itself, the vocal against the beat, and room for Masterology.",
+  balance: "Fader levels: the beat against itself, the vocal against the beat. And room for Masterology: the whole mix down in one go.",
   clean: "Assist EQ in each track's Mixology Link: low cuts where there's rumble, dips where the mix is muddy.",
   pocket: "Assist EQ dips in the instruments that cover the vocal's words (1.6 - 4 kHz).",
   stereo: "Pans: low end and lead vocal in the middle, pairs and doubles spread, a lopsided mix evened out.",
@@ -149,14 +149,15 @@ export async function openToolSheet(app, tool) {
   }
   if (!plan.changes.length) el("div", "", list, { fontSize: "20px", marginTop: "14px", color: "var(--green)" }).textContent = "Nothing to change: this part of your mix already fits.";
 
-  // ---- room for Masterology: on its own, unticked (the mix gets quieter, and quieter always sounds worse at first)
+  // ---- room for Masterology: on its own, unticked (the mix gets quieter, and quieter always sounds worse at first). One
+  // gain on the whole mix: the Full Mix's Final Output (every track, FX return and group goes down together).
   let headBox = null;
   if (plan.headroomDb < 0) {
     const hr = el("div", "", list, { display: "grid", gridTemplateColumns: "34px 1fr", gap: "6px 12px", alignItems: "start", marginTop: "18px", padding: "12px 14px", borderRadius: "10px", border: "1.5px solid var(--panel-edge)" });
     headBox = el("button", "", hr, { width: "30px", height: "30px", borderRadius: "7px", border: "1.5px solid var(--btn-edge)", background: "var(--btn)", color: "var(--green)", cursor: "pointer", padding: "4px", display: "grid", placeItems: "center" });
     headBox.addEventListener("click", () => { headroomOn = !headroomOn; refresh(); });
     const ht2 = el("div", "", hr);
-    el("div", "", ht2, { fontSize: "19px", fontWeight: "600" }).textContent = `Also make room for Masterology: every fader ${fmt.db(plan.headroomDb)} (${plan.headroomCount} channels)`;
+    el("div", "", ht2, { fontSize: "19px", fontWeight: "600" }).textContent = `Also make room for Masterology: the whole mix ${fmt.db(plan.headroomDb)} in one go (Mixology's Final Output)`;
     el("div", "", ht2, { fontSize: "15.5px", lineHeight: "1.35", color: "var(--text-dim)", marginTop: "3px" }).textContent = plan.headroomWhy + " Best done last, when the balance is right.";
   }
 

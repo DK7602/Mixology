@@ -946,6 +946,23 @@ void BridgeHub::updateDonePoints()
             const auto& p = plans[tool];
             const bool nothingLeft = p.valid && (sg.id == "headroom" ? p.headroomDb == 0.0 : p.changes.empty());
             if (! nothingLeft) continue;
+            // Room for Masterology is made on the Full Mix's Final Output (or by pulling every fader down yourself).
+            if (sg.id == "headroom")
+            {
+                DonePoint d;
+                if (mix.known && mixProcAtAnalysisKnown)
+                {
+                    using namespace mixology::proc;
+                    auto outOf = [] (const Values& v) { return isOn (v, Module::final) ? static_cast<double> (v[finOut]) : 0.0; };
+                    const double moved = outOf (mix.now) - outOf (mixProcAtAnalysis);
+                    if (std::abs (moved) >= 0.5)
+                        d.what = "Full Mix Final Output " + std::string (moved > 0.0 ? "+" : "") + juce::String (moved, 1).toStdString() + " dB";
+                }
+                if (d.what.empty()) d.what = changedSinceAnalysis (sg.tracks, true, true);
+                d.done = ! d.what.empty();
+                if (d.done) found[sg.id] = d;
+                continue;
+            }
             // A level point is only done by faders, and only when Balance could have moved its tracks (in a DAW
             // without a bridge, or with them padlocked, its plan is empty because it can't act, not because it's done).
             const bool levels = tool == "balance";
@@ -2363,6 +2380,13 @@ mixology::mix::MixNow BridgeHub::mixNow() const
     m.now = mixProc.get();
     m.atAnalysisKnown = mixProcAtAnalysisKnown;
     m.atAnalysis = mixProcAtAnalysis;
+    m.onMaster = ! mixProc.onMaster || mixProc.onMaster();
+    if (mixProc.peakBeforeFinal)
+    {
+        const double peak = mixProc.peakBeforeFinal();
+        m.peakKnown = std::isfinite (peak) && peak > -100.0;
+        m.peakBeforeFinalDb = m.peakKnown ? peak : -120.0;
+    }
     return m;
 }
 
@@ -2765,7 +2789,11 @@ juce::var BridgeHub::planToVar (const mixology::mix::Plan& p) const
     o->setProperty ("changes", changes);
     o->setProperty ("headroomDb", std::round (p.headroomDb * 10.0) / 10.0);
     o->setProperty ("headroomWhy", juce::String::fromUTF8 (p.headroomWhy.c_str()));
-    o->setProperty ("headroomCount", static_cast<int> (p.headroom.size()));
+    if (p.headroomChange)   // Make Room: the Full Mix's Final Output, from -> to
+    {
+        o->setProperty ("headroomFrom", std::round (p.headroomChange->from * 10.0) / 10.0);
+        o->setProperty ("headroomTo", std::round (p.headroomChange->to * 10.0) / 10.0);
+    }
     juce::Array<juce::var> hints;
     for (const auto& n : p.groupHints) hints.add (juce::String::fromUTF8 (n.c_str()));
     o->setProperty ("groupHints", hints);
@@ -2798,7 +2826,7 @@ mixology::BridgeSession::Result BridgeHub::applyCurrentPlan (const juce::var& pi
     if (! currentPlan.valid) return { false, "Nothing to apply." };
     if (bridge.busy()) return { false, "Mixology is still busy with the last change: wait a second." };
     const auto* list = picked.getArray();
-    headroom = headroom && currentPlan.headroomDb < 0.0 && ! currentPlan.headroom.empty();
+    headroom = headroom && currentPlan.headroomDb < 0.0 && currentPlan.headroomChange.has_value();
     if ((list == nullptr || list->isEmpty()) && ! headroom) return { false, "Tick at least one change." };
 
     auto& registry = mixology::link::processRegistry();
@@ -2847,19 +2875,13 @@ mixology::BridgeSession::Result BridgeHub::applyCurrentPlan (const juce::var& pi
         else if (c.kind == "mud") { a.mudDb = static_cast<float> (c.to); a.mudHz = static_cast<float> (c.hz); }
         else if (c.kind == "pocket") { a.pocketDb = static_cast<float> (c.to); a.pocketHz = static_cast<float> (c.hz); }
     }
-    // Room for Masterology: every fader that plays moves the same amount, on top of its level change (if ticked).
+    // Room for Masterology (if ticked): one gain on the whole mix, the Full Mix's Final Output, applied and undone like
+    // Polish's Full Mix changes.
     if (headroom)
-        for (const auto& h : currentPlan.headroom)
-        {
-            auto& st = steps[h.hash];
-            const double base = st.setVolume ? st.db : h.from;
-            st.hash = h.hash;
-            st.title = h.name;
-            st.setVolume = true;
-            st.db = std::min (base + currentPlan.headroomDb, mixology::mix::kMaxFaderDb);
-            st.checkFrom = true;
-            st.fromDb = h.from;
-        }
+    {
+        if (mixProc.set) procs.push_back (&*currentPlan.headroomChange);
+        else noLink.push_back ("Full Mix");
+    }
     if (steps.empty() && eq.empty() && procs.empty())
         return { false, noLink.empty() ? std::string ("Tick at least one change.") : "Mixology Link isn't reachable on those tracks any more." };
     if (! steps.empty() && bridge.link() != mixology::BridgeSession::Link::connected)
@@ -2933,7 +2955,7 @@ mixology::BridgeSession::Result BridgeHub::applyCurrentPlan (const juce::var& pi
             if (c->fullMix) mixProc.set (id, v);
             else registry.requestProc (u.slot, u.generation, id, v);
         }
-        procTracks.insert (c->hash);
+        if (! currentPlan.headroomChange || c != &*currentPlan.headroomChange) procTracks.insert (c->hash);   // Make Room is said on its own
         next.procs.push_back (std::move (u));
     }
     if (const auto id = history.record (currentPlan.title, "", std::move (hist), wallClock(), ! steps.empty()); id != 0 && ! steps.empty())
@@ -2945,6 +2967,9 @@ mixology::BridgeSession::Result BridgeHub::applyCurrentPlan (const juce::var& pi
     if (! steps.empty()) parts.push_back ("moving " + std::to_string (steps.size()) + " channel" + (steps.size() == 1 ? "" : "s") + " in {daw}");
     if (! eq.empty()) parts.push_back ("Assist EQ on " + std::to_string (eq.size()) + " track" + (eq.size() == 1 ? "" : "s"));
     if (! procTracks.empty()) parts.push_back ("processing on " + std::to_string (procTracks.size()) + (procTracks.size() == 1 ? " track" : " tracks"));
+    if (headroom && mixProc.set)
+        parts.push_back ("the whole mix " + juce::String (currentPlan.headroomDb, 1).toStdString() + " dB on the Full Mix's Final Output "
+                         "(run Auto-Master in Masterology afterwards)");
     std::string joined;
     for (const auto& p : parts) joined += (joined.empty() ? "" : ", ") + p;
     info = currentPlan.title + ": " + joined + ".";

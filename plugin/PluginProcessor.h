@@ -68,6 +68,8 @@ public:
         std::atomic<float> shortTerm { -100.0f };
         std::atomic<float> integrated { -100.0f };
         std::atomic<float> truePeak { -100.0f };    // dBTP, max since reset
+        std::atomic<float> peakBeforeFinal { -100.0f };   // the true peak where Final Output sits (its gain taken back
+                                                          // out), max since play: Make Room works from it
     };
     Meters meters;
     SpectrumTap spectrumTap;

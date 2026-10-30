@@ -73,9 +73,17 @@ namespace mixology::proc::host
             }
             else
             {
+                const auto* spec = &s;
                 juce::NormalisableRange<float> range (s.min, s.max, s.step);
                 if (s.curve == Curve::log) range.setSkewForCentre (std::sqrt (s.min * s.max));
-                const auto* spec = &s;
+                if (s.curve == Curve::zeroMid)   // 0 in the middle, each half linear (Final Output -24 .. +12 dB)
+                {
+                    const int index = static_cast<int> (spec - specs().data());
+                    range = juce::NormalisableRange<float> (
+                        s.min, s.max, [spec] (float, float, float n) { return fromNormalised (*spec, n); },
+                        [spec] (float, float, float v) { return toNormalised (*spec, v); },
+                        [index] (float, float, float v) { return sanitise (index, v); });
+                }
                 layout.add (std::make_unique<juce::AudioParameterFloat> (
                     pid, s.name, range, s.def,
                     juce::AudioParameterFloatAttributes()

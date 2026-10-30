@@ -16,8 +16,10 @@
       under the vocal, all at the same overall loudness. Fader moves since Analyze Mix are allowed for, so
       applying a plan and opening it again finds nothing more to do. Tracks of one kind move
       together, so their balance among themselves stays yours. Room for Masterology (mix peaks around
-      -6 dBTP) is offered separately: every fader down together. With a music group (a group channel the
-      instruments play through, e.g. Voxology's "Beat"), the music moves on that one fader.
+      -6 dBTP) is offered separately: one gain on the whole mix, the Full Mix's Final Output (Mixology on the
+      master channel, before Masterology), so every track, FX return and group goes down together. With a music
+      group (a group channel the instruments play through, e.g. Voxology's "Beat"), the music moves on that one
+      fader.
     - Stereo Architect: pans. Low end and the lead vocal in the middle, doubles and pairs spread left / right,
       a lopsided mix evened out.
     - Clean Up: Assist EQ low cuts on tracks with rumble (and on vocals), mud dips where the mix is muddy.
@@ -78,12 +80,15 @@ namespace mixology::mix
         Voxology voxology;
     };
 
-    /** Mixology's own Full Mix processing (for the mix's tone against the style). */
+    /** Mixology's own Full Mix processing (for the mix's tone against the style, and room for Masterology). */
     struct MixNow
     {
         bool known = false;
         proc::Values now {}, atAnalysis {};
         bool atAnalysisKnown = false;
+        bool onMaster = true;              // that Mixology sits on the master channel (or the host doesn't say where)
+        bool peakKnown = false;            // the mix's true peak since play where Final Output sits (after the Full
+        double peakBeforeFinalDb = -120.0; // Mix processing, Final Output's own gain taken back out), dBTP
     };
 
     enum class Tool { autoMix, balance, stereo, cleanUp, pocket, polish };
@@ -122,18 +127,13 @@ namespace mixology::mix
         std::vector<std::string> notes;   // what it left alone, and why
         std::vector<std::string> first;   // fix these before applying (a vocal recorded too hot): shown above the changes
 
-        /** Room for Masterology, offered on its own (you tick it): every fader that plays moves headroomDb
-            (< 0) together, on top of the level changes. 0 = not needed. */
-        struct HeadroomMove
-        {
-            std::uint32_t hash = 0;
-            std::string name;
-            double from = 0.0;        // the fader now
-            double afterLevels = 0.0; // after this plan's level change (if any), before the headroom move
-        };
+        /** Room for Masterology, offered on its own (you tick it): one gain on the whole mix, the Full Mix's Final
+            Output, headroomDb (< 0) quieter. Every track, FX return and group goes down together (also those that
+            didn't play while Analyze Mix listened), the balance stays exactly, and it is one change to undo.
+            0 = not needed, or not possible (a note says why). */
         double headroomDb = 0.0;
         std::string headroomWhy;
-        std::vector<HeadroomMove> headroom;
+        std::optional<Change> headroomChange;   // the Full Mix change it makes (Final Touch on, its Output)
 
         std::vector<std::string> groupHints;   // channels that look like a group the tracks play through (ask: music group?)
     };

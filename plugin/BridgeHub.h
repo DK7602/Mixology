@@ -53,11 +53,13 @@ public:
         Mixology as a Mackie Control surface (mixology::mcu::McuBridge); the others run a bridge script. */
     void setDaw (const std::string& key);
 
-    /** Mixology's own Full Mix processing, for Polish / Auto Mix. */
+    /** Mixology's own Full Mix processing, for Polish / Auto Mix (and Make Room, on its Final Output). */
     struct MixProcessing
     {
         std::function<mixology::proc::Values()> get;
         std::function<void (int, float)> set;
+        std::function<float()> peakBeforeFinal;   // the mix's true peak since play where Final Output sits (dBTP, -100: none yet)
+        std::function<bool()> onMaster;           // it sits on the master channel (or the host doesn't say)
     };
 
     /** Every Mixology in the host registers itself (message thread). One of them is the hub's Full Mix (Polish /

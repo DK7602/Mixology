@@ -115,6 +115,7 @@ TEST_CASE ("Processing controls: one table, sane ids, everything starts off", "[
         CHECK ((s.def >= s.min && s.def <= s.max));
         CHECK (sanitise (i, s.def) == s.def);
         if (s.curve == Curve::log) CHECK (s.min > 0.0f);
+        if (s.curve == Curve::zeroMid) CHECK ((s.min < 0.0f && s.max > 0.0f && toNormalised (s, 0.0f) == 0.5f));
     }
     CHECK (indexOf ("no_such_control") == -1);
     CHECK (sp[chainOn].def == 1.0f);
@@ -132,6 +133,32 @@ TEST_CASE ("Processing controls: one table, sane ids, everything starts off", "[
     CHECK (sanitise (compThr, -12.34f) == Catch::Approx (-12.3f));
     CHECK (sanitise (eqMode, 1.7f) == 2.0f);
     CHECK (sanitise (eq1Type, 9.0f) == 4.0f);
+}
+
+TEST_CASE ("Processing controls: Final Output reaches -24 dB, and what was saved before means the same", "[proc]")
+{
+    // Make Room lowers the whole mix on the Full Mix's Final Output: it needs more than -12 dB for a very hot mix.
+    const auto& s = specs()[finOut];
+    CHECK (s.min == -24.0f);
+    CHECK (s.max == 12.0f);
+    CHECK (s.def == 0.0f);
+    CHECK (s.curve == Curve::zeroMid);
+    // Values are saved as dB (projects, presets, the History): -12 .. +12 stay what they were, on the same 0.1 dB steps.
+    for (float v : { -12.0f, -6.3f, 0.0f, 4.5f, 12.0f }) CHECK (sanitise (finOut, v) == Catch::Approx (v).margin (1.0e-5));
+    CHECK (sanitise (finOut, -30.0f) == -24.0f);
+    CHECK (sanitise (finOut, -15.73f) == Catch::Approx (-15.7f).margin (1.0e-5));
+    // The knob and the host's 0..1: 0 dB stays in the middle; the top half is exactly what it was with -12 .. +12, so
+    // automation written above 0 dB keeps its meaning; the bottom half now reaches -24.
+    CHECK (toNormalised (s, 0.0f) == 0.5f);
+    CHECK (toNormalised (s, 6.0f) == Catch::Approx (0.75f));
+    CHECK (toNormalised (s, 12.0f) == 1.0f);
+    CHECK (toNormalised (s, -24.0f) == 0.0f);
+    CHECK (toNormalised (s, -12.0f) == Catch::Approx (0.25f));
+    for (float n : { 0.0f, 0.1f, 0.25f, 0.5f, 0.6f, 0.9f, 1.0f }) CHECK (toNormalised (s, fromNormalised (s, n)) == Catch::Approx (n).margin (1.0e-6));
+    // A linear control maps as before.
+    const auto& w = specs()[finWidth];
+    CHECK (toNormalised (w, 100.0f) == Catch::Approx (0.5f));
+    CHECK (fromNormalised (w, 0.25f) == Catch::Approx (50.0f));
 }
 
 TEST_CASE ("Processing: all modules off passes the audio bit for bit", "[proc]")

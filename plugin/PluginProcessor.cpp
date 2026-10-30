@@ -70,7 +70,9 @@ MixologyAudioProcessor::MixologyAudioProcessor()
     projectId.store (bridgeHub->idForNewInstance());
     // Polish / Auto Mix can propose the Full Mix's tone: they read and set it through the hub.
     BridgeHub::Instance me;
-    me.processing = { [this] { return procRaw.read(); }, [this] (int index, float value) { setProc (index, value); } };
+    me.processing = { [this] { return procRaw.read(); }, [this] (int index, float value) { setProc (index, value); },
+                      [this] { return meters.peakBeforeFinal.load (std::memory_order_relaxed); },
+                      [this] { const juce::ScopedLock sl (stateLock); return trackName.isEmpty() || BridgeHub::looksLikeMaster (trackName); } };
     me.project = [this] { return projectId.load(); };
     me.adopt = [this] (std::uint64_t id) { projectId.store (id); };
     me.lastAudioMs = [this] { return lastAudioMs.load (std::memory_order_relaxed); };
@@ -261,7 +263,8 @@ void MixologyAudioProcessor::process (juce::AudioBuffer<Sample>& buffer)
     analysisRing.push (buffer.getArrayOfReadPointers(), channels, n);
 
     chain.setHost (beat.bpm.load (std::memory_order_relaxed), -1.0);   // the tempo as of the last block
-    chain.setValues (procRaw.read());
+    const auto values = procRaw.read();
+    chain.setValues (values);
     chain.process (buffer.getArrayOfWritePointers(), channels, n);
     {
         const auto m = chain.takeMeters();
@@ -279,6 +282,12 @@ void MixologyAudioProcessor::process (juce::AudioBuffer<Sample>& buffer)
     // ... the meters and scopes show the mix as it leaves (Mono Check, below, only changes what you hear).
     const auto* const* data = buffer.getArrayOfReadPointers();
     loudness.process (data, channels, n);
+    {
+        // Where Final Output sits (Make Room): this block's true peak with Final Output's own gain taken back out.
+        const double tp = loudness.takeRecentTruePeakDbtp();
+        const double finalGain = mixology::proc::isOn (values, mixology::proc::Module::final) ? values[mixology::proc::finOut] : 0.0;
+        if (std::isfinite (tp) && tp > -100.0) storeMax (meters.peakBeforeFinal, static_cast<float> (tp - finalGain));
+    }
     spectrumTap.push (data, channels, n);
     stereoTap.push (data, channels, n);
     lastAudioMs.store (juce::Time::currentTimeMillis(), std::memory_order_relaxed);
@@ -286,7 +295,11 @@ void MixologyAudioProcessor::process (juce::AudioBuffer<Sample>& buffer)
         if (auto pos = ph->getPosition())
         {
             // Peaks and loudness count from the moment you press play (a clip before a fix doesn't stay forever).
-            if (pos->getIsPlaying() && ! wasPlaying) loudness.resetStatistics();
+            if (pos->getIsPlaying() && ! wasPlaying)
+            {
+                loudness.resetStatistics();
+                meters.peakBeforeFinal.store (-100.0f, std::memory_order_relaxed);
+            }
             wasPlaying = pos->getIsPlaying();
             transportPlaying.store (pos->getIsPlaying(), std::memory_order_relaxed);
             if (auto bpm = pos->getBpm()) beat.bpm.store (*bpm, std::memory_order_relaxed);

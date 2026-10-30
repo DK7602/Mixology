@@ -371,7 +371,7 @@ export function buildMaster(root, app) {
     { id: "tilt", label: "TILT", min: -3, max: 3, value: 0, bipolar: true, step: 0.1, format: (v) => fmt.db(v),
       onChange: (v) => { const c = master && master.tbOn ? (master.air + master.warmth) / 2 : 0; send({ tb_on: 1, tb_warmth: c - v, tb_air: c + v }); } },
     { id: "width", label: "WIDTH", min: 50, max: 150, value: 100, step: 1, format: (v) => fmt.pct(v), onChange: (v) => send({ fin_on: 1, fin_width: v }) },
-    { id: "trim", label: "TRIM", min: -12, max: 12, value: 0, bipolar: true, step: 0.1, format: (v) => fmt.db(v), onChange: (v) => send({ fin_on: 1, fin_out: v }) },
+    { id: "trim", label: "TRIM", min: -24, max: 12, curve: "zero", value: 0, bipolar: true, step: 0.1, format: (v) => fmt.db(v), onChange: (v) => send({ fin_on: 1, fin_out: v }) },
   ]);
   finishing[0].root.title = "Bus glue: gentle compression that makes the mix hang together (Final Touch on the Full Mix)";
   finishing[1].root.title = "Tilt: + brighter and lighter, − warmer and darker (Tone Balance on the Full Mix: Air and Warmth in opposite directions)";

@@ -155,9 +155,104 @@ namespace mixology::mix
         }
 
         // ---------------------------------------------------------------------------------------------
+        // Room for Masterology: one gain on the whole mix, the Full Mix's Final Output (Final Touch). It sits after
+        // Mixology's own processing (its glue still hears the mix as it was) and before the Limiter and Masterology,
+        // so every track, FX return and group goes down together, the balance stays exactly, and it is one change to
+        // undo. Moving every fader instead left out the tracks that didn't play while Analyze Mix listened (a chorus
+        // while it heard a verse): they came back louder than the rest by the whole amount.
+
+        constexpr double kRoomTargetDb = -6.0;   // Masterology works best with peaks around -6 dBTP (and under -3) ...
+        constexpr double kRoomOfferDb = -5.0;    // ... offered once they are hotter than this
+
+        // analysisPeak: what Analyze Mix heard coming into Mixology (with the fader moves since). planShift: what this
+        // plan's level moves do to the whole mix (dB).
+        void planRoom (const Report& r, double analysisPeak, double planShift, const MixNow& mix, Plan& plan)
+        {
+            // The peak where Final Output sits, before it: the higher of Mixology's own output since play (Final
+            // Output's gain taken back out) and what Analyze Mix heard. What Final Output already does counts, so it is
+            // never applied twice.
+            double peak = -200.0;
+            if (r.mixPeak > -100.0) peak = analysisPeak;
+            if (mix.known && mix.peakKnown && mix.peakBeforeFinalDb > -100.0) peak = std::max (peak, mix.peakBeforeFinalDb);
+            if (peak <= -100.0) return;
+            peak += planShift;
+            const auto& v = mix.now;
+            auto val = [&v] (int id) { return static_cast<double> (v[static_cast<std::size_t> (id)]); };
+            const bool finalOn = mix.known && proc::isOn (v, proc::Module::final);
+            const double outNow = finalOn ? val (proc::finOut) : 0.0;
+            const double into = peak + outNow;   // what reaches Masterology
+            if (into <= kRoomOfferDb) return;
+            const double need = into - kRoomTargetDb;
+
+            // Only Mixology on the master channel can do it (there it comes before Masterology).
+            if (! mix.known || ! mix.onMaster)
+            {
+                plan.notes.push_back ("Room for Masterology: your mix peaks at about " + signedDb (into) + ". Mixology turns the whole mix down in one go "
+                                      "only on the {daw:master} channel (before Masterology), and " + std::string (mix.known ? "this Mixology isn't there" : "no Mixology is there")
+                                      + ": put Mixology on the {daw:master} channel, or pull all the track faders down together by about " + fmt0 (need) + " dB.");
+                return;
+            }
+            bool otherModules = false;
+            for (int m = 0; m < proc::kModules; ++m)
+                if (static_cast<proc::Module> (m) != proc::Module::final && val (proc::onParam (static_cast<proc::Module> (m))) > 0.5) otherModules = true;
+            const bool chainOff = val (proc::chainOn) < 0.5;
+            if (chainOff && otherModules)
+            {
+                plan.notes.push_back ("Room for Masterology: your mix peaks at about " + signedDb (into) + ", but Mixology's Full Mix processing is switched off, "
+                                      "so its Final Output can't make room. Switch the processing on (Full Mix), or pull all the track faders down together by about "
+                                      + fmt0 (need) + " dB.");
+                return;
+            }
+
+            const auto& spec = proc::specs()[static_cast<std::size_t> (proc::finOut)];
+            const double lowest = spec.min;
+            double want = std::round ((kRoomTargetDb - peak) * 10.0) / 10.0;
+            const bool capped = want < lowest;
+            want = std::max (want, lowest);
+            const double still = peak + want;   // where the peaks end up
+            if (want > outNow - 0.5)
+            {
+                if (capped)
+                    plan.notes.push_back ("Room for Masterology: Mixology's Final Output is at its lowest (" + signedDb (lowest) + ") and the mix still peaks at about "
+                                          + signedDb (into) + ". Pull all the track faders down together by about " + fmt0 (into - kRoomTargetDb) + " dB (or turn the hottest tracks down).");
+                return;
+            }
+
+            Change c;
+            c.hash = 0;
+            c.name = "Full Mix";
+            c.role = Role::other;
+            c.kind = "room";
+            c.fullMix = true;
+            if (chainOff) c.proc.push_back ({ proc::chainOn, 1.0f });   // nothing else is on: only Final Output plays
+            if (! finalOn)   // Final Touch on with everything but its Output neutral: nothing else in the sound changes
+                for (auto [id, value] : { std::pair { proc::finOn, 1.0f }, std::pair { proc::finWidth, 100.0f }, std::pair { proc::finAir, 0.0f },
+                                          std::pair { proc::finGlue, 0.0f } })
+                    c.proc.push_back ({ id, value });
+            c.proc.push_back ({ proc::finOut, static_cast<float> (want) });
+            c.from = outNow;
+            c.to = c.wanted = want;
+            c.fromText = finalOn ? "Final Output " + signedDb (outNow) : "Final Touch off";
+            c.toText = "Final Output " + signedDb (want);
+            c.why = "room for Masterology: the whole mix " + signedDb (want - outNow) + " in one go";
+            plan.headroomChange = c;
+            plan.headroomDb = std::round ((want - outNow) * 10.0) / 10.0;
+            plan.headroomWhy = "Your mix peaks at about " + signedDb (into) + " (after Mixology's own processing). Masterology works best with peaks around -6 "
+                               "(and under -3): Mixology's Final Output on the Full Mix goes " + (finalOn ? "from " + signedDb (outNow) + " " : std::string())
+                               + "to " + signedDb (want) + ", one gain on the whole mix, so every track, FX return and group goes down together and the balance "
+                                 "stays exactly as it is" + (finalOn ? std::string (".") : " (Final Touch switches on; its width, air and glue stay neutral).")
+                               + " The mix plays " + fmt1 (outNow - want) + " dB quieter until Masterology brings it back: run Auto-Master in Masterology "
+                                 "afterwards (again, if it already ran).";
+            if (capped)
+                plan.headroomWhy += " Your mix is hotter than Final Output can take: at its lowest (" + signedDb (lowest) + ") the peaks still reach about "
+                                    + signedDb (still) + ". Pull all the track faders down together by about " + fmt0 (still - kRoomTargetDb)
+                                    + " dB too (or turn the hottest tracks down), then open Balance again.";
+        }
+
+        // ---------------------------------------------------------------------------------------------
         // Balance: fader levels
 
-        std::string planBalance (const Report& r, const Lookup& look, Plan& plan)
+        std::string planBalance (const Report& r, const Lookup& look, const MixNow& mix, Plan& plan)
         {
             struct Member
             {
@@ -439,31 +534,12 @@ namespace mixology::mix
                 }
             }
 
-            // 4. Room for Masterology: offered separately (you tick it). Every fader that plays goes down together, so the
-            //    balance stays; the mix gets quieter and Masterology brings the level back at the end.
+            // 4. Room for Masterology: offered separately (you tick it). One gain on the whole mix (planRoom), worked out
+            //    with this plan's level moves in.
             {
                 double before = 0.0, after = 0.0;
                 for (auto& [k, g] : groups) { before += g.e; after += g.eAfter (eff (g)); }
-                const double peak = mixPeak + (toDb (after) - toDb (before));
-                if (r.mixPeak > -100.0 && peak > -5.0)
-                {
-                    plan.headroomDb = std::round (-(peak + 6.0) * 10.0) / 10.0;
-                    plan.headroomWhy = "Your mix peaks at about " + signedDb (peak) + ". Masterology works best with peaks around -6: every fader goes down "
-                                       + fmt1 (-plan.headroomDb) + " dB together. The balance stays the same, the mix just gets quieter (Masterology brings the level back).";
-                    std::vector<std::string> stuck;
-                    if (busActive) plan.headroom.push_back ({ bus->hash, bus->name, bus->faderDb, std::min (bus->faderDb + busMove, kMaxFaderDb) });
-                    for (auto& [k, g] : groups)
-                    {
-                        if (g.viaBus) continue;   // they go down with the music group
-                        for (const auto& m : g.members)
-                        {
-                            if (! movable (m.ch)) { stuck.push_back (m.name); continue; }
-                            plan.headroom.push_back ({ m.ch->hash, m.name, m.ch->faderDb, std::min (m.ch->faderDb + g.move + m.extra, kMaxFaderDb) });
-                        }
-                    }
-                    if (! stuck.empty())
-                        plan.headroomWhy += " " + joinNames (stuck) + " can't move (protected or not read): it would get louder against the rest.";
-                }
+                planRoom (r, mixPeak, toDb (after) - toDb (before), mix, plan);
             }
 
             // Changes, track by track (a kind's tracks all move the same).
@@ -1620,7 +1696,7 @@ namespace mixology::mix
         if (look.musicBus == nullptr && (tool == Tool::autoMix || tool == Tool::balance)) plan.groupHints = r.groupHints;
         std::vector<std::string> parts;
         auto add = [&] (const std::string& s) { if (! s.empty()) parts.push_back (s); };
-        if (tool == Tool::autoMix || tool == Tool::balance) add (planBalance (r, look, plan));
+        if (tool == Tool::autoMix || tool == Tool::balance) add (planBalance (r, look, mix, plan));
         if (tool == Tool::autoMix || tool == Tool::stereo) add (planStereo (r, look, plan));
         if (tool == Tool::autoMix || tool == Tool::cleanUp) add (planCleanUp (r, look, plan));
         if (tool == Tool::autoMix || tool == Tool::pocket) add (planPocket (r, look, plan));

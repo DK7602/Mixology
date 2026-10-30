@@ -211,7 +211,12 @@
       if (value === "auto" || value === "clean" || value === "pocket") notes.push("'Synth' has no Mixology Link Mixology can reach: vocal pocket skipped.");
       if (value === "auto" || value === "polish") notes.push("Send 'Lead Vox' to 'FX 1-Vox Verb' ({daw:sendHow}): Mixology can't add sends.");
       const first = value === "auto" || value === "balance" ? ["Voxology says 'Lead Vox' was recorded too hot (it reaches +0.2 dB coming in, over the top of the meter; 29 spots clipped while it was recorded). Lower its clip gain first, until its loudest words peak around -6 dB. In {daw}: {daw:clipGain}. Then press AUTO-EDIT in Voxology again (its settings follow the level) and let Analyze Mix hear it again (Auto Analyze does it by itself): these moves are worked out from how loud it is now."] : [];
-      const hd = value === "auto" || value === "balance" ? { headroomDb: -12.8, headroomCount: 8, headroomWhy: "Your mix peaks at about +6.8 dB. Masterology works best with peaks around -6: every fader goes down 12.8 dB together. The balance stays the same, the mix just gets quieter (Masterology brings the level back)." } : { headroomDb: 0, headroomCount: 0, headroomWhy: "" };
+      // Make Room: one gain on the whole mix, the Full Mix's Final Output (what's already there counts).
+      const room = P.spec ? (() => { const v = P.values.mix, ix = P.spec.PROC_INDEX; return v[ix.chain_on] > 0.5 && v[ix.fin_on] > 0.5 ? v[ix.fin_out] : 0; })() : 0;
+      const roomTo = Math.max(-24, +(-6 - 6.8).toFixed(1)), roomDb = +(roomTo - room).toFixed(1);
+      const hd = (value === "auto" || value === "balance") && roomDb <= -0.5 ? { headroomDb: roomDb, headroomFrom: room, headroomTo: roomTo,
+        headroomWhy: `Your mix peaks at about ${(6.8 + room).toFixed(1).replace(/^(?!-)/, "+")} dB (after Mixology's own processing). Masterology works best with peaks around -6 (and under -3): Mixology's Final Output on the Full Mix goes ${room ? `from ${room.toFixed(1)} dB ` : ""}to ${roomTo.toFixed(1)} dB, one gain on the whole mix, so every track, FX return and group goes down together and the balance stays exactly as it is${room ? "." : " (Final Touch switches on; its width, air and glue stay neutral)."} The mix plays ${(-roomDb).toFixed(1)} dB quieter until Masterology brings it back: run Auto-Master in Masterology afterwards (again, if it already ran).` }
+        : { headroomDb: 0, headroomWhy: "" };
       const busSet = Object.values(B.settings).some((x) => x && x.musicBus);
       B.plan = { ...hd, groupHints: (value === "auto" || value === "balance") && !busSet ? ["Pad"] : [], id: B.planId, tool: value, title, valid: true, summary: `${changes.length} changes for ${window.__mixStyle || "Hip Hop - Modern Clean"}: levels: the hats -3.4 dB, the kick -1.5 dB; pans: 2 tracks; 1 low cut, 1 mud dip; 2 pocket dips.`, notes, first, changes };
       return { ok: true, plan: B.plan };
@@ -236,6 +241,7 @@
       const picked = (arg.picked || []).map((i) => B.plan.changes[i]).filter(Boolean);
       if (!picked.length && !arg.headroom) return fail("Tick at least one change.");
       if (picked.some((c) => c.kind === "pocket") && B.an.report) { B.pocketDone = true; B.an.report = fakeReport(); }   // the point is done now
+      if (arg.headroom && B.plan.headroomDb < 0) procSet("mix", B.plan.headroomFrom ? { fin_out: B.plan.headroomTo } : { fin_on: 1, fin_width: 100, fin_air: 0, fin_glue: 0, fin_out: B.plan.headroomTo });
       const before = chans.map((c) => ({ c, v: c.volume, p: c.pan }));
       Object.assign(B.apply, { active: true, what: B.plan.title, done: 0, total: new Set(picked.filter((c) => c.kind === "level" || c.kind === "pan").map((c) => c.name)).size, skipped: 0, notes: [], canUndo: false, undoWhat: B.plan.title });
       B.version++;
