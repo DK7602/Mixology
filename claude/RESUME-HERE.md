@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-18, v0.22.0)
+# Mixology: resume here (updated 2026-10-30, v0.23.0)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,34 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## v0.23.0: Make Room, doubles by ear, linked faders (2026-10-30, session "Mixology audit")
+- User (video, Cubase): Make Room made the mix too quiet and the chorus vocals loud; "Vox Chorus 1" / "Vox Chorus 2"
+  (different parts, not doubles) were panned L / R; Q-Link left on made Auto Mix sound awful.
+- MAKE ROOM: was every fader that played while Analyze Mix listened (the chorus tracks, silent then, were left out ->
+  louder than the rest by the whole amount). Now planRoom (MixPlanner.cpp): ONE Full Mix change, Final Touch on (width
+  100, air 0, glue 0 if it was off) + fin_out, applied / undone like Polish's Full Mix changes (History). Peak = max(
+  analysis peak, new meter peakBeforeFinal = Mixology's output true peak since play with fin_out taken out) + the plan's
+  level shift; offered when the peak into Masterology > -5, aims -6. Not offered (note why): Mixology not on the master
+  (trackName via looksLikeMaster; empty = yes), processing off with other modules on. fin_out range -12..+12 -> -24..+12
+  with Curve::zeroMid (0 dB at 12 o'clock, top half unchanged; lower-half host automation now plays deeper). Quieter by
+  design until Masterology's Auto-Master runs again (the text says so).
+- DOUBLES: Report::pairs (PairCheck, MixAnalysis): per name pair, overlap (both / either) and envelope correlation
+  while both play (best of +-1 moment). Double = both played >= 2 s, together >= 2 s, overlap >= 0.65, alike >= 0.3.
+  Verdicts: not heard together / apart / unlike / together. Only "together" (or L / R in the names) spreads, in Stereo
+  Architect, Auto Mix and Polish's lead choice; a vocal part whose partners sing at other times counts as a lead part
+  and is centred (undoes the old bad pans); one note per unconfirmed pair (max 3 + "N more"). pairName moved to
+  MixAnalysis.h. Links now measure on a shared 200 ms grid of link::nowMs (LinkProcessor::useTimeSlice) and Mixology
+  takes its moments halfway between (PluginProcessor timer): Mixology + Link go together, Analyze Mix again.
+- LINKED FADERS (BridgeSession, so Cubase / FL / Live / Mackie Control alike): a channel Mixology didn't write moves
+  within 0.3 s of a write to another, by the same amount (0.15 dB or 10 % in dB, or 0.003 / 8 % in travel, >= 0.5 dB);
+  two matches within 8 s, or one + a 1.5 dB test move (probeStep) that the other follows. Channels moving on their own
+  around then (hand, automation Read) don't count. A plan stops, its moves go back (put-back plan, nothing left to
+  undo for faders), linkedFaders() -> getState "linked" -> pop-up FADERS ARE LINKED once (command linkedSeen) with the
+  new daws.js phrase linkedFaders (copied to Voxology / Masterology, byte-identical). Known gap: Mackie Control with
+  exactly two linked channels both written in the same instant. Not yet tried in real Cubase / Logic.
+- Tests: 216 engine tests; FakeCubase / FakeMcuHost linked faders; bridge-sim Node (real Cubase script) and FL / Live
+  Python sims.
 
 ## v0.22.0: Space layers (2026-10-18, session "Mixology audit")
 - User: "I can only add one Space effect... I tried phaser and hall and it only allows one at a time." Agreed design:
