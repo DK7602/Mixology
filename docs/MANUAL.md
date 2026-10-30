@@ -263,6 +263,10 @@ costs very little.
 Analyze Mix listens to every track that has Mixology Link, and to the whole mix, while the song plays. Then the
 Mix Assistant tells you, in plain words, what stands out, with **Do I need to fix it?** and how.
 
+Every Mixology Link measures its track at the same moments (five times a second, on one shared clock), so Analyze
+Mix can compare tracks moment by moment: whether two tracks really play together, the vocal against the beat. Update
+Mixology Link together with Mixology (an older Link measures at its own moments).
+
 1. Insert Mixology Link on your tracks (after their other plug-ins). Pick your mix style in the header.
 2. Press **ANALYZE MIX**. Mixology first reads every channel's fader in Cubase (a second or two; the Tracks
    page flickers while it pages through).
@@ -366,9 +370,16 @@ list: every change it wants to make, **now → new**, and why, in plain words. U
   most; the line says how much is still left (pull all the track faders down together for the rest). Without
   Mixology on the master channel it isn't offered (the list says why): pull all the track faders down together
   instead.
-- **Stereo Architect**: pans. Kick, bass, snare and the lead vocal in the middle. Pairs and doubles
-  ("Gtr L" / "Gtr R", "Electric Rhythm" / "Electric Rhythm (D)", "Keys 1" / "Keys 2") spread left and right:
-  if one is already out on a side, it stays and its partner mirrors it. A mix that leans to one side is evened
+- **Stereo Architect**: pans. Kick, bass, snare and the lead vocal in the middle. **Doubles** spread left and right
+  (if one is already out on a side, it stays and its partner mirrors it). A name only says who *might* be a double
+  ("Electric Rhythm" / "Electric Rhythm (D)", "Keys 1" / "Keys 2", "Vox Chorus 1" / "Vox Chorus 2"): Mixology spreads
+  them only when Analyze Mix heard both play at the same time with their levels moving together, the way the same
+  part played or sung twice does. Two different parts of a chorus, a call and its response, a lead and its ad-libs
+  keep their pans, and the list says why in one line ("... sing at different times (different parts), so their pans
+  stay"). Pairs it didn't hear together (one only plays in a part of the song Analyze Mix didn't hear) keep their pans
+  too: play the part where both play and Analyze Mix again. Left and right you typed in the names ("Gtr L" / "Gtr R",
+  "Left" / "Right") count as they are. A vocal part that sings while its name partner doesn't is a lead part: it
+  belongs in the middle like the lead vocal. A mix that leans to one side is evened
   out with the tracks pulling it there. It only pans **mono** tracks: for a stereo track Cubase doesn't tell
   Mixology where its panner really sits. If Cubase reports pans your mix doesn't match (stereo tracks with Cubase's
   Combined Panner show one side only, e.g. "L100" on a full-width track), it leaves the pans alone and says so.
@@ -799,6 +810,11 @@ If Cubase crackles or the performance meter peaks:
   Voxology and the Tracks page must see the same name (rename the track in Cubase if two tracks share one).
 - **The Master page doesn't show Masterology**: update Masterology to 0.29.3 or newer, and put it in the same project
   (after Mixology on the Stereo Out). It appears a moment after Masterology is inserted.
+- **Stereo Architect doesn't spread my doubles**: the list says why. "Sing at different times" or "not the same line":
+  Mixology heard them as different parts. "Didn't hear them sing together": play the part of the song where both
+  play, then Analyze Mix again. Doubles that are loose on purpose may not count as doubles: pan them yourself, or put
+  L / R in their names. **Two parts got panned left and right by an older Mixology**: open Stereo Architect again: a
+  vocal part that sings on its own goes back to the middle (untick it if you like it where it is).
 - **After "Make room for Masterology" the mix is much quieter**: that is the room. Masterology brings the level back:
   run Auto-Master in Masterology (again, if it already ran). Undo (or the History) takes it back. If one part of
   the song suddenly sticks out after making room with an older Mixology (it moved every fader that played while

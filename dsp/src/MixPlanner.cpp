@@ -633,6 +633,69 @@ namespace mixology::mix
             }
         }
 
+        // ---- name pairs: a double only by ear (Report::pairs) ----------------------------------------------
+        // The names say who MIGHT pair ("Vox Chorus 1" / "Vox Chorus 2", "Gtr" / "Gtr (D)"); a pair is a double (spread
+        // left / right) only when Analyze Mix heard both play at the same time with their levels moving together. Two
+        // parts of a chorus, a call and its response, a lead and its ad-libs are not. Sides you typed (L / R, Left /
+        // Right) count by name.
+        bool sidesByName (const PairName& a, const PairName& b) { return a.side != 0 && b.side != 0 && a.side != b.side; }
+
+        bool playsAsDouble (const Report& r, const TrackReport& a, const TrackReport& b)
+        {
+            const auto pa = pairName (a.name), pb = pairName (b.name);
+            if (pa.base.empty() || pa.base != pb.base) return false;
+            if (sidesByName (pa, pb)) return true;
+            const auto* c = pairCheck (r, a.hash, b.hash);
+            return c != nullptr && c->verdict == PairCheck::Verdict::together;
+        }
+
+        // A double of another track (not the original take): a side in its name, or heard as the later take of a double.
+        bool doubleTake (const Report& r, const TrackReport& t)
+        {
+            const auto pt = pairName (t.name);
+            if (pt.side != 0) return true;
+            for (const auto& o : r.tracks)
+            {
+                if (o.hash == t.hash || o.role != t.role || ! counts (o) || ! playsAsDouble (r, t, o)) continue;
+                const auto po = pairName (o.name);
+                if (pt.order > po.order || (pt.order == po.order && pt.explicitPair && ! po.explicitPair)) return true;
+            }
+            return false;
+        }
+
+        // A vocal part whose name partners (counted, same role) all sing at other times: a lead part of its own.
+        bool takesTurns (const Report& r, const TrackReport& t)
+        {
+            const auto pt = pairName (t.name);
+            bool any = false;
+            for (const auto& o : r.tracks)
+            {
+                if (o.hash == t.hash || o.role != t.role || ! counts (o) || pairName (o.name).base != pt.base) continue;
+                const auto* c = pairCheck (r, t.hash, o.hash);
+                if (c == nullptr || c->verdict != PairCheck::Verdict::apart) return false;
+                any = true;
+            }
+            return any;
+        }
+
+        // Why a name pair stays as it is, in a few words (for the plan's notes).
+        std::string pairNote (const PairCheck* c, const std::string& a, const std::string& b, Role role)
+        {
+            const bool vocal = role == Role::vox || role == Role::adlibs;
+            const std::string verb = vocal ? "sing" : "play";
+            const auto pa = pairName (a), pb = pairName (b);   // in their order: "... 1" before "... 2", the original first
+            const bool swap = pa.order != pb.order ? pa.order > pb.order : pa.side != pb.side ? pa.side > pb.side : b < a;
+            const std::string both = quoted (swap ? b : a) + " and " + quoted (swap ? a : b) + " look like a pair by name";
+            using V = PairCheck::Verdict;
+            if (c != nullptr && c->verdict == V::apart)
+                return both + ", but they " + verb + " at different times (different parts), so their pans stay.";
+            if (c != nullptr && c->verdict == V::unlike)
+                return both + " and " + verb + " at the same time, but not the same " + (vocal ? "line" : "part")
+                       + " (their levels don't move together), so their pans stay.";
+            return both + ", but Mixology didn't hear them " + verb + " together: play the part where both " + verb
+                   + " and Analyze Mix again (their pans stay until then).";
+        }
+
         std::string planStereo (const Report& r, const Lookup& look, Plan& plan)
         {
             struct T
@@ -713,18 +776,22 @@ namespace mixology::mix
                 if (x.ch->panUnknown || x.ch->channels != 1) continue;
                 const auto role = x.t->role;
                 const auto pn = pairName (x.t->name);
-                const bool lead = role == Role::vox && ! pn.explicitPair && pn.order == 0;
+                // The lead vocal: the original take, or a part that sings while its name partners don't ("Vox Chorus 2"
+                // after "Vox Chorus 1"); never a double heard as one.
+                const bool lead = role == Role::vox && ! doubleTake (r, *x.t) && ((! pn.explicitPair && pn.order == 0) || takesTurns (r, *x.t));
                 const double limit = role == Role::kick || role == Role::bass ? 5.0 : role == Role::snare ? 25.0 : lead ? 15.0 : 1.0e9;
                 if (std::abs (x.pan) > limit)
                 {
                     x.to = 0.0;
-                    x.why = role == Role::vox ? "the lead vocal is the centre of the song"
+                    x.why = role == Role::vox ? (pn.order > 0 || pn.explicitPair ? "a lead vocal part (its name partners sing at other times): the centre of the song"
+                                                                                 : "the lead vocal is the centre of the song")
                                               : std::string (roleWords (role)) + " belong" + (role == Role::snare ? "s" : "") + " in the middle: stronger on every speaker and in mono";
                 }
                 if (role == Role::kick || role == Role::bass || role == Role::snare || lead) x.fixed = true;
             }
 
-            // 2. Pairs and doubles: spread left / right.
+            // 2. Doubles: spread left / right. A name pair only when Analyze Mix heard both play at the same time, moving
+            //    together (or the names say left and right); the others keep their pans, and a note says why.
             std::map<std::string, std::vector<T*>> pairs;
             for (auto& x : ts)
             {
@@ -735,6 +802,41 @@ namespace mixology::mix
                 if (role == Role::kick || role == Role::bass || role == Role::snare || role == Role::fx) continue;
                 pairs[pn.base + "|" + roleKey (role)].push_back (&x);
             }
+            std::vector<std::string> pairNotes;
+            int morePairs = 0;
+            auto addPairNote = [&] (const std::string& note) { if (pairNotes.size() < 3) pairNotes.push_back (note); else ++morePairs; };
+            auto mayPair = [] (Role role) { return role != Role::kick && role != Role::bass && role != Role::snare && role != Role::fx; };
+            auto leadTake = [] (Role role, const PairName& pn) { return role == Role::vox && ! pn.explicitPair && pn.order == 0; };
+            // Name pairs that don't play as doubles keep their pans: one note each (the original lead take stays in the
+            // middle anyway, so a pair with it says nothing).
+            for (std::size_t i = 0; i < ts.size(); ++i)
+                for (std::size_t j = i + 1; j < ts.size(); ++j)
+                {
+                    const auto& x = ts[i];
+                    const auto& y = ts[j];
+                    if (x.ch->panUnknown || x.ch->channels != 1 || y.ch->panUnknown || y.ch->channels != 1) continue;
+                    const auto role = x.t->role;
+                    const auto px = pairName (x.t->name), py = pairName (y.t->name);
+                    if (y.t->role != role || ! mayPair (role) || px.base.empty() || px.base != py.base) continue;
+                    if (leadTake (role, px) || leadTake (role, py)) continue;
+                    if (role == Role::other && ! px.explicitPair && ! py.explicitPair) continue;   // "Audio 01", "Audio 02"
+                    if (playsAsDouble (r, *x.t, *y.t)) continue;
+                    if (std::abs (x.to - x.pan) >= 3.0 || std::abs (y.to - y.pan) >= 3.0) continue;   // a lead part centred: its change says why
+                    addPairNote (pairNote (pairCheck (r, x.t->hash, y.t->hash), x.t->name, y.t->name, role));
+                }
+            for (const auto& c : r.pairs)   // a partner that didn't play while Analyze Mix listened (a chorus while it heard a verse)
+            {
+                const auto ia = std::find_if (r.tracks.begin(), r.tracks.end(), [&c] (const TrackReport& t) { return t.hash == c.a; });
+                const auto ib = std::find_if (r.tracks.begin(), r.tracks.end(), [&c] (const TrackReport& t) { return t.hash == c.b; });
+                if (ia == r.tracks.end() || ib == r.tracks.end() || ia->role != ib->role || counts (*ia) == counts (*ib)) continue;
+                const auto role = ia->role;
+                const auto pa = pairName (ia->name), pb = pairName (ib->name);
+                if (! mayPair (role) || leadTake (role, pa) || leadTake (role, pb) || sidesByName (pa, pb)) continue;
+                if (role == Role::other && ! pa.explicitPair && ! pb.explicitPair) continue;
+                const auto* heard = look.of (counts (*ia) ? *ia : *ib);
+                if (heard == nullptr || ! heard->hasPan || heard->channels != 1) continue;   // its pan isn't Mixology's to move anyway
+                addPairNote (pairNote (&c, c.nameA, c.nameB, role));
+            }
             for (auto& [key, members] : pairs)
             {
                 if (members.size() < 2) continue;
@@ -742,14 +844,18 @@ namespace mixology::mix
                 bool anyExplicit = false;
                 for (auto* m : members) anyExplicit = anyExplicit || pairName (m->t->name).explicitPair;
                 if (role == Role::other && ! anyExplicit) continue;   // "Audio 01", "Audio 02": not a pair
-                std::vector<T*> spread = members;
+                // Only the ones that play as doubles (by ear, or by their sides).
+                std::vector<T*> spread;
+                for (auto* m : members)
+                    if (std::any_of (members.begin(), members.end(), [&] (T* o) { return o != m && playsAsDouble (r, *m->t, *o->t); }))
+                        spread.push_back (m);
                 if (role == Role::vox)
                 {
                     // The original take is the lead (centre); spread its doubles only when there are two or more.
                     spread.erase (std::remove_if (spread.begin(), spread.end(), [] (T* m) { const auto pn = pairName (m->t->name); return ! pn.explicitPair && pn.order == 0; }),
                                   spread.end());
-                    if (spread.size() < 2) continue;
                 }
+                if (spread.size() < 2) continue;
                 std::sort (spread.begin(), spread.end(), [] (T* a, T* b) {
                     const auto pa = pairName (a->t->name), pb = pairName (b->t->name);
                     return pa.side != pb.side ? pa.side < pb.side : pa.order < pb.order;
@@ -775,9 +881,16 @@ namespace mixology::mix
                     m->fixed = true;
                     std::vector<std::string> names;
                     for (auto* o : spread) if (o != m) names.push_back (o->t->name);
-                    m->why = "pairs with " + joinNames (names) + ": one left, one right sounds wide and keeps the middle free for the vocal";
+                    bool byName = true;
+                    for (auto* o : spread) if (o != m) byName = byName && sidesByName (pairName (m->t->name), pairName (o->t->name));
+                    m->why = "pairs with " + joinNames (names) + (byName ? " (left and right in their names)" : " (a double: Mixology heard them play together)")
+                             + ": one left, one right sounds wide and keeps the middle free for the vocal";
                 }
             }
+            for (const auto& n : pairNotes) plan.notes.push_back (n);
+            if (morePairs > 0)
+                plan.notes.push_back (std::to_string (morePairs) + " more name pair" + (morePairs == 1 ? "" : "s")
+                                      + " keep their pans the same way (not heard as doubles).");
 
             // 3. A lopsided mix: even it out with the loudest tracks pulling it to one side.
             auto predict = [&] () {
@@ -1396,8 +1509,7 @@ namespace mixology::mix
             for (const auto& t : r.tracks)
             {
                 if (! counts (t) || t.role != Role::vox) continue;
-                const auto pn = pairName (t.name);
-                if (pn.explicitPair || pn.order != 0) continue;
+                if (doubleTake (r, t)) continue;   // a double heard as one (or a side): not the lead
                 if (lead == nullptr || t.loudness + 10.0 * std::log10 (std::max (0.01, t.activity)) > lead->loudness + 10.0 * std::log10 (std::max (0.01, lead->activity))) lead = &t;
             }
             auto spaceOn = [] (const ChannelNow& c) { return spaceNow (c) != 0; };
@@ -1651,34 +1763,6 @@ namespace mixology::mix
         for (auto t : { Tool::autoMix, Tool::balance, Tool::stereo, Tool::cleanUp, Tool::pocket, Tool::polish })
             if (k == toolKey (t)) return t;
         return std::nullopt;
-    }
-
-    PairName pairName (const std::string& name)
-    {
-        PairName p;
-        std::string s;
-        for (char ch : name) s += static_cast<char> (std::tolower (static_cast<unsigned char> (ch)));
-        while (! s.empty() && std::isspace (static_cast<unsigned char> (s.back()))) s.pop_back();
-
-        static const std::regex suffix (R"(^(.*?)[\s_\-]*[\(\[]?\s*(l|r|left|right|lft|rt|d|dbl|double|dub|dup|\d{1,2})\s*[\)\]]?$)", std::regex::icase);
-        std::smatch m;
-        if (std::regex_match (s, m, suffix) && ! m[1].str().empty())
-        {
-            const auto tag = m[2].str();
-            const bool separated = m[1].str().size() + tag.size() < s.size();   // "Gtr L", "Gtr (L)", not "Gtrl" or "Lead"
-            if (separated)
-            {
-                p.base = m[1].str();
-                while (! p.base.empty() && (std::isspace (static_cast<unsigned char> (p.base.back())) || p.base.back() == '-' || p.base.back() == '_')) p.base.pop_back();
-                if (tag == "l" || tag == "left" || tag == "lft") { p.side = -1; p.explicitPair = true; }
-                else if (tag == "r" || tag == "right" || tag == "rt") { p.side = 1; p.explicitPair = true; }
-                else if (std::isdigit (static_cast<unsigned char> (tag[0]))) p.order = std::max (0, std::stoi (tag) - 1);
-                else { p.order = 1; p.explicitPair = true; }   // a double
-                return p;
-            }
-        }
-        p.base = s;
-        return p;
     }
 
     Plan makePlan (Tool tool, const Report& r, const std::vector<ChannelNow>& channels, const MixNow& mix)

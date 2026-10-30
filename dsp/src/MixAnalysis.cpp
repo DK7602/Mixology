@@ -148,12 +148,75 @@ namespace mixology::mix
             if (mud > 0.35) return Role::keys;
             return Role::other;
         }
+
+        // ---- name pairs, by ear --------------------------------------------------------------------
+        // How alike two tracks' levels move while both play: the correlation of their moments' RMS (dB). Each Link
+        // measures on its own clock, up to a moment apart, so the best of a moment either way counts. Two steady
+        // levels (a sustained pad, a test tone) are alike; one steady and one moving are not.
+        double alikeness (const std::vector<float>& a, const std::vector<char>& actA, const std::vector<float>& b, const std::vector<char>& actB)
+        {
+            constexpr double kSteadyDb = 0.5;
+            auto stats = [&] (int lag, double& r, double& sa, double& sb) {
+                double n = 0.0, ma = 0.0, mb = 0.0;
+                const int m = static_cast<int> (a.size());
+                for (int i = std::max (0, -lag); i < m && i + lag < m; ++i)
+                    if (actA[static_cast<std::size_t> (i)] && actB[static_cast<std::size_t> (i + lag)])
+                    {
+                        ma += a[static_cast<std::size_t> (i)];
+                        mb += b[static_cast<std::size_t> (i + lag)];
+                        n += 1.0;
+                    }
+                if (n < 8.0) return false;
+                ma /= n;
+                mb /= n;
+                double saa = 0.0, sbb = 0.0, sab = 0.0;
+                for (int i = std::max (0, -lag); i < m && i + lag < m; ++i)
+                    if (actA[static_cast<std::size_t> (i)] && actB[static_cast<std::size_t> (i + lag)])
+                    {
+                        const double x = a[static_cast<std::size_t> (i)] - ma, y = b[static_cast<std::size_t> (i + lag)] - mb;
+                        saa += x * x;
+                        sbb += y * y;
+                        sab += x * y;
+                    }
+                sa = std::sqrt (saa / n);
+                sb = std::sqrt (sbb / n);
+                r = saa > 0.0 && sbb > 0.0 ? sab / std::sqrt (saa * sbb) : 0.0;
+                return true;
+            };
+            double r = 0.0, sa = 0.0, sb = 0.0;
+            if (! stats (0, r, sa, sb)) return 0.0;
+            if (sa <= kSteadyDb && sb <= kSteadyDb) return 1.0;
+            if (sa <= kSteadyDb || sb <= kSteadyDb) return 0.0;
+            double best = r;
+            for (int lag : { -1, 1 })
+            {
+                double rl = 0.0, al = 0.0, bl = 0.0;
+                if (stats (lag, rl, al, bl) && al > kSteadyDb && bl > kSteadyDb) best = std::max (best, rl);
+            }
+            return best;
+        }
+
+        PairCheck::Verdict verdictOf (const PairCheck& c)
+        {
+            using V = PairCheck::Verdict;
+            if (c.activeA < kPairMinMoments || c.activeB < kPairMinMoments) return V::notHeard;
+            if (c.overlap < kPairOverlap) return V::apart;
+            if (c.both < kPairMinMoments) return V::notHeard;
+            return c.alike >= kPairAlike ? V::together : V::unlike;
+        }
     }
 
     // ---------------------------------------------------------------------------------------------
     // Roles
 
     double vocalTargetFor (const std::string& styleKey) { return vocalTarget (styleKey); }
+
+    const PairCheck* pairCheck (const Report& r, std::uint32_t a, std::uint32_t b)
+    {
+        for (const auto& c : r.pairs)
+            if ((c.a == a && c.b == b) || (c.a == b && c.b == a)) return &c;
+        return nullptr;
+    }
 
     ToneAgainstStyle toneAgainstStyle (const Report& r)
     {
@@ -270,6 +333,34 @@ namespace mixology::mix
     {
         static const char* keys[] = { "kick", "bass", "drums", "vocals", "instruments", "other" };
         return keys[static_cast<int> (g)];
+    }
+
+    PairName pairName (const std::string& name)
+    {
+        PairName p;
+        std::string s;
+        for (char ch : name) s += static_cast<char> (std::tolower (static_cast<unsigned char> (ch)));
+        while (! s.empty() && std::isspace (static_cast<unsigned char> (s.back()))) s.pop_back();
+
+        static const std::regex suffix (R"(^(.*?)[\s_\-]*[\(\[]?\s*(l|r|left|right|lft|rt|d|dbl|double|dub|dup|\d{1,2})\s*[\)\]]?$)", std::regex::icase);
+        std::smatch m;
+        if (std::regex_match (s, m, suffix) && ! m[1].str().empty())
+        {
+            const auto tag = m[2].str();
+            const bool separated = m[1].str().size() + tag.size() < s.size();   // "Gtr L", "Gtr (L)", not "Gtrl" or "Lead"
+            if (separated)
+            {
+                p.base = m[1].str();
+                while (! p.base.empty() && (std::isspace (static_cast<unsigned char> (p.base.back())) || p.base.back() == '-' || p.base.back() == '_')) p.base.pop_back();
+                if (tag == "l" || tag == "left" || tag == "lft") { p.side = -1; p.explicitPair = true; }
+                else if (tag == "r" || tag == "right" || tag == "rt") { p.side = 1; p.explicitPair = true; }
+                else if (std::isdigit (static_cast<unsigned char> (tag[0]))) p.order = std::max (0, std::stoi (tag) - 1);
+                else { p.order = 1; p.explicitPair = true; }   // a double
+                return p;
+            }
+        }
+        p.base = s;
+        return p;
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -470,6 +561,59 @@ namespace mixology::mix
                     a.sideE[i] += e * t.frame.sideShare[i];
                 }
             }
+
+        // ---- name pairs, by ear: every pair of tracks whose names differ only by a number, a side or a double tag
+        {
+            std::map<std::string, std::vector<std::uint32_t>> byBase;
+            for (const auto& [key, a] : acc)
+                if (const auto pn = pairName (a.name); ! pn.base.empty()) byBase[pn.base].push_back (key);
+            std::map<std::uint32_t, std::pair<std::vector<float>, std::vector<char>>> level;   // per moment: RMS (dB), playing
+            auto levelsOf = [&] (std::uint32_t key) -> const std::pair<std::vector<float>, std::vector<char>>& {
+                auto it = level.find (key);
+                if (it != level.end()) return it->second;
+                auto& l = level[key];
+                l.first.assign (moments.size(), kSilentDb);
+                l.second.assign (moments.size(), 0);
+                const auto& a = acc.at (key);
+                for (std::size_t mi = 0; mi < moments.size(); ++mi)
+                    for (const auto& t : moments[mi].tracks)
+                        if (keyOf (t) == key)
+                        {
+                            l.first[mi] = t.frame.silent ? kSilentDb : t.frame.rmsDb;
+                            l.second[mi] = activeIn (t, a.maxLoud) ? 1 : 0;
+                            break;
+                        }
+                return l;
+            };
+            for (const auto& [base, keys] : byBase)
+                for (std::size_t i = 0; i < keys.size(); ++i)
+                    for (std::size_t j = i + 1; j < keys.size(); ++j)
+                    {
+                        const auto& ta = acc.at (keys[i]);
+                        const auto& tb = acc.at (keys[j]);
+                        auto tagged = [] (const PairName& p) { return p.side != 0 || p.order != 0 || p.explicitPair; };
+                        if (! tagged (pairName (ta.name)) && ! tagged (pairName (tb.name))) continue;   // one name spelt twice: not a pair
+                        PairCheck c;
+                        c.a = keys[i];
+                        c.b = keys[j];
+                        c.nameA = ta.name;
+                        c.nameB = tb.name;
+                        const auto& la = levelsOf (c.a);
+                        const auto& lb = levelsOf (c.b);
+                        for (std::size_t mi = 0; mi < moments.size(); ++mi)
+                        {
+                            const bool x = la.second[mi] != 0, y = lb.second[mi] != 0;
+                            c.activeA += x ? 1 : 0;
+                            c.activeB += y ? 1 : 0;
+                            c.both += x && y ? 1 : 0;
+                            c.either += x || y ? 1 : 0;
+                        }
+                        c.overlap = c.either > 0 ? static_cast<double> (c.both) / c.either : 0.0;
+                        c.alike = alikeness (la.first, la.second, lb.first, lb.second);
+                        c.verdict = verdictOf (c);
+                        r.pairs.push_back (std::move (c));
+                    }
+        }
 
         const auto total = static_cast<double> (moments.size());
         std::map<std::uint32_t, std::size_t> indexOf;

@@ -20,8 +20,9 @@
       master channel, before Masterology), so every track, FX return and group goes down together. With a music
       group (a group channel the instruments play through, e.g. Voxology's "Beat"), the music moves on that one
       fader.
-    - Stereo Architect: pans. Low end and the lead vocal in the middle, doubles and pairs spread left / right,
-      a lopsided mix evened out.
+    - Stereo Architect: pans. Low end and the lead vocal in the middle, doubles spread left / right (a name pair
+      only when Analyze Mix heard both play at the same time, moving together: Report::pairs), a lopsided mix
+      evened out.
     - Clean Up: Assist EQ low cuts on tracks with rumble (and on vocals), mud dips where the mix is muddy.
     - Vocal Pocket: Assist EQ dips where instruments cover the vocal's words.
     - Polish (Milestone 5, round 3): processing in each track's Mixology Link: EQ (a dull or harsh vocal, its air,
@@ -142,15 +143,4 @@ namespace mixology::mix
     constexpr double kMaxFaderDb = 6.0;   // top of a Cubase channel fader
 
     Plan makePlan (Tool, const Report&, const std::vector<ChannelNow>&, const MixNow& mix = {});
-
-    /** "Gtr L" / "Gtr R", "Vocals" / "Vocals (D)", "Keys 1" / "Keys 2": the shared name, and which side the
-        name asks for (-1 left, +1 right, 0 none) and its order among the takes (0 = the original). */
-    struct PairName
-    {
-        std::string base;
-        int side = 0;
-        int order = 0;
-        bool explicitPair = false;   // L / R / double / (D): clearly one of a pair, whatever its role
-    };
-    PairName pairName (const std::string& name);
 }

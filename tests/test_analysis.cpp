@@ -1377,6 +1377,298 @@ TEST_CASE ("Plans: a big channel without a Link: the instruments aren't judged a
     CHECK (noted (p, "'Beat' has no Mixology Link"));
 }
 
+namespace
+{
+    // ---- test signals for name pairs ---------------------------------------------------------------------------
+    // A voice: syllables (0.10 - 0.30 s, rap) in phrases of 2 - 4 s with breaths between, its level envelope at 1 ms,
+    // measured as Mixology Link does: 85 ms of audio every 200 ms, each track on the shared grid give or take 30 ms
+    // (the host's buffers, the analysis thread). Own random numbers (mt19937's are the same everywhere; the standard
+    // distributions aren't), so every compiler hears the same songs.
+    struct VoiceRng
+    {
+        std::mt19937 g;
+        explicit VoiceRng (unsigned seed) : g (seed) {}
+        double uniform (double lo, double hi) { return lo + (hi - lo) * (static_cast<double> (g()) / 4294967296.0); }
+        double normal (double sigma)
+        {
+            const double u1 = std::max (1.0e-12, uniform (0.0, 1.0)), u2 = uniform (0.0, 1.0);
+            return sigma * std::sqrt (-2.0 * std::log (u1)) * std::cos (2.0 * kPi * u2);
+        }
+    };
+    struct Syllable { double t0, t1, amp; };
+    constexpr double kSongSeconds = 40.0;
+
+    std::vector<std::pair<double, double>> phrasesOf (VoiceRng& rng)
+    {
+        std::vector<std::pair<double, double>> out;
+        for (double t = 0.5; t < kSongSeconds - 0.5;)
+        {
+            const double len = std::min (rng.uniform (2.0, 4.0), kSongSeconds - 0.5 - t);
+            out.push_back ({ t, t + len });
+            t += len + rng.uniform (0.3, 0.8);
+        }
+        return out;
+    }
+    std::vector<Syllable> syllablesIn (VoiceRng& rng, double from, double to)
+    {
+        std::vector<Syllable> out;
+        for (double t = from;;)
+        {
+            const double d = rng.uniform (0.10, 0.30), gap = rng.uniform (0.02, 0.08);
+            if (t + d > to) break;
+            out.push_back ({ t, t + d, std::pow (10.0, rng.normal (2.0) / 20.0) });
+            t += d + gap;
+        }
+        return out;
+    }
+    // Amplitude per ms; a second take: each syllable a little early or late (jitter, s), quieter, its level varied.
+    std::vector<double> sing (const std::vector<Syllable>& syl, VoiceRng& rng, double jitter = 0.0, double levelDb = 0.0, double varyDb = 0.0)
+    {
+        std::vector<double> env (static_cast<std::size_t> (kSongSeconds * 1000.0), 0.0);
+        for (auto s : syl)
+        {
+            if (jitter > 0.0) { s.t0 += rng.normal (jitter); s.t1 += rng.normal (jitter); }
+            if (varyDb > 0.0) s.amp *= std::pow (10.0, rng.normal (varyDb) / 20.0);
+            const int i0 = std::max (0, static_cast<int> (s.t0 * 1000.0)), i1 = std::min (static_cast<int> (env.size()), static_cast<int> (s.t1 * 1000.0));
+            for (int i = i0; i < i1; ++i)
+            {
+                const double x = static_cast<double> (i - i0) / std::max (1, i1 - i0);
+                env[static_cast<std::size_t> (i)] = std::max (env[static_cast<std::size_t> (i)], s.amp * std::pow (10.0, levelDb / 20.0) * std::min (1.0, x * 8.0) * (1.0 - 0.5 * x));
+            }
+        }
+        return env;
+    }
+    std::vector<double> measured (const std::vector<double>& env, double phase)
+    {
+        std::vector<double> out;
+        for (int k = 0;; ++k)
+        {
+            const auto i0 = static_cast<std::size_t> ((0.2 * k + phase) * 1000.0), i1 = i0 + 85;
+            if (i1 > env.size()) break;
+            double e = 0.0;
+            for (auto i = i0; i < i1; ++i) e += env[i] * env[i];
+            const double rms = std::sqrt (e / 85.0 * 0.5);
+            out.push_back (rms > 1.0e-5 ? 20.0 * std::log10 (rms) : -120.0);
+        }
+        return out;
+    }
+
+    enum class Duet { tightDouble, looseDouble, sameTimeOtherLines, callAndResponse, chorusHalves, leadAndAdlibs, notHeard };
+
+    // Two takes' levels per moment, as the Links heard them.
+    std::pair<std::vector<double>, std::vector<double>> duet (Duet kind, unsigned seed)
+    {
+        VoiceRng rng (seed);
+        const auto ph = phrasesOf (rng);
+        const double phaseA = rng.uniform (0.0, 0.03), phaseB = rng.uniform (0.0, 0.03);
+        std::vector<Syllable> a, b;
+        auto all = [&] (std::vector<Syllable>& to, auto keep) {
+            for (std::size_t i = 0; i < ph.size(); ++i)
+                if (keep (i, ph[i])) for (const auto& s : syllablesIn (rng, ph[i].first, ph[i].second)) to.push_back (s);
+        };
+        std::vector<double> envA, envB;
+        switch (kind)
+        {
+            case Duet::tightDouble:
+                all (a, [] (std::size_t, auto) { return true; });
+                envA = sing (a, rng);
+                envB = sing (a, rng, 0.025, -2.0, 1.5);
+                break;
+            case Duet::looseDouble:
+                all (a, [] (std::size_t, auto) { return true; });
+                envA = sing (a, rng);
+                envB = sing (a, rng, 0.05, -4.0, 3.0);
+                break;
+            case Duet::sameTimeOtherLines:
+                all (a, [] (std::size_t, auto) { return true; });
+                all (b, [] (std::size_t, auto) { return true; });
+                envA = sing (a, rng);
+                envB = sing (b, rng, 0.0, -2.0);
+                break;
+            case Duet::callAndResponse:
+                all (a, [] (std::size_t i, auto) { return i % 2 == 0; });
+                all (b, [] (std::size_t i, auto) { return i % 2 == 1; });
+                envA = sing (a, rng);
+                envB = sing (b, rng);
+                break;
+            case Duet::chorusHalves:   // part 1 sings 8 s, then part 2 sings 8 s
+                all (a, [] (std::size_t, auto p) { return static_cast<int> (p.first / 8.0) % 2 == 0; });
+                all (b, [] (std::size_t, auto p) { return static_cast<int> (p.first / 8.0) % 2 == 1; });
+                envA = sing (a, rng);
+                envB = sing (b, rng);
+                break;
+            case Duet::leadAndAdlibs:
+                all (a, [] (std::size_t, auto) { return true; });
+                for (const auto& p : ph)
+                    if (rng.uniform (0.0, 1.0) < 0.6)
+                    {
+                        const double t = rng.uniform (p.first, p.second);
+                        for (const auto& s : syllablesIn (rng, t, std::min (kSongSeconds, t + rng.uniform (0.4, 1.2)))) b.push_back (s);
+                    }
+                envA = sing (a, rng);
+                envB = sing (b, rng, 0.0, -6.0);
+                break;
+            case Duet::notHeard:   // the second part sings in a section Analyze Mix didn't hear
+                all (a, [] (std::size_t, auto) { return true; });
+                envA = sing (a, rng);
+                envB.assign (envA.size(), 0.0);
+                break;
+        }
+        return { measured (envA, phaseA), measured (envB, phaseB) };
+    }
+
+    AnalysisFrame voiceFrame (double db) { return db < -90.0 ? silentFrame() : vocalFrame (db - 6.0); }
+
+    // A short song with a kick, a lead vocal and the two takes on their own tracks (levels before the fader).
+    Report duetReport (Duet kind, unsigned seed, const std::string& nameA, const std::string& nameB)
+    {
+        const auto [la, lb] = duet (kind, seed);
+        Analysis a;
+        a.begin (Style {});
+        for (std::size_t i = 0; i < std::min (la.size(), lb.size()); ++i)
+        {
+            Moment m;
+            m.tracks = { sample ("Kick", kickFrame()), sample ("Lead Vox", vocalFrame (-14.0)), sample (nameA, voiceFrame (la[i])), sample (nameB, voiceFrame (lb[i])) };
+            m.mix = mixOf (m.tracks);
+            a.add (m);
+        }
+        return a.evaluate ({});
+    }
+
+    PairCheck::Verdict verdictFor (Duet kind, unsigned seed, PairCheck* out = nullptr)
+    {
+        const auto r = duetReport (kind, seed, "Backing Vox 1", "Backing Vox 2");
+        const auto* c = pairCheck (r, mixology::bridge::nameHash ("Backing Vox 1"), mixology::bridge::nameHash ("Backing Vox 2"));
+        REQUIRE (c != nullptr);
+        if (out != nullptr) *out = *c;
+        return c->verdict;
+    }
+}
+
+TEST_CASE ("Doubles by ear: only a real double plays together and moves together", "[plan][pairs]")
+{
+    // The user's chorus: 'Vox Chorus 1' and 'Vox Chorus 2' are different parts, not the same lines, yet Stereo
+    // Architect panned them left and right because of their names. Now the names only say who MIGHT pair.
+    using V = PairCheck::Verdict;
+    auto count = [] (Duet kind, V verdict) {
+        int n = 0;
+        for (unsigned seed = 1; seed <= 12; ++seed) n += verdictFor (kind, seed) == verdict ? 1 : 0;
+        return n;
+    };
+    CHECK (count (Duet::tightDouble, V::together) == 12);       // the same lines, sung twice
+    CHECK (count (Duet::looseDouble, V::together) >= 10);       // sloppier doubles (50 ms, 3 dB off): nearly all still count
+    CHECK (count (Duet::sameTimeOtherLines, V::together) == 0); // two lines at once: never a double
+    CHECK (count (Duet::callAndResponse, V::apart) == 12);
+    CHECK (count (Duet::chorusHalves, V::apart) == 12);
+    CHECK (count (Duet::leadAndAdlibs, V::apart) == 12);
+    CHECK (count (Duet::notHeard, V::notHeard) == 12);
+
+    PairCheck c;
+    verdictFor (Duet::tightDouble, 3, &c);
+    CHECK (c.overlap > 0.85);
+    CHECK (c.alike > 0.5);
+    verdictFor (Duet::callAndResponse, 3, &c);
+    CHECK (c.overlap < 0.1);
+    // Steady levels (a pad and its double, or test tones) are alike; a name with no number, side or double tag isn't a pair.
+    const auto r = listen ([] (int) { return std::vector<TrackSample> { sample ("Pad", padFrame (-20.0)), sample ("Pad (D)", padFrame (-22.0)),
+                                                                          sample ("Keys", padFrame (-20.0)), sample ("keys ", padFrame (-20.0)) }; }).evaluate ({});
+    const auto* pads = pairCheck (r, mixology::bridge::nameHash ("Pad"), mixology::bridge::nameHash ("Pad (D)"));
+    REQUIRE (pads != nullptr);
+    CHECK (pads->verdict == V::together);
+    CHECK (pairCheck (r, mixology::bridge::nameHash ("Keys"), mixology::bridge::nameHash ("keys ")) == nullptr);
+}
+
+TEST_CASE ("Doubles by ear: print the measurements (manual check)", "[.pairsprint]")
+{
+    for (auto kind : { Duet::tightDouble, Duet::looseDouble, Duet::sameTimeOtherLines, Duet::callAndResponse, Duet::chorusHalves, Duet::leadAndAdlibs, Duet::notHeard })
+    {
+        std::vector<double> ov, al;
+        int verdicts[4] = {};
+        for (unsigned seed = 1; seed <= 40; ++seed)
+        {
+            PairCheck c;
+            ++verdicts[static_cast<int> (verdictFor (kind, seed, &c))];
+            ov.push_back (c.overlap);
+            al.push_back (c.alike);
+        }
+        std::sort (ov.begin(), ov.end());
+        std::sort (al.begin(), al.end());
+        printf ("kind %d  overlap %.2f %.2f %.2f   alike %.2f %.2f %.2f   (min / median / max)   not heard %d, apart %d, unlike %d, together %d of 40\n",
+                static_cast<int> (kind), ov.front(), ov[20], ov.back(), al.front(), al[20], al.back(), verdicts[0], verdicts[1], verdicts[2], verdicts[3]);
+    }
+}
+
+TEST_CASE ("Plans: Stereo Architect spreads a double heard as one, and leaves other name pairs alone", "[plan][pairs]")
+{
+    auto chans = [] (double pan2) {
+        std::vector<ChannelNow> c { channel ("Kick"), channel ("Lead Vox"), channel ("Backing Vox 1"), channel ("Backing Vox 2", 0.0, pan2) };
+        return c;
+    };
+    SECTION ("a real double: one left, one right")
+    {
+        const auto r = duetReport (Duet::tightDouble, 5, "Backing Vox 1", "Backing Vox 2");
+        const auto p = makePlan (Tool::stereo, r, chans (0.0));
+        const auto* a = change (p, "Backing Vox 1", "pan");
+        const auto* b = change (p, "Backing Vox 2", "pan");
+        REQUIRE (a != nullptr);
+        REQUIRE (b != nullptr);
+        CHECK (a->to * b->to < 0.0);
+        CHECK (a->why.find ("a double: Mixology heard them play together") != std::string::npos);
+    }
+    SECTION ("two parts of the chorus (they take turns): the pans stay, and a note says why")
+    {
+        const auto r = duetReport (Duet::chorusHalves, 5, "Backing Vox 1", "Backing Vox 2");
+        const auto p = makePlan (Tool::stereo, r, chans (0.0));
+        CHECK (change (p, "Backing Vox 1", "pan") == nullptr);
+        CHECK (change (p, "Backing Vox 2", "pan") == nullptr);
+        CHECK (noted (p, "'Backing Vox 1' and 'Backing Vox 2' look like a pair by name, but they sing at different times (different parts), so their pans stay."));
+    }
+    SECTION ("two lines sung at the same time: the pans stay")
+    {
+        const auto r = duetReport (Duet::sameTimeOtherLines, 5, "Backing Vox 1", "Backing Vox 2");
+        const auto p = makePlan (Tool::autoMix, r, chans (0.0));
+        CHECK (change (p, "Backing Vox 1", "pan") == nullptr);
+        CHECK (change (p, "Backing Vox 2", "pan") == nullptr);
+        CHECK (noted (p, "not the same line"));
+    }
+    SECTION ("the second part wasn't heard (it sings in another section): its pan stays, play that part")
+    {
+        const auto r = duetReport (Duet::notHeard, 5, "Backing Vox 1", "Backing Vox 2");
+        const auto p = makePlan (Tool::stereo, r, chans (0.0));
+        CHECK (change (p, "Backing Vox 1", "pan") == nullptr);
+        CHECK (noted (p, "didn't hear them sing together: play the part where both sing and Analyze Mix again"));
+    }
+    SECTION ("left and right typed in the names count by name")
+    {
+        const auto r = duetReport (Duet::chorusHalves, 5, "Gtr L", "Gtr R");
+        std::vector<ChannelNow> c { channel ("Kick"), channel ("Lead Vox"), channel ("Gtr L"), channel ("Gtr R") };
+        const auto p = makePlan (Tool::stereo, r, c);
+        REQUIRE (change (p, "Gtr L", "pan") != nullptr);
+        CHECK (change (p, "Gtr L", "pan")->to < 0.0);
+        CHECK (change (p, "Gtr R", "pan")->to > 0.0);
+        CHECK (change (p, "Gtr L", "pan")->why.find ("left and right in their names") != std::string::npos);
+    }
+    SECTION ("the user's chorus: 'Vox Chorus 2' panned by an older Mixology comes back to the middle")
+    {
+        // Two parts of the chorus taking turns are lead vocal parts: the one panned R35 goes back to the centre.
+        const auto r = duetReport (Duet::chorusHalves, 7, "Vox Chorus 1", "Vox Chorus 2");
+        REQUIRE (track (r, "Vox Chorus 2")->role == Role::vox);
+        std::vector<ChannelNow> c { channel ("Kick"), channel ("Lead Vox"), channel ("Vox Chorus 1", 0.0, -35.0), channel ("Vox Chorus 2", 0.0, 35.0) };
+        const auto p = makePlan (Tool::stereo, r, c);
+        const auto* one = change (p, "Vox Chorus 1", "pan");
+        const auto* two = change (p, "Vox Chorus 2", "pan");
+        REQUIRE (one != nullptr);
+        REQUIRE (two != nullptr);
+        CHECK (one->to == Catch::Approx (0.0));
+        CHECK (two->to == Catch::Approx (0.0));
+        CHECK (two->why.find ("a lead vocal part") != std::string::npos);
+        // A real double of the chorus: the original stays in the middle, a single double stays with it (as before).
+        const auto d = duetReport (Duet::tightDouble, 7, "Vox Chorus 1", "Vox Chorus 2");
+        const auto q = makePlan (Tool::stereo, d, { channel ("Kick"), channel ("Lead Vox"), channel ("Vox Chorus 1"), channel ("Vox Chorus 2") });
+        CHECK (change (q, "Vox Chorus 2", "pan") == nullptr);
+    }
+}
+
 TEST_CASE ("Plans: Stereo Architect only pans mono tracks", "[plan]")
 {
     auto tracks = [] (int) { return std::vector<TrackSample> {

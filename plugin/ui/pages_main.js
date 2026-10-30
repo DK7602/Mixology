@@ -20,7 +20,7 @@ export function buildOverview(root, app) {
     { id: "balance", label: "BALANCE", icon: "sliders", tip: "Fader levels for your style, and room for Masterology" },
     { id: "clean", label: "CLEAN UP", icon: "wave", tip: "Low cuts and mud dips (Assist EQ in each Mixology Link)" },
     { id: "pocket", label: "VOCAL POCKET", icon: "mic", tip: "Dips in the instruments that cover the vocal's words" },
-    { id: "stereo", label: "STEREO ARCHITECT", icon: "rings", tip: "Pans: low end centred, pairs spread, a lopsided mix evened out" },
+    { id: "stereo", label: "STEREO ARCHITECT", icon: "rings", tip: "Pans: low end centred, doubles spread, a lopsided mix evened out" },
     { id: "ref", label: "REFERENCE MATCH", icon: "target", tip: "Your mix against a song you like, level-matched" },
   ];
   const analyze = el("button", "btn big active", root, box(0, 0, 252, 112));

@@ -191,7 +191,7 @@
         balance: [lvl("Hats", -3.4, "the hats sit 4.4 dB louder against the rest of the beat than Hip Hop - Modern Clean usually has"),
           lvl("Kick", -1.5, "makes room for the vocal"), lvl("808", -1.5, "makes room for the vocal"), lvl("Snare", -1.5, "makes room for the vocal"),
           lvl("Adlibs", 1.5, "follows the lead vocal")],
-        stereo: [pan("Hats", 15, "the mix leans left by 1.9 dB: this evens it out"), pan("Keys", -45, "pairs with 'Synth': one left, one right sounds wide and keeps the middle free for the vocal")],
+        stereo: [pan("Hats", 15, "the mix leans left by 1.9 dB: this evens it out"), pan("Keys", -45, "pairs with 'Synth' (a double: Mixology heard them play together): one left, one right sounds wide and keeps the middle free for the vocal")],
         clean: [eq("Adlibs", "lowcut", 0, 100, 100, "41% of its energy is below 100 Hz, where it only muddies the kick and bass"),
           eq("Keys", "mud", 0, -2.5, 315, "the mix has 3.6 dB more 200 - 500 Hz than Hip Hop - Modern Clean usually does; this is one of the tracks carrying it")],
         pocket: [eq("Keys", "pocket", 0, -3, 2500, "at 1.6 - 4 kHz it is 2.1 dB under the vocal while it sings, covering its words"),

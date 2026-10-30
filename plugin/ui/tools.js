@@ -14,7 +14,7 @@ const TOOL_ABOUT = {
   balance: "Fader levels: the beat against itself, the vocal against the beat. And room for Masterology: the whole mix down in one go.",
   clean: "Assist EQ in each track's Mixology Link: low cuts where there's rumble, dips where the mix is muddy.",
   pocket: "Assist EQ dips in the instruments that cover the vocal's words (1.6 - 4 kHz).",
-  stereo: "Pans: low end and lead vocal in the middle, pairs and doubles spread, a lopsided mix evened out.",
+  stereo: "Pans: low end and lead vocal in the middle, doubles spread (only when Mixology hears them play together), a lopsided mix evened out.",
 };
 const KIND_LABEL = { level: "Fader", pan: "Pan", lowcut: "Low cut", mud: "Mud dip", pocket: "Pocket dip",
   eq: "EQ", comp: "Compressor", width: "Stereo", space: "Space", tone: "Tone" };

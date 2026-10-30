@@ -30,6 +30,18 @@ namespace mixology::mix
     /** A name as the words roleFromName reads: "LeadVox2 (Hook)" -> "lead vox 2 hook". */
     std::string nameWords (const std::string& name);
 
+    /** "Gtr L" / "Gtr R", "Vocals" / "Vocals (D)", "Keys 1" / "Keys 2": the shared name, and which side the
+        name asks for (-1 left, +1 right, 0 none) and its order among the takes (0 = the original). A name only says
+        who MIGHT pair: Report::pairs says whether they really play together. */
+    struct PairName
+    {
+        std::string base;
+        int side = 0;
+        int order = 0;
+        bool explicitPair = false;   // L / R / double / (D): clearly one of a pair, whatever its role
+    };
+    PairName pairName (const std::string& name);
+
     /** The six colours of the Overview analyzer: Kick, Bass, Drums, Vocals, Instruments, Other. */
     enum class Group { kick, bass, drums, vocals, instruments, other };
     constexpr int kGroupCount = 6;
@@ -108,6 +120,37 @@ namespace mixology::mix
         bool reference = false;    // your reference song
     };
 
+    /** Two tracks whose names make them look like a pair or a double ("Vox Chorus 1" / "Vox Chorus 2", "Gtr" /
+        "Gtr (D)"), checked by ear from every moment Analyze Mix kept: did they play at the same time, and do their
+        levels move together while they do? A real double (the same part played or sung twice) does both; two parts
+        of a chorus, a call and its response, a lead and its ad-libs don't. Only real doubles get spread left / right. */
+    struct PairCheck
+    {
+        std::uint32_t a = 0, b = 0;   // the two tracks (name hashes, as TrackReport::hash)
+        std::string nameA, nameB;
+        int activeA = 0, activeB = 0; // moments each one played
+        int both = 0, either = 0;     // moments both / either of them played
+        double overlap = 0.0;         // both / either: 1 = always together, 0 = never at the same time
+        double alike = 0.0;           // how alike their levels move while both play (correlation of the moments'
+                                      // RMS, the best of a moment either way: -1 .. 1; 1 for two steady levels)
+        enum class Verdict
+        {
+            notHeard,   // one of them (nearly) didn't play while Analyze Mix listened, or not together long enough
+            apart,      // they play at different times (different parts, a call and its response, ad-libs)
+            unlike,     // at the same time, but their levels don't move together (different lines)
+            together    // a double: at the same time, moving together
+        };
+        Verdict verdict = Verdict::notHeard;
+    };
+    /** What it takes to call a name pair a double. Tuned with test signals (tests/test_analysis.cpp, "Doubles by ear",
+        40 songs each, the Links measuring within 30 ms of each other): real doubles overlap 0.83 - 0.99 and move alike
+        0.25 - 0.79 (sloppy ones the low end); two different lines sung at the same time overlap 0.93 - 0.98 but move
+        alike only -0.05 - 0.19; a call and its response, two halves of a chorus overlap 0, ad-libs under a lead
+        0.06 - 0.20. When in doubt a pair keeps its pans (and the plan says why). */
+    constexpr int kPairMinMoments = 10;        // each played at least 2 s, and both together 2 s
+    constexpr double kPairOverlap = 0.65;
+    constexpr double kPairAlike = 0.3;
+
     /** Your mix against your reference song (Reference Match). */
     struct ReferenceReport
     {
@@ -173,7 +216,12 @@ namespace mixology::mix
         double mixWidth = 0.0;
         bool monoMix = false;              // left and right of the Stereo Out are the same: panning changes nothing
         ReferenceReport reference;
+        /** Every name pair among the tracks (same name apart from a number, a side or a double tag), checked by ear. */
+        std::vector<PairCheck> pairs;
     };
+
+    /** The check of two tracks' name pair (either order), or nothing when their names don't pair. */
+    const PairCheck* pairCheck (const Report&, std::uint32_t a, std::uint32_t b);
 
     /** Rumble on a track: its energy below what a low cut for its kind would remove. That is the bands up to
         lowCutTopBand (about 100 Hz; about 45 Hz for keys and synths, whose low notes are part of the sound). */

@@ -143,7 +143,7 @@ private:
     // Analyze Mix hears the mix through the Full Mix's Mixology (the hub's), five times a second.
     mixology::TrackAnalyzer mixAnalyzer;
     std::vector<float> mixL, mixR;
-    int analysisCountdown = 0;
+    int ticksSinceFeed = 0;   // timer ticks since Analyze Mix last got a moment
     void feedAnalysis();
 
     template <typename Sample>

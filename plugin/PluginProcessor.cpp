@@ -123,9 +123,12 @@ void MixologyAudioProcessor::timerCallback()
         if (prepared.load() && ! bridgeHub->isEnabled() && bridgeDaw (detectedDaw))
             bridgeHub->enable();   // the bridge connects with the project, before the window first opens
     }
-    if (--analysisCountdown <= 0)
+    // Analyze Mix: five times a second, halfway between the Links' measurements (they measure on a 200 ms grid of the
+    // shared clock), so every moment takes all tracks from the same measurement (a late timer waits at most one tick).
+    const auto phase = mixology::link::nowMs() % 200;
+    if (++ticksSinceFeed >= 3 || (ticksSinceFeed >= 2 && phase >= 70 && phase < 170))
     {
-        analysisCountdown = 2;
+        ticksSinceFeed = 0;
         feedAnalysis();
     }
 }

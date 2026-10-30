@@ -85,19 +85,22 @@ MixologyLinkProcessor::~MixologyLinkProcessor()
     registry.release (slot, instanceId);
 }
 
-// Analysis thread: about five times a second, while audio is flowing.
+// Analysis thread: five times a second, while audio is flowing. Every Link measures on the same 200 ms grid of the
+// shared clock, so the moments of all tracks are heard at the same time (Analyze Mix compares them moment by moment:
+// whether two tracks really play together, the vocal against the beat).
 int MixologyLinkProcessor::useTimeSlice()
 {
     constexpr int kIntervalMs = 200;
+    auto untilGrid = [] (std::uint64_t t) { return static_cast<int> (kIntervalMs - t % kIntervalMs); };
     const auto now = mixology::link::nowMs();
     const auto last = lastAudioMs.load (std::memory_order_relaxed);
-    if (last == 0 || now - std::min (now, last) > 300) return kIntervalMs;   // stopped or bypassed: nothing new
+    if (last == 0 || now - std::min (now, last) > 300) return untilGrid (now);   // stopped or bypassed: nothing new
 
     const double rate = currentRate.load();
     ring.copyLatest (snapL.data(), snapR.data(), mixology::TrackAnalyzer::sizeFor (rate));
     const auto frame = analyzer.analyse (snapL.data(), snapR.data(), rate);
     registry.publishAnalysis (slot, frame, transportPlaying.load(), songPosition.load(), now);
-    return kIntervalMs;
+    return untilGrid (mixology::link::nowMs());
 }
 
 bool MixologyLinkProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
