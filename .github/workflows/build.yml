@@ -44,7 +44,7 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.mac
-          && '[{"name":"macOS","os":"macos-14"},{"name":"Windows","os":"windows-latest"}]'
+          && '[{"name":"macOS","os":"macos-15"},{"name":"Windows","os":"windows-latest"}]'
           || '[{"name":"Windows","os":"windows-latest"}]') }}
 
     steps:

@@ -73,11 +73,11 @@ jobs:
       matrix:
         include:
           - { plugin: Voxology, repo: DK7602/Voxology, ref: voxology, name: Windows, os: windows-latest, options: "-DVOX_BUILD_TESTS=OFF" }
-          - { plugin: Voxology, repo: DK7602/Voxology, ref: voxology, name: macOS, os: macos-14, options: "-DVOX_BUILD_TESTS=OFF" }
+          - { plugin: Voxology, repo: DK7602/Voxology, ref: voxology, name: macOS, os: macos-15, options: "-DVOX_BUILD_TESTS=OFF" }
           - { plugin: Mixology, repo: DK7602/Mixology, ref: mixology, name: Windows, os: windows-latest, options: "-DMIX_BUILD_TESTS=OFF" }
-          - { plugin: Mixology, repo: DK7602/Mixology, ref: mixology, name: macOS, os: macos-14, options: "-DMIX_BUILD_TESTS=OFF" }
+          - { plugin: Mixology, repo: DK7602/Mixology, ref: mixology, name: macOS, os: macos-15, options: "-DMIX_BUILD_TESTS=OFF" }
           - { plugin: Masterology, repo: DK7602/polisher, ref: masterology, name: Windows, os: windows-latest, options: "-DPOLISHER_BUILD_TESTS=OFF" }
-          - { plugin: Masterology, repo: DK7602/polisher, ref: masterology, name: macOS, os: macos-14, options: "-DPOLISHER_BUILD_TESTS=OFF" }
+          - { plugin: Masterology, repo: DK7602/polisher, ref: masterology, name: macOS, os: macos-15, options: "-DPOLISHER_BUILD_TESTS=OFF" }
     steps:
       - uses: actions/checkout@v4
         with:
@@ -179,7 +179,7 @@ jobs:
     name: macOS installer
     needs: [shared, build]
     if: ${{ !cancelled() && (needs.shared.result == 'success' || needs.shared.result == 'skipped') && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
