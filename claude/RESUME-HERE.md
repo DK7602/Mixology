@@ -51,6 +51,9 @@ sends higher-resolution art, re-run it.
   types for the Voxology-reverb warnings, propose with all 7 switches set. Saved advice from older versions loads.
 - CPU (48 Links, cloud VM): Space off 0.13 % / track; one effect 0.8-0.9 %; Phaser + Hall 1.5-2.3 %; three 2.5-4.4 %.
 - Mixology and Mixology Link must be updated together (control count changed).
+- Beta 6 suite installers (2026-10-30, from Masterology's "Masterology Auto Edit" thread): run 40996902871, label "Beta 6",
+  version 0.6.0 = Beta 5 with Masterology 0.29.5 (it opened at its 800 x 450 minimum every time; now 1440 x 810, as large
+  as fits on smaller screens). Mixology 0.22.0 and Voxology 0.52.1 unchanged.
 - v0.22.0 CI green: run 39103836805 (e7ef1ef). Beta 5 suite installers: run 39103844494 (Mixology 0.22.0, Voxology 0.52.1,
   Masterology 0.29.4; the shared-files job passed, auval PASS on all five AUs with Apple's success line).
 - Before it: Beta 4 suite installers = run 39098727832 (Mixology 0.21.1, Voxology 0.52.1, Masterology 0.29.4; all
