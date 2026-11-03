@@ -1464,6 +1464,21 @@ std::map<std::uint32_t, mixology::mix::TrackSettings> BridgeHub::settingsForAnal
     return settings;
 }
 
+void BridgeHub::handoffChanging (suite::MixInfo& m)
+{
+    const auto t = suite::nowMs();
+    const auto key = autoMixKey();
+    if (key != handoffMixKey)
+    {
+        if (handoffKeySeen) mixChangedMs = t;   // (not the first look: the project just opened)
+        handoffMixKey = key;
+        handoffKeySeen = true;
+    }
+    if (enabled && bridge.applying()) mixChangedMs = t;   // a plan's faders still on their way
+    if (mixChangedMs != 0 && t - mixChangedMs < kChangeSettleMs)
+        m.flags |= suite::MixInfo::changing;
+}
+
 bool BridgeHub::handoffTone (const std::string& styleKey, suite::MixInfo& m) const
 {
     using namespace mixology;

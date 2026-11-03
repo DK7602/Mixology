@@ -103,6 +103,11 @@ public:
     /** What Analyze Mix knows for Masterology (the style it analysed against, its tone against it, a mono mix);
         the plug-in adds its meters and publishes it. False before Analyze Mix (or after the style changed). */
     bool handoffTone (const std::string& styleKey, suite::MixInfo&) const;
+    /** Sets suite::MixInfo::changing while Mixology changes the mix: a plan going out to the faders, or any of its
+        processing (a Link, Assist EQ, the Full Mix, the History) changed within kChangeSettleMs. Masterology's Auto
+        Analyze waits for it, then hears the new mix from the start. Message thread (the hand-off). */
+    void handoffChanging (suite::MixInfo&);
+    static constexpr std::uint64_t kChangeSettleMs = 4000;
     /** The suite link while the hub's timer isn't running (the Full Mix's Mixology calls it from its own timer). */
     void suiteTick();
     /** The Masterology after Mixology, if one is open in this project (message thread). */
@@ -356,6 +361,8 @@ private:
     static double wallClock();   // seconds since 1970: when a step happened
     const mixology::link::LinkInfo* linkOf (const std::vector<mixology::link::LinkInfo>&, const mixology::history::Change&) const;
     std::uint64_t applyVersion = 0, seenPlanSerial = 0;
+    std::uint64_t handoffMixKey = 0, mixChangedMs = 0;   // handoffChanging: the processing as last seen, when it changed
+    bool handoffKeySeen = false;
     std::uint64_t linkedSeen = 0;   // the linked-faders occurrence the window has shown (its pop-up comes once)
     std::uint64_t seenNoPanVersion = 0;   // the bridge's No pan list, as last saved in trackSettings
     void syncNoPan();

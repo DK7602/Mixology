@@ -214,6 +214,7 @@ void MixologyAudioProcessor::publishHandoff()
     m.shortTermLufs = hearing ? meters.shortTerm.load() : -100.0f;
     if (hearing && mixology::proc::isOn (procRaw.read(), mixology::proc::Module::limit)) m.flags |= suite::MixInfo::limited;
     bridgeHub->handoffTone (styleKey, m);   // after Analyze Mix: the mix's tone against the style, a mono mix
+    bridgeHub->handoffChanging (m);         // Mixology changing the mix right now: Masterology's Auto Analyze waits
     m.version = static_cast<std::uint32_t> (JucePlugin_VersionCode);
     suite::Link::process().publishMix (m, suite::nowMs());
 }

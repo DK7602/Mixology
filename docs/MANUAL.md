@@ -3,7 +3,7 @@
 Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list all three are under Sonicology.
 
-Manual for version 0.23.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
+Manual for version 0.24.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -326,7 +326,8 @@ Analyze, updated 2:14 PM"). When you move a fader or change a track's processing
 (the first check 20 seconds later), so the advice is always about the mix as it is now. It pauses when the song stops,
 while Mixology applies a plan and while you listen to your reference song; it keeps listening with Mixology's window
 closed (once the window has been open, or from the start in Cubase, FL Studio, Live, Logic and Cakewalk). It
-only gives advice: it never moves anything. Your choice is saved with the project: open the project again and Auto
+only gives advice: it never moves anything. Voxology and Masterology don't move anything by themselves either, and the
+three never chase each other's changes (see The three talk to each other). Your choice is saved with the project: open the project again and Auto
 Analyze is still on and carries on from the advice you had. (A project saved before Mixology 0.14 has no advice
 saved: there it reads the faders once when you press play, as Analyze Mix does, and the first advice comes about
 20 seconds in.) Pick another style in the header and the next check gives advice for that style.
@@ -701,7 +702,11 @@ other); the Sonicology installer always has matching ones.
   - answers each Voxology: Voxology's bottom bar says **MIXOLOGY ✓** only when Mixology found that track, and
     otherwise why not (**ADD LINK**: no Mixology Link on it; **RENAME TRACK**: two tracks share the name; **NO TRACK
     NAME**: the DAW doesn't give it; **NOT A VOCAL THERE**: you set another role). After Analyze Mix it also says how
-    loud the vocal sits against the beat, and Voxology's level tips say so when Mixology's bridge moves that fader.
+    loud the vocal sits against the beat.
+  - **owns the vocal's level** once it found the vocal and moves its fader (bridge connected) or Analyze Mix heard it:
+    Voxology 0.53 then drops its FIT LEVEL button and Auto Analyze's "the beat is louder / quieter here" card for that
+    vocal (it says to use Mixology's Balance or Auto Mix). Balance moves the music faders as well as the vocal's, and
+    the music reaches Voxology's side-chain: without this the two would keep answering each other's moves.
 - **Masterology after Mixology.** The Master page's HAND-OFF panel shows what Masterology aims for (for example
   "Masterology: −14 LUFS · −1.0 dBTP"; hover it for the goal and genre) and a check that it is there. Its checks
   use those numbers: peaks under −3 dBTP (2 dB under Masterology's ceiling when it's lower), and a mix more than 3 dB louder
@@ -711,6 +716,11 @@ other); the Sonicology installer always has matching ones.
   sits against the style, including what Mixology's own Full Mix EQ and Tone Balance add. Masterology shows it and
   can start from the matching genre. The Mixology on your master channel does this (with Mixology on a group too,
   the one on the channel called Stereo Out / Master / Main; when it goes, another takes over).
+- **Masterology waits while Mixology changes the mix.** While a plan's faders are still moving, and for 4 seconds
+  after any of Mixology's processing changes (a tool you applied, a Link or Full Mix knob, an undo in the History),
+  Mixology tells Masterology it is changing the mix. Masterology 0.30's Auto Analyze then waits ("Waiting for
+  Mixology"), drops the edits it offered for the mix before, and listens to the new mix from the start. So a mix
+  change never turns into a master edit halfway through.
 - **One song style** for all three (see Mix styles): pick it in any of them, the others follow. Only the project that
   plays takes part: with two projects open, the one that isn't active doesn't change the other's style or DAW, and
   loading a preset doesn't switch the song's style when the project already has one. Settings > DAW "Found: ..."

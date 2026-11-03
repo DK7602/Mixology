@@ -959,3 +959,11 @@ MANUAL.md, M1_TEST.md, INSTALL.txt).
 3. M5 round 3: Master page finishing (glue, tilt, width, trim on Mixology), Auto Mix proposing EQ / dynamics.
    Open question from M4: is the user's Beat a mono group (one meter in MixConsole)? Maybe: restore points saved
    with the project.
+
+## v0.24.0 No plug-in feedback loop (2026-11-03, with Voxology 0.53.0 and Masterology 0.30.0)
+- User worry: the three Auto Analyzes chasing each other. Only real loop found: Balance / Auto Mix split a vocal fix
+  half on the music faders, which feed Voxology's side-chain post-fader -> Voxology's "beat louder / quieter" card
+  (Output) -> Mixology again. Voxology 0.53 now leaves the level to Mixology when the ack is matched + (balancesLevel |
+  heard). Mixology: BridgeHub::handoffChanging sets suite::MixInfo::changing (bit 3; layout stays 4) while a plan
+  applies and for kChangeSettleMs = 4 s after autoMixKey() changes; Masterology's Auto Analyze pauses ("mixology"),
+  drops its edits and listens afresh. Test: "Suite: Mixology tells Masterology while it changes the mix".
