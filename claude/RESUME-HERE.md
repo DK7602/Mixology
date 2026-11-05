@@ -35,6 +35,23 @@ sends higher-resolution art, re-run it.
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
 
+## PLANNED, NOT BUILT: per-track AUTO buttons (agreed with the user 2026-11-05, session "Mixology audit")
+- WAIT: build only after the user has tried 0.23 / 0.24 in real Cubase sessions (Make Room, doubles by ear, the
+  linked-faders pop-up) and says go. The user said "DONT BUILD YET" while it was discussed.
+- What: an AUTO button on the EQ, Dynamics, Space, Tone and Stereo pages. It works only on the track picked on that
+  page (disabled / "pick a track" with Full Mix picked), only when pressed, and only on that page's settings. Auto Mix
+  stays exactly as it is. No AUTO on Master (Masterology's job); on Tone only Tone Balance (never Harmonics, Analog,
+  Clip: taste).
+- Same rules as Polish / Auto Mix (one engine, filtered to a page and a track), so they never undo each other.
+- Pressing it APPLIES straight away (knobs move on the page), one line says what changed and why, one Undo (History)
+  takes it all back, like Voxology's AUTO-EDIT. No tick list.
+- Hearing: uses the last Analyze Mix when it heard that track; when it didn't (a chorus while Analyze Mix heard a
+  verse), it listens while the user plays a part where that track plays.
+- Must serve every style. Before release it needs rules for every role (kick, snare, hats, perc, bass, keys, synth,
+  guitar, vox, adlibs, fx, other), not just today's vocal / kick / bass ones, or AUTO mostly says "nothing to
+  change". Add a "full beat" role (a whole instrumental on one track, common in hip-hop / R&B): there is none today.
+- The look stays: one AUTO button in each page's toolbar, in the existing button style.
+
 ## v0.23.0: Make Room, doubles by ear, linked faders (2026-10-30, session "Mixology audit")
 - User (video, Cubase): Make Room made the mix too quiet and the chorus vocals loud; "Vox Chorus 1" / "Vox Chorus 2"
   (different parts, not doubles) were panned L / R; Q-Link left on made Auto Mix sound awful.
