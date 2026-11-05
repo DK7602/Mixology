@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-10-30, v0.23.0)
+# Mixology: resume here (updated 2026-11-05, v0.25.0)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -35,22 +35,36 @@ sends higher-resolution art, re-run it.
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
 
-## PLANNED, NOT BUILT: per-track AUTO buttons (agreed with the user 2026-11-05, session "Mixology audit")
-- WAIT: build only after the user has tried 0.23 / 0.24 in real Cubase sessions (Make Room, doubles by ear, the
-  linked-faders pop-up) and says go. The user said "DONT BUILD YET" while it was discussed.
-- What: an AUTO button on the EQ, Dynamics, Space, Tone and Stereo pages. It works only on the track picked on that
-  page (disabled / "pick a track" with Full Mix picked), only when pressed, and only on that page's settings. Auto Mix
-  stays exactly as it is. No AUTO on Master (Masterology's job); on Tone only Tone Balance (never Harmonics, Analog,
-  Clip: taste).
-- Same rules as Polish / Auto Mix (one engine, filtered to a page and a track), so they never undo each other.
-- Pressing it APPLIES straight away (knobs move on the page), one line says what changed and why, one Undo (History)
-  takes it all back, like Voxology's AUTO-EDIT. No tick list.
-- Hearing: uses the last Analyze Mix when it heard that track; when it didn't (a chorus while Analyze Mix heard a
-  verse), it listens while the user plays a part where that track plays.
-- Must serve every style. Before release it needs rules for every role (kick, snare, hats, perc, bass, keys, synth,
-  guitar, vox, adlibs, fx, other), not just today's vocal / kick / bass ones, or AUTO mostly says "nothing to
-  change". Add a "full beat" role (a whole instrumental on one track, common in hip-hop / R&B): there is none today.
-- The look stays: one AUTO button in each page's toolbar, in the existing button style.
+## v0.25.0: per-track AUTO buttons and the Beat role (2026-11-05, session "Mixology audit")
+- Agreed with the user (2026-11-05) after they tested 0.23's fixes in Cubase. One AUTO button on the EQ, Dynamics,
+  Space, Tone and Stereo pages (plugin/ui/autobtn.js; drawn like the page's ON button). Only the track picked on the
+  page (Full Mix picked: refused, "Auto Mix does the whole mix"), only that page's controls, applied straight away as
+  ONE History step ("AUTO EQ on 'Keys'"), one plain line + an Undo text button (autoUndo: History undo when it's the
+  newest step, else puts back only controls still at AUTO's values, as a new step). Never on Master; Tone = Tone
+  Balance only (warmth / presence / air); Dynamics never the Limiter; Stereo never pans; Space may set the FX return
+  for a lead vocal (as Polish). Space's AUTO sits in the Effect EQ panel's top row (the centre row is full).
+- ONE ENGINE: mix::makeTrackPlan (page, hash, report, channels, mix) and Polish / Auto Mix share the per-track rules
+  (MixPlanner.cpp), so AUTO then Auto Mix (or the reverse) finds nothing more. Moves start from the track as Analyze
+  Mix heard it and count other controls doing the same job since (EQ vs Tone Balance vs Assist EQ). Voxology's EQ /
+  compression / reverb / delay on a vocal are left alone. Rules per role x page: see the manual's "AUTO on a page"
+  and Polish sections (low cuts by role, box / mud / harsh / dull, compressor / transient / gate / multiband, rooms /
+  plates / halls by genre, Tone Balance tilt, low-end to the middle, narrow tracks widened). Thresholds tuned on
+  synthetic spectra only: watch real sessions. Polish / Auto Mix now propose many more instrument changes (incl.
+  rooms, plates, halls): it's a tick list, but expect feedback.
+- LISTENING: when Analyze Mix heard the track < 4 s (or there is none), AUTO listens while the song plays (8 s of the
+  track, gives up after 90 s, press again to stop, refuses while Analyze Mix runs), merges only that track's report
+  (+ vocals / name partners as context: mergeTrack) and applies. Kept per project after the advice data (older
+  versions skip it); dropped once a later Analyze Mix hears the track.
+- BEAT ROLE: Role::beat appended after other (kRoleCount 13; saved by key). By name ("Beat", "Instrumental", "Trap
+  Beat"; tests/role_names.txt) and by sound (broadband, plays most of the song); a Voxology in Beat mode gives it
+  (roleFrom "voxology") unless the user set a role. Balance: the vocal against the beat; Stereo Architect centres it,
+  never pairs; Clean Up never cuts its lows; Vocal Pocket may dip it.
+- Masterology hears AUTO's changes through autoMixKey (History version + every Link's processing): MixInfo::changing.
+  Listening changes nothing in the key.
+- Hub: bridgeCommand "auto" {page, hash} -> {auto: {seq, state (idle / listening / applied / nothing / refused /
+  stopped / undone), page, hash, name, line, step, heard, need, playing}}, "autoUndo" {value: step}; getState().auto.
+- Tests: tests/test_auto.cpp (every page x role, idempotence both ways, Voxology, refusals, beat role, listen merge);
+  232 ctest under ASan. BridgeHub's AUTO code has no unit test and has never run in a DAW.
 
 ## v0.23.0: Make Room, doubles by ear, linked faders (2026-10-30, session "Mixology audit")
 - User (video, Cubase): Make Room made the mix too quiet and the chorus vocals loud; "Vox Chorus 1" / "Vox Chorus 2"
