@@ -958,10 +958,14 @@ void BridgeHub::updateDonePoints()
             if (sg.id == "headroom")
             {
                 DonePoint d;
-                if (mix.known && mixProcAtAnalysisKnown)
+                using namespace mixology::proc;
+                auto outOf = [] (const Values& v) { return isOn (v, Module::final) ? static_cast<double> (v[finOut]) : 0.0; };
+                // Analyze Mix hears the mix before Final Output, so after room was made (and Balance offers no more) the
+                // peaks it heard are still hot: the room on Final Output is what counts, also after a new Analyze Mix.
+                if (mix.known && outOf (mix.now) <= -0.5)
+                    d.what = "room made on the Full Mix's Final Output (" + juce::String (outOf (mix.now), 1).toStdString() + " dB)";
+                else if (mix.known && mixProcAtAnalysisKnown)
                 {
-                    using namespace mixology::proc;
-                    auto outOf = [] (const Values& v) { return isOn (v, Module::final) ? static_cast<double> (v[finOut]) : 0.0; };
                     const double moved = outOf (mix.now) - outOf (mixProcAtAnalysis);
                     if (std::abs (moved) >= 0.5)
                         d.what = "Full Mix Final Output " + std::string (moved > 0.0 ? "+" : "") + juce::String (moved, 1).toStdString() + " dB";
@@ -2880,6 +2884,7 @@ juce::var BridgeHub::planToVar (const mixology::mix::Plan& p) const
         co->setProperty ("wanted", std::round (c.wanted * 10.0) / 10.0);
         co->setProperty ("big", c.big);
         co->setProperty ("hz", std::round (c.hz));
+        if (c.fromHz > 0.0) co->setProperty ("fromHz", std::round (c.fromHz));
         co->setProperty ("why", juce::String::fromUTF8 (c.why.c_str()));
         if (! c.proc.empty())
         {

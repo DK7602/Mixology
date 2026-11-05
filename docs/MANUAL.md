@@ -3,7 +3,7 @@
 Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list all three are under Sonicology.
 
-Manual for version 0.25.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
+Manual for version 0.25.1 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -404,7 +404,9 @@ list: every change it wants to make, **now → new**, and why, in plain words. U
   it already ran).** Best done last, when the balance is right. Very hot mixes: Final Output goes down to -24 dB at
   most; the line says how much is still left (pull all the track faders down together for the rest). Without
   Mixology on the master channel it isn't offered (the list says why): pull all the track faders down together
-  instead.
+  instead. **Once you've made room**, it isn't offered again when later mixing makes the mix a dB or two louder: only
+  when the peaks reaching Masterology pass -3 dBTP (its own limit), and then the line says the mix got louder since.
+  The Mix Assistant's headroom point counts the room on Final Output as done, also after a new Analyze Mix.
 - **Stereo Architect**: pans. Kick, bass, snare and the lead vocal in the middle. **Doubles** spread left and right
   (if one is already out on a side, it stays and its partner mirrors it). A name only says who *might* be a double
   ("Electric Rhythm" / "Electric Rhythm (D)", "Keys 1" / "Keys 2", "Vox Chorus 1" / "Vox Chorus 2"): Mixology spreads
@@ -425,7 +427,10 @@ list: every change it wants to make, **now → new**, and why, in plain words. U
   words, each where it overlaps the vocal most (always inside 1.6 - 4 kHz, the range the advice measures). When
   Mixology heard a track with its dip already in and it still covers the words, the dip goes a little deeper (at
   most 6 dB; past that, turn the track down or pan it instead). A dip made since Mixology listened counts as done; a
-dip outside 1.6 - 4 kHz (e.g. at 5 kHz, from Mixology before 0.16) doesn't count: Vocal Pocket moves it.
+dip outside 1.6 - 4 kHz (e.g. at 5 kHz, from Mixology before 0.16) doesn't count: Vocal Pocket moves it. A dip
+  already inside 1.6 - 4 kHz **stays where it is** and only ever gets deeper (Clean Up's mud dips too): once a dip is
+  in, the overlap is biggest somewhere else, and before 0.25.1 the next Auto Mix moved the dip there, taking the old
+  cut away (sometimes shallower). The list's NOW side shows the dip's own frequency.
 - **Polish**: processing in each track's Mixology Link, worked out from what Analyze Mix heard. Every kind of track
   gets the same rules as the **AUTO** buttons on the processing pages (the table in "AUTO on a page" below), so Polish
   after AUTO, or AUTO after Polish, finds nothing more to do. A track that fits gets nothing.

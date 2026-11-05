@@ -24,6 +24,12 @@ namespace mixology::mix
             std::snprintf (b, sizeof (b), "%.1f", std::abs (v) < 0.05 ? 0.0 : v);
             return b;
         }
+
+        // "4.2 dB over" / "only 0.7 dB under": a level against a reference that is too high for its role, either side of 0.
+        std::string overUnder (double v)
+        {
+            return v >= 0.0 ? fmt1 (v) + " dB over" : "only " + fmt1 (-v) + " dB under";
+        }
         std::string fmt0 (double v)
         {
             char b[32];
@@ -167,7 +173,10 @@ namespace mixology::mix
         // while it heard a verse): they came back louder than the rest by the whole amount.
 
         constexpr double kRoomTargetDb = -6.0;   // Masterology works best with peaks around -6 dBTP (and under -3) ...
-        constexpr double kRoomOfferDb = -5.0;    // ... offered once they are hotter than this
+        constexpr double kRoomOfferDb = -5.0;    // ... offered once they are hotter than this ...
+        constexpr double kRoomAgainDb = -3.0;    // ... and once room was made (Final Output down), only past Masterology's own
+                                                 // limit: a mix a dB louder after more mixing isn't worth turning down (and
+                                                 // running Auto-Master) again
 
         // analysisPeak: what Analyze Mix heard coming into Mixology (with the fader moves since). planShift: what this
         // plan's level moves do to the whole mix (dB).
@@ -186,7 +195,8 @@ namespace mixology::mix
             const bool finalOn = mix.known && proc::isOn (v, proc::Module::final);
             const double outNow = finalOn ? val (proc::finOut) : 0.0;
             const double into = peak + outNow;   // what reaches Masterology
-            if (into <= kRoomOfferDb) return;
+            const bool madeRoom = finalOn && outNow <= -0.5;
+            if (into <= (madeRoom ? kRoomAgainDb : kRoomOfferDb)) return;
             const double need = into - kRoomTargetDb;
 
             // Only Mixology on the master channel can do it (there it comes before Masterology).
@@ -242,8 +252,9 @@ namespace mixology::mix
             c.why = "room for Masterology: the whole mix " + signedDb (want - outNow) + " in one go";
             plan.headroomChange = c;
             plan.headroomDb = std::round ((want - outNow) * 10.0) / 10.0;
-            plan.headroomWhy = "Your mix peaks at about " + signedDb (into) + " (after Mixology's own processing). Masterology works best with peaks around -6 "
-                               "(and under -3): Mixology's Final Output on the Full Mix goes " + (finalOn ? "from " + signedDb (outNow) + " " : std::string())
+            plan.headroomWhy = (madeRoom ? "Your mix got louder since you made room: it peaks at about " + signedDb (into) + ", over -3."
+                                         : "Your mix peaks at about " + signedDb (into) + " (after Mixology's own processing).")
+                               + " Masterology works best with peaks around -6 (and under -3): Mixology's Final Output on the Full Mix goes " + (finalOn ? "from " + signedDb (outNow) + " " : std::string())
                                + "to " + signedDb (want) + ", one gain on the whole mix, so every track, FX return and group goes down together and the balance "
                                  "stays exactly as it is" + (finalOn ? std::string (".") : " (Final Touch switches on; its width, air and glue stay neutral).")
                                + " The mix plays " + fmt1 (outNow - want) + " dB quieter until Masterology brings it back: run Auto-Master in Masterology "
@@ -1113,8 +1124,11 @@ namespace mixology::mix
                         c.role = t->role;
                         c.kind = "mud";
                         c.from = ch->assist.mudDb;
+                        c.fromHz = ch->assist.mudHz;
                         c.to = c.wanted = -d;
-                        c.hz = hz;
+                        // A mud dip it already has stays where it is, only deeper (as Vocal Pocket's): once it is in, the
+                        // mix's worst band moves, and following it would take the old cut away.
+                        c.hz = ch->assist.mudDb < -0.05f && ch->assist.mudHz >= 150.0f && ch->assist.mudHz <= 600.0f ? static_cast<double> (ch->assist.mudHz) : hz;
                         c.why = "the mix has " + fmt1 (dev) + " dB more 200 - 500 Hz than " + r.style.name + " usually does; this is one of the tracks carrying it";
                         plan.changes.push_back (c);
                         ++dips;
@@ -1170,16 +1184,21 @@ namespace mixology::mix
                 }
                 const auto* ch = eqChannel (t, look, plan, "vocal pocket");
                 if (ch == nullptr) continue;
-                const double hz = bandHz (best);
-                // A dip counts when it sits where the words are (1.6 - 4 kHz) and within half an octave of this one.
-                auto dipCounts = [&] (const AssistSettings& a) {
-                    return a.pocketDb < -0.05 && a.pocketHz >= 1500.0f && a.pocketHz <= 4300.0f
-                           && std::abs (std::log2 (std::max (static_cast<double> (a.pocketHz), 1.0) / hz)) <= 0.5;
-                };
                 // The dip Mixology heard it with (Analyze Mix measured the track with it): what's still covered needs
                 // more on top. A dip made since Mixology listened (a plan applied) already counts. Advice from before
                 // 0.16 didn't keep the Assist EQ it heard: then it heard the one there now.
                 const auto& heard = ch->assistAtAnalysisKnown ? ch->assistAtAnalysis : ch->assist;
+                // A dip it already has where the words are stays where it is and only ever gets deeper. Once it is in,
+                // the overlap is biggest somewhere else, and moving it there took the old cut away (it went back and
+                // forth between Auto Mix runs, sometimes shallower).
+                auto inWords = [] (const AssistSettings& a) { return a.pocketDb < -0.05 && a.pocketHz >= 1500.0f && a.pocketHz <= 4300.0f; };
+                const double hz = inWords (ch->assist) ? static_cast<double> (ch->assist.pocketHz)
+                                : inWords (heard)      ? static_cast<double> (heard.pocketHz)
+                                                       : bandHz (best);
+                // A dip counts when it sits where the words are (1.6 - 4 kHz) and within half an octave of this one.
+                auto dipCounts = [&] (const AssistSettings& a) {
+                    return inWords (a) && std::abs (std::log2 (std::max (static_cast<double> (a.pocketHz), 1.0) / hz)) <= 0.5;
+                };
                 const double heardDip = dipCounts (heard) ? heard.pocketDb : 0.0;
                 const double wanted = std::max (-kMaxPocketDb, heardDip - d);
                 if (heardDip <= -kMaxPocketDb + 0.25)
@@ -1201,10 +1220,11 @@ namespace mixology::mix
                 c.role = t.role;
                 c.kind = "pocket";
                 c.from = ch->assist.pocketDb;
+                c.fromHz = ch->assist.pocketHz;
                 c.to = c.wanted = wanted;
                 c.hz = hz;
-                c.why = "at 1.6 - 4 kHz it is " + (mask >= 0.0 ? fmt1 (mask) + " dB louder than" : fmt1 (-mask) + " dB under")
-                        + " the vocal while it sings, covering its words"
+                c.why = "at 1.6 - 4 kHz it is " + (mask >= 0.0 ? fmt1 (mask) + " dB louder than the vocal while it sings, covering its words"
+                                                                : "only " + fmt1 (-mask) + " dB under the vocal while it sings: close enough to cover its words")
                         + (heardDip < 0.0 ? " (with the " + fmt1 (-heardDip) + " dB dip it already has: a deeper one)" : "");
                 plan.changes.push_back (c);
                 ++dips;
@@ -1895,13 +1915,13 @@ namespace mixology::mix
                 if (top < n.dull + shift)
                     topFix (std::clamp (0.5 * (n.dull + shift - top) + 1.0, 1.0, 3.0), n.topPage, what + fmt1 (std::abs (top)) + " dB under its mids", true, true);
                 else if (top > n.bright + shift)
-                    topFix (-std::clamp (0.5 * (top - n.bright - shift) + 1.0, 1.0, 3.0), n.topPage, what + fmt1 (top) + " dB over its mids", false, true);
+                    topFix (-std::clamp (0.5 * (top - n.bright - shift) + 1.0, 1.0, 3.0), n.topPage, what + overUnder (top) + " its mids: bright for " + std::string (roleWords (t.role)), false, true);
             }
             if (n.low)
             {
                 const double low = level15 (t.bands, 5, 8) - mid;
                 const double thr = n.boomy + (s.bass - 4.0) * 0.5;   // bass-heavy styles take more of it
-                if (low > thr) lowFix (-std::clamp (0.5 * (low - thr) + 1.0, 1.0, 3.0), "its low end (63 - 125 Hz) is " + fmt1 (low) + " dB over its mids: boomy for " + std::string (roleWords (t.role)), true);
+                if (low > thr) lowFix (-std::clamp (0.5 * (low - thr) + 1.0, 1.0, 3.0), "its low end (63 - 125 Hz) is " + overUnder (low) + " its mids: boomy for " + std::string (roleWords (t.role)), true);
             }
             return out;
         }

@@ -133,6 +133,7 @@ namespace mixology::mix
         double wanted = 0.0;       // levels: the whole move's target, before the 6 dB limit
         bool big = false;          // levels: the whole move is more than 6 dB (Apply stops at 6 unless you allow more)
         double hz = 0.0;           // mud / pocket: where the dip sits
+        double fromHz = 0.0;       // ... and where the one there now sits (0: none)
         std::string why;
 
         // Processing (Milestone 5): controls of the track's Mixology Link (or of Mixology's Full Mix) set together.

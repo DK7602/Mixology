@@ -24,7 +24,7 @@ function valueText(c, v, which) {
   if (c.kind === "level") return fmt.db(v, 1);
   if (c.kind === "pan") return fmt.pan(v);
   if (c.kind === "lowcut") return v < 20 ? "Off" : fmt.hz(v);
-  return Math.abs(v) < 0.05 ? "None" : fmt.db(v, 1) + " at " + fmt.hz(c.hz);
+  return Math.abs(v) < 0.05 ? "None" : fmt.db(v, 1) + " at " + fmt.hz(which === "from" && c.fromHz ? c.fromHz : c.hz);   // a dip there now: its own frequency
 }
 
 let openTool = null;   // re-renders the open tool sheet when the bridge reports progress
@@ -171,7 +171,8 @@ export async function openToolSheet(app, tool) {
     nm.title = c.name;
     lastName = c.name;
     el("div", "", grid, { fontSize: "17px", color: "var(--text-dim)" }).textContent = KIND_LABEL[c.kind] || c.kind;
-    const val = el("div", "", grid, c.toText !== undefined ? { fontSize: "17px", lineHeight: "1.3" } : { fontSize: "19px", whiteSpace: "nowrap" });
+    // Now -> new wraps after the arrow when it doesn't fit (a dip's "-2.0 dB at 1.59 kHz" twice): it never runs into Why.
+    const val = el("div", "", grid, c.toText !== undefined ? { fontSize: "17px", lineHeight: "1.3" } : { fontSize: "19px", lineHeight: "1.3", minWidth: "0" });
     const why = el("div", "", grid, { fontSize: "15.5px", lineHeight: "1.3", color: "var(--text-dim)" });
     why.textContent = c.why.charAt(0).toUpperCase() + c.why.slice(1) + ".";
     rows.push({ c, i, box, val });
@@ -238,7 +239,7 @@ export async function openToolSheet(app, tool) {
       const on = picked.has(i);
       tick(box, on);
       const to = c.kind === "level" && allowBig ? c.wanted : c.to;
-      val.innerHTML = `<span style="color:var(--text-dim)">${esc(valueText(c, c.from, "from"))}</span> → <b style="color:${on ? "var(--text)" : "var(--text-dim)"}">${esc(valueText(c, to, "to"))}</b>`
+      val.innerHTML = `<span style="color:var(--text-dim);white-space:nowrap">${esc(valueText(c, c.from, "from"))} →</span> <b style="color:${on ? "var(--text)" : "var(--text-dim)"};white-space:nowrap">${esc(valueText(c, to, "to"))}</b>`
         + (c.big ? ` <span style="color:var(--amber);font-size:15px" title="The whole move is ${fmt.db(c.wanted - c.from)}">${allowBig ? "" : "(limited)"}</span>` : "");
       val.style.opacity = on ? "1" : "0.5";
     }

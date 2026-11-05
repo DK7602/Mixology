@@ -913,6 +913,25 @@ TEST_CASE ("Plans: room for Masterology is one gain on the whole mix (the Full M
         // Final Output set while Final Touch is off doesn't count (it isn't playing).
         CHECK (makePlan (Tool::balance, r, chans, fullMix (-13.6, false)).headroomDb < -12.0);
     }
+    SECTION ("room made, then the mix got a little louder: not offered again until it passes -3")
+    {
+        // Peaks at about -4.4 into Masterology (made room to -6, more mixing since): fine for Masterology, no new offer
+        // (it came back after every Auto Mix, and Auto-Master had to run again each time).
+        const auto louder = makePlan (Tool::balance, r, chans, fullMix (-12.0, true));
+        CHECK (louder.headroomDb == 0.0);
+        CHECK_FALSE (louder.headroomChange.has_value());
+        // Past -3 (about -2.4): offered again, and it says why.
+        const auto over = makePlan (Tool::balance, r, chans, fullMix (-10.0, true));
+        REQUIRE (over.headroomChange.has_value());
+        CHECK (procValue (*over.headroomChange, finOut) == Catch::Approx (-13.6).margin (0.25));
+        CHECK (over.headroomWhy.find ("got louder since you made room") != std::string::npos);
+        // Never made room: offered from -5 as before (about -4.4 here).
+        auto m = fullMix (0.0, false);
+        m.peakKnown = true;
+        m.peakBeforeFinalDb = -4.4;
+        const auto first = listen (tracks, 150, -4.4).evaluate ({});
+        CHECK (makePlan (Tool::balance, first, chans, m).headroomChange.has_value());
+    }
     SECTION ("the peak where Final Output sits: Mixology's own output since play when it is higher")
     {
         auto m = fullMix();
@@ -1223,6 +1242,31 @@ TEST_CASE ("Plans: Vocal Pocket and the dip it heard (the advice and the tool ag
         const auto* moved = change (again, "Hats - Verse", "pocket");
         REQUIRE (moved != nullptr);
         CHECK (moved->hz <= 4100.0);
+    }
+    // A dip already where the words are, but not at the band with the biggest overlap now (the dip itself moved it
+    // there): it stays where it is and only gets deeper, never moved or made shallower (it went back and forth between
+    // Auto Mix runs).
+    const double elsewhere = d->hz < 2500.0 ? 3500.0 : 1600.0;
+    SECTION ("heard with a dip elsewhere in the words' range and still covering: deeper where it is")
+    {
+        hats.assistAtAnalysisKnown = true;
+        hats.assistAtAnalysis.pocketDb = -2.0f;
+        hats.assistAtAnalysis.pocketHz = static_cast<float> (elsewhere);
+        hats.assist = hats.assistAtAnalysis;
+        const auto again = makePlan (Tool::pocket, r, chans);
+        const auto* deeper = change (again, "Hats - Verse", "pocket");
+        REQUIRE (deeper != nullptr);
+        CHECK (deeper->hz == Catch::Approx (elsewhere));
+        CHECK (deeper->fromHz == Catch::Approx (elsewhere));
+        CHECK (deeper->to < -2.5);
+    }
+    SECTION ("a dip made since elsewhere in the words' range: kept as it is, not moved shallower")
+    {
+        hats.assistAtAnalysisKnown = true;   // heard without a dip
+        hats.assist.pocketDb = -4.0f;
+        hats.assist.pocketHz = static_cast<float> (elsewhere);
+        const auto again = makePlan (Tool::pocket, r, chans);
+        CHECK (change (again, "Hats - Verse", "pocket") == nullptr);
     }
     SECTION ("advice from an older Mixology (the Assist EQ it heard isn't known): the dip there now was heard")
     {

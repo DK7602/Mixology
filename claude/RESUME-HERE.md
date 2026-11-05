@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-11-05, v0.25.0)
+# Mixology: resume here (updated 2026-11-05, v0.25.1)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,22 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## v0.25.1: the user's Auto Mix screenshots (2026-11-05, session "Mixology audit")
+- NOW -> NEW ran into WHY in the tool sheets (a dip's "-2.0 dB at 1.59 kHz -> -6.0 dB at 1.59 kHz" was nowrap): it
+  wraps after the arrow now (tools.js), checked in the browser preview (no cell past its column).
+- The NOW side of a dip showed the NEW frequency: Change::fromHz (planToVar "fromHz") is the dip's own frequency.
+- BUG (since Vocal Pocket existed): a pocket dip moved the band of biggest overlap, so the next Auto Mix moved the dip
+  there, taking the old cut away (sometimes shallower: -6 -> -4), back and forth between runs. A pocket dip already in
+  1.5 - 4.3 kHz now stays at its frequency and only gets deeper; Clean Up's mud dips stay at theirs too. Tests in
+  "Plans: Vocal Pocket and the dip it heard" (fail on the old planner).
+- Make Room came back after every Auto Mix (offered at > -5, aims -6: 1 dB of slack). Once room is made (Final
+  Output <= -0.5 and on), it is offered only past -3 dBTP into Masterology (kRoomAgainDb), saying the mix got louder
+  since. The Mix Assistant's headroom point counts room on Final Output as done also after a new Analyze Mix
+  (Analyze Mix hears the mix before Final Output, so its peaks stay hot). Test in the room-for-Masterology case.
+- Tone wording: a top / low end under its mids read "-0.7 dB over its mids": now "only 0.7 dB under its mids:
+  bright for guitars" (overUnder).
+- The user is fine with Auto Mix keeping its tick list (only the page AUTO buttons apply straight away).
 
 ## v0.25.0: per-track AUTO buttons and the Beat role (2026-11-05, session "Mixology audit")
 - Agreed with the user (2026-11-05) after they tested 0.23's fixes in Cubase. One AUTO button on the EQ, Dynamics,

@@ -298,8 +298,8 @@
         stereo: [pan("Hats", 15, "the mix leans left by 1.9 dB: this evens it out"), pan("Keys", -45, "pairs with 'Synth' (a double: Mixology heard them play together): one left, one right sounds wide and keeps the middle free for the vocal")],
         clean: [eq("Adlibs", "lowcut", 0, 100, 100, "41% of its energy is below 100 Hz, where it only muddies the kick and bass"),
           eq("Keys", "mud", 0, -2.5, 315, "the mix has 3.6 dB more 200 - 500 Hz than Hip Hop - Modern Clean usually does; this is one of the tracks carrying it")],
-        pocket: [eq("Keys", "pocket", 0, -3, 2500, "at 1.6 - 4 kHz it is 2.1 dB under the vocal while it sings, covering its words"),
-          eq("Snare", "pocket", 0, -2, 3150, "at 1.6 - 4 kHz it is 4.8 dB under the vocal while it sings, covering its words")],
+        pocket: [eq("Keys", "pocket", 0, -3, 2500, "at 1.6 - 4 kHz it is only 2.1 dB under the vocal while it sings: close enough to cover its words"),
+          { ...eq("Snare", "pocket", -2, -4.5, 3150, "at 1.6 - 4 kHz it is only 1.2 dB under the vocal while it sings: close enough to cover its words (with the 2.0 dB dip it already has: a deeper one)"), fromHz: 3150 }],
         polish: [
           proc("Lead Vox", "eq", "Flat", "+2.0 dB at 3.5 kHz", "the vocal is dull: its presence (2 - 5 kHz) is 4.2 dB under its body; a little lift makes every word clear"),
           proc("Lead Vox", "eq", "Flat", "+1.5 dB at 10 kHz (shelf)", "the vocal has little air (8 - 12 kHz is 8.1 dB under its presence): a gentle shelf opens it up"),
