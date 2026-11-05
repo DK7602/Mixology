@@ -79,6 +79,10 @@ sends higher-resolution art, re-run it.
   exactly two linked channels both written in the same instant. Not yet tried in real Cubase / Logic.
 - Tests: 216 engine tests; FakeCubase / FakeMcuHost linked faders; bridge-sim Node (real Cubase script) and FL / Live
   Python sims.
+- Later suite installers (built from the "Mixology part 2" chat on 2026-11-03, recorded here 2026-11-05):
+  Beta 9 = run 41644064103, version 0.9.0 (Mixology 0.24.0, Voxology 0.53.0, Masterology 0.30.0);
+  Beta 10 = run 41649725017, version 0.10.0 (the same with Masterology 0.30.1, the HD logo). Beta 10 is the latest:
+  no code changed in any of the three after it (as of 2026-11-05). The user tested 0.23's fixes in Cubase: good.
 - v0.23.0 CI green: run 41109557346 (c0ec1b6). Beta 8 suite installers: run 41112154839, label "Beta 8", version 0.8.0
   (Mixology 0.23.0, Voxology 0.52.1 + daws.js 0c82e95, Masterology 0.29.6 + daws.js 8fb7b74; shared-files job passed).
 - MAC RUNNERS: on 2026-10-30 evening GitHub cancelled every macos-14 job instantly (no runner, no log; run 41109593837,
