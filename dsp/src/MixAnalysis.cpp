@@ -105,6 +105,8 @@ namespace mixology::mix
             std::array<double, kBands> bandE {}, sideE {};
             std::vector<int> momentIndex;   // moments where it was active
             std::vector<double> rmsE, peaks;   // per active moment, before the fader (energy, dBFS)
+            std::vector<double> lowE;          // per active moment: its low end (up to 160 Hz) before the fader (energy)
+            std::vector<double> quietRms, quietPeak;   // moments it didn't play but wasn't silent (a noise floor?), dBFS
         };
 
         double percentile (std::vector<double> v, double q)
@@ -127,6 +129,26 @@ namespace mixology::mix
 
         Role roleFromSound (const TrackReport& t)
         {
+            // A whole beat on one track: strong low end, low mids, mids and highs all at once, playing most of the
+            // time, and not as spiky as a drum kit alone. Checked first: its low end would make it a "bass" below.
+            {
+                double region[5] {};   // per band, average energy: lows, low mids, mids, presence, highs
+                const int from[5] = { 3, 10, 15, 21, 25 }, to[5] = { 9, 14, 20, 24, 29 };
+                double top = -200.0, all = 0.0;
+                for (int b = 0; b < kBands; ++b) { top = std::max (top, t.bands[static_cast<std::size_t> (b)]); all += toE (t.bands[static_cast<std::size_t> (b)]); }
+                bool everywhere = all > 0.0;
+                double share[5] {};
+                for (int k = 0; k < 5; ++k)
+                {
+                    for (int b = from[k]; b <= to[k]; ++b) region[k] += toE (t.bands[static_cast<std::size_t> (b)]);
+                    share[k] = all > 0.0 ? region[k] / all : 0.0;
+                    region[k] = toDb (region[k] / (to[k] - from[k] + 1));
+                    everywhere = everywhere && region[k] > top - 38.0;
+                }
+                if (everywhere && t.activity >= 0.5 && t.crest < 13.0 && share[0] >= 0.15 && share[0] <= 0.85 && share[1] >= 0.03
+                    && share[2] + share[3] >= 0.05 && share[4] >= 0.005)
+                    return Role::beat;
+            }
             double total = 0.0, low = 0.0, high = 0.0, mud = 0.0, mid = 0.0, pres = 0.0;
             for (int b = 0; b < kBands; ++b)
             {
@@ -218,6 +240,49 @@ namespace mixology::mix
         return nullptr;
     }
 
+    const TrackReport* trackIn (const Report& r, std::uint32_t hash)
+    {
+        for (const auto& t : r.tracks)
+            if (t.hash == hash) return &t;
+        return nullptr;
+    }
+
+    bool heardEnough (const Report& r, std::uint32_t hash)
+    {
+        const auto* t = r.valid ? trackIn (r, hash) : nullptr;
+        return t != nullptr && ! t->excluded && t->loudness > -100.0 && t->activeSeconds >= kAutoHeardSeconds - 1.0e-6
+               && t->bands.size() == static_cast<std::size_t> (kBands);
+    }
+
+    Report mergeTrack (const Report& into, const Report& fresh, std::uint32_t hash)
+    {
+        const auto* heard = trackIn (fresh, hash);
+        if (heard == nullptr || ! into.valid) return into;
+        Report out = into;
+        auto t = *heard;
+        // The way to the master channel (group faders, pan law) as the full listen found it by ear, in place of what this
+        // short one found (or didn't): the track's levels after the fader then match the rest of the report.
+        if (! t.excluded)
+        {
+            const bool vocal = t.role == Role::vox || t.role == Role::adlibs;
+            auto path = [vocal] (const Report& x) { return x.routingFromSound ? (vocal ? x.vocalPathDb : x.musicPathDb) : 0.0; };
+            const double g = path (into) - path (fresh);
+            if (std::abs (g) > 1.0e-9)
+            {
+                if (t.loudness > -100.0) t.loudness += g;
+                for (auto& b : t.bands) if (b > -100.0) b += g;
+            }
+        }
+        bool replaced = false;
+        for (auto& x : out.tracks)
+            if (x.hash == hash) { x = t; replaced = true; }
+        if (! replaced) out.tracks.push_back (t);
+        out.pairs.erase (std::remove_if (out.pairs.begin(), out.pairs.end(), [hash] (const PairCheck& c) { return c.a == hash || c.b == hash; }), out.pairs.end());
+        for (const auto& c : fresh.pairs)
+            if (c.a == hash || c.b == hash) out.pairs.push_back (c);
+        return out;
+    }
+
     ToneAgainstStyle toneAgainstStyle (const Report& r)
     {
         ToneAgainstStyle t;
@@ -242,7 +307,8 @@ namespace mixology::mix
 
     const char* roleKey (Role r)
     {
-        static const char* keys[] = { "kick", "snare", "hats", "perc", "bass", "keys", "synth", "guitar", "vox", "adlibs", "fx", "other" };
+        static const char* keys[] = { "kick", "snare", "hats", "perc", "bass", "keys", "synth", "guitar", "vox", "adlibs", "fx", "other", "beat" };
+        static_assert (std::size (keys) == kRoleCount);
         return keys[static_cast<int> (r)];
     }
 
@@ -297,6 +363,11 @@ namespace mixology::mix
             { Role::bass,   R ("\\b(808s?|bass(es)?|basslines?|subs?|reese)\\b") },
             { Role::keys,   R ("\\b(keys?|keyboards?|pianos?|rhodes|organs?|ep|epiano|wurli|wurlitzer|clavs?|clavinet|harpsichord)\\b") },
             { Role::guitar, R ("\\b(guitars?|gtrs?|acoustic|strat|tele|electric|ukes?|ukulele|banjo|mandolin)\\b") },
+            // A whole beat on one track ("Beat", "Trap Beat", "Instrumental", "Song Inst", "2-Track", "Riddim", "Backing
+            // Track", "Prod. by ..."). Not "Beatbox" / "Beat Box" (a voice), not "Inst 1" (Logic's name for a new
+            // instrument track). After the instruments ("Drum Beat" is drums, "Piano Beat" keys), before the synth
+            // words ("Beat Loop" is the beat).
+            { Role::beat,   R ("\\b(beats?(?! ?box)|instrumentals?|instrus?|inst(?! ?[0-9])|riddims?|karaoke|2 ?(tracks?|trk)|two tracks?|backing tracks?|music|prod|produced)\\b") },
             { Role::synth,  R ("\\b(synths?|pads?|leads?|plucks?|arps?|arpeggios?|strings?|brass|horns?|trumpets?|sax|flutes?|bells?|choirs?|samples?|melody|melodies|melodic|chords?|stabs?|loops?)\\b") },
         };
         static const R fxSound ("\\b(effects?|transitions?|risers?|sweeps?|impacts?|reverse|noise|uplifters?|downlifters?|whoosh(es)?|swells?|sirens?|scratch(es)?|vinyl|foley|atmos|atmosphere|ambience|textures?)\\b");
@@ -324,7 +395,7 @@ namespace mixology::mix
             case Role::bass: return Group::bass;
             case Role::snare: case Role::hats: case Role::perc: return Group::drums;
             case Role::vox: case Role::adlibs: return Group::vocals;
-            case Role::keys: case Role::synth: case Role::guitar: return Group::instruments;
+            case Role::keys: case Role::synth: case Role::guitar: case Role::beat: return Group::instruments;
             default: return Group::other;
         }
     }
@@ -541,13 +612,18 @@ namespace mixology::mix
                 auto& a = acc[keyOf (t)];
                 ++a.seen;
                 a.peak = std::max (a.peak, static_cast<double> (t.frame.peakDb));
-                if (! activeIn (t, a.maxLoud)) continue;
+                if (! activeIn (t, a.maxLoud))
+                {
+                    if (! t.frame.silent) { a.quietRms.push_back (t.frame.rmsDb); a.quietPeak.push_back (t.frame.peakDb); }
+                    continue;
+                }
                 ++a.active;
                 a.momentIndex.push_back (mi);
                 a.loudE += toE (t.frame.loudness + t.faderDb);
                 a.crestSum += t.frame.peakDb - t.frame.rmsDb;
                 a.rmsE.push_back (toE (t.frame.rmsDb));
                 a.peaks.push_back (t.frame.peakDb);
+                a.lowE.push_back (rangeE (t.frame.bandDb, 0, kLowTo));
                 a.widthSum += t.frame.width;
                 a.corrSum += t.frame.correlation;
                 const auto [l, rgt] = leftRight (t.frame, t.faderDb);
@@ -640,21 +716,38 @@ namespace mixology::mix
                     if (b <= kLowTo) { lowE += a.bandE[i]; lowSide += a.sideE[i]; }
                 }
                 t.lowWidth = lowE > 0.0 ? lowSide / lowE : 0.0;
-                // Level swings: each snapshot averaged with its neighbours (about a second), loud minus quiet.
-                if (a.rmsE.size() >= 10)
-                {
+                // Level swings: each snapshot averaged with its neighbours (about a second), loud minus quiet. The same
+                // for its low end alone (a bass whose lows jump from note to note).
+                auto swing = [] (const std::vector<double>& energies) {
+                    if (energies.size() < 10) return 0.0;
                     std::vector<double> smooth;
-                    const auto m = a.rmsE.size();
+                    const auto m = energies.size();
                     for (std::size_t k = 0; k < m; ++k)
                     {
                         double e = 0.0;
                         int cnt = 0;
-                        for (std::size_t j = k >= 2 ? k - 2 : 0; j <= std::min (m - 1, k + 2); ++j) { e += a.rmsE[j]; ++cnt; }
+                        for (std::size_t j = k >= 2 ? k - 2 : 0; j <= std::min (m - 1, k + 2); ++j) { e += energies[j]; ++cnt; }
                         smooth.push_back (toDb (e / cnt));
                     }
-                    t.levelRange = percentile (smooth, 0.9) - percentile (smooth, 0.1);
+                    return percentile (smooth, 0.9) - percentile (smooth, 0.1);
+                };
+                t.levelRange = swing (a.rmsE);
+                t.lowRange = swing (a.lowE);
+                t.correlation = a.corrSum / n;
+                t.activeSeconds = n * Analysis::kMomentSeconds;
+                {
+                    std::vector<double> rms;
+                    for (double e : a.rmsE) rms.push_back (toDb (e));
+                    t.activeRms = percentile (rms, 0.5);
                 }
                 t.loudPeak = percentile (a.peaks, 0.9);
+                if (! a.quietRms.empty())
+                {
+                    t.floorMoments = static_cast<int> (a.quietRms.size());
+                    t.floorRms = percentile (a.quietRms, 0.5);
+                    t.floorPeak = percentile (a.quietPeak, 0.5);
+                    t.floorSpread = percentile (a.quietRms, 0.9) - percentile (a.quietRms, 0.1);
+                }
                 t.balance = a.rightE > 0.0 && a.leftE > 0.0 ? std::clamp (toDb (a.leftE) - toDb (a.rightE), -40.0, 40.0) : 0.0;
             }
 
@@ -1150,7 +1243,7 @@ namespace mixology::mix
             {
                 const bool light = lows < 0.0;
                 std::vector<std::string> names;
-                for (const auto& t : r.tracks) if (counts (t) && (t.role == Role::kick || t.role == Role::bass)) names.push_back (t.name);
+                for (const auto& t : r.tracks) if (counts (t) && (t.role == Role::kick || t.role == Role::bass || t.role == Role::beat)) names.push_back (t.name);
                 out.push_back ({ light ? "bass-light" : "bass-heavy", std::abs (lows) > 5.0 ? "warn" : "info", "bass",
                                  light ? "The low end is light for " + style.name : "The low end is heavy for " + style.name,
                                  "40 - 125 Hz is " + fmt1 (std::abs (lows)) + " dB " + (light ? "under" : "over") + " what " + style.name + " usually has.",
@@ -1219,7 +1312,7 @@ namespace mixology::mix
             const double mixSub = rangeE (mixDb, 0, kHpTo);
             for (const auto& t : r.tracks)
             {
-                if (! counts (t) || t.role == Role::kick || t.role == Role::bass || t.role == Role::fx) continue;
+                if (! counts (t) || t.role == Role::kick || t.role == Role::bass || t.role == Role::fx || t.role == Role::beat) continue;
                 const double low = rangeE (t.bands, 0, lowCutTopBand (t.role)), all = rangeE (t.bands, 0, kBands - 1);
                 if (all <= 0.0 || low / all < 0.2 || toDb (low) < toDb (mixSub) - 18.0) continue;
                 r.tracks[indexOf.at (t.hash)].rumble = true;
@@ -1237,7 +1330,7 @@ namespace mixology::mix
         {
             std::vector<std::string> wideLows;
             for (const auto& t : r.tracks)
-                if (counts (t) && (t.role == Role::kick || t.role == Role::bass) && t.lowWidth > 0.15) wideLows.push_back (t.name);
+                if (counts (t) && (t.role == Role::kick || t.role == Role::bass || t.role == Role::beat) && t.lowWidth > 0.15) wideLows.push_back (t.name);
             double mixLowSide = 0.0, mixLowE = 0.0;
             for (int b = 0; b <= kLowTo; ++b) { mixLowSide += mixSide[static_cast<std::size_t> (b)]; mixLowE += mixE[static_cast<std::size_t> (b)]; }
             const bool mixLowWide = mixLowE > 0.0 && mixLowSide / mixLowE > 0.15;

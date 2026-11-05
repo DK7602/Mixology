@@ -73,9 +73,32 @@ Vocal Plate | fx
 Analog Lab V 01 | -
 HALion Sonic 02 | -
 Groove Agent SE 01 | -
-Beat | -
-Trap Beat | -
+Beat | beat
+Trap Beat | beat
 Rising | -
 Custom | -
-Instrumental | -
+Instrumental | beat
 Intro | -
+Beats | beat
+Song Inst | beat
+Inst | beat
+Inst 1 | -
+Inst 12 | -
+2-Track | beat
+2trk Mix | beat
+Two Track | beat
+Riddim | beat
+Backing Track | beat
+Instru V2 | beat
+Music | beat
+Prod. by Metro | beat
+Beat (Instrumental) | beat
+Beat Loop | beat
+Beatbox | -
+Beat Box | -
+Beat Vox | vox
+Beat Kick | kick
+Drum Beat | perc
+Piano Beat | keys
+Breakbeat | perc
+Beat Verb | fx

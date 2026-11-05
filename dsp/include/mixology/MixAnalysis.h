@@ -19,8 +19,11 @@ namespace mixology::mix
     // ---------------------------------------------------------------------------------------------
     // Track roles (same keys as the interface's ROLES table)
 
-    enum class Role { kick, snare, hats, perc, bass, keys, synth, guitar, vox, adlibs, fx, other };
-    constexpr int kRoleCount = 12;
+    // New roles go at the end: projects save roles by key ("beat"), but the order is the analyzer's and the tables'.
+    // beat: a whole instrumental on one track (a 2-track beat, very common in hip hop, R&B and pop demos): the music
+    // against the vocal, never an instrument among the others.
+    enum class Role { kick, snare, hats, perc, bass, keys, synth, guitar, vox, adlibs, fx, other, beat };
+    constexpr int kRoleCount = 13;
 
     const char* roleKey (Role);
     std::optional<Role> roleFromKey (const std::string&);
@@ -110,6 +113,15 @@ namespace mixology::mix
         double levelRange = 0.0;   // how far its level swings while it plays (dB, loud minus quiet parts, ~1 s averages)
         double loudPeak = -120.0;  // its peaks in the loud parts (dBFS before the fader, 90th percentile)
         double balance = 0.0;      // left minus right (dB) after the fader: + leans left
+        double correlation = 1.0;  // left against right while it plays (1 = mono, 0 = unrelated, below 0 = out of phase)
+        double lowRange = 0.0;     // how far its low end (up to 160 Hz) swings while it plays (dB, like levelRange)
+        double activeSeconds = 0.0; // how long it played while Mixology listened
+        double activeRms = -120.0; // its usual level while it plays (dBFS before the fader, median of the moments)
+        /** A noise floor between its phrases: moments it didn't play but wasn't silent either (hiss, hum, bleed),
+            before the fader. floorMoments 0 = none heard (silent between phrases, or it never stops). */
+        int floorMoments = 0;
+        double floorRms = -120.0, floorPeak = -120.0;   // median of those moments (dBFS)
+        double floorSpread = 0.0;                       // how steady it is (P90 - P10 of those moments, dB)
         std::vector<double> bands; // average spectrum after the fader (dB per 1/3 octave)
         double maskDb = -120.0;    // its 1.6 - 4 kHz level against the lead vocal's while it sings (> -6: covers it)
         bool hasVocalRatio = false; // a lead vocal track: it against the rest of the mix while it sings (dB),
@@ -222,6 +234,20 @@ namespace mixology::mix
 
     /** The check of two tracks' name pair (either order), or nothing when their names don't pair. */
     const PairCheck* pairCheck (const Report&, std::uint32_t a, std::uint32_t b);
+
+    /** AUTO on a processing page works from what Analyze Mix heard of that track: it played at least this long
+        (and isn't left out). Otherwise AUTO listens to it while you play a part where it plays (kAutoListenSeconds). */
+    constexpr double kAutoHeardSeconds = 4.0;
+    constexpr double kAutoListenSeconds = 8.0;
+    /** The report's track (by name hash), or nullptr. */
+    const TrackReport* trackIn (const Report&, std::uint32_t hash);
+    /** Analyze Mix heard this track well enough for AUTO (played kAutoHeardSeconds or more, not left out). */
+    bool heardEnough (const Report&, std::uint32_t hash);
+    /** A track AUTO listened to on its own (a chorus Analyze Mix didn't hear): `fresh` is the report of those moments.
+        Returns `into` with that one track's report (and the name pairs it is in) taken from `fresh`; everything else
+        (the rest of the mix, the style, the advice) stays as it was. Its levels get the path to the master channel
+        `into` found by ear when `fresh` heard too little to find it. */
+    Report mergeTrack (const Report& into, const Report& fresh, std::uint32_t hash);
 
     /** Rumble on a track: its energy below what a low cut for its kind would remove. That is the bands up to
         lowCutTopBand (about 100 Hz; about 45 Hz for keys and synths, whose low notes are part of the sound). */

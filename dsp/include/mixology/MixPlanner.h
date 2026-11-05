@@ -25,15 +25,33 @@
       evened out.
     - Clean Up: Assist EQ low cuts on tracks with rumble (and on vocals), mud dips where the mix is muddy.
     - Vocal Pocket: Assist EQ dips where instruments cover the vocal's words.
-    - Polish (Milestone 5, round 3): processing in each track's Mixology Link: EQ (a dull or harsh vocal, its air,
-      a boxy kick), a compressor where a vocal or the bass swings a lot in level, the low end of stereo kicks /
-      basses in the middle, a reverb for the lead vocal (on an FX channel with a Link, ducking under the vocal,
-      else a little on the vocal itself), a delay on the ad-libs, and the Full Mix's tone against the style. A track
-      whose Space already plays (up to three effects: Space layers) is left alone and its effects are named; two
-      reverb types on one track (Reverb, Hall, Room, Special FX) get a tip: stacking spaces can wash it out.
-      Settings are worked out from what the processing was when Analyze Mix listened, so applying and opening it
-      again finds nothing more to do.
+    - Polish (Milestone 5, round 3): processing in each track's Mixology Link, by the per-track rules below, and the
+      Full Mix's tone against the style. A track whose Space already plays (up to three effects: Space layers) is
+      left alone and its effects are named; two reverb types on one track (Reverb, Hall, Room, Special FX) get a
+      tip: stacking spaces can wash it out.
     - Auto Mix: all of them together.
+
+    The per-track rules (one set, used by Polish / Auto Mix for every track and by each processing page's AUTO
+    button for the one track picked there: makeTrackPlan), per page, for every role:
+    - EQ (the Link's 6-band EQ): a low cut by role (rumble; kick, bass and a whole beat only below their notes),
+      mud (250 - 500 Hz heavy for the role and style), a boxy kick or snare, a harsh peak, a dull or bright top, a
+      dull vocal's presence and air, a dull snare's crack, a boomy low end (when Tone Balance can't).
+    - Dynamics: a compressor where the level swings (vocals, bass, keys, guitars, synths; at most gentle glue on a
+      beat), Multiband for a bass whose low end jumps, the Transient shaper on a squashed or spiky kick / snare, a
+      gate or expander only where Analyze Mix heard a steady noise floor between phrases. Never the Limiter.
+    - Space: the lead vocal's reverb (on an FX channel with a Link, ducking under it; else a little on the vocal),
+      ad-libs' delay, a small room / plate / hall on snare, keys, guitars, synths and percussion by the style
+      (trap dry, hip hop nearly dry, pop / R&B / worship wetter, rock rooms); kick, bass, hats and a beat stay dry.
+    - Tone: Tone Balance only (Warmth, Presence, Air), a broad tilt per role and style, at most about 3 dB.
+    - Stereo: the low end of a stereo kick / bass / beat in the middle; a narrow stereo keys / synth / guitar /
+      backing vocal a little wider (up to 140 %), a very wide one that falls apart in mono a little narrower. Never
+      pans (Stereo Architect does the whole mix's), never widens a lead vocal, nothing on mono tracks.
+    They correct clear problems only (a track that fits gets nothing), with small moves (EQ 1.5 - 4 dB, never more
+    than 6), and never fight Voxology (a vocal where it already does EQ, compression, reverb or delay keeps those).
+    Settings are worked out from what the processing was when Analyze Mix listened, and every rule counts what the
+    track's other modules changed since then in the same range (Tone Balance's air against the EQ's, the Assist EQ's
+    mud and pocket dips against the EQ's), so applying a plan and opening it again, AUTO then Auto Mix, or Auto Mix
+    then AUTO, finds nothing more to do.
 
     Nothing here touches Cubase: the plug-in applies the plan you approve (faders and pans through the bridge,
     the Assist EQ through each track's Mixology Link). Framework-free and unit-tested. */
@@ -93,6 +111,13 @@ namespace mixology::mix
     };
 
     enum class Tool { autoMix, balance, stereo, cleanUp, pocket, polish };
+
+    /** The processing pages, as AUTO works on them (the interface's page ids: "eq", "dynamics", "space", "tone",
+        "stereo"). Never Master: that is Masterology's job. */
+    enum class Page { eq, dynamics, space, tone, stereo };
+    const char* pageKey (Page);
+    const char* pageName (Page);   // "EQ", "Dynamics", "Space", "Tone", "Stereo"
+    std::optional<Page> pageFromKey (const std::string&);
     const char* toolKey (Tool);
     const char* toolName (Tool);
     std::optional<Tool> toolFromKey (const std::string&);
@@ -116,6 +141,14 @@ namespace mixology::mix
         bool setDuck = false;                      // space: also set the tracks the effect ducks under
         std::vector<std::uint32_t> duck;
         std::string fromText, toText;              // e.g. "Flat" -> "+2.0 dB at 3.5 kHz"
+        std::string page;                          // the processing page its controls are on ("eq", "dynamics", "space",
+                                                   // "tone", "stereo"); "" for faders, pans, the Assist EQ, the Full Mix
+
+        // AUTO's one line: what it did and what it heard, in a few words ("cut 3 dB of mud at 300 Hz" / "muddy")
+        std::string did;
+        std::string heard;                         // a word for "'Keys' sounded ..." ("muddy", "dull")
+        std::string heardPhrase;                   // or a whole phrase ("swung 9 dB in level")
+        bool byStyle = false;                      // the move follows the style (the line names it)
     };
 
     struct Plan
@@ -137,10 +170,24 @@ namespace mixology::mix
         std::optional<Change> headroomChange;   // the Full Mix change it makes (Final Touch on, its Output)
 
         std::vector<std::string> groupHints;   // channels that look like a group the tracks play through (ask: music group?)
+
+        /** AUTO (makeTrackPlan): one plain line, what it changed and why ("AUTO: cut 3 dB of mud at 300 Hz: 'Keys'
+            sounded muddy for Pop - Modern"), or why nothing ("'Kick' already fits: nothing to change"). */
+        std::string line;
     };
 
     constexpr double kMaxMoveDb = 6.0;
     constexpr double kMaxFaderDb = 6.0;   // top of a Cubase channel fader
 
     Plan makePlan (Tool, const Report&, const std::vector<ChannelNow>&, const MixNow& mix = {});
+
+    /** AUTO on a processing page: the same rules Polish and Auto Mix use, for that page's controls on one track (its
+        name hash; 0 = the Full Mix: refused, the line says to pick a track). Only that track's processing changes, and
+        for the lead vocal's Space, the FX channel its reverb goes on (the line says so). Nothing to change: no
+        changes and the line says why. plan.valid false: AUTO can't work here (no Analyze Mix, Full Mix, the track
+        didn't play); the line says why. */
+    Plan makeTrackPlan (Page, std::uint32_t hash, const Report&, const std::vector<ChannelNow>&, const MixNow& mix = {});
+    /** AUTO needs to hear this track first (Analyze Mix didn't hear it play long enough: heardEnough). Not for an FX
+        channel's Space: that works from the lead vocal going into it. */
+    bool autoListensFirst (Page, std::uint32_t hash, const Report&, const std::vector<ChannelNow>&);
 }

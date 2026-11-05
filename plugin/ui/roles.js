@@ -14,6 +14,7 @@ export const ROLES = {
   fx:     { icon: "fx",     colour: "#ffe23a", label: "FX" },
   adlibs: { icon: "adlibs", colour: "#ff9a1f", label: "Ad-libs" },
   other:  { icon: "other",  colour: "#c0c8d6", label: "Other" },
+  beat:   { icon: "note",   colour: "#8f7cff", label: "Beat (whole)" },   // a whole instrumental on one track
 };
 
 /** The icon for a track: its role's, except a percussion track that is a whole kit ("Drums", "Drum Machine", "Kit")
@@ -58,6 +59,8 @@ const NAME_RULES = {
     ["bass", W("808s?|bass(es)?|basslines?|subs?|reese")],
     ["keys", W("keys?|keyboards?|pianos?|rhodes|organs?|ep|epiano|wurli|wurlitzer|clavs?|clavinet|harpsichord")],
     ["guitar", W("guitars?|gtrs?|acoustic|strat|tele|electric|ukes?|ukulele|banjo|mandolin")],
+    // A whole beat on one track; not "Beatbox" / "Beat Box", not "Inst 1" (Logic's new instrument track).
+    ["beat", W("beats?(?! ?box)|instrumentals?|instrus?|inst(?! ?[0-9])|riddims?|karaoke|2 ?(tracks?|trk)|two tracks?|backing tracks?|music|prod|produced")],
     ["synth", W("synths?|pads?|leads?|plucks?|arps?|arpeggios?|strings?|brass|horns?|trumpets?|sax|flutes?|bells?|choirs?|samples?|melody|melodies|melodic|chords?|stabs?|loops?")],
   ],
   fxSound: W("effects?|transitions?|risers?|sweeps?|impacts?|reverse|noise|uplifters?|downlifters?|whoosh(es)?|swells?|sirens?|scratch(es)?|vinyl|foley|atmos|atmosphere|ambience|textures?"),
@@ -77,7 +80,7 @@ export function guessRole(name) {
   return "other";
 }
 
-export const ROLE_ORDER = ["kick", "snare", "hats", "perc", "bass", "keys", "synth", "guitar", "vox", "adlibs", "fx", "other"];
+export const ROLE_ORDER = ["kick", "snare", "hats", "perc", "bass", "keys", "synth", "guitar", "beat", "vox", "adlibs", "fx", "other"];
 
 // The analyzer's six colours, and which roles belong to each (same as the engine's groups).
 export const GROUPS = [
@@ -85,6 +88,6 @@ export const GROUPS = [
   { key: "bass", label: "Bass", colour: "#ff7a12", roles: ["bass"] },
   { key: "drums", label: "Drums", colour: "#ffe11f", roles: ["snare", "hats", "perc"] },
   { key: "vocals", label: "Vocals", colour: "#3dff5a", roles: ["vox", "adlibs"] },
-  { key: "instruments", label: "Instruments", colour: "#1f6bff", roles: ["keys", "synth", "guitar"] },
+  { key: "instruments", label: "Instruments", colour: "#1f6bff", roles: ["keys", "synth", "guitar", "beat"] },
   { key: "other", label: "Other", colour: "#e62bff", roles: ["fx", "other"] },
 ];
