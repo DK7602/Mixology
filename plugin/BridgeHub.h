@@ -115,7 +115,7 @@ public:
 
     /** Everything the Tracks page and Settings > Cubase Bridge show. */
     juce::var getState (bool includeLog);
-    std::uint64_t stateVersion() const { return bridge.stateVersion() + linkVersion + analysisVersion + applyVersion + suiteVersion + setupVersion + history.version() + doneVersion + projectEpoch * 1000003ull; }
+    std::uint64_t stateVersion() const { return bridge.stateVersion() + linkVersion + analysisVersion + applyVersion + suiteVersion + setupVersion + history.version() + doneVersion + autoVersion + projectEpoch * 1000003ull; }
 
     /** The setup check's issues right now (a mono group, vocals without a Link...), as Mix Assistant suggestions. */
     const std::vector<mixology::mix::Suggestion>& setupIssues() const { return setupNow; }
@@ -138,6 +138,9 @@ public:
         refListen ("ref" / "mix"), vocalTaste ("right" / "quieter" / "louder" / "style"), setMusicBus { hash, value }.
         Linked faders: linkedSeen (serial): the window showed its pop-up for that occurrence (getState's "linked" goes).
         Undo history: history -> { history }, historyTo (step id, 0 = the start), historyUndo, historyRedo.
+        AUTO on a processing page: auto { page: "eq" | "dynamics" | "space" | "tone" | "stereo", hash (the target's name
+        hash, 0 = Full Mix) } -> { auto } (applies straight away, or starts listening; pressed again while it listens:
+        stops), autoUndo { value: step } (takes back exactly that AUTO's History step). getState's "auto" follows it.
         Returns { ok, message, warning, info }. */
     juce::var command (const juce::String& name, const juce::var& arg);
 
@@ -187,6 +190,60 @@ public:
     std::optional<mixology::mix::Role> trackRole (std::uint32_t hash, const std::string& name) const { return roleFor (hash, name); }
 
 private:
+    // ---- AUTO on a processing page: one track, one page, the rules Polish uses (mix::makeTrackPlan) ----------------
+    struct AutoState   // what the pages show (getState "auto")
+    {
+        std::uint64_t seq = 0;          // a new result: the page shows its line (once)
+        std::string state = "idle";     // idle, listening, applied, nothing, refused, stopped, undone
+        std::string page, name, line;
+        std::uint32_t hash = 0;
+        std::uint64_t step = 0;         // the History step it made (its Undo)
+        double heard = 0.0;             // listening: how long the track has played so far (s)
+        bool playing = false;
+    };
+    AutoState autoState;
+    std::uint64_t autoVersion = 0;
+    struct AutoStep { std::string page; std::uint32_t hash = 0; std::string name; };
+    std::map<std::uint64_t, AutoStep> autoSteps;   // the History steps AUTO made (its Undo says it on their page)
+    /** The track AUTO listens to when Analyze Mix didn't hear it (a chorus while it heard a verse): the moments while the
+        song plays, until the track has played kAutoListenSeconds (or 90 s have gone by). */
+    struct TrackListen
+    {
+        bool active = false;
+        mixology::mix::Page page = mixology::mix::Page::eq;
+        std::uint32_t hash = 0;
+        std::string name;
+        mixology::mix::Analysis heard;
+        double startedAt = 0.0;
+        int played = 0;                 // moments the track played
+        std::uint64_t key = 0;          // its processing and Assist EQ (listening starts again when they change)
+    };
+    TrackListen trackListen;
+    /** Tracks AUTO heard on its own: merged into every report made from moments that didn't hear them (kept with the
+        project in the advice block), with the processing they had while it listened. */
+    struct LiveTrack
+    {
+        mixology::mix::Analysis heard;
+        bool procKnown = false;
+        mixology::proc::Values proc {};
+        mixology::AssistSettings assist;
+        bool assistKnown = false;
+        bool faderKnown = false;
+        double fader = 0.0;
+    };
+    std::map<std::uint32_t, LiveTrack> liveTracks;
+    mixology::mix::Report liveOnly;     // no Analyze Mix yet: what AUTO's listening heard (it works from that)
+    juce::var autoCommand (const juce::var& arg);
+    mixology::BridgeSession::Result autoUndo (std::uint64_t step, std::string& info);
+    void autoRun (mixology::mix::Page, std::uint32_t hash);
+    void autoResult (const std::string& state, const std::string& line, std::uint64_t step = 0);
+    void trackListenTick (const mixology::AnalysisFrame& mix, const std::vector<mixology::mix::TrackSample>&, bool playing);
+    std::uint64_t trackKey (std::uint32_t hash) const;
+    void mergeLiveInto (mixology::mix::Report&, const mixology::mix::Report* heardOnItsOwn = nullptr) const;
+    void dropLiveHeardBy (const mixology::mix::Report&);
+    void applyLiveSnapshots();
+    juce::var autoStateVar() const;
+
     void timerCallback() override;
     void handleIncomingMidiMessage (juce::MidiInput*, const juce::MidiMessage&) override;
 

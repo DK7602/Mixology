@@ -288,6 +288,7 @@ namespace mixology::mix
         double secondsHeard() const { return static_cast<double> (moments.size()) * kMomentSeconds; }
         bool full() const { return static_cast<int> (moments.size()) >= kMaxMoments; }
         bool hasMoments() const { return ! moments.empty(); }
+        const std::vector<Moment>& heardMoments() const { return moments; }
 
         Report evaluate (const std::map<std::uint32_t, TrackSettings>& settings,
                          const std::vector<std::string>& unheard = {}) const;

@@ -434,6 +434,12 @@ void BridgeHub::timerCallback()
         lastSessionCache = t;
         updateSessionCache();
     }
+    if (trackListen.active && t - trackListen.startedAt > 90.0)
+    {
+        const auto who = trackListen.name;
+        trackListen = {};
+        autoResult ("stopped", "AUTO stopped listening: '" + who + "' didn't play long enough in a minute and a half. Play a part where it plays, then press AUTO again.");
+    }
     if (t - doneCheckedAt >= 0.5)
     {
         doneCheckedAt = t;
@@ -1020,6 +1026,20 @@ std::string BridgeHub::adviceBlock() const
         w.u32 (hash);
         for (float x : { a.lowCutHz, a.mudHz, a.mudDb, a.pocketHz, a.pocketDb }) w.f32 (x);
     }
+    // Since 0.25: the tracks AUTO listened to on its own (older versions stop reading before this).
+    w.u32 (static_cast<std::uint32_t> (liveTracks.size()));
+    for (const auto& [hash, lt] : liveTracks)
+    {
+        w.u32 (hash);
+        w.str (lt.heard.save());
+        w.flag (lt.procKnown);
+        w.u32 (static_cast<std::uint32_t> (lt.proc.size()));
+        for (float x : lt.proc) w.f32 (x);
+        w.flag (lt.assistKnown);
+        for (float x : { lt.assist.lowCutHz, lt.assist.mudHz, lt.assist.mudDb, lt.assist.pocketHz, lt.assist.pocketDb }) w.f32 (x);
+        w.flag (lt.faderKnown);
+        w.f64 (lt.fader);
+    }
     return w.take();
 }
 
@@ -1063,6 +1083,27 @@ bool BridgeHub::loadAdvice (const std::string& bytes)
             auto& a = snap.assist[hash];
             a.lowCutHz = r.f32(); a.mudHz = r.f32(); a.mudDb = r.f32(); a.pocketHz = r.f32(); a.pocketDb = r.f32();
         }
+    std::map<std::uint32_t, LiveTrack> live;   // the tracks AUTO listened to on its own (since 0.25)
+    if (assistKept && ! r.atEnd())
+        for (std::uint32_t i = 0, n = r.count (8); i < n && r.ok(); ++i)
+        {
+            const auto hash = r.u32();
+            LiveTrack lt;
+            const bool heardOk = lt.heard.load (r.str());
+            lt.procKnown = r.flag();
+            const auto values = r.u32();
+            lt.proc = mixology::proc::defaults();
+            for (std::uint32_t k = 0; k < values && r.ok(); ++k)
+            {
+                const float x = r.f32();
+                if (k < kValues) lt.proc[k] = x;
+            }
+            lt.assistKnown = r.flag();
+            lt.assist.lowCutHz = r.f32(); lt.assist.mudHz = r.f32(); lt.assist.mudDb = r.f32(); lt.assist.pocketHz = r.f32(); lt.assist.pocketDb = r.f32();
+            lt.faderKnown = r.flag();
+            lt.fader = r.f64();
+            if (heardOk && values <= kValues) live[hash] = std::move (lt);
+        }
     if (! r.ok()) return false;
 
     analysis = std::move (heard);
@@ -1078,6 +1119,9 @@ bool BridgeHub::loadAdvice (const std::string& bytes)
     applyMusicBus (analysis, fadersAtAnalysis);
     report = analysis.evaluate (settingsForAnalysis(), unheard);
     if (! report.valid) { report = {}; analysis.clear(); return false; }
+    liveTracks = std::move (live);
+    mergeLiveInto (report);
+    applyLiveSnapshots();
     analyzeState = Analyze::done;
     autoListen.start (autoStyleKnown ? autoStyle : report.style);   // Auto Analyze carries on from it (when it's on)
     analyzedMs = at;
@@ -1178,6 +1222,7 @@ void BridgeHub::analysisTick (const mixology::AnalysisFrame& mixFrame, bool play
     monoWatch.add (heard, setupTracks);
     updateSetup();
 
+    trackListenTick (mixFrame, tracks, playing);   // AUTO listening to one track Analyze Mix didn't hear
     if (analyzeState == Analyze::done || analyzeState == Analyze::idle) { autoTick (mixFrame, std::move (tracks), playing); return; }
     if (analyzeState != Analyze::listening || ! playing) return;
     mix::Moment m;
@@ -1255,6 +1300,7 @@ void BridgeHub::reevaluate()
         if (ts == trackSettings.end() || (! ts->second.musicBus && ! ts->second.excluded)) unheard.push_back (n);
     }
     report = heard.evaluate (settingsForAnalysis(), unheard);
+    mergeLiveInto (report);   // the tracks AUTO heard on its own
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1450,6 +1496,8 @@ const suite::VocalInfo* BridgeHub::voxologyOn (std::uint32_t hash) const
 std::optional<mixology::mix::Role> BridgeHub::voxRole (std::uint32_t hash, const std::string& name) const
 {
     using mixology::mix::Role;
+    // Voxology in Beat mode sits on the beat (every Voxology on the channel in it): a whole beat on one track.
+    if (const auto it = suiteVocals.find (hash); it != suiteVocals.end() && (it->second.info.flags & suite::VocalInfo::beat) != 0) return Role::beat;
     const auto* v = voxologyOn (hash);
     if (v == nullptr) return std::nullopt;
     // Voxology says it is a vocal; the channel's name says whether it is the ad-libs.
@@ -1577,6 +1625,9 @@ void BridgeHub::finishAnalysis()
     useSnapshot (snapshotNow());
     applyMusicBus (analysis, fadersAtAnalysis);
     report = analysis.evaluate (settingsForAnalysis(), unheard);
+    dropLiveHeardBy (report);   // AUTO's own listens: the ones this one didn't hear stay in
+    mergeLiveInto (report);
+    applyLiveSnapshots();
     analyzeState = Analyze::done;
     autoListen.start (report.style);   // Auto Analyze carries on from here (when it's on)
     adviceAnalysis = {};
@@ -1653,13 +1704,17 @@ void BridgeHub::autoTick (const mixology::AnalysisFrame& mixFrame, std::vector<m
         auto& a = autoListen.analysis();
         a.setVocalOffset (vocalOffset, vocalFromYou);
         applyMusicBus (a, autoSnapshot.faders);
-        auto fresh = a.evaluate (settingsForAnalysis(), unheardNow());
+        const auto own = a.evaluate (settingsForAnalysis(), unheardNow());
+        auto fresh = own;
+        mergeLiveInto (fresh, &own);   // the tracks AUTO heard on its own (that this listen didn't hear)
         autoCheckedMs = juce::Time::currentTimeMillis();
         if (mix::adviceChanged (report, fresh))
         {
             report = std::move (fresh);
             analysis = a;   // role changes re-evaluate the moments behind the advice on screen
             useSnapshot (autoSnapshot);
+            dropLiveHeardBy (own);
+            applyLiveSnapshots();
             autoUpdatedMs = autoCheckedMs;
             analyzeState = Analyze::done;   // the first advice, when Auto Analyze started from scratch
             analyzedMs = autoCheckedMs;
@@ -1957,6 +2012,7 @@ juce::var BridgeHub::getState (bool includeLog)
     o->setProperty ("channelNames", stringList (bridge.channelTitles()));
     o->setProperty ("analysis", analysisState());
     o->setProperty ("apply", applyState());
+    o->setProperty ("auto", autoStateVar());   // AUTO on a processing page: listening, applied, nothing to change
     // Faders that move together in the DAW (Q-Link, tracks selected together, a group): the window says so once.
     if (const auto& lf = bridge.linkedFaders(); lf.serial != 0 && lf.serial != linkedSeen)
     {
@@ -2149,6 +2205,11 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
         else
         {
             if (report.valid && analyzeState == Analyze::done) adviceAnalysis = analysis;   // Cancel goes back to it
+            if (trackListen.active)
+            {
+                trackListen = {};
+                autoResult ("stopped", "Analyze Mix started: AUTO stopped listening (Analyze Mix hears every track). Press AUTO again when it has finished.");
+            }
             analysis.begin (style);
             analysis.setVocalOffset (vocalOffset, vocalFromYou);
             autoListen.reset();
@@ -2359,6 +2420,8 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
         linkedSeen = static_cast<std::uint64_t> (static_cast<juce::int64> (value));
         ++applyVersion;
     }
+    else if (name == "auto")      planResult = autoCommand (arg);
+    else if (name == "autoUndo")  r = autoUndo (static_cast<std::uint64_t> (static_cast<juce::int64> (number)), info);
     else if (name == "history")   planResult = historyList();
     else if (name == "historyTo" || name == "historyUndo" || name == "historyRedo")
     {
@@ -2374,7 +2437,8 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
     o->setProperty ("message", juce::String::fromUTF8 (r.message.c_str()));
     o->setProperty ("warning", juce::String::fromUTF8 (r.warning.c_str()));
     o->setProperty ("info", juce::String::fromUTF8 (info.c_str()));
-    if (! planResult.isVoid()) o->setProperty (name == "planUndo" ? "undo" : name.startsWith ("history") ? "history" : "plan", planResult);
+    if (! planResult.isVoid()) o->setProperty (name == "planUndo" ? "undo" : name.startsWith ("history") ? "history" : name == "auto" ? "auto" : "plan", planResult);
+    if (name == "autoUndo") o->setProperty ("auto", autoStateVar());
     return juce::var (o);
 }
 
@@ -2677,6 +2741,12 @@ void BridgeHub::resetProject()
     autoListen.reset();
     autoSnapshot = {};
     autoScanAsked = false;
+    trackListen = {};
+    liveTracks.clear();
+    liveOnly = {};
+    autoSteps.clear();
+    autoState = {};
+    ++autoVersion;
     autoCheckedMs = autoUpdatedMs = 0.0;
     autoPause.clear();
     autoSecondsShown = -1;
@@ -3385,4 +3455,350 @@ juce::var BridgeHub::historyState() const
     o->setProperty ("redoWhat", redo);
     o->setProperty ("busy", history.busy() || bridge.busy());
     return juce::var (o);
+}
+
+// ---------------------------------------------------------------------------------------------
+// AUTO on a processing page: one track, one page, the same rules Polish and Auto Mix use (mix::makeTrackPlan). It applies
+// straight away (one History step), or first listens to the track when Analyze Mix didn't hear it play.
+
+juce::var BridgeHub::autoStateVar() const
+{
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("seq", static_cast<juce::int64> (autoState.seq));
+    o->setProperty ("state", juce::String (autoState.state));
+    o->setProperty ("page", juce::String (autoState.page));
+    o->setProperty ("hash", static_cast<juce::int64> (autoState.hash));
+    o->setProperty ("name", juce::String::fromUTF8 (autoState.name.c_str()));
+    o->setProperty ("line", juce::String::fromUTF8 (autoState.line.c_str()));
+    o->setProperty ("step", static_cast<juce::int64> (autoState.step));
+    o->setProperty ("heard", std::floor (autoState.heard));
+    o->setProperty ("need", mixology::mix::kAutoListenSeconds);
+    o->setProperty ("playing", autoState.playing);
+    return juce::var (o);
+}
+
+void BridgeHub::autoResult (const std::string& state, const std::string& line, std::uint64_t step)
+{
+    autoState.state = state;
+    autoState.line = line;
+    autoState.step = step;
+    ++autoState.seq;
+    ++autoVersion;
+}
+
+namespace
+{
+    std::string listeningLine (const std::string& name, double heard, bool playing)
+    {
+        const auto of = std::to_string (static_cast<int> (std::floor (heard))) + " of " + std::to_string (static_cast<int> (mixology::mix::kAutoListenSeconds)) + " s";
+        return playing ? "Play a part where '" + name + "' plays: AUTO is listening (" + of + ")"
+                       : "Press play at a part where '" + name + "' plays: AUTO is listening (" + of + ")";
+    }
+}
+
+std::uint64_t BridgeHub::trackKey (std::uint32_t hash) const
+{
+    // Its processing and Assist EQ: what it heard is only good for them.
+    std::uint64_t h = 1469598103934665603ull;
+    auto add = [&h] (const void* p, std::size_t n) {
+        const auto* b = static_cast<const unsigned char*> (p);
+        for (std::size_t i = 0; i < n; ++i) { h ^= b[i]; h *= 1099511628211ull; }
+    };
+    auto& registry = mixology::link::processRegistry();
+    const auto links = registry.links (mixology::link::nowMs());
+    if (const auto* l = uniqueLink (links, hash))
+    {
+        mixology::proc::Values v {};
+        if (registry.readProc (l->slot, l->generation, v)) add (v.data(), v.size() * sizeof (float));
+        const float a[] = { l->assist.lowCutHz, l->assist.mudHz, l->assist.mudDb, l->assist.pocketHz, l->assist.pocketDb };
+        add (a, sizeof a);
+    }
+    return h;
+}
+
+juce::var BridgeHub::autoCommand (const juce::var& arg)
+{
+    using namespace mixology;
+    const auto page = mix::pageFromKey (arg.getProperty ("page", "").toString().toStdString());
+    const auto hash = static_cast<std::uint32_t> (static_cast<juce::int64> (arg.getProperty ("hash", 0)));
+    if (! page)
+    {
+        autoResult ("refused", "AUTO works on the EQ, Dynamics, Space, Tone and Stereo pages.");
+        return autoStateVar();
+    }
+    // Pressed again while it listens: it stops (on another page or track: that one starts instead).
+    if (trackListen.active)
+    {
+        const bool same = trackListen.hash == hash && trackListen.page == *page;
+        const auto who = trackListen.name;
+        trackListen = {};
+        autoState.heard = 0.0;
+        if (same)
+        {
+            autoResult ("stopped", "AUTO stopped listening to '" + who + "': nothing changed.");
+            return autoStateVar();
+        }
+    }
+    autoState.page = mix::pageKey (*page);
+    autoState.hash = hash;
+    autoState.heard = 0.0;
+    autoState.name.clear();
+    const auto links = link::processRegistry().links (link::nowMs());
+    for (const auto& l : links)
+        if (hash != 0 && l.identity.hasName && l.nameHash == hash) autoState.name = l.identity.name;
+    const auto quotedName = "'" + autoState.name + "'";
+    if (hash == 0)
+        autoResult ("refused", mix::makeTrackPlan (*page, 0, {}, {}).line);
+    else if (analyzeState == Analyze::reading || analyzeState == Analyze::listening)
+        autoResult ("refused", "Analyze Mix is listening right now: press AUTO again when it has finished (it hears this track too).");
+    else if (autoState.name.empty())
+        autoResult ("refused", "That track's Mixology Link isn't answering (track removed, or the host gives it no name): pick it again.");
+    else if (uniqueLink (links, hash) == nullptr)
+        autoResult ("refused", quotedName + ": another track has the same name, so Mixology can't tell their Links apart. Rename one of them.");
+    else if (bridge.isProtected (hash))
+        autoResult ("refused", quotedName + " is protected (padlock): AUTO leaves it alone.");
+    else if (! mix::autoListensFirst (*page, hash, report.valid ? report : liveOnly, channelsNow()))
+        autoRun (*page, hash);
+    else
+    {
+        // Analyze Mix didn't hear it play (a chorus while it heard a verse, a track added since): listen to it now,
+        // with the rest of the mix around it, while you play a part where it plays.
+        trackListen.active = true;
+        trackListen.page = *page;
+        trackListen.hash = hash;
+        trackListen.name = autoState.name;
+        trackListen.heard.begin (report.valid ? report.style : autoStyleKnown ? autoStyle : mix::Style {});
+        trackListen.heard.setVocalOffset (vocalOffset, vocalFromYou);
+        trackListen.startedAt = now();
+        trackListen.played = 0;
+        trackListen.key = trackKey (hash);
+        autoState.playing = transportPlaying;
+        autoResult ("listening", listeningLine (autoState.name, 0.0, transportPlaying));
+    }
+    return autoStateVar();
+}
+
+void BridgeHub::trackListenTick (const mixology::AnalysisFrame& mixFrame, const std::vector<mixology::mix::TrackSample>& tracks, bool playing)
+{
+    using namespace mixology;
+    if (! trackListen.active) return;
+    auto& L = trackListen;
+    if (const auto key = trackKey (L.hash); key != L.key)   // you changed its processing while it listened: from here
+    {
+        L.key = key;
+        L.played = 0;
+        L.heard.clear();
+    }
+    const double heardBefore = L.played * mix::Analysis::kMomentSeconds;
+    if (playing && ! mixFrame.silent && ! L.heard.full())
+    {
+        bool plays = false;
+        for (const auto& t : tracks)
+            if (t.hash == L.hash && ! t.frame.silent && t.frame.loudness + (t.faderKnown ? t.faderDb : 0.0) > -60.0) plays = true;
+        mix::Moment m;
+        m.mix = mixFrame;
+        m.tracks = tracks;
+        L.heard.add (std::move (m));
+        if (plays) ++L.played;
+    }
+    const double heard = L.played * mix::Analysis::kMomentSeconds;
+    if (static_cast<int> (heard) != static_cast<int> (heardBefore) || playing != autoState.playing)
+    {
+        autoState.playing = playing;
+        autoState.heard = heard;
+        autoState.line = listeningLine (L.name, heard, playing);
+        ++autoVersion;   // the line only: nothing in the mix changes while it listens
+    }
+    if (heard + 1.0e-6 < mix::kAutoListenSeconds) return;
+
+    auto heardNow = L.heard;
+    std::map<std::uint32_t, double> faders;
+    for (const auto& [h, f] : bridge.knownFaders()) faders[h] = f.db;
+    applyMusicBus (heardNow, faders);
+    const auto fresh = heardNow.evaluate (settingsForAnalysis(), unheardNow());
+    if (! mix::heardEnough (fresh, L.hash)) return;   // by Analyze Mix's own measure: a little more
+
+    // Kept: what it heard of this track (and the vocals and name partners around it, for masking and doubles), with
+    // its processing then. Merged into the advice from here on, saved with the project.
+    LiveTrack lt;
+    {
+        std::set<std::uint32_t> keep { L.hash };
+        const auto base = mix::pairName (L.name).base;
+        for (const auto& t : fresh.tracks)
+            if (t.role == mix::Role::vox || t.role == mix::Role::adlibs || (! base.empty() && mix::pairName (t.name).base == base)) keep.insert (t.hash);
+        mix::Analysis trimmed;
+        trimmed.begin (report.valid ? report.style : autoStyleKnown ? autoStyle : mix::Style {});
+        for (const auto& m : L.heard.heardMoments())
+        {
+            auto copy = m;
+            copy.tracks.erase (std::remove_if (copy.tracks.begin(), copy.tracks.end(), [&keep] (const mix::TrackSample& t) { return keep.count (t.hash) == 0; }),
+                               copy.tracks.end());
+            trimmed.add (std::move (copy));
+        }
+        lt.heard = std::move (trimmed);
+    }
+    auto& registry = link::processRegistry();
+    const auto links = registry.links (link::nowMs());
+    if (const auto* l = uniqueLink (links, L.hash))
+    {
+        lt.procKnown = registry.readProc (l->slot, l->generation, lt.proc);
+        lt.assist = l->assist;
+        lt.assistKnown = true;
+    }
+    if (const auto f = bridge.knownFaders().find (L.hash); f != bridge.knownFaders().end()) { lt.faderKnown = true; lt.fader = f->second.db; }
+    const auto hash = L.hash;
+    const auto page = L.page;
+    liveTracks[hash] = std::move (lt);
+    if (report.valid)
+    {
+        report = mix::mergeTrack (report, fresh, hash);
+        applyLiveSnapshots();
+        ++adviceSerial;
+        ++analysisVersion;
+    }
+    else liveOnly = fresh;
+    trackListen = {};
+    autoState.heard = heard;
+    autoRun (page, hash);
+}
+
+void BridgeHub::autoRun (mixology::mix::Page page, std::uint32_t hash)
+{
+    using namespace mixology;
+    const auto plan = mix::makeTrackPlan (page, hash, report.valid ? report : liveOnly, channelsNow(), mixNow());
+    if (plan.changes.empty())
+    {
+        autoResult (plan.valid ? "nothing" : "refused", plan.line);
+        return;
+    }
+    // Each control as if you moved it on its page (the Link applies them), the values before into ONE History step.
+    auto& registry = link::processRegistry();
+    const auto links = registry.links (link::nowMs());
+    std::vector<HChange> hist;
+    std::vector<std::string> missing;
+    for (const auto& c : plan.changes)
+    {
+        const auto* l = c.fullMix ? nullptr : uniqueLink (links, c.hash);
+        if (l == nullptr)
+        {
+            missing.push_back (c.name);
+            continue;
+        }
+        proc::Values before {};
+        if (! registry.readProc (l->slot, l->generation, before)) before = proc::defaults();
+        const auto target = linkChange (HWhat::proc, *l);
+        for (const auto& [id, v] : c.proc)
+        {
+            auto pc = target;
+            pc.index = id;
+            pc.before = before[static_cast<std::size_t> (id)];
+            pc.after = v;
+            hist.push_back (std::move (pc));
+            registry.requestProc (l->slot, l->generation, id, v);
+        }
+        if (c.setDuck)
+        {
+            link::DuckSources d;
+            for (auto h : c.duck)
+                if (d.count < link::kMaxDuckSources) d.hashes[static_cast<std::size_t> (d.count++)] = h;
+            auto dc = linkChange (HWhat::duck, *l);
+            dc.listBefore = duckList (l->duck);
+            dc.listAfter = duckList (d);
+            hist.push_back (std::move (dc));
+            registry.requestDuck (l->slot, l->generation, d);
+        }
+    }
+    const auto step = history.record ("AUTO " + std::string (mix::pageName (page)) + " on '" + autoState.name + "'", "", std::move (hist), wallClock());
+    if (step == 0)
+    {
+        autoResult ("nothing", missing.empty() ? "'" + autoState.name + "' already fits: nothing to change."
+                                               : "AUTO couldn't reach the Mixology Link of '" + missing.front() + "': nothing changed.");
+        return;
+    }
+    std::string line = plan.line;
+    if (! missing.empty()) line += " ('" + missing.front() + "' skipped: its Mixology Link isn't there.)";
+    autoSteps[step] = { autoState.page, autoState.hash, autoState.name };
+    autoResult ("applied", line, step);
+}
+
+mixology::BridgeSession::Result BridgeHub::autoUndo (std::uint64_t step, std::string& info)
+{
+    using namespace mixology;
+    const auto* s = history.find (step);
+    if (s == nullptr) return { false, "That AUTO isn't in the History any more." };
+    if (s->undone) return { false, "That AUTO is undone already (History, top bar)." };
+    const auto what = s->what;
+    if (history.current() == step)
+    {
+        // The newest step: the History's own Undo (it stays there, dimmed, and can be redone).
+        const auto r = moveHistory ("historyUndo", 0, info);
+        if (! r.ok) return r;
+    }
+    else
+    {
+        // Steps came after it: exactly its changes go back, those still as it left them (a step of its own).
+        auto& registry = link::processRegistry();
+        const auto links = registry.links (link::nowMs());
+        std::vector<HChange> back;
+        for (const auto& c : s->changes)
+        {
+            const auto* l = linkOf (links, c);
+            if (l == nullptr) continue;
+            if (c.what == HWhat::proc)
+            {
+                proc::Values v {};
+                if (registry.readProc (l->slot, l->generation, v) && std::abs (v[static_cast<std::size_t> (c.index)] - c.after) < 1.0e-3) back.push_back (c.reversed());
+            }
+            else if (c.what == HWhat::duck && duckList (l->duck) == c.listAfter) back.push_back (c.reversed());
+        }
+        if (back.empty()) return { false, "Everything that AUTO changed has been changed again since: nothing of it left to undo." };
+        const auto r = playHistory (back, "Undo " + what, info);
+        if (! r.ok) return r;
+        history.record ("Undo " + what, "", std::move (back), wallClock());
+        lastApply = {};
+        presetUndo.clear();
+        ++applyVersion;
+    }
+    // The page and track it was on show it (their line loses its Undo).
+    if (const auto it = autoSteps.find (step); it != autoSteps.end())
+    {
+        autoState.page = it->second.page;
+        autoState.hash = it->second.hash;
+        autoState.name = it->second.name;
+    }
+    autoState.heard = 0.0;
+    autoResult ("undone", "Undone: " + what + ". Everything it changed is back.");
+    return { true, {} };
+}
+
+void BridgeHub::mergeLiveInto (mixology::mix::Report& r, const mixology::mix::Report* heardOnItsOwn) const
+{
+    if (! r.valid) return;
+    for (const auto& [hash, lt] : liveTracks)
+    {
+        if (heardOnItsOwn != nullptr && mixology::mix::heardEnough (*heardOnItsOwn, hash)) continue;   // a newer listen heard it
+        auto heard = lt.heard;
+        heard.setVocalOffset (vocalOffset, vocalFromYou);
+        applyMusicBus (heard, fadersAtAnalysis);
+        r = mixology::mix::mergeTrack (r, heard.evaluate (settingsForAnalysis(), {}), hash);
+    }
+}
+
+void BridgeHub::dropLiveHeardBy (const mixology::mix::Report& r)
+{
+    bool dropped = false;
+    for (auto it = liveTracks.begin(); it != liveTracks.end();)
+        if (mixology::mix::heardEnough (r, it->first)) { it = liveTracks.erase (it); dropped = true; }
+        else ++it;
+    if (dropped) ++adviceSerial;
+}
+
+void BridgeHub::applyLiveSnapshots()
+{
+    for (const auto& [hash, lt] : liveTracks)
+    {
+        if (lt.procKnown) procAtAnalysis[hash] = lt.proc;
+        if (lt.assistKnown) assistAtAnalysis[hash] = lt.assist;
+        if (lt.faderKnown) fadersAtAnalysis[hash] = lt.fader;
+    }
 }
