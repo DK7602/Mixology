@@ -67,7 +67,10 @@ sends higher-resolution art, re-run it.
   232 ctest under ASan. BridgeHub's AUTO code has no unit test and has never run in a DAW.
 - v0.25.0 CI green: run 42055330176 (8a10b11). Beta 11 suite installers: run 42055344974, label "Beta 11", version
   0.11.0 (Mixology 0.25.0, Voxology 0.53.0, Masterology 0.30.1); its macOS installer job got no runner for 15 min
-  and was cancelled: "re-run failed jobs" packed it (attempt 2). If it happens again, do the same.
+  and was cancelled: "re-run failed jobs" packed it (attempt 2), but GitHub's page for attempt 2 lists only that
+  attempt's artifact, so the user saw only the Mac installer. Fixed by a repack-only run (reuse_run 42055344974):
+  run 42071697620 = Beta 11 with BOTH installers on one page (give the user this one). Next time a Mac installer
+  job is cancelled, repack with reuse_run instead of re-running the failed job.
 
 ## v0.23.0: Make Room, doubles by ear, linked faders (2026-10-30, session "Mixology audit")
 - User (video, Cubase): Make Room made the mix too quiet and the chorus vocals loud; "Vox Chorus 1" / "Vox Chorus 2"
