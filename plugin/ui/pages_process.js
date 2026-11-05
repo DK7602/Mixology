@@ -6,6 +6,7 @@ import { knobFor, eqBand, magnitudeDb, EQ_SHAPES, MODULE_NAMES, SPACE_ON, MAX_SP
 import { createScene } from "./space_scene.js";
 import { dawName, say } from "./daws.js";
 import { guessRole } from "./roles.js";
+import { autoButton } from "./autobtn.js";
 
 const SR = 48000;
 function biquadDb(type, f0, gainDb, q, f) {
@@ -38,7 +39,8 @@ export function buildEq(root, app) {
   const title = el("div", "panel-title", panel);
   title.textContent = "EQ";
   proc.powerButton(panel, 76, 20, () => "eq");
-  const status = el("div", "proc-note", panel, { left: "190px", top: "26px", width: "560px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });
+  const status = el("div", "proc-note", panel, { left: "190px", top: "26px", width: "456px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });
+  const auto = autoButton(app, "eq", panel, 656, 20);   // between the status line and the character chips
 
   const id = (i, field) => `eq${i + 1}_${field}`;
   const band = (i) => ({ type: Math.round(proc.get(id(i, "type"))), shape: EQ_SHAPES[Math.round(proc.get(id(i, "type")))], f: proc.get(id(i, "freq")), g: proc.get(id(i, "gain")), q: proc.get(id(i, "q")) });
@@ -220,12 +222,13 @@ export function buildEq(root, app) {
       if (!cd.q.dragging && Math.abs(cd.q.value - b.q) > 0.005) cd.q.set(b.q);
     });
     const target = proc.key === "mix" ? `the full mix (${say(app.daw, "master")})` : `'${proc.name}'`;
-    status.textContent = !proc.ok ? `${proc.name}: its Mixology Link isn't answering (track removed?). Pick another target.`
+    if (!auto.show(status)) status.textContent = !proc.ok ? `${proc.name}: its Mixology Link isn't answering (track removed?). Pick another target.`
       : proc.switchedOn("eq") ? (proc.isOn("eq") ? `Working on ${target}` : `On, but the processing of ${target} is switched off in its Link window`)
       : `Off on ${target}. Drag a point (or press ON) to start`;
     g.redraw();
   }
   proc.on((why) => { if (why === "values" || why === "target") update(); });
+  auto.onChange(update);
   update();
   app.on("theme", () => g.redraw());
 
@@ -318,6 +321,7 @@ export function buildDynamics(root, app) {
   const top = el("div", "panel", root, box(266, 0, 1146, 556));
   const power = proc.powerButton(top, 22, 16, () => mod);
   const note = el("div", "proc-note", top, { left: "140px", top: "22px", width: "560px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });
+  const auto = autoButton(app, "dynamics", top, 721, 16);   // between the note and the target
   proc.targetSelect(top, 836, 14, 290, { dot: "#1fd1ff" });
 
   const GW = 790, GH = 474;
@@ -367,12 +371,13 @@ export function buildDynamics(root, app) {
     if (extraSel) extraSel.set(proc.spec(ex.id).choices[Math.round(v(ex.id))]);
     list.lamps((m) => proc.switchedOn(m), (m) => proc.running(m));
     const target = proc.key === "mix" ? "the full mix" : `'${proc.name}'`;
-    note.textContent = !proc.ok ? `${proc.name}: its Mixology Link isn't answering. Pick another target.`
+    if (!auto.show(note)) note.textContent = !proc.ok ? `${proc.name}: its Mixology Link isn't answering. Pick another target.`
       : proc.switchedOn(mod) ? `${MODULE_NAMES[mod]} on ${target}` + (mod === "limit" && proc.latencyMs > 0 ? ` · ${fmt.num(proc.latencyMs, 1)} ms lookahead` : "")
       : `${MODULE_NAMES[mod]} is off on ${target}. Turn a knob (or press ON) to start`;
     g.redraw();
   }
   proc.on((why) => { if (why === "values" || why === "target") sync(); });
+  auto.onChange(() => sync());
 
   // Graphs
   g.draw = (ctx, w, h) => {
@@ -681,6 +686,7 @@ export function buildSpace(root, app) {
   const right = el("div", "panel", root, box(1072, 0, 340, 420));
   const eqTitle = el("div", "panel-title", right);
   eqTitle.textContent = "EFFECT EQ";
+  const auto = autoButton(app, "space", right, 225, 20);   // the page's top row (the centre one is full)
   const eqg = graph(right, 18, 70, 304, 300);
   const eqNote = el("div", "", right, { position: "absolute", left: "18px", top: "378px", right: "18px", fontSize: "15.5px", color: "var(--text-dim)" });
   eqNote.textContent = "Drag the points: the effect's low cut and high cut";
@@ -836,6 +842,7 @@ export function buildSpace(root, app) {
   const lamps = () => list.lamps((id) => inUseHere(id), (id) => inUseHere(id) && proc.running("space"));
   let bpmNow = 0;
   function syncNote() {
+    if (auto.show(note, { wrap: true })) return;
     const d = def();
     let text = routeNote;
     const spaces = stacked();
@@ -880,6 +887,7 @@ export function buildSpace(root, app) {
     if (why === "target") { followTarget = true; routeNote = ""; duckLocal = null; }
     if (why === "values" || why === "target" || why === "targets") sync();
   });
+  auto.onChange(() => syncNote());
   app.on("theme", () => eqg.redraw());
   show(view);
 

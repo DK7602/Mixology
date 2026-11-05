@@ -243,6 +243,12 @@ button { font-family: inherit; }
 .small-btn .lamp.on { background: var(--green); opacity: 1; box-shadow: 0 0 8px var(--green); }
 @keyframes lamp-live { 50% { box-shadow: 0 0 2px var(--green); } }
 .proc-note { position: absolute; font-size: 16px; line-height: 1.35; color: var(--text-dim); }
+/* AUTO (processing pages): the ON button's look; listening = lit and breathing. Its line's Undo is a text button. */
+.power-btn.listening { animation: auto-listen 1.2s ease-in-out infinite; }
+@keyframes auto-listen { 50% { box-shadow: 0 0 2px var(--green); } }
+.text-btn { flex: none; padding: 0 2px; border: none; background: none; font: inherit; color: var(--gold); text-decoration: underline; cursor: pointer; white-space: nowrap; }
+.text-btn:hover { color: var(--gold-hi); }
+:root[data-theme="light"] .text-btn { color: #9a6a10; }
 .mono-badge {
   position: absolute; z-index: 3; padding: 6px 16px; border-radius: 999px; font-size: 18px; font-weight: 600; letter-spacing: 0.08em;
   color: #fff; background: var(--red); box-shadow: 0 0 16px rgba(255, 40, 40, 0.6);

@@ -21,7 +21,8 @@
   const MOCK_DAW = { key: location.hash.slice(1) || "cubase", picked: !!location.hash, from: 3, detected: "cubase" };   // #fl, #ableton, #studioone...
   const B = { vocalOwn: {}, offset: 0, lastMove: "", log: [], version: 1, restore: {}, an: { state: "idle", seconds: 0, playing: true, report: null, auto: { on: false, pause: "", seconds: 0, checked: 0, updated: 0 } }, settings: {},
     apply: { active: false, what: "", done: 0, total: 0, skipped: 0, message: "", notes: [], serial: 0, canUndo: false, undoWhat: "", hearingReference: false },
-    planId: 0, plan: null, undo: null };
+    planId: 0, plan: null, undo: null,
+    auto: { seq: 0, state: "idle", page: "", hash: 0, name: "", line: "", step: 0, heard: 0, need: 8, playing: true }, autoHeard: false };
   const ROLE_OF = { Kick: "kick", Snare: "snare", Hats: "hats", Perc: "perc", "808": "bass", Keys: "keys", Synth: "synth", Guitar: "guitar", "Lead Vox": "vox", FX: "fx", Adlibs: "adlibs", "Vox Double": "adlibs", Pad: "synth", Riser: "fx" };
   // Voxology on the vocals (M6, the suite link), as the hub reports it.
   const VOXOLOGY = {
@@ -115,7 +116,7 @@
       analysis: { state: B.an.state, seconds: B.an.seconds, enough: 20, max: 60, playing: B.an.playing, heard: chans.filter((c) => c.link).length, report: B.an.report, analyzed: B.an.analyzed || 0, fromProject: !!B.an.fromProject, auto: { ...B.an.auto, seconds: Math.floor(B.an.auto.seconds), pause: !B.an.auto.on ? "off" : B.an.playing ? "" : "stopped" } },
       apply: { ...B.apply },
       linksSeen: chans.filter((c) => c.link).length, linksPaired: slots.filter((s) => s.linkStatus === "matched").length, linksShared: true,
-      setup: SETUP_DEMO ? SETUP : [], history: hState(),
+      setup: SETUP_DEMO ? SETUP : [], history: hState(), auto: { ...B.auto },
       channelNames: B.channelsRead ? chans.map((c) => c.name) : [], viewOffset: B.channelsRead ? B.offset : -1,
       lastMove: B.lastMove, lawPoints: 37, marks: [6, 0, -6, -12, -24, -36, -48].map((db) => ({ db, pos: toNorm(db) })),
       logVersion: B.log.length, log: withLog ? B.log.slice() : undefined,
@@ -143,6 +144,104 @@
     return { version: H.version, count: H.steps.length, canUndo: done.length > 0, canRedo: undone.length > 0,
       undoWhat: done.length ? done[done.length - 1].what : "", redoWhat: undone.length ? undone[0].what : "", busy: false };
   };
+  // --- AUTO on the processing pages: one track, one page. 'Snare' wasn't heard by Analyze Mix (it listens first). ---
+  const NO_SPACE = { rev_on: 0, dly_on: 0, cho_on: 0, pha_on: 0, hall_on: 0, room_on: 0, spx_on: 0 };
+  const AUTO = {
+    eq: {
+      Keys: { line: (st) => `AUTO: cut mud at 315 Hz (-2.5 dB) and opened the top (+2.0 dB air): 'Keys' sounded muddy and dull for ${st}`,
+        set: { eq_on: 1, eq2_type: 0, eq2_freq: 315, eq2_q: 1.4, eq2_gain: -2.5, eq6_type: 2, eq6_freq: 10000, eq6_q: 0.7, eq6_gain: 2 } },
+      Hats: { line: () => "AUTO: softened a harsh peak at 5 kHz (-3.0 dB): 'Hats' sounded harsh", set: { eq_on: 1, eq4_type: 0, eq4_freq: 5000, eq4_q: 2, eq4_gain: -3 } },
+      Adlibs: { line: () => "AUTO: added a low cut at 100 Hz: 'Adlibs' had rumble below 100 Hz", set: { eq_on: 1, eq1_type: 3, eq1_freq: 100, eq1_q: 0.7 } },
+      Snare: { line: (st) => `AUTO: brought out its crack (+2.0 dB at 3.5 kHz): 'Snare' sounded dull for ${st}`, set: { eq_on: 1, eq4_type: 0, eq4_freq: 3500, eq4_q: 1, eq4_gain: 2 } },
+      "Lead Vox": { nothing: "'Lead Vox': Voxology's Tone EQ shapes this vocal, so Mixology leaves its EQ to Voxology (make tone changes there). Nothing to change." },
+    },
+    dynamics: {
+      "808": { line: () => "AUTO: added a gentle compressor (4:1 from -9.0 dB): '808' swung 9 dB in level", set: { comp_on: 1, comp_thr: -9, comp_ratio: 4, comp_att: 25, comp_rel: 150, comp_makeup: 2, comp_knee: 0 } },
+      Keys: { line: () => "AUTO: added a gentle compressor (2.5:1 from -14.0 dB): 'Keys' swung 10 dB in level", set: { comp_on: 1, comp_thr: -14, comp_ratio: 2.5, comp_att: 15, comp_rel: 140, comp_makeup: 1.5, comp_knee: 0 } },
+      Kick: { line: () => "AUTO: brought back the front of each hit (Attack +25 %): 'Kick' sounded squashed", set: { trans_on: 1, trans_attack: 25, trans_sustain: 0, trans_speed: 10, trans_out: 0, trans_mix: 100, trans_focus: 0 } },
+      Snare: { line: () => "AUTO: added a gate between hits: 'Snare' had noise between its hits", set: { gate_on: 1, gate_mode: 0, gate_thr: -58, gate_range: 18, gate_att: 0.5, gate_hold: 40, gate_rel: 120 } },
+      "Lead Vox": { nothing: "'Lead Vox': Voxology compresses it already (about 4 dB lately), so Mixology adds no second compressor. Nothing to change." },
+    },
+    space: {
+      Keys: { line: (st) => `AUTO: gave it a small room (8 % mix): 'Keys' was dry for ${st}`,
+        set: Object.assign({}, NO_SPACE, { sp_on: 1, room_on: 1, sp_type: 5, sp_route: 0, sp_lowcut: 250, sp_highcut: 9000, room_pre: 6, room_decay: 0.6, room_size: 40, room_late: 55, room_mix: 8 }) },
+      Snare: { line: (st) => `AUTO: gave it a short plate (6 % mix): 'Snare' was dry for ${st}`,
+        set: Object.assign({}, NO_SPACE, { sp_on: 1, rev_on: 1, sp_type: 0, sp_route: 0, sp_lowcut: 250, sp_highcut: 9000, rev_pre: 15, rev_decay: 0.9, rev_damp: 7000, rev_width: 100, rev_mix: 6 }) },
+      Kick: { nothing: "'Kick': a kick stays dry: reverb blurs its punch and muddies the low end. Nothing to change." },
+      "808": { nothing: "'808': the bass / 808 stays dry: reverb on the low end turns it to mud. Nothing to change." },
+      Hats: { nothing: "'Hats': hats stay dry: reverb on them washes the groove out. Nothing to change." },
+      "Lead Vox": { nothing: "'Lead Vox' has Voxology's reverb: Mixology adds no second reverb. Nothing to change." },
+      Adlibs: { nothing: "'Adlibs' has its own Space already (delay): Mixology leaves it. Nothing to change." },
+    },
+    tone: {
+      Keys: { line: (st) => `AUTO: took some boom out (Warmth -1.5 dB): 'Keys' sounded boomy for ${st}`, set: { tb_on: 1, tb_warmth: -1.5, tb_presence: 0, tb_air: 0, tb_glue: 0, tb_punch: 0 } },
+      Snare: { nothing: "'Snare' already fits: nothing to change." },
+      Kick: { nothing: "'Kick': a kick's tone is its EQ (weight and click) and its Transient: Tone Balance has nothing to add. Nothing to change." },
+      "808": { nothing: "'808': a bass's tone is its notes: Tone Balance has nothing to add. Nothing to change." },
+      "Lead Vox": { nothing: "'Lead Vox': Voxology's Tone EQ shapes this vocal, so Mixology leaves its tone to Voxology. Nothing to change." },
+    },
+    stereo: {
+      Kick: { line: () => "AUTO: put its low end in the middle: 'Kick' had its lows spread wide", set: { st_on: 1, st_low: 0, st_lowx: 150 } },
+      Keys: { line: () => "AUTO: opened it a little wider (125 %): 'Keys' sounded narrow", set: { st_on: 1, st_width: 125, st_low: 80, st_mid: 100, st_high: 100 } },
+      "808": { nothing: "'808' is mono: widening can't open it. Use Stereo Architect (Overview) to place it. Nothing to change." },
+      "Lead Vox": { nothing: "'Lead Vox' is mono: widening can't open it. Use Stereo Architect (Overview) to place it. Nothing to change." },
+    },
+  };
+  const PAGE_NAMES = { eq: "EQ", dynamics: "Dynamics", space: "Space", tone: "Tone", stereo: "Stereo" };
+  const autoUndos = {};
+  const autoSet = (fields) => { Object.assign(B.auto, fields); B.auto.seq++; B.version++; return { ok: true, auto: { ...B.auto } }; };
+  function autoApply(page, c) {
+    const st = window.__mixStyle || "Hip Hop - Modern Clean";
+    const a = (AUTO[page] || {})[c.name];
+    if (!a || a.nothing) return autoSet({ state: "nothing", line: a ? a.nothing : `'${c.name}' already fits: nothing to change.`, step: 0 });
+    const key = "link:" + chans.indexOf(c) + ":1", v = P.values[key], ix = P.spec.PROC_INDEX;
+    const before = {};
+    for (const id of Object.keys(a.set)) before[id] = v[ix[id]];
+    procSet(key, a.set);
+    const id = Math.max(0, ...H.steps.map((x) => x.id)) + 1;
+    const what = `AUTO ${PAGE_NAMES[page]} on '${c.name}'`;
+    H.steps = H.steps.filter((x) => !x.undone);
+    H.steps.push({ id, time: Date.now(), what, summary: `'${c.name}': ${Object.keys(a.set).length} controls`, lines: Object.entries(a.set).map(([k, x]) => `'${c.name}' ${k} ${before[k]} \u2192 ${x}`), undone: false, pending: false });
+    H.version++;
+    autoUndos[id] = { key, before, what, page, hash: c.hash, name: c.name };
+    return autoSet({ state: "applied", line: a.line(st), step: id });
+  }
+  function autoCommand(arg) {
+    const page = arg && arg.page, c = chans.find((x) => x.hash === Number(arg && arg.hash) && x.link);
+    if (B.auto.state === "listening") {
+      const same = B.auto.page === page && B.auto.hash === Number(arg.hash);
+      const who = B.auto.name;
+      B.auto.state = "idle";
+      if (same) return autoSet({ state: "stopped", line: `AUTO stopped listening to '${who}': nothing changed.`, heard: 0 });
+    }
+    Object.assign(B.auto, { page, hash: c ? c.hash : 0, name: c ? c.name : "", heard: 0, step: 0 });
+    if (!c) return autoSet({ state: "refused", line: "Pick a track: AUTO works on one track at a time (Auto Mix on the Overview does the whole mix)." });
+    if (!B.an.report) return autoSet({ state: "refused", line: "Press Analyze Mix first and play the song: AUTO works from what it hears." });
+    if (c.name === "Snare" && !B.autoHeard) return autoSet({ state: "listening", line: "Play a part where 'Snare' plays: AUTO is listening (0 of 8 s)", playing: B.an.playing !== false });
+    return autoApply(page, c);
+  }
+  function autoTick() {
+    if (B.auto.state !== "listening" || B.an.playing === false) return;
+    const was = Math.floor(B.auto.heard);
+    B.auto.heard += 1 / 30;
+    if (Math.floor(B.auto.heard) === was) return;
+    B.auto.line = `Play a part where '${B.auto.name}' plays: AUTO is listening (${Math.floor(B.auto.heard)} of 8 s)`;
+    B.version++;
+    if (B.auto.heard >= 8) { B.autoHeard = true; autoApply(B.auto.page, chans.find((x) => x.hash === B.auto.hash)); }
+  }
+  function autoUndo(step) {
+    const u = autoUndos[step], s = H.steps.find((x) => x.id === step);
+    if (!u || !s) return { ok: false, message: "That AUTO isn't in the History any more." };
+    if (s.undone) return { ok: false, message: "That AUTO is undone already (History, top bar)." };
+    procSet(u.key, u.before);
+    const newest = H.steps.filter((x) => !x.undone).pop();
+    if (newest && newest.id === step) { s.undone = true; H.version++; }
+    else { H.steps.push({ id: Math.max(...H.steps.map((x) => x.id)) + 1, time: Date.now(), what: "Undo " + u.what, summary: "", lines: [], undone: false, pending: false }); H.version++; }
+    delete autoUndos[step];
+    Object.assign(B.auto, { page: u.page, hash: u.hash, name: u.name, heard: 0 });
+    return Object.assign(autoSet({ state: "undone", line: `Undone: ${u.what}. Everything it changed is back.`, step: 0 }), { info: `Undo: ${u.what}.` });
+  }
+
   const hMove = (id) => {
     const at = id === 0 ? 0 : H.steps.findIndex((s) => s.id === id) + 1;
     if (at < 0 || (id !== 0 && at === 0)) return { ok: false, message: "That step isn't there any more." };
@@ -162,6 +261,8 @@
       return { ok: true };
     }
     if (name === "history") return { ok: true, history: hList() };
+    if (name === "auto") return autoCommand(arg);
+    if (name === "autoUndo") return autoUndo(Number(value));
     if (name === "historyTo") return hMove(value || 0);
     if (name === "historyUndo") { const done = H.steps.filter((s) => !s.undone); return done.length ? hMove(done.length > 1 ? done[done.length - 2].id : 0) : { ok: false, message: "Nothing to undo." }; }
     if (name === "historyRedo") { const u = H.steps.find((s) => s.undone); return u ? hMove(u.id) : { ok: false, message: "Nothing to redo." }; }
@@ -543,13 +644,14 @@
         if (s >= 20 && (s - 20) % 15 === 0) { B.an.auto.checked = Date.now(); if (s === 20) { B.an.auto.updated = Date.now(); B.an.state = "done"; B.an.report = fakeReport(); } }
       }
     }
+    autoTick();
     if (B.an.state === "listening" && B.an.playing) {
       B.an.seconds += 1 / 30;
       if (Math.floor(B.an.seconds * 5) !== Math.floor((B.an.seconds - 1 / 30) * 5)) B.version++;
       if (B.an.seconds >= 60) { B.an.state = "done"; B.an.report = fakeReport(); B.version++; }
     }
     if (page === "overview" && Math.round(t * 30) % 6 === 0) {
-      const groups = { kick: 0, bass: 1, snare: 2, hats: 2, perc: 2, vox: 3, adlibs: 3, keys: 4, synth: 4, guitar: 4, fx: 5, other: 5 };
+      const groups = { kick: 0, bass: 1, snare: 2, hats: 2, perc: 2, vox: 3, adlibs: 3, keys: 4, synth: 4, guitar: 4, beat: 4, fx: 5, other: 5 };
       const centres = [5, 3.5, 22, 18, 19, 16];
       const curves = [null, null, null, null, null, null];
       chans.filter((c) => c.link && !(B.settings[c.hash] && B.settings[c.hash].excluded)).forEach((c, i) => {

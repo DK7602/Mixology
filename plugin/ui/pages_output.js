@@ -4,6 +4,7 @@
 import { el, box, icon, fmt, esc, clamp, Knob, Meter, select, graph, freqToX, moduleList, store, cssVar } from "./ui.js";
 import { knobFor, biquad, magnitudeDb, MODULE_NAMES } from "./proc.js";
 import { dawName, say } from "./daws.js";
+import { autoButton } from "./autobtn.js";
 
 function knobRow(host, defs, prefix, onChange) {
   host.innerHTML = "";
@@ -65,8 +66,13 @@ export function buildTone(root, app) {
   const top = el("div", "panel", root, box(266, 0, 870, 556));
   const power = proc.powerButton(top, 22, 16, () => mod);
   const legend = el("div", "", top, { position: "absolute", left: "140px", top: "22px", display: "flex", gap: "22px", fontSize: "17px", whiteSpace: "nowrap" });
+  // AUTO (Tone Balance only) left of the target. With the Full Mix picked the legend needs the row, and AUTO (one track
+  // at a time) isn't there.
+  const auto = autoButton(app, "tone", top, 515, 16, { hideOnMix: true });
   proc.targetSelect(top, 620, 14, 230);
   const g = graph(top, 18, 70, 834, 470);
+  // AUTO's line (this page has no status line): one small line at the top of the graph, empty until AUTO says something.
+  const autoLine = el("div", "proc-note", top, { left: "80px", top: "78px", width: "750px", fontSize: "15px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });
   let mix = null;
 
   // Genre target curves (dB vs a flat, tilted reference): bass weight, low-mid scoop, top sheen.
@@ -124,10 +130,12 @@ export function buildTone(root, app) {
     }
   };
   function renderLegend() {
+    // A track's legend stops before AUTO: a long track name ends in "..." (it never runs under the button).
+    legend.style.maxWidth = proc.key === "mix" ? "" : "360px";
     const sw = (c) => `<span style="display:inline-block;width:22px;height:3px;background:${c};vertical-align:5px;margin-right:8px"></span>`;
     legend.innerHTML = (proc.key === "mix" ? `<span>${sw("#ff2a2a")}Target: ${esc(app.style.fullName)}</span><span>${sw("var(--text)")}Your mix</span>`
-      : `<span>${sw("var(--text)")}${esc(proc.name)}</span>`)
-      + (toneChange(proc, mod, 1000) !== null ? `<span>${sw("#ffd21f")}${MODULE_NAMES[mod]}</span>` : "");
+      : `<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;padding-bottom:6px">${sw("var(--text)")}${esc(proc.name)}</span>`)
+      + (toneChange(proc, mod, 1000) !== null ? `<span style="flex-shrink:0">${sw("#ffd21f")}${MODULE_NAMES[mod]}</span>` : "");
   }
   app.on("preset", () => { renderLegend(); g.redraw(); });
   app.on("theme", () => g.redraw());
@@ -143,6 +151,7 @@ export function buildTone(root, app) {
   function sync() {
     knobs.forEach((k) => { const v = proc.get(k.o.pid); if (!k.dragging && Math.abs(k.value - v) > 1e-3) k.set(v); });
     list.lamps((m) => proc.switchedOn(m), (m) => proc.running(m));
+    auto.show(autoLine);
     power.el.title = TONE_HELP[mod];
     g.redraw();
   }
@@ -150,6 +159,7 @@ export function buildTone(root, app) {
     if (why === "values") sync();
     if (why === "target") { mix = null; renderLegend(); sync(); }
   });
+  auto.onChange(() => sync());
 
   // Right: loudness of the full mix (live)
   const right = el("div", "panel", root, box(1150, 0, 262, 842));
@@ -231,6 +241,7 @@ export function buildStereo(root, app) {
 
   const right = el("div", "panel", root, box(1070, 0, 342, 842));
   proc.powerButton(right, 22, 16, () => "width");
+  const auto = autoButton(app, "stereo", right, 223, 16);   // the power row's free right half
   proc.targetSelect(right, 22, 60, 298);
   const KNOBS = [["st_width", "WIDTH", 6, 128], ["st_low", "LOW WIDTH", 176, 128], ["st_mid", "MID WIDTH", 6, 336], ["st_high", "HIGH WIDTH", 176, 336]];
   const knobs = KNOBS.map(([id, label, x, y]) => new Knob(right, knobFor(proc, id, { label, x, y, w: 160, size: 104, format: (v) => fmt.pct(v), labelGap: 10, valueGap: 8, onChange: (v) => proc.set(id, v), pid: id })));
@@ -247,10 +258,12 @@ export function buildStereo(root, app) {
     scopeNote.textContent = proc.mono ? "Scope: the full mix as it really is (you hear it in mono)" : "Scope: the full mix";
     list.buttons.find((b) => b.dataset.id === "mono").classList.toggle("active", proc.mono);
     const mono = proc.key !== "mix" && proc.channels === 1;
-    if (mono) { note.textContent = `'${proc.name}' is a mono track: width does nothing here (pan it instead).`; note.style.color = "var(--amber)"; shownMono = "track"; }
-    else if (shownMono === "track") shownMono = null;
+    if (auto.show(note, { wrap: true })) { note.style.color = ""; shownMono = "auto"; }   // AUTO's line
+    else if (mono) { note.textContent = `'${proc.name}' is a mono track: width does nothing here (pan it instead).`; note.style.color = "var(--amber)"; shownMono = "track"; }
+    else if (shownMono === "track" || shownMono === "auto") shownMono = null;
   }
   proc.on((why) => { if (why === "values" || why === "target" || why === "mono") sync(); });
+  auto.onChange(() => sync());
   sync();
 
   const trail = [];
@@ -298,7 +311,7 @@ export function buildStereo(root, app) {
       // The setup check knows more: stereo tracks folded by a mono group (and which one it most likely is).
       const fold = !track && ((app.bridge && app.bridge.setup) || []).find((s) => s.id === "setup-mono-group" || s.id === "setup-mono-mixology");
       const noteKey = monoNow + "|" + track + "|" + (fold ? fold.id + (fold.tracks || []).join(",") : "");
-      if (shownMono !== "track" && noteKey !== shownMono) {   // a mono track keeps its own note (sync)
+      if (shownMono !== "track" && shownMono !== "auto" && noteKey !== shownMono) {   // a mono track (or AUTO) keeps its own note (sync)
         shownMono = noteKey;
         note.style.color = monoNow || fold ? "var(--amber)" : "";
         note.textContent = fold && fold.id === "setup-mono-mixology" ? `Mixology sits on a mono channel, so it hears the whole mix in mono. Put it on the ${say(app.daw, "master")} channel (Overview > Mix Assistant says how).`

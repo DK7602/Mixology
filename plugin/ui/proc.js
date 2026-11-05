@@ -70,6 +70,7 @@ export function createProc(app) {
       }
       if (!flushTimer) flushTimer = setTimeout(flush, 30);
       api.emit("values");
+      api.emit("touch");   // you moved it (not the plug-in's echo)
     },
     toggle(mod) { api.set(MODULE_ON[mod], api.switchedOn(mod) ? 0 : 1, { autoOn: false }); },
     /** Every control of a module back to its starting point (its on / off switch stays as it is). */
