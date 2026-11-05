@@ -42,6 +42,7 @@ fix):
 | Mono Check (Stereo page) | Live |
 | Space page: reverbs, delay, chorus, phaser, special effects on a track or an FX channel (up to three at once), ducking | Live |
 | Polish (and Auto Mix): EQ, compression, vocal reverb / delay and the mix's tone proposed for you | Live |
+| AUTO on the EQ, Dynamics, Space, Tone and Stereo pages: one track, straight away, one Undo; the Beat role | New: tested in the engine and the browser preview, not yet in a DAW |
 | Master page's finishing knobs (Glue, Tilt, Width, Trim on the Full Mix) | Live |
 | Suite link: Voxology on your vocals (VOX tag, no second compressor / reverb / delay), Masterology's goal on the Master page, the hand-off to Masterology | Live (needs Voxology 0.52 and Masterology 0.29.3 or newer) |
 | Setup check: a mono group or output on the way, vocals without Mixology Link (Mix Assistant, Tracks page) | Live |
@@ -107,6 +108,8 @@ Mixology remembers your choice.
 - **Tone**: Tone Balance, Loudness, Clip Control, Harmonic, Analog Touch, Final Touch; your mix's tonal balance
   against the style's target (red line), and loudness.
 - **Stereo**: Width (and Low / Mid / High Width), Mono Check, and how wide your mix is.
+- EQ, Dynamics, Space, Tone and Stereo each have an **AUTO** button in their top row: it sets that page for the track
+  you picked, straight away (see "AUTO on a page" below).
 - **Master**: loudness over the last minute, a checklist for handing the mix to Masterology (the peaks and overall
   loudness count from the last time you pressed play), and four finishing
   knobs on the Full Mix (before Masterology): **Glue** (gentle bus compression), **Tilt** (+ brighter, − warmer),
@@ -352,6 +355,17 @@ its own ("Verse 1", "Hook") counts as a vocal. Click a strip's icon on the Track
 yourself, or to **leave a track out of Analyze Mix** (a reference song, a printed stem). Your choices are saved
 with the project and the advice updates straight away, without listening again.
 
+**Beat (whole)** is the role for a whole instrumental on one track (a two-track beat you sing over, common in hip hop,
+R&B and pop): kick, snare, 808 and the rest already mixed together. Mixology finds it by name ("Beat", "Instrumental",
+"Inst", "2-Track", "Riddim", "Backing Track", "Music", "Prod. by ..."; not "Beatbox", "Beat Vox" or Logic's "Inst 1")
+and by sound (lows, mids and highs all at once, through most of the song). A track where Voxology runs in **Beat
+mode** is a Beat too (unless you set its role yourself). On the Tracks page it has a note icon in violet; in the
+analyzer it counts with the instruments. What changes for a Beat: Balance sets the vocal against it (the music) but
+doesn't judge the instruments on top of it against each other (it can't hear the beat's own kick or 808); Stereo
+Architect keeps it in the middle and never pairs it; Clean Up never cuts its low end; Vocal Pocket can dip it where it
+covers the words; Polish and AUTO treat it like a finished mix (its tone against your style, at most a gentle glue,
+no reverb on top, its low end in the middle). Roles saved before this version load as they were.
+
 ## The smart tools (left of the analyzer)
 
 Every tool works from the last **Analyze Mix**, so analyze first (and again after big changes). Fader moves since
@@ -412,14 +426,24 @@ list: every change it wants to make, **now → new**, and why, in plain words. U
   Mixology heard a track with its dip already in and it still covers the words, the dip goes a little deeper (at
   most 6 dB; past that, turn the track down or pan it instead). A dip made since Mixology listened counts as done; a
 dip outside 1.6 - 4 kHz (e.g. at 5 kHz, from Mixology before 0.16) doesn't count: Vocal Pocket moves it.
-- **Polish**: processing in each track's Mixology Link, worked out from what Analyze Mix heard:
-  - **EQ**: a dull lead vocal gets a little presence (around 3.5 kHz) and, if it has little air, a gentle high
-    shelf; a harsh one a narrow dip; a boxy kick a dip around 300 - 500 Hz. Gentle moves (at most 3 dB), in an EQ
-    band that's free (or the one already doing that job: it's adjusted, never doubled).
-  - **Compressor**: where a vocal or the bass swings a lot in level between loud and quiet parts (about 4 dB off
-    the loud parts). A track that is even already (Voxology on the vocal, for example) or that has a compressor
-    switched on is left alone.
-  - **Low end in the middle**: a stereo kick or 808 whose lows are spread gets them centred (Stereo, Low Width 0 %).
+- **Polish**: processing in each track's Mixology Link, worked out from what Analyze Mix heard. Every kind of track
+  gets the same rules as the **AUTO** buttons on the processing pages (the table in "AUTO on a page" below), so Polish
+  after AUTO, or AUTO after Polish, finds nothing more to do. A track that fits gets nothing.
+  - **EQ**: a low cut where there is rumble the track doesn't need, a dip where it is muddy (250 - 500 Hz) or boxy
+    (kick, snare), a harsh spot softened, a dull lead vocal's presence (around 3.5 kHz) and air, a dull snare's crack.
+    Small moves (usually 1.5 - 4 dB, never more than 6), in an EQ band that's free (or the one already doing that job:
+    it's adjusted, never doubled).
+  - **Tone Balance** on a track: a dull or sharp top, a boomy low end, a broad tilt of at most about 3 dB. Polish
+    makes each fix once: on the EQ or on Tone Balance, never both.
+  - **Compressor**: where a vocal, the bass, keys, guitars or synths swing a lot in level between loud and quiet parts
+    (about 4 dB off the loud parts); at most a gentle glue (1.5:1) on a whole beat. A track that is even already
+    (Voxology on the vocal, for example) or that has a compressor switched on is left alone. **Multiband** for a bass
+    whose low end jumps from note to note; the **Transient** shaper on a kick or snare whose hits are squashed or very
+    spiky; a **gate** (drums) or gentle **expander** (vocals, guitars) only where Analyze Mix heard a steady noise
+    floor between the phrases.
+  - **Width**: a stereo kick, 808 or beat whose lows are spread gets them centred (Stereo, Low Width 0 %); a narrow
+    stereo keys, synth, guitar or backing vocal a little wider (up to 140 %); a very wide track that falls apart in
+    mono a little narrower (85 %).
   - **Space**: a reverb for the lead vocal. If you have an FX channel with Mixology Link (named like "FX 1-...",
     "Verb", "Delay"...), it goes there, 100 % wet, ducking under the vocal; send the vocal to it in Cubase at 0 dB
     (the list reminds you). Its **LEVEL** is set so the reverb sits where your style wants it under the vocal (about
@@ -427,13 +451,16 @@ dip outside 1.6 - 4 kHz (e.g. at 5 kHz, from Mixology before 0.16) doesn't count
     goes in and allows for it. If a reverb on an FX channel is already there, Polish checks its level and offers to
     turn it down (or up) when it's more than 3 dB off. When the vocal needs no EQ, the list says why ("already
     sounds balanced"). Without one, a little plate on the vocal itself (12 %). Hip hop, trap, R&B: a short plate;
-    gospel, worship, cinematic: a hall. Ad-libs get a ping-pong delay (in the urban and pop styles). Effects you
+    gospel, worship, cinematic: a hall. Ad-libs get a ping-pong delay (in the urban and pop styles). Snare, keys, guitars, synths and
+    percussion get a small room, plate or hall by your style (trap stays dry, hip hop nearly dry, rock rooms,
+    gospel / worship halls); kick, bass, hats and a whole beat stay dry. Effects you
     set up yourself are left alone (the notes name them, all of a track's layers), and a track playing two reverb
     types at once gets a tip: stacking two spaces can wash the sound out.
   - **The mix's tone**: when the whole mix is clearly short of (or has too much) low end, presence or air against
     your style, a gentle Tone Balance on the Full Mix.
   Apply and open it again: it finds nothing more to do. Undo puts every setting back.
-- **Auto Mix**: all of the above together (levels, pans, Clean Up, Vocal Pocket and Polish).
+- **Auto Mix**: all of the above together (levels, pans, Clean Up, Vocal Pocket and Polish). Clean Up and Vocal Pocket
+  count what a track's EQ already cuts (yours, AUTO's or Polish's): nothing is cut twice.
 - **Reference Match**: put a finished song you like on its own track under yours (same bars), insert Mixology
   Link on it and mute the track (its Link still hears it). Analyze Mix, then pick it in Reference Match. You see
   both tonal curves, five regions in words ("2.4 dB less low end"), loudness and width. **Hear the reference**
@@ -480,6 +507,7 @@ Switching on:
   **ON** button switches it off and on again (a quick before / after).
 - The lamps in the left column show which modules are on for this target (they pulse while they work on the sound).
 - **Reset this module** puts its knobs back where they started.
+- **AUTO** (top row of EQ, Dynamics, Space, Tone and Stereo) sets the page for the picked track: see "AUTO on a page".
 - In a Link window, the **PROCESSING** strip lists what's on for that track; its **On / Off** button switches all
   of that track's processing off at once (a before / after for the whole track).
 - Everything is a normal Cubase parameter of that Link (or of Mixology for the full mix): saved with the project,
@@ -583,6 +611,78 @@ effect uses 0.3 - 2.3 % of one CPU core (Delay the least, Hall the most); layers
 about 1.5 - 2.3 %, three about 2.5 - 4.5 % (Hall + Room + Special FX the most). Every feedback (Shimmer, Drift,
 Delay) always dies away once the sound stops, at any setting, with layers too.
 
+## AUTO on a page (EQ, Dynamics, Space, Tone, Stereo)
+
+Each of the five processing pages has an **AUTO** button in its top row (EQ: next to the status line; Dynamics: left
+of the track list; Space: at the top of the Effect EQ panel; Tone: left of the track list; Stereo: next to ON). Pick a
+track on the page and press **AUTO**: Mixology sets that page's controls for that track, straight away, with the same
+rules Polish and Auto Mix use. Use it while you work on one track; **Auto Mix** on the Overview does the whole mix.
+
+- **One track at a time.** With **Full Mix** picked, AUTO says "Pick a track: AUTO works on one track at a time (Auto
+  Mix on the Overview does the whole mix)." (On the Tone page the button hides while Full Mix is picked.)
+- **Only that page.** AUTO on the EQ page moves only the EQ, on Dynamics only the dynamics, and so on. Faders, pans and
+  the other pages stay as they are.
+- **Straight away, in one line.** The page's line says what it did and what it heard, for example "AUTO: cut mud at
+  315 Hz (-2.5 dB) and opened the top (+2.0 dB air): 'Keys' sounded muddy and dull for Hip Hop - Modern Clean". Move a
+  control yourself and the line steps aside.
+- **Undo** after the line takes back exactly what that AUTO changed. It is one step in the History ("AUTO EQ on
+  'Keys'"): the newest step is undone there (and can be redone); if you changed other things since, only the controls
+  still as AUTO left them go back, as a step of its own.
+- **Nothing to change** is said too, with the reason: "'Keys' already fits: nothing to change.", "'Lead Vox': Voxology
+  compresses it already, so Mixology adds no second compressor. Nothing to change.", "'Kick': a kick stays dry ...".
+- It works from what **Analyze Mix** heard, so analyze first (Auto Analyze keeps it up to date).
+
+**Same rules as Polish and Auto Mix.** AUTO is not a second opinion: it is Polish's rules for one page of one track.
+Every move starts from how the track was when Analyze Mix listened and counts what the track's other controls doing
+the same job changed since (Tone Balance's Air against an EQ shelf, the Assist EQ's mud dip against an EQ bell). So
+AUTO twice, AUTO then Auto Mix, or Auto Mix then AUTO finds nothing more to do; EQ AUTO and Tone AUTO never make the
+same fix twice; Clean Up and Vocal Pocket never cut what the EQ already cut.
+
+**When Analyze Mix didn't hear the track** (it only plays in a chorus while Analyze Mix heard a verse, or you added it
+since), AUTO listens to it first: the button lights up and breathes, and the line says "Play a part where 'Snare'
+plays: AUTO is listening (3 of 8 s)". Play a part where that track plays: after about 8 seconds of it playing, AUTO
+applies as usual. Press AUTO again to stop listening (nothing changes). It gives up after a minute and a half
+without enough playing, and says so. While Analyze Mix itself is listening, AUTO waits (press it when Analyze Mix has
+finished: it hears that track too). What AUTO heard goes into the advice for that one track (the rest stays as
+Analyze Mix heard it), is saved with the project, and counts for Polish, Auto Mix and the other pages too. Listening
+changes nothing in the mix.
+
+What each page's AUTO does:
+
+- **EQ** (the six bands, not the Assist EQ): a low cut by role where there is rumble (kick, bass and a whole beat only
+  under their lowest notes), mud (250 - 500 Hz heavy for that kind of track and your style), a boxy kick or snare, a
+  harsh spot, a dull or bright top, a boomy low end, a dull vocal's presence and air, a dull snare's crack.
+- **Dynamics** (Gate / Expand, Compressor, Multiband, Transient; never the Limiter): see the table.
+- **Space**: by role and style (the table; in trap everything but the vocals stays dry). On the **lead vocal**, AUTO sets up its reverb on your FX channel with
+  Mixology Link when there is one (100 % wet, ducking under the vocal, its level by your style; the line names the FX
+  channel), so AUTO on the vocal can change that FX channel's Space too. Without one, a little plate on the vocal.
+  AUTO on the FX channel itself does the same.
+- **Tone**: **Tone Balance** only (Warmth, Presence, Air): a broad tilt of at most about 3 dB.
+- **Stereo**: the track's Width module: the lows of a stereo kick, bass or beat in the middle, a narrow stereo track a
+  little wider, a very wide one that falls apart in mono a little narrower.
+
+Every kind of track (the moves happen only when Mixology heard the problem; a track that fits gets nothing):
+
+| Track | EQ | Dynamics | Space | Tone | Stereo |
+| --- | --- | --- | --- | --- | --- |
+| Kick | Low cut 30 Hz for rumble under its notes; box dip (315 - 500 Hz) | Transient (squashed or spiky hits); gate where noise sits between hits | Dry | Nothing (its tone is EQ and Transient) | Lows in the middle |
+| Snare | Low cut 70 Hz; box dip (400 - 800 Hz); a harsh peak; crack (3.5 kHz) when dull | Transient; gate | Plate or room by style (hip hop 6 %, rock a room 14 %) | Crack (Presence) when dull | Narrower if very wide |
+| Hats | Low cut 250 Hz; a harsh peak | Nothing | Dry | Air when dull | Narrower if very wide |
+| Percussion | Low cut 120 Hz; mud; a harsh peak; top; boom | Gate | A small room (dry in hip hop, R&B, pop, electronic, trap) | Top, boom | Narrower if very wide |
+| Bass / 808 | Low cut 25 Hz for rumble under its notes; mud | Compressor (4:1) or Multiband when the lows jump | Dry | Nothing (its tone is its notes) | Lows in the middle |
+| Keys, Guitar, Synth | Low cut (keys / synth 50 Hz, guitar 80 Hz); mud; a harsh peak; top; boom | Compressor (2.5:1); expander on guitar where noise | Room, plate or hall by style (synths dry in hip hop) | Top, boom | Wider if narrow, narrower if very wide |
+| Lead vocal | Low cut 90 Hz; harsh dip; presence and air when dull | Compressor (3:1); expander where noise | Its reverb (FX channel, or a little plate) | Presence, Air when dull | Never widened |
+| Ad-libs | Low cut 100 Hz; mud; a harsh peak | Compressor (3:1); expander | Ping-pong delay 1/8 (urban, pop, electronic) | Nothing | Wider if narrow |
+| Beat (whole) | Low cut 25 Hz for rumble under its notes; mud against your style | A gentle glue (1.5:1) at most | Dry (it comes mixed) | Top and low end against your style | Lows in the middle |
+| FX return | Left to you | Left to you | The lead vocal's reverb | Left to you | Left to you |
+| Other | Low cut 60 Hz; mud; a harsh peak; top; boom | Nothing | Nothing (set its role) | Top, boom | Wider if narrow, narrower if very wide |
+
+**What AUTO never does**: work on the Full Mix or the Master page (that's Masterology's job); move faders or pans
+(Balance and Stereo Architect do the whole mix's); switch on the Limiter on a track; touch Harmonic, Analog Touch,
+Clip Control, Loudness or Final Touch (taste, yours); fight Voxology (a vocal where Voxology does the EQ, compression,
+reverb or delay keeps those, and the line says so); add a second compressor, gate, transient shaper or Space to one
+you set up yourself (yours stays as it is); widen a lead vocal or a mono track; touch a protected track (padlock).
+
 ## Mix styles
 
 The style in the header (for example "Hip Hop - Modern Clean") is what Mixology aims for. Click it (or **Mix
@@ -653,6 +753,7 @@ first, with the time. A step is one thing you did in Mixology:
 - a preset loaded, Space ducking set;
 - Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect (each one step, with every fader, pan, Assist EQ
   and control it changed), and their own Undo;
+- AUTO on a page ("AUTO EQ on 'Keys'": one step with every control it set), and its Undo;
 - Restore (one channel, or Restore all).
 
 Click a step to see each change ("'Kick' fader −3.2 → −5.0 dB"). Then:
