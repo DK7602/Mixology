@@ -50,6 +50,8 @@ sends higher-resolution art, re-run it.
 - Tone wording: a top / low end under its mids read "-0.7 dB over its mids": now "only 0.7 dB under its mids:
   bright for guitars" (overUnder).
 - The user is fine with Auto Mix keeping its tick list (only the page AUTO buttons apply straight away).
+- v0.25.1 CI green: run 42080478948 (957a7f1). Beta 12 suite installers: run 42080488068, label "Beta 12", version
+  0.12.0 (Mixology 0.25.1, Voxology 0.53.0, Masterology 0.30.1), both installers in attempt 1.
 
 ## v0.25.0: per-track AUTO buttons and the Beat role (2026-11-05, session "Mixology audit")
 - Agreed with the user (2026-11-05) after they tested 0.23's fixes in Cubase. One AUTO button on the EQ, Dynamics,
