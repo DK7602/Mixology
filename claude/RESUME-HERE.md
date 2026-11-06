@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-11-05, v0.25.1)
+# Mixology: resume here (updated 2026-11-06, v0.25.2)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,19 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## v0.25.2: mud that Clean Up couldn't finish (2026-11-06, session "Mixology audit")
+- User's Rock - Indie song stayed 5.7 dB over the style in 200 - 500 Hz after Auto Mix (carriers: 'Chorus Vox',
+  'Verse Vox', 'Guitar - Verses'; NOT the bass). Clean Up's mud dips were 1.5 - 4 dB on the top 3 and never went deeper,
+  so Auto Mix had nothing left and the point said "worth fixing" for ever. Agreed fix (user said go):
+  - heard with its mud dip and still muddy: deeper by step = clamp(dev * 0.4, 1, 2) dB at the same frequency, up to
+    kMaxMudDb 6 (instruments) / kMaxMudVocalDb 4 (vox, adlibs); a dip made since counts as done.
+  - 5 carriers instead of 3 when dev >= 4 dB.
+  - all at the limit: a plan note says what's left, Plan::atLimit["mud"] (only when no dips proposed) -> BridgeHub
+    DonePoint::limit -> suggestion "limit" -> Overview card "Mixology has done what it can: click for the rest", the
+    sheet's label "Mixology has done what it can" + a "What's left." card (sheets.js). mock.js has such a mud point.
+  - Test "Plans: Clean Up's mud dips go deeper while the mix stays muddy, then say what's left". 233 ctest.
+- Same day: Honey Tune audit started in Voxology (the user's wobbly chorus vocal: "nothing helped"): see Voxology's notes.
 
 ## v0.25.1: the user's Auto Mix screenshots (2026-11-05, session "Mixology audit")
 - NOW -> NEW ran into WHY in the tool sheets (a dip's "-2.0 dB at 1.59 kHz -> -6.0 dB at 1.59 kHz" was nowrap): it

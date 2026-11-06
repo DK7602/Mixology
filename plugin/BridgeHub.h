@@ -285,7 +285,7 @@ private:
     void guessAssistAtAnalysis();
     // The Mix Assistant's points the smart tools already fixed since Mixology listened (their tool has nothing
     // left to do and their tracks changed): worked out at most twice a second.
-    struct DonePoint { bool done = false; std::string what; };
+    struct DonePoint { bool done = false; std::string what; std::string limit; };   // limit: the tool is at its limit, what's left by hand
     std::map<std::string, DonePoint> donePoints;
     std::string doneShown;              // what the interface was told last
     std::uint64_t doneVersion = 0;

@@ -86,6 +86,9 @@
           tool: "pocket", ...(B.pocketDone ? { done: true, doneWhat: "'Keys' Assist EQ, 'Snare' Assist EQ" } : {}) },
         { tool: "clean", ...sg("highpass", "info", "lowcut", "Low rumble in tracks that don't need it", "'Adlibs' has a lot of energy in the lowest lows. It adds mud and fights the kick and bass without being heard as part of the sound.",
           "Usually yes: it's free headroom and a cleaner low end.", ["Put a low cut (high-pass) on it: about 80 - 100 Hz for vocals, 60 - 80 Hz for guitars, 40 - 50 Hz for keys and synths."], ["Adlibs"]) },
+        { tool: "clean", limit: "Clean Up's mud dips are at their limit on 'Keys' and 'Pad' (vocals 4 dB, instruments 6 dB) and the mix still has 5.7 dB more 200 - 500 Hz than Hip Hop - Modern Clean. The rest is in those tracks' own sound: on a vocal, Voxology's Tone EQ (or a little more distance from the mic next time you record); on an instrument, AUTO on its EQ page, or a little less of it in the mix.",
+          ...sg("mud", "warn", "freq", "Muddy low mids (200 - 500 Hz)", "The mix has 5.7 dB more 200 - 500 Hz than Hip Hop - Modern Clean usually does. Too much there sounds boxy and cloudy.",
+          "Yes: it clouds everything else.", ["The most in that range: 'Keys' and 'Pad'.", "Dip them 2 - 3 dB around 300 Hz (a wide EQ bell), starting with the ones that aren't bass instruments."], ["Keys", "Pad"]) },
         sg("unheard", "info", "link", "5 channels without Mixology Link", "'Perc', 'Synth', 'Guitar' and 'FX' and 1 more play in your mix, but Mixology can't hear them one by one, so the advice below leaves them out.",
           "Only if those tracks matter for the balance (they usually do).", ["Insert Mixology Link on each of them, after their other plug-ins, then Analyze Mix again."], ["Perc", "Synth", "Guitar", "FX"]),
         Object.keys(B.vocalOwn).length

@@ -5,6 +5,7 @@
 #include "mixology/ProcParams.h"
 
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -171,6 +172,9 @@ namespace mixology::mix
         std::optional<Change> headroomChange;   // the Full Mix change it makes (Final Touch on, its Output)
 
         std::vector<std::string> groupHints;   // channels that look like a group the tracks play through (ask: music group?)
+        /** Mix Assistant points (by id, e.g. "mud") this plan can't do more for: its fixes are in at their limit and the
+            problem is still there. What's left, by hand. */
+        std::map<std::string, std::string> atLimit;
 
         /** AUTO (makeTrackPlan): one plain line, what it changed and why ("AUTO: cut 3 dB of mud at 300 Hz: 'Keys'
             sounded muddy for Pop - Modern"), or why nothing ("'Kick' already fits: nothing to change"). */

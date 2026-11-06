@@ -289,7 +289,7 @@ export function buildOverview(root, app) {
     const report = b.analysis && b.analysis.report;
     const useReport = report && !showLive;
     const setup = b.setup || [];
-    const key = JSON.stringify(setup.map((x) => x.id + x.title)) + "|" + (useReport ? "r|" + JSON.stringify(report.suggestions.map((x) => x.id + x.kind + x.title + (x.done ? "|done" : ""))) + report.seconds + report.style + (b.analysis.auto && b.analysis.auto.on ? b.analysis.auto.updated : "") + (b.analysis.fromProject ? "|p" : "")
+    const key = JSON.stringify(setup.map((x) => x.id + x.title)) + "|" + (useReport ? "r|" + JSON.stringify(report.suggestions.map((x) => x.id + x.kind + x.title + (x.done ? "|done" : "") + (x.limit ? "|limit" : ""))) + report.seconds + report.style + (b.analysis.auto && b.analysis.auto.on ? b.analysis.auto.updated : "") + (b.analysis.fromProject ? "|p" : "")
       : [b.link, (b.slots || []).filter((s) => s.present).length, b.linksPaired, b.linksSeen, st > -70, tp > -70 ? (tp > -1 ? 2 : tp > -3 ? 1 : 0) : -1, !!report, !!(b.analysis && b.analysis.auto && b.analysis.auto.on), app.daw].join("|"));
     if (key === lastKey) { if (live) live(st, tp); return; }
     lastKey = key;
@@ -316,8 +316,9 @@ export function buildOverview(root, app) {
         : `From Analyze Mix (${Math.round(report.seconds)} s heard):`;
       // Points a smart tool already fixed since Mixology listened go last, ticked, until it hears the mix again.
       const open = report.suggestions.filter((x) => !x.done), done = report.suggestions.filter((x) => x.done);
+      // A point whose tool is at its limit (Clean Up's mud dips all in) says so: the rest is by hand.
       for (const sg of open)
-        card(sg.icon, KIND[sg.kind] || KIND.info, sg.title, sg.need, () => openSuggestion(app, sg));
+        card(sg.icon, KIND[sg.kind] || KIND.info, sg.title, sg.limit ? "Mixology has done what it can: click for the rest" : sg.need, () => openSuggestion(app, sg));
       for (const sg of done)
         card("check", KIND.calm, sg.title, "Done since Mixology listened: play the song to check it", () => openSuggestion(app, sg)).style.opacity = "0.75";
       return;

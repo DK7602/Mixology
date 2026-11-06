@@ -1170,6 +1170,66 @@ TEST_CASE ("Plans: Clean Up cuts rumble and dips mud, never the kick", "[plan]")
     CHECK (noted (p2, "'Pad' has no Mixology Link"));
 }
 
+TEST_CASE ("Plans: Clean Up's mud dips go deeper while the mix stays muddy, then say what's left", "[plan]")
+{
+    // A very muddy mix (a user's Rock - Indie song was 5.7 dB over): the dips in, heard again, still muddy. Before,
+    // Clean Up had nothing more to offer and the Mix Assistant kept saying "worth fixing" with no way forward.
+    auto muddyPad = shaped ([] (int b) { return bump (b, 12, 2.5, -6.0); }, 5.0, 0.3);
+    auto muddyVox = shaped ([] (int b) { return std::max (bump (b, 19, 4.0, -14.0), bump (b, 12, 2.0, -9.0)); }, 10.0, 0.02);
+    auto tracks = [=] (int) { return std::vector<TrackSample> {
+        sample ("Kick", kickFrame()), sample ("Lead Vox", muddyVox), sample ("Pad", muddyPad) }; };
+    const auto r = listen (tracks).evaluate ({});
+    auto chans = channelsOf (tracks (0));
+    const auto first = makePlan (Tool::cleanUp, r, chans);
+    const auto* padDip = change (first, "Pad", "mud");
+    REQUIRE (padDip != nullptr);
+    const double firstDepth = padDip->to, hz = padDip->hz;
+    auto& pad = *std::find_if (chans.begin(), chans.end(), [] (const ChannelNow& c) { return c.name == "Pad"; });
+    auto& vox = *std::find_if (chans.begin(), chans.end(), [] (const ChannelNow& c) { return c.name == "Lead Vox"; });
+
+    SECTION ("heard with its dip and still muddy: deeper, at the same frequency")
+    {
+        pad.assistAtAnalysisKnown = true;
+        pad.assistAtAnalysis.mudDb = static_cast<float> (firstDepth);
+        pad.assistAtAnalysis.mudHz = static_cast<float> (hz);
+        pad.assist = pad.assistAtAnalysis;
+        const auto again = makePlan (Tool::cleanUp, r, chans);
+        const auto* deeper = change (again, "Pad", "mud");
+        REQUIRE (deeper != nullptr);
+        CHECK (deeper->to < firstDepth - 0.75);
+        CHECK (deeper->to >= -6.0);
+        CHECK (deeper->hz == Catch::Approx (hz));
+        CHECK (deeper->why.find ("already has") != std::string::npos);
+        // Applied: nothing more until Mixology hears it again.
+        pad.assist.mudDb = static_cast<float> (deeper->to);
+        CHECK (change (makePlan (Tool::cleanUp, r, chans), "Pad", "mud") == nullptr);
+    }
+    SECTION ("at their limit (6 dB, a vocal 4 dB) and still muddy: a note says what's left, the point knows")
+    {
+        pad.assistAtAnalysisKnown = vox.assistAtAnalysisKnown = true;
+        pad.assistAtAnalysis.mudDb = -6.0f;
+        pad.assistAtAnalysis.mudHz = static_cast<float> (hz);
+        pad.assist = pad.assistAtAnalysis;
+        vox.assistAtAnalysis.mudDb = -4.0f;
+        vox.assistAtAnalysis.mudHz = static_cast<float> (hz);
+        vox.assist = vox.assistAtAnalysis;
+        const auto limit = makePlan (Tool::cleanUp, r, chans);
+        CHECK (change (limit, "Pad", "mud") == nullptr);
+        CHECK (change (limit, "Lead Vox", "mud") == nullptr);   // a vocal stops at 4 dB
+        CHECK (noted (limit, "at their limit"));
+        REQUIRE (limit.atLimit.count ("mud") == 1);
+        CHECK (limit.atLimit.at ("mud").find ("Voxology's Tone EQ") != std::string::npos);
+        // A vocal heard with a 3 dB dip: one more step, never past 4.
+        vox.assistAtAnalysis.mudDb = -3.0f;
+        vox.assist = vox.assistAtAnalysis;
+        const auto step = makePlan (Tool::cleanUp, r, chans);
+        const auto* v = change (step, "Lead Vox", "mud");
+        REQUIRE (v != nullptr);
+        CHECK (v->to >= -4.0);
+        CHECK (v->to < -3.25);
+    }
+}
+
 TEST_CASE ("Plans: Vocal Pocket dips what covers the vocal's words", "[plan]")
 {
     auto tracks = [] (int) { return std::vector<TrackSample> {

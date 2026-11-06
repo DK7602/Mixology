@@ -990,11 +990,15 @@ void BridgeHub::updateDonePoints()
             DonePoint d;
             d.what = changedSinceAnalysis (sg.tracks, levels, levels);
             d.done = ! d.what.empty();
-            if (d.done) found[sg.id] = d;
+            // Not changed since, and the tool's fixes are in at their limit (Clean Up's mud dips): Mixology has done
+            // what it can, the point says what's left by hand (not "worth fixing" for ever).
+            if (! d.done)
+                if (const auto lim = p.atLimit.find (sg.id); lim != p.atLimit.end()) d.limit = lim->second;
+            if (d.done || ! d.limit.empty()) found[sg.id] = d;
         }
     }
     std::string key;
-    for (const auto& [id, d] : found) key += id + ":" + d.what + ";";
+    for (const auto& [id, d] : found) key += id + ":" + d.what + "|" + d.limit + ";";
     donePoints = std::move (found);
     if (key != doneShown)
     {
@@ -1846,11 +1850,13 @@ juce::var BridgeHub::analysisState() const
             if (auto* so = v.getDynamicObject())
             {
                 so->setProperty ("tool", juce::String (toolForPoint (sg.id)));   // the smart tool that fixes it
-                if (auto it = donePoints.find (sg.id); it != donePoints.end())
+                if (auto it = donePoints.find (sg.id); it != donePoints.end() && it->second.done)
                 {
                     so->setProperty ("done", true);   // ... and it did, since Mixology listened
                     so->setProperty ("doneWhat", juce::String::fromUTF8 (it->second.what.c_str()));
                 }
+                else if (it != donePoints.end() && ! it->second.limit.empty())
+                    so->setProperty ("limit", juce::String::fromUTF8 (it->second.limit.c_str()));   // ... as far as it can
             }
             sugs.add (v);
         }

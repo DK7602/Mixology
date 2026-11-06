@@ -565,7 +565,8 @@ export function openSuggestion(app, sg, opts = {}) {
   const body = sheet("MIX ASSISTANT");
   const me = sheetNow();
   body.className = "scroll";
-  const [colour, kindLabel] = sg.done ? [KIND.calm[0], "Done: play the song to check"] : KIND[sg.kind] || KIND.info;
+  const [colour, kindLabel] = sg.done ? [KIND.calm[0], "Done: play the song to check"]
+    : sg.limit ? [(KIND[sg.kind] || KIND.info)[0], "Mixology has done what it can"] : KIND[sg.kind] || KIND.info;
   const head = el("div", "", body, { display: "flex", alignItems: "center", gap: "16px", marginBottom: "12px" });
   head.innerHTML = `<span style="width:54px;height:54px;flex:none;color:${colour};filter:drop-shadow(0 0 6px ${colour})">${icon(sg.icon)}</span>
     <span><span style="display:block;font-size:30px;font-weight:600">${esc(sg.title)}</span>
@@ -577,6 +578,11 @@ export function openSuggestion(app, sg, opts = {}) {
     const done = el("div", "card", body, { position: "relative", padding: "14px 18px 14px 58px", marginBottom: "16px", fontSize: "19px", lineHeight: "1.45", borderColor: KIND.calm[0] });
     done.innerHTML = `<div style="position:absolute;left:16px;top:14px;width:28px;height:28px;color:${KIND.calm[0]}">${icon("check")}</div>
       <b style="color:${KIND.calm[0]}">Done since Mixology listened.</b> Changed: ${esc(sg.doneWhat)}. This point is about the mix as it was before: Mixology checks it again when it hears the song (Auto Analyze while it plays, or Analyze Mix), and it goes when it's fixed.`;
+  }
+  if (sg.limit) {
+    // Its tool's fixes are in at their limit and it's still there: what's left, by hand.
+    const lim = el("div", "card", body, { position: "relative", padding: "14px 18px", marginBottom: "16px", fontSize: "19px", lineHeight: "1.45", borderColor: colour });
+    lim.innerHTML = `<b style="color:var(--gold)">What's left.</b> ${esc(sg.limit)}`;
   }
   const need = el("div", "card", body, { position: "relative", padding: "14px 18px", marginBottom: "16px", fontSize: "20px", lineHeight: "1.45", borderColor: colour });
   need.innerHTML = `<b style="color:var(--gold)">Do I need to fix it?</b> ${esc(sg.need)}`;

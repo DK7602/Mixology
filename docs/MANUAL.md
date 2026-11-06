@@ -3,7 +3,7 @@
 Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list all three are under Sonicology.
 
-Manual for version 0.25.1 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
+Manual for version 0.25.2 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -422,7 +422,12 @@ list: every change it wants to make, **now → new**, and why, in plain words. U
   Combined Panner show one side only, e.g. "L100" on a full-width track), it leaves the pans alone and says so.
 - **Clean Up**: Assist EQ. Low cuts on tracks with rumble they don't need (on vocals about 90 Hz; on keys and synths
   50 Hz, and only for rumble below about 45 Hz: their low notes are part of the sound), and mud
-  dips (200 - 500 Hz) on the tracks carrying it when the mix is muddier than your style.
+  dips (200 - 500 Hz) on the tracks carrying it when the mix is muddier than your style: the three carrying the most,
+  five when the mix is 4 dB or more muddier than your style. When Mixology hears the mix with those dips in and it is
+  still muddy, they go deeper (1 - 2 dB at a time, at the same frequency), up to 6 dB on an instrument and 4 dB on a
+  vocal (it keeps its body). Once they're all at that limit, Clean Up says what's left, and the Mix Assistant's point
+  says **Mixology has done what it can** with the rest to do by hand (a vocal's own boominess: Voxology's Tone EQ,
+  or a little more distance from the mic next time you record).
 - **Vocal Pocket**: Assist EQ. Gentle dips (2 - 4 dB) at 1.6 - 4 kHz in the instruments that cover the vocal's
   words, each where it overlaps the vocal most (always inside 1.6 - 4 kHz, the range the advice measures). When
   Mixology heard a track with its dip already in and it still covers the words, the dip goes a little deeper (at

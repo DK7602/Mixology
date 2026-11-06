@@ -1046,6 +1046,9 @@ namespace mixology::mix
             return ch;
         }
 
+        constexpr double kMaxMudDb = 6.0;        // a mud dip at most (deeper takes the instrument's warmth away) ...
+        constexpr double kMaxMudVocalDb = 4.0;   // ... and on a vocal (its body)
+
         std::string planCleanUp (const Report& r, const Lookup& look, Plan& plan)
         {
             int cuts = 0, dips = 0;
@@ -1105,19 +1108,37 @@ namespace mixology::mix
                     // Bass instruments only when nothing else carries the mud.
                     const bool othersCarry = std::any_of (v.begin(), v.end(), [&] (auto& p) { return p.second->role != Role::bass && p.first > 0.25 * v.front().first; });
                     const double depth = std::clamp (std::round (dev * 0.7 * 2.0) / 2.0, 1.5, 4.0);
+                    // A big excess reaches more of the tracks carrying it (the three biggest alone couldn't close it).
+                    const int slots = dev >= 4.0 ? 5 : 3;
+                    // Still muddy with its dip in (Analyze Mix heard it): that much deeper, more when the excess is big.
+                    const double step = std::clamp (std::round (dev * 0.4 * 2.0) / 2.0, 1.0, 2.0);
+                    auto mudIn = [] (const AssistSettings& a) { return a.mudDb < -0.05f && a.mudHz >= 150.0f && a.mudHz <= 600.0f; };
+                    std::vector<std::string> atLimit;
                     int taken = 0;
                     for (const auto& [e, t] : v)
                     {
-                        if (taken >= 3 || e < 0.1 * v.front().first) break;
+                        if (taken >= slots || e < 0.1 * v.front().first) break;
                         if (othersCarry && t->role == Role::bass) continue;
                         const double d = std::max (1.0, std::round (depth * (taken == 0 ? 1.0 : taken == 1 ? 0.8 : 0.6) * 2.0) / 2.0);
                         ++taken;
                         const auto* ch = eqChannel (*t, look, plan, "mud dip");
                         if (ch == nullptr) continue;
-                        if (ch->assist.mudDb <= -d + 0.25) continue;
                         // Its EQ page cuts its mud since Analyze Mix listened (AUTO, or you): that track's mud is dealt with,
                         // never cut twice.
                         if (ch->hasProc && eqCutSince (ch->proc, atAnalysis (*ch), Job::mud) <= -1.5) continue;
+                        // The dip Analyze Mix heard it with: the mix still muddy with it in, a deeper one (as Vocal Pocket's).
+                        // A dip made since Mixology listened counts as done. Vocals keep their body: at most 4 dB there.
+                        const bool vocal = t->role == Role::vox || t->role == Role::adlibs;
+                        const double cap = vocal ? kMaxMudVocalDb : kMaxMudDb;
+                        const auto& heard = ch->assistAtAnalysisKnown ? ch->assistAtAnalysis : ch->assist;
+                        const double heardDip = mudIn (heard) ? static_cast<double> (heard.mudDb) : 0.0;
+                        if (heardDip <= -cap + 0.25)
+                        {
+                            atLimit.push_back (t->name);
+                            continue;
+                        }
+                        const double want = std::max (-cap, heardDip < -0.05 ? heardDip - step : -d);
+                        if (mudIn (ch->assist) && ch->assist.mudDb <= want + 0.25) continue;   // in already
                         Change c;
                         c.hash = ch->hash;
                         c.name = t->name;
@@ -1125,13 +1146,25 @@ namespace mixology::mix
                         c.kind = "mud";
                         c.from = ch->assist.mudDb;
                         c.fromHz = ch->assist.mudHz;
-                        c.to = c.wanted = -d;
+                        c.to = c.wanted = want;
                         // A mud dip it already has stays where it is, only deeper (as Vocal Pocket's): once it is in, the
                         // mix's worst band moves, and following it would take the old cut away.
-                        c.hz = ch->assist.mudDb < -0.05f && ch->assist.mudHz >= 150.0f && ch->assist.mudHz <= 600.0f ? static_cast<double> (ch->assist.mudHz) : hz;
-                        c.why = "the mix has " + fmt1 (dev) + " dB more 200 - 500 Hz than " + r.style.name + " usually does; this is one of the tracks carrying it";
+                        c.hz = mudIn (ch->assist) ? static_cast<double> (ch->assist.mudHz) : mudIn (heard) ? static_cast<double> (heard.mudHz) : hz;
+                        c.why = "the mix has " + fmt1 (dev) + " dB more 200 - 500 Hz than " + r.style.name + " usually does; this is one of the tracks carrying it"
+                                + (heardDip < -0.05 ? " (with the " + fmt1 (-heardDip) + " dB dip it already has: a deeper one)" : "");
                         plan.changes.push_back (c);
                         ++dips;
+                    }
+                    // Dips at their limit and the mix still muddy: what's left is in those tracks' own sound. Said once, and
+                    // the Mix Assistant's point says Mixology has done what it can (instead of "worth fixing" for ever).
+                    if (! atLimit.empty())
+                    {
+                        const std::string left = "Clean Up's mud dips are at their limit on " + joinNames (atLimit) + " (vocals 4 dB, instruments 6 dB) and the mix still has "
+                                                 + fmt1 (dev) + " dB more 200 - 500 Hz than " + r.style.name + ". The rest is in those tracks' own sound: on a vocal, "
+                                                   "Voxology's Tone EQ (or a little more distance from the mic next time you record); on an instrument, AUTO on its "
+                                                   "EQ page, or a little less of it in the mix.";
+                        plan.notes.push_back (left);
+                        if (dips == 0) plan.atLimit["mud"] = left;
                     }
                 }
             }
