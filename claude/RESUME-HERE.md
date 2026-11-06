@@ -46,7 +46,10 @@ sends higher-resolution art, re-run it.
     DonePoint::limit -> suggestion "limit" -> Overview card "Mixology has done what it can: click for the rest", the
     sheet's label "Mixology has done what it can" + a "What's left." card (sheets.js). mock.js has such a mud point.
   - Test "Plans: Clean Up's mud dips go deeper while the mix stays muddy, then say what's left". 233 ctest.
-- Same day: Honey Tune audit started in Voxology (the user's wobbly chorus vocal: "nothing helped"): see Voxology's notes.
+- Same day: Honey Tune audit in Voxology (the user's wobbly chorus vocal: "nothing helped"; double tuning with Voxology's
+  Pitch, a key that didn't reach Honey Tune, moving notes keeps their wobble): Voxology 0.54.0, see its notes.
+- v0.25.2 CI green: run 42228520314 (69de8c2). Beta 13 suite installers: run 42238119394, label "Beta 13", version 0.13.0
+  (Mixology 0.25.2, Voxology 0.54.0, Masterology 0.30.1), both installers in attempt 1.
 
 ## v0.25.1: the user's Auto Mix screenshots (2026-11-05, session "Mixology audit")
 - NOW -> NEW ran into WHY in the tool sheets (a dip's "-2.0 dB at 1.59 kHz -> -6.0 dB at 1.59 kHz" was nowrap): it
