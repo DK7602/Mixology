@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-11-06, v0.25.2)
+# Mixology: resume here (updated 2026-11-14, v0.25.2; next: the Sonicology Rack plan)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,16 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## NEXT: Sonicology Rack, stage 1 (planned 2026-11-14, not built; the user says when to start)
+- Plan: docs/rack/RACK-PLAN.md (all stages; stage 1 in detail, build order with approval gates, open questions).
+  The look: docs/rack/concepts/*.png (the user's picked concept art; they will re-share the art files).
+- Decided: the Rack is a VIEW inside all three plug-ins (a RACK button on each current screen, the only change to the
+  locked looks), not a fourth plug-in. Stage 1 = see everything (every Sonicology plug-in's modules per track, how they
+  work together); stage 2 = quick controls; stage 3 = the Coach (runs Auto-Edit / AUTO / Auto-Master, measured numbers).
+- Also verified in Cubase (Beta 13): Voxology's Pitch rests with Honey Tune, Honey Tune's Auto key "F Minor", wobbly
+  notes steady with NOTE DRIFT + NOTE VIBRATO at 0. Still open from Beta 13: the mud point re-check, an Auto Mix list
+  screenshot (Beta 12's three fixes).
 
 ## v0.25.2: mud that Clean Up couldn't finish (2026-11-06, session "Mixology audit")
 - User's Rock - Indie song stayed 5.7 dB over the style in 200 - 500 Hz after Auto Mix (carriers: 'Chorus Vox',
