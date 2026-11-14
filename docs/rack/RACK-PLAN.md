@@ -81,10 +81,10 @@ Tune link). The Rack gets its own block next to them, so nothing the suite alrea
 - **The "together" checks across plug-ins** (two reverbs on one vocal, two tuners, a vocal without a Link, a shared
   track name, room made for Masterology, Masterology's target against the mix) are worked out in `RackLink.cpp`
   (`rack::together (slots)`), so Catch2 tests cover them; the view only shows them.
-- **The art** is rebuilt as CSS and SVG (frames, panels, buttons, toggles, hex cells, knob arcs, meters) with a few
-  images (the crystal logo, the chrome "SONICOLOGY RACK" wordmark, the red / blue header swoosh, the honeycomb texture,
-  the gold knob face). Images at 2x, about 3 MB at most (they're inside every plug-in file). It will look like the
-  concepts, not pixel for pixel: the concepts are AI art at 1448 x 1086.
+- **The art:** the user's art files (`art/`, see "The art files" below) for the logo, wordmark, chrome bars, frame
+  corners, hex cells and knobs; CSS and SVG for the rest (panel bevels, buttons, pills, toggles, knob arcs, meters,
+  graphs, text). Trimmed, sized to 2x and saved as WebP: about 0.5 MB in each plug-in. It will look like the concepts,
+  not pixel for pixel: the concepts are AI art at 1448 x 1086.
 
 ## Stage 1: see everything
 
@@ -203,18 +203,36 @@ Roughly 3 to 5 build sessions, step 1 first.
 
 ## Open questions for the user (before or during step 1)
 
-1. **Art files:** re-share the art. Best are separate pieces at 2x, on transparent backgrounds: the crystal logo; the
-   "SONICOLOGY RACK" wordmark; the red / blue header swoosh (wide); a seamless honeycomb tile; one gold knob seen from
-   the front with no pointer; a hex cell (off, on, picked); a gold frame corner. If only the three screenshots exist,
-   we cut what we need from them.
+1. ~~Art files~~: received 2026-11-14 (`art/`). Nothing else is needed to start; see "The art files" for what is drawn
+   in CSS / SVG instead.
 2. **Later buttons in stage 1:** leave A/B, BYPASS, SAVE CHAIN, ANALYZE out until they work (recommended), or show
    them greyed?
-3. **The subtitle** "MODULAR INTELLIGENT PROCESSING SUITE": keep, or something truer to a view ("YOUR WHOLE SUITE IN
-   ONE VIEW")?
+3. **The subtitle** "MODULAR INTELLIGENT PROCESSING SUITE" (it is part of the lettering art): keep, or something
+   truer to a view ("YOUR WHOLE SUITE IN ONE VIEW")? A new one is cut off the art and set as text in the same style.
 4. **A RACK button on Mixology Link's small window** too (later)?
+
+## The art files (received 2026-11-14, `art/`)
+
+Seven PNGs from the user, real transparency, clean edges (checked on magenta), 1254 x 1254 or 2172 x 724. Originals are
+kept here; step 1 trims them, sizes them to 2x and saves WebP into `plugin/ui/rack/` (shared in all three repos, about
+470 KB together; the plug-ins already show WebP, also on macOS 11).
+
+| File | What it becomes |
+|---|---|
+| `01_sonicology_rack_logo_emblem.png` (crystal cube in gold orbits) | the logo at the top left |
+| `02_sonicology_rack_lettering.png` (chrome SONICOLOGY + red RACK, with the subtitle) | the title; the subtitle line is cut off and set as text if it changes (question 3) |
+| `03_red_blue_header_art.png` (red / blue chrome bar with a dark middle) | the top bar's plate and the bottom meter bar, stretched by its straight middle (CSS border-image) |
+| `04_honeycomb_tile.png` (one cream glass hex in a gold frame) | the honeycomb filler under the lists (tiled in offset rows) and the dim "off" hex |
+| `05_gold_knob.png` (gold knob, blue ring, gold tabs, a pointer) | every knob: cut into a still bezel (tabs and ring) and a turning cap (the disc with the pointer), the value arc drawn in SVG over the blue ring |
+| `06_hex_cell.png` (navy hex, gold frame, red / blue inner glow) | the CHAIN FLOW hexes; "picked" adds the concept's red glow, "off" dims it (CSS) |
+| `07_frame_corner.png` (red / blue chrome over a gold corner) | the panels' corners (mirrored for all four), joined by a gold CSS edge |
+
+Drawn in CSS / SVG (no file needed): the panels' gold bevels and navy glass, buttons and pills, ON toggles, meters,
+graphs, the swooshes behind the top corners (from 03 and 07), text.
 
 ## Files
 
 - `concepts/rack-main.png`, `concepts/rack-modules.png`, `concepts/rack-coach.png`: the picked look (1448 x 1086).
+- `art/`: the user's art files (originals, with their README).
 - `concept-chat-2026-11-13.md`: the earlier concept chat that produced them (its "separate plug-in" plan was
   replaced by this one).

@@ -37,7 +37,8 @@ sends higher-resolution art, re-run it.
 
 ## NEXT: Sonicology Rack, stage 1 (planned 2026-11-14, not built; the user says when to start)
 - Plan: docs/rack/RACK-PLAN.md (all stages; stage 1 in detail, build order with approval gates, open questions).
-  The look: docs/rack/concepts/*.png (the user's picked concept art; they will re-share the art files).
+  The look: docs/rack/concepts/*.png (the user's picked concept art); the user's art files: docs/rack/art/*.png
+  (received 2026-11-14; the plan says what each becomes).
 - Decided: the Rack is a VIEW inside all three plug-ins (a RACK button on each current screen, the only change to the
   locked looks), not a fourth plug-in. Stage 1 = see everything (every Sonicology plug-in's modules per track, how they
   work together); stage 2 = quick controls; stage 3 = the Coach (runs Auto-Edit / AUTO / Auto-Master, measured numbers).
