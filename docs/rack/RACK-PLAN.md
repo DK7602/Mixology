@@ -93,7 +93,7 @@ Tune link). The Rack gets its own block next to them, so nothing the suite alrea
 - **Voxology**: top bar, between REC and the Voxology logo.
 - **Mixology**: a RACK tab after PRESETS (before the gear), the same style as the other tabs.
 - **Masterology**: top bar, next to the gear and ?.
-- Mixology Link's small window and Honey Tune: no button in stage 1 (they show up in the Rack).
+- Mixology Link: a RACK button too, in stage 2 (decided below). Honey Tune: none (it shows up in the Rack).
 
 The Rack opens over the plug-in's own page in the same window; a "BACK TO VOXOLOGY / MIXOLOGY / MASTEROLOGY" button
 returns. The windows differ (Voxology 1280 x 720 and Masterology 1440 x 810, both 16:9; Mixology 1152 x 864, 4:3; all
@@ -102,7 +102,7 @@ resizable, Masterology keeps its 16:9): the view is designed at the concept's 4:
 
 ### Page 1: RACK (concept `rack-main.png`)
 
-- **Top bar:** the logo and wordmark; the **track picker** where the concept has "Trap Vocal Chain" (‹ Lead Vox ›,
+- **Top bar:** the logo and wordmark (subtitle "YOUR WHOLE SUITE IN ONE VIEW", decided below); the **track picker** where the concept has "Trap Vocal Chain" (‹ Lead Vox ›,
   then Full Mix and Master at the end); the page picker (RACK / MODULES; COACH arrives in stage 3); BACK TO ... .
   The concept's A/B, BYPASS, UNDO / REDO, SAVE CHAIN, ANALYZE and power buttons arrive when they work (stages 2 and 3);
   until then that row holds the suite status ("Voxology 3 · Mixology Links 9 · Masterology 1").
@@ -173,6 +173,11 @@ Roughly 3 to 5 build sessions, step 1 first.
 
 ## Stage 2: quick controls (planned, not built)
 
+- **First: a RACK button on Mixology Link's window** (the user said yes, 2026-11-14; when is ours to pick). It opens
+  the Rack straight on that Link's track. Stage 2, not 1, because the Link's window is small (600 x 536): it has to
+  grow to the Rack's size while the Rack is open and shrink back after, which needs testing in Cubase, and stage 1 is
+  complete without it (the three big plug-ins open the Rack).
+
 - **Turn modules on / off and turn their main knobs from the Rack**, in any plug-in on any track. Each plug-in
   publishes its module's controls (name, range, unit, curve), so the shared view draws the gold knobs for any module.
 - **How:** a request queue per slot in RackLink (the way Mixology already asks a Link to change its Assist EQ): the
@@ -201,15 +206,15 @@ Roughly 3 to 5 build sessions, step 1 first.
   (to the RACK page). A project view: what to fix first across tracks (Mixology's Mix Assistant points).
 - Needs stage 2's request queue. Analysis needs playback, as in the plug-ins today.
 
-## Open questions for the user (before or during step 1)
+## The user's answers (2026-11-14): nothing open
 
-1. ~~Art files~~: received 2026-11-14 (`art/`). Nothing else is needed to start; see "The art files" for what is drawn
-   in CSS / SVG instead.
-2. **Later buttons in stage 1:** leave A/B, BYPASS, SAVE CHAIN, ANALYZE out until they work (recommended), or show
-   them greyed?
-3. **The subtitle** "MODULAR INTELLIGENT PROCESSING SUITE" (it is part of the lettering art): keep, or something
-   truer to a view ("YOUR WHOLE SUITE IN ONE VIEW")? A new one is cut off the art and set as text in the same style.
-4. **A RACK button on Mixology Link's small window** too (later)?
+1. **Art files:** received (`art/`). Nothing else is needed to start; "The art files" says what is drawn in CSS / SVG.
+2. **Buttons that work only later** (A/B, BYPASS, UNDO / REDO, SAVE CHAIN, ANALYZE, power): left out until they work,
+   not shown greyed. Stage 1's top bar holds the track picker, the page picker, BACK TO ... and the suite status.
+3. **The subtitle changes** (the user let us pick): **YOUR WHOLE SUITE IN ONE VIEW**, two-tone like the original
+   ("YOUR WHOLE SUITE" in the cyan, "IN ONE VIEW" in the white), letter-spaced the same. The old subtitle line is cut
+   off the lettering art and the new one set as text.
+4. **Mixology Link gets a RACK button too** (the user said yes; when is ours to pick): first thing in stage 2.
 
 ## The art files (received 2026-11-14, `art/`)
 
@@ -220,7 +225,7 @@ kept here; step 1 trims them, sizes them to 2x and saves WebP into `plugin/ui/ra
 | File | What it becomes |
 |---|---|
 | `01_sonicology_rack_logo_emblem.png` (crystal cube in gold orbits) | the logo at the top left |
-| `02_sonicology_rack_lettering.png` (chrome SONICOLOGY + red RACK, with the subtitle) | the title; the subtitle line is cut off and set as text if it changes (question 3) |
+| `02_sonicology_rack_lettering.png` (chrome SONICOLOGY + red RACK, with the subtitle) | the title; its subtitle line is cut off and "YOUR WHOLE SUITE IN ONE VIEW" set as text |
 | `03_red_blue_header_art.png` (red / blue chrome bar with a dark middle) | the top bar's plate and the bottom meter bar, stretched by its straight middle (CSS border-image) |
 | `04_honeycomb_tile.png` (one cream glass hex in a gold frame) | the honeycomb filler under the lists (tiled in offset rows) and the dim "off" hex |
 | `05_gold_knob.png` (gold knob, blue ring, gold tabs, a pointer) | every knob: cut into a still bezel (tabs and ring) and a turning cap (the disc with the pointer), the value arc drawn in SVG over the blue ring |
