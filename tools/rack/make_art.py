@@ -124,6 +124,9 @@ def honeycombs():
     canvas = Image.new("RGB", (round(tw * big), round(th * big)), (120, 84, 30))
     walls = Image.new("L", canvas.size, 0)
     dw = ImageDraw.Draw(walls)
+    thin = Image.new("L", canvas.size, 0)     # the knob panel's thinner gold lines, the same lattice
+    dt = ImageDraw.Draw(thin)
+    THIN = 4.6
     picks = {}
     for row in range(-1, pairs * 2 + 1):
         for col in range(-1, cols + 1):
@@ -135,6 +138,7 @@ def honeycombs():
             canvas.paste(cells[picks[key]], (round(cx * big - inner), round(cy * big - inner)), mask)
             pts = [(px * big, py * big) for (px, py) in hexagon(cx, cy, R)]
             dw.line(pts + [pts[0]], fill=255, width=round(WALL * big), joint="curve")
+            dt.line(pts + [pts[0]], fill=255, width=round(THIN * big), joint="curve")
     glow = walls.filter(ImageFilter.GaussianBlur(5 * big))
     soft = walls.filter(ImageFilter.GaussianBlur(1.0 * big))
     ridge = walls.filter(ImageFilter.MinFilter(round(WALL * 0.45 * big) | 1)).filter(ImageFilter.GaussianBlur(1.2 * big))
@@ -156,14 +160,19 @@ def honeycombs():
     navy = Image.composite(Image.new("RGB", (tw, th), (150, 96, 24)), navy, wall_glow.point(lambda v: v * 0.30))
     save_rgb(Image.composite(glass, navy, wall), "honey_dark.webp")
 
-    # the knob panel's lines are thinner than the glass honeycomb's walls
-    wall = wall.filter(ImageFilter.MinFilter(5)).filter(ImageFilter.GaussianBlur(0.6))
-    wall_glow = wall.filter(ImageFilter.GaussianBlur(3.5))
-    # pearly ivory cells framed by thin gold lines (as the concept's knob panel)
-    ivory = Image.merge("RGB", (lum.point(lambda v: 241 + (v - 180) * 0.10), lum.point(lambda v: 232 + (v - 180) * 0.10), lum.point(lambda v: 212 + (v - 180) * 0.08)))
-    ivory = Image.composite(Image.new("RGB", (tw, th), (226, 196, 128)), ivory, wall_glow.point(lambda v: v * 0.45))
-    ivory = Image.composite(Image.new("RGB", (tw, th), (206, 152, 58)), ivory, wall.point(lambda v: v * 0.95))
-    ivory = Image.composite(Image.new("RGB", (tw, th), (240, 202, 118)), ivory, wall.filter(ImageFilter.MinFilter(3)).point(lambda v: v * 0.7))
+    # the knob panel: pearly ivory cells framed by thin lines of real-looking gold (the same layers as the glass
+    # honeycomb's walls: a darker edge, gold, a bright middle, a warm glow), as the concept's knob panel
+    cells_lum = canvas.convert("L")
+    ivory = Image.merge("RGB", (cells_lum.point(lambda v: 242 + (v - 180) * 0.10), cells_lum.point(lambda v: 233 + (v - 180) * 0.10), cells_lum.point(lambda v: 214 + (v - 180) * 0.08)))
+    t_glow = thin.filter(ImageFilter.GaussianBlur(3 * big))
+    t_soft = thin.filter(ImageFilter.GaussianBlur(0.6 * big))
+    t_ridge = thin.filter(ImageFilter.MinFilter(round(THIN * 0.40 * big) | 1)).filter(ImageFilter.GaussianBlur(0.6 * big))
+    t_shine = thin.filter(ImageFilter.MinFilter(round(THIN * 0.70 * big) | 1)).filter(ImageFilter.GaussianBlur(0.5 * big))
+    ivory = Image.composite(layer((236, 196, 116)), ivory, t_glow.point(lambda v: v * 0.40))
+    ivory = Image.composite(layer((138, 84, 14)), ivory, t_soft)
+    ivory = Image.composite(layer((232, 166, 46)), ivory, t_ridge)
+    ivory = Image.composite(layer((255, 238, 166)), ivory, t_shine)
+    ivory = ivory.resize((tw, th), Image.LANCZOS).filter(ImageFilter.UnsharpMask(radius=1.0, percent=40, threshold=2))
     save_rgb(ivory, "honey_ivory.webp")
 
 

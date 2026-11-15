@@ -390,52 +390,121 @@
     return 20 * Math.log10(Math.max(mag, 1e-9)) * order;
   }
 
+  // EQ bands as the concept draws them: gold where a band lifts, red where it cuts hard (with a red line down from its
+  // point and the spectrum tinted under it), blue for gentle cuts and low / high cuts.
+  const isCut = (b) => b.type === "lowCut" || b.type === "highCut";
+  const bandTone = (b) => (isCut(b) ? "blue" : (b.db || 0) >= 0.5 ? "gold" : (b.db || 0) <= -2 ? "red" : "blue");
+  const BAND_WORD = { lowCut: "Low Cut", highCut: "High Cut", lowShelf: "Low Shelf", highShelf: "High Shelf" };
+  const bandName = (b, i) => b.name || BAND_WORD[b.type] || "Band " + (i + 1);
+  const TONE_RGB = { gold: "242, 196, 84", blue: "58, 162, 255", red: "255, 46, 69" };
+
   function eqGraph(mod, w, h) {
-    const bands = mod.bands || [];
-    const fx = (f) => (Math.log10(f / 20) / 3) * w;
-    const range = Math.max(12, Math.ceil(Math.max(0, ...bands.filter((b) => b.type !== "lowCut" && b.type !== "highCut").map((b) => Math.abs(b.db || 0))) / 6) * 6);
-    const gy = (db) => h / 2 - (clamp(db, -range * 1.5, range) / range) * (h / 2 - 14);
+    const bands = (mod.bands || []).filter((b) => b.on !== false);
+    const fx = (f) => (Math.log10(clamp(f, 20, 20000) / 20) / 3) * w;
+    const bells = bands.filter((b) => !isCut(b));
+    const top = Math.max(12, Math.ceil(Math.max(0, ...bells.map((b) => b.db || 0)) / 6) * 6);
+    const bot = -Math.max(18, Math.ceil(Math.max(0, ...bells.map((b) => -(b.db || 0))) / 6) * 6);
+    const gy = (db) => 6 + ((top - clamp(db, bot, top)) / (top - bot)) * (h - 12);
+    const y0 = gy(0);
+
+    let defs = "";
+    for (const t of Object.keys(TONE_RGB)) {
+      defs += `<linearGradient id="sr-up-${t}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgb(${TONE_RGB[t]})" stop-opacity=".62"/><stop offset="1" stop-color="rgb(${TONE_RGB[t]})" stop-opacity=".10"/></linearGradient>`;
+      defs += `<linearGradient id="sr-dn-${t}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgb(${TONE_RGB[t]})" stop-opacity=".10"/><stop offset="1" stop-color="rgb(${TONE_RGB[t]})" stop-opacity=".66"/></linearGradient>`;
+    }
+    defs += `<linearGradient id="sr-spec" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3fa8ff" stop-opacity=".85"/><stop offset=".55" stop-color="#1c64d8" stop-opacity=".45"/><stop offset="1" stop-color="#0b2a80" stop-opacity=".25"/></linearGradient>`;
+    defs += `<linearGradient id="sr-spec-red" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff5a6a" stop-opacity=".95"/><stop offset="1" stop-color="#a0001a" stop-opacity=".45"/></linearGradient>`;
+    defs += `<linearGradient id="sr-redcol" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff2e45" stop-opacity=".22"/><stop offset="1" stop-color="#ff2e45" stop-opacity="0"/></linearGradient>`;
+    defs += `<linearGradient id="sr-redfade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity="1"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>`;
+
     let grid = "";
     for (const f of [50, 100, 200, 500, 1000, 2000, 5000, 10000]) grid += `<line x1="${fx(f)}" y1="0" x2="${fx(f)}" y2="${h}" class="sr-gl"/>`;
-    for (let d = -range; d <= range; d += range / 2) grid += `<line x1="0" y1="${gy(d)}" x2="${w}" y2="${gy(d)}" class="sr-gl${d === 0 ? " sr-g0" : ""}"/>`;
-    let spec = "";
+    for (let d = top; d >= bot; d -= 6) grid += `<line x1="0" y1="${gy(d)}" x2="${w}" y2="${gy(d)}" class="sr-gl${d === 0 ? " sr-g0" : ""}"/>`;
+
+    // the spectrum (spiky, glowing); tinted red under hard cuts
+    const reds = bands.filter((b) => bandTone(b) === "red");
+    let spec = "", clips = "";
     if (Array.isArray(mod.spectrum) && mod.spectrum.length > 4) {
+      // dense glowing needles under a soft envelope (the concept's spectrum), in dB on the graph's own scale
       const n = mod.spectrum.length;
-      let p = `M0 ${h}`;
+      const sy = (v) => gy(clamp(v, bot, top)).toFixed(1);
+      let d = `M0 ${h}`, edge = "", needles = "", pen = false;
       mod.spectrum.forEach((v, i) => {
-        const x = (i / (n - 1)) * w;
-        const y = h - clamp((v + 72) / 72, 0, 1) * (h - 8);
-        p += ` L${x.toFixed(1)} ${y.toFixed(1)}`;
+        const x = ((i / (n - 1)) * w).toFixed(1);
+        d += ` L${x} ${sy(v)}`;
+        const shows = v > bot + 1;   // no line along the floor where there is nothing
+        if (shows) { edge += `${pen ? "L" : "M"}${x} ${sy(v)}`; needles += `M${x} ${h}V${sy(v)}`; }
+        pen = shows;
       });
-      spec = `<path d="${p} L${w} ${h} Z" class="sr-spec"/>`;
+      d += ` L${w} ${h} Z`;
+      const body = `<path d="${d}" fill="url(#sr-spec)" class="sr-specarea"/><path d="${needles}" class="sr-needles"/><path d="${edge}" class="sr-specedge"/>`;
+      spec = `<g class="sr-spec">${body}</g>`;
+      reds.forEach((b, i) => {
+        const span = Math.pow(2, 0.9 / Math.max(0.4, b.q || 1));
+        const x0 = fx(b.hz / span), x1 = fx(b.hz * span);
+        clips += `<mask id="sr-rm-${i}" maskUnits="userSpaceOnUse"><rect x="${x0}" y="0" width="${x1 - x0}" height="${h}" fill="url(#sr-redfade)"/></mask>`;
+        spec += `<g class="sr-spec sr-spec-red" mask="url(#sr-rm-${i})"><path d="${d}" fill="url(#sr-spec-red)" class="sr-specarea"/><path d="${needles}" class="sr-needles"/><path d="${edge}" class="sr-specedge"/></g>`;
+      });
     }
-    let curve = "", fill = "";
-    if (bands.length) {
-      const pts = [];
-      for (let i = 0; i <= 160; i++) {
-        const f = 20 * Math.pow(1000, i / 160);
-        let db = 0;
-        for (const b of bands) if (b.on !== false) db += bandDb(b, f);
-        pts.push([fx(f), gy(db), db]);
-      }
-      const d = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
-      curve = `<path d="${d}" class="sr-curve"/>`;
-      fill = `<path d="${d} L${w} ${gy(0)} L0 ${gy(0)} Z" class="sr-curvefill"/>`;
-    }
-    let dots = "";
-    bands.forEach((b, i) => {
-      if (b.on === false) return;
-      const x = fx(clamp(b.hz, 20, 20000));
-      const y = b.type === "lowCut" || b.type === "highCut" ? gy(-3) : gy(b.db || 0);
-      const tone = b.db < -0.05 && b.type !== "lowCut" && b.type !== "highCut" ? "red" : i % 2 ? "blue" : "gold";
-      dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="7" class="sr-dot sr-dot-${tone}"/>`;
+    let cols = "";
+    reds.forEach((b, i) => {
+      const span = Math.pow(2, 0.9 / Math.max(0.4, b.q || 1));
+      cols += `<rect x="${fx(b.hz / span)}" y="${y0}" width="${fx(b.hz * span) - fx(b.hz / span)}" height="${h - y0}" fill="url(#sr-redcol)" mask="url(#sr-rm-${i})"/>`;
     });
+
+    // the response, and the fill between it and 0 dB in the colour of the band that shapes each part
+    let curve = "", fills = "";
+    if (bands.length) {
+      const N = 200;
+      const pts = [];
+      for (let i = 0; i <= N; i++) {
+        const f = 20 * Math.pow(1000, i / N);
+        let db = 0, lead = null, most = 0;
+        for (const b of bands) {
+          const v = bandDb(b, f);
+          db += v;
+          if (Math.abs(v) > most) { most = Math.abs(v); lead = b; }
+        }
+        pts.push({ x: fx(f), y: gy(db), db, tone: lead && most > 0.15 ? bandTone(lead) : null });
+      }
+      curve = `<path d="${pts.map((p, i) => (i ? "L" : "M") + p.x.toFixed(1) + " " + p.y.toFixed(1)).join(" ")}" class="sr-curve"/>`;
+      let i = 0;
+      while (i < pts.length) {
+        let j = i;
+        const up = pts[i].db >= 0;
+        while (j + 1 < pts.length && pts[j + 1].tone === pts[i].tone && (pts[j + 1].db >= 0) === up) j++;
+        if (pts[i].tone && j > i) {
+          const seg = pts.slice(i, j + 2 <= pts.length ? j + 2 : j + 1);
+          const d = `M${seg[0].x.toFixed(1)} ${y0} ` + seg.map((p) => `L${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ") + ` L${seg[seg.length - 1].x.toFixed(1)} ${y0} Z`;
+          fills += `<path d="${d}" fill="url(#sr-${up ? "up" : "dn"}-${pts[i].tone})"/>`;
+        }
+        i = j + 1;
+      }
+    }
+
+    // each band's point (round, glossy: HTML on top of the stretched drawing), a red line down from a hard cut
+    let lines = "", dots = "";
+    bands.forEach((b) => {
+      const x = fx(b.hz);
+      const y = isCut(b) ? gy(-3) : gy(b.db || 0);
+      const tone = bandTone(b);
+      if (tone === "red") lines += `<line x1="${x}" y1="${y}" x2="${x}" y2="${h}" class="sr-redline"/>`;
+      dots += `<i class="sr-eqdot sr-eqdot-${tone}" style="left:${((x / w) * 100).toFixed(2)}%;top:${((y / h) * 100).toFixed(2)}%"></i>`;
+    });
+
     const labels = [20, 50, 100, 200, 500, "1k", "2k", "5k", "10k", "20k"].map((t) => {
       const f = typeof t === "number" ? t : parseFloat(t) * 1000;
       return `<span style="left:${(fx(f) / w) * 100}%">${t}</span>`;
     }).join("");
-    const dbl = [range, range / 2, 0, -range / 2, -range].map((d) => `<span style="top:${(gy(d) / h) * 100}%">${d > 0 ? "+" + d : d < 0 ? MINUS + -d : 0}</span>`).join("");
-    return `<div class="sr-graph sr-graph-eq"><div class="sr-ylab">${dbl}</div><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${grid}${spec}${fill}${curve}${dots}</svg><div class="sr-xlab">${labels}</div></div>`;
+    let dbl = "";
+    for (let d = top; d >= bot; d -= 6) dbl += `<span style="top:${(gy(d) / h) * 100}%">${d > 0 ? "+" + d : d < 0 ? MINUS + -d : 0}</span>`;
+    return `<div class="sr-graph sr-graph-eq"><div class="sr-ylab">${dbl}</div><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><defs>${defs}${clips}</defs>${grid}${spec}${cols}${fills}${lines}${curve}</svg>${dots}<div class="sr-xlab">${labels}</div></div>`;
+  }
+
+  function bandChips(mod) {
+    const bands = (mod.bands || []).filter((b) => b.on !== false);
+    if (!bands.length) return "";
+    return `<div class="sr-bands"><b>BANDS</b>${bands.map((b, i) => `<span class="sr-band sr-band-${bandTone(b)}">${i + 1}&nbsp; ${esc(bandName(b, i))}</span>`).join("")}</div>`;
   }
 
   function historyGraph(key, kind, w, h) {
@@ -602,6 +671,7 @@
           ${pill(m.state)}
         </div>
         <div class="sr-graphwrap">${graph}${meterNow}</div>
+        ${c.graph === "eq" ? bandChips(m) : ""}
         <div class="sr-knobs ${vals.length ? "" : "sr-knobs-none"}">
           ${vals.length ? `<div class="sr-krow">${knobs}</div>` : `<p class="sr-nokn">${m.state === "off" ? "Off: it passes the sound through untouched." : "No settings to show."}</p>`}
           ${more ? `<div class="sr-more">${more}</div>` : ""}

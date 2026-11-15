@@ -244,7 +244,15 @@ kept here; step 1 trims them, sizes them to 2x and saves WebP into `plugin/ui/ra
 `concepts/rack-coach.png`): the concept's own glass cells (cut from the clean honeycomb under its left column) set in a
 regular lattice that tiles without a seam, with gold walls drawn in the concept's colours. Glass: the left column under
 the list (in its gold frame), the Chain Flow strip, the Modules page's strip. Dark (gold walls on navy, warm glass in the
-corner): behind the logo. Ivory (thin light lines): the knob panel. A side-by-side with the concept was checked.
+corner): behind the logo. Ivory (thin lines of shaded gold, like the glass honeycomb's walls): the knob panel. Side-by-sides with the concept were
+checked.
+
+**The EQ graph** (the user, 2026-11-15: "just like the original"): the concept's drawing. A gold glowing curve; the area
+between it and 0 dB filled in the colour of the band that shapes it (gold where a band lifts, red where it cuts 2 dB or
+more, blue for gentle cuts and low / high cuts); round glossy points; a red line down from a hard cut with the spectrum
+glowing red under it; the spectrum as a filled glowing blue area with a spiky edge; scale +12 to -18 dB; the bands as
+coloured pills under the graph (BANDS: 1 Body, 2 Mud ...). So each plug-in publishes, per EQ module, its bands (type, Hz,
+dB, Q, name) and, where it has one, a spectrum (dB per bin on the graph's scale, 0 = the 0 dB line).
 
 Drawn in CSS / SVG (no file needed): the panels' gold bevels and navy glass, buttons and pills, ON toggles, meters,
 graphs, the swooshes behind the top corners (from 03 and 07), text.

@@ -209,7 +209,7 @@
 .sr-graph svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .sr-gl { stroke: rgba(150, 180, 240, .14); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .sr-g0 { stroke: rgba(200, 220, 255, .35); }
-.sr-spec { fill: rgba(30, 110, 230, .38); stroke: rgba(90, 170, 255, .75); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.sr-spec { stroke: rgba(90, 170, 255, .75); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .sr-curve { fill: none; stroke: #f2c860; stroke-width: 3; vector-effect: non-scaling-stroke; filter: drop-shadow(0 0 4px rgba(242, 200, 96, .8)); }
 .sr-curvefill { fill: rgba(255, 46, 69, .16); stroke: none; }
 .sr-dot { stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke; }
@@ -377,3 +377,28 @@
 .sr-dim { font-size: 15px; color: var(--dim); line-height: 1.3; margin-bottom: 12px; }
 .sr-from-big { margin-top: auto; align-self: center; padding: 4px 16px; border-radius: 12px; font-size: 15px; font-weight: 700; }
 .sr-honey-strip { flex: none; min-height: 0; height: 30px; margin: 6px 8px 0; }
+
+/* ---- the EQ graph and its bands, as the concept draws them ---------------------------------------------------------- */
+.sr-graph-eq .sr-spec { filter: drop-shadow(0 0 3px rgba(60, 150, 255, .75)); }
+.sr-graph-eq .sr-specarea { stroke: none; opacity: .9; }
+.sr-graph-eq .sr-needles { fill: none; stroke: rgba(90, 180, 255, .45); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.sr-graph-eq .sr-specedge { fill: none; stroke: rgba(130, 205, 255, .95); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+.sr-graph-eq .sr-spec-red { filter: drop-shadow(0 0 4px rgba(255, 46, 69, .85)); }
+.sr-graph-eq .sr-spec-red .sr-needles { stroke: rgba(255, 110, 125, .55); }
+.sr-graph-eq .sr-spec-red .sr-specedge { stroke: rgba(255, 150, 160, .95); }
+.sr-graph-eq .sr-xlab { font-size: 15px; font-weight: 700; color: #f2f6ff; bottom: -24px; }
+.sr-graph-eq .sr-ylab { font-size: 14px; font-weight: 700; color: #f2f6ff; }
+.sr-graph-eq .sr-curve { stroke: #ffd36a; stroke-width: 3.2; filter: drop-shadow(0 0 3px rgba(255, 200, 90, .95)) drop-shadow(0 0 8px rgba(242, 170, 60, .55)); }
+.sr-redline { stroke: #ff3d52; stroke-width: 2.2; vector-effect: non-scaling-stroke; filter: drop-shadow(0 0 4px #ff2e45); }
+.sr-eqdot { position: absolute; width: 20px; height: 20px; margin: -10px 0 0 -10px; border-radius: 50%; pointer-events: none; }
+.sr-eqdot-gold { background: radial-gradient(circle at 35% 30%, #fffbe6 0 12%, #ffd86e 34%, #d7962a 72%, #7a4a0a 100%); box-shadow: 0 0 0 1.5px rgba(255, 246, 210, .9), 0 0 12px 3px rgba(255, 196, 80, .75); }
+.sr-eqdot-blue { background: radial-gradient(circle at 35% 30%, #f2fbff 0 12%, #7cd0ff 34%, #1f7ee6 72%, #0a2f7a 100%); box-shadow: 0 0 0 1.5px rgba(220, 240, 255, .9), 0 0 12px 3px rgba(58, 162, 255, .8); }
+.sr-eqdot-red { background: radial-gradient(circle at 35% 30%, #fff0f1 0 12%, #ff8592 34%, #e01a32 72%, #6a0010 100%); box-shadow: 0 0 0 1.5px rgba(255, 225, 230, .9), 0 0 14px 4px rgba(255, 46, 69, .85); }
+
+.sr-bands { flex: none; display: flex; align-items: center; gap: 10px; margin: 10px 14px 0; padding: 7px 12px; border-radius: 12px; overflow: hidden;
+  background: linear-gradient(180deg, #f6ecd4, #e7d5aa); box-shadow: inset 0 0 0 2px rgba(196, 138, 38, .85), inset 0 0 0 3.5px rgba(255, 240, 190, .6), 0 0 10px rgba(242, 200, 96, .25); }
+.sr-bands > b { font-size: 15px; font-weight: 700; letter-spacing: .08em; color: #3a2606; margin-right: 4px; }
+.sr-band { flex: 0 1 auto; min-width: 0; height: 32px; display: inline-flex; align-items: center; padding: 0 16px; border-radius: 16px; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sr-band-blue { color: #eaf6ff; background: linear-gradient(180deg, #3f8fe8, #13509e 55%, #0b3577); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 0 0 1px #0a2a5c, 0 2px 4px rgba(0, 0, 0, .35); }
+.sr-band-gold { color: #3a2400; background: linear-gradient(180deg, #fff0b8, #f2c860 50%, #c48a26); box-shadow: inset 0 1px 0 #fff, 0 0 0 1px #8a5a14, 0 2px 4px rgba(0, 0, 0, .3); }
+.sr-band-red { color: #fff; background: linear-gradient(180deg, #ff6a78, #d81830 55%, #8e0a1c); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 0 0 1px #6a0010, 0 0 12px rgba(255, 46, 69, .65); }

@@ -13,13 +13,13 @@
   const off = (key) => ({ key, state: "off", summary: "Off" });
   const H = { lead: 0x1a2b301, chorus: 0x1a2b302, adlibs: 0x1a2b303, beat: 0x1a2b304, kick: 0x1a2b305, snare: 0x1a2b306, hats: 0x1a2b307, bass: 0x1a2b308, keys: 0x1a2b309 };
 
-  // a vocal-ish spectrum (160 bins, 20 Hz - 20 kHz, dB), spiky like a real one
-  const vocalSpectrum = () => Array.from({ length: 160 }, (_, i) => {
-    const f = 20 * Math.pow(1000, i / 159);
-    const body = -40 + 22 * Math.exp(-Math.pow(Math.log2(f / 250), 2) / 2.2) + 14 * Math.exp(-Math.pow(Math.log2(f / 2500), 2) / 1.5);
-    const roll = f < 90 ? -30 * Math.log2(90 / f) : 0;
-    const spikes = 7 * Math.abs(Math.sin(i * 12.9898 + 78.233 * Math.sin(i))) - 3.5;
-    return body + roll - (f > 9000 ? 10 * Math.log2(f / 9000) : 0) + spikes + wob(i * 0.7, 2.5) - 6;
+  // a vocal-ish spectrum (240 bins, 20 Hz - 20 kHz, dB), spiky like a real one
+  const vocalSpectrum = () => Array.from({ length: 360 }, (_, i) => {
+    const f = 20 * Math.pow(1000, i / 359);
+    const body = -40 + 22 * Math.exp(-Math.pow(Math.log2(f / 250), 2) / 3.2) + 15 * Math.exp(-Math.pow(Math.log2(f / 2500), 2) / 2.2);
+    const roll = f < 45 ? -14 * Math.log2(45 / f) : 0;
+    const spikes = 8 * Math.abs(Math.sin(i * 12.9898 + 78.233 * Math.sin(i))) - 4;
+    return body + roll - (f > 9000 ? 8 * Math.log2(f / 9000) : 0) + spikes + wob(i * 0.7, 2) + 17;
   });
 
   function voxLead() {
@@ -31,10 +31,10 @@
         { key: "vox.pitch", state: "on", summary: "Classic · 20 ms · F minor (from the beat)", values: [v("Mode", "Classic", 0.5), v("Amount", "85 %", 0.85), v("Retune", "20 ms", 0.2), v("Vibrato", "as sung", 0.5), v("Humanize", "20 %", 0.2), v("Formant", "0 st", 0.5, true)] },
         { key: "vox.cleanup", state: "on", summary: "Noise −10 dB · Low cut 90 Hz · Breaths −6 dB", values: [v("Noise", "45 %", 0.45), v("Room", "20 %", 0.2), v("Low Cut", "90 Hz", 0.35), v("Pops", "On", 1), v("Clicks", "30 %", 0.3), v("Breaths", "−6 dB", 0.4), v("Gate", "Off", 0)] },
         { key: "vox.eq", state: "on", summary: "Mud −3 dB · Presence +2.5 dB · Air +2 dB", spectrum: vocalSpectrum(),
-          bands: [{ type: "lowShelf", hz: 120, db: 0.5, q: 0.7 }, { type: "bell", hz: 320, db: -3, q: 1.1 }, { type: "bell", hz: 900, db: -0.5, q: 1.2 }, { type: "bell", hz: 3500, db: 2.5, q: 0.9 }, { type: "highShelf", hz: 10000, db: 2, q: 0.7 }],
+          bands: [{ name: "Body", type: "lowShelf", hz: 120, db: 0.5, q: 0.7 }, { name: "Mud", type: "bell", hz: 320, db: -3, q: 1.1 }, { name: "Nasal", type: "bell", hz: 900, db: -0.5, q: 1.2 }, { name: "Presence", type: "bell", hz: 3500, db: 2.5, q: 0.9 }, { name: "Air", type: "highShelf", hz: 10000, db: 2, q: 0.7 }],
           values: [v("Body", "+0.5 dB", 0.53, true), v("Mud", "−3.0 dB", 0.33, true), v("Nasal", "−0.5 dB", 0.47, true), v("Presence", "+2.5 dB", 0.64, true), v("Air", "+2.0 dB", 0.61, true)] },
         { key: "vox.dyneq", state: "on", summary: "Harsh 3.2 kHz cuts up to 4 dB · Smooth 30 %", spectrum: vocalSpectrum(),
-          bands: [{ type: "bell", hz: 180, db: -0.5, q: 1.4 }, { type: "bell", hz: 420, db: -1.5, q: 1.4 }, { type: "bell", hz: 1100, db: 0, q: 1.4 }, { type: "bell", hz: 3200, db: -3.2 + wob(6, 0.8), q: 2.2 }],
+          bands: [{ name: "Boom", type: "bell", hz: 180, db: -0.5, q: 1.4 }, { name: "Mud", type: "bell", hz: 420, db: -1.5, q: 1.4 }, { name: "Honk", type: "bell", hz: 1100, db: 0, q: 1.4 }, { name: "Harsh", type: "bell", hz: 3200, db: -4.2 + wob(6, 0.8), q: 2.2 }],
           values: [v("Max Cut", "4.0 dB", 0.4), v("Frequency", "3.2 kHz", 0.62), v("Sensitivity", "55 %", 0.55), v("Smooth", "30 %", 0.3)] },
         { key: "vox.deess", state: "on", summary: "Amount 45 % at 6.8 kHz", meterKind: "gr", meter: ds, values: [v("Amount", "45 %", 0.45), v("Sensitivity", "50 %", 0.5), v("Frequency", "6.8 kHz", 0.7)] },
         { key: "vox.rider", state: "on", summary: "Target −18 dB · Range ±6 dB · Medium", meterKind: "gr", meter: rd, values: [v("Target", "−18 dB", 0.4), v("Range", "±6 dB", 0.5), v("Speed", "Med", 0.5)] },
@@ -106,29 +106,29 @@
       voxAdlibs(),
       voxBeat(),
       link("link-beat", "Beat", H.beat, "beat", -9, {
-        "mix.assist": { summary: "Pocket −2.0 dB at 3.2 kHz", by: "Mixology's Vocal Pocket", bands: [{ type: "bell", hz: 3200, db: -2, q: 1.4 }], values: [v("Low Cut", "Off", 0), v("Mud", "Off", 0), v("Pocket", "−2.0 dB", 0.35, true)] },
+        "mix.assist": { summary: "Pocket −2.0 dB at 3.2 kHz", by: "Mixology's Vocal Pocket", bands: [{ name: "Pocket", type: "bell", hz: 3200, db: -2, q: 1.4 }], values: [v("Low Cut", "Off", 0), v("Mud", "Off", 0), v("Pocket", "−2.0 dB", 0.35, true)] },
         "mix.stereo": { summary: "Lows in the middle below 120 Hz", values: [v("Width", "100 %", 0.5), v("Low Width", "0 %", 0), v("Mid Width", "100 %", 0.5), v("High Width", "110 %", 0.55)] },
       }),
       link("link-kick", "Kick", H.kick, "track", -10, {
-        "mix.eq": { summary: "Low cut 30 Hz · box −3 dB at 400 Hz", by: "Mixology AUTO", bands: [{ type: "lowCut", hz: 30, q: 0.7 }, { type: "bell", hz: 60, db: 1.5, q: 1 }, { type: "bell", hz: 400, db: -3, q: 1.6 }, { type: "bell", hz: 4000, db: 1.5, q: 1.2 }],
+        "mix.eq": { summary: "Low cut 30 Hz · box −3 dB at 400 Hz", by: "Mixology AUTO", bands: [{ type: "lowCut", hz: 30, q: 0.7 }, { name: "Thump", type: "bell", hz: 60, db: 1.5, q: 1 }, { name: "Box", type: "bell", hz: 400, db: -3, q: 1.6 }, { name: "Click", type: "bell", hz: 4000, db: 1.5, q: 1.2 }],
           values: [v("Low Cut", "30 Hz", 0.1), v("Thump", "+1.5 dB", 0.56, true), v("Box", "−3.0 dB", 0.38, true), v("Click", "+1.5 dB", 0.56, true)] },
         "mix.trans": { summary: "Attack +20 % · Sustain −10 %", values: [v("Attack", "+20 %", 0.6, true), v("Sustain", "−10 %", 0.45, true), v("Speed", "Fast", 0.7), v("Mix", "100 %", 1)] },
       }),
       link("link-snare", "Snare", H.snare, "track", -12, {
-        "mix.eq": { summary: "Crack +2 dB at 3.5 kHz", bands: [{ type: "lowCut", hz: 70, q: 0.7 }, { type: "bell", hz: 3500, db: 2, q: 1.2 }], values: [v("Low Cut", "70 Hz", 0.2), v("Crack", "+2.0 dB", 0.58, true)] },
+        "mix.eq": { summary: "Crack +2 dB at 3.5 kHz", bands: [{ type: "lowCut", hz: 70, q: 0.7 }, { name: "Crack", type: "bell", hz: 3500, db: 2, q: 1.2 }], values: [v("Low Cut", "70 Hz", 0.2), v("Crack", "+2.0 dB", 0.58, true)] },
         "mix.trans": { summary: "Attack +15 %", values: [v("Attack", "+15 %", 0.58, true), v("Sustain", "0 %", 0.5, true)] },
         "mix.space": { summary: "Room 0.6 s · Mix 8 %", layers: ["room"], values: [v("Effect", "Room", 0.7), v("Decay", "0.6 s", 0.2), v("Mix", "8 %", 0.08)] },
       }),
       link("link-hats", "Hats", H.hats, "track", -18, {
         "mix.eq": { summary: "Low cut 300 Hz", bands: [{ type: "lowCut", hz: 300, q: 0.7 }], values: [v("Low Cut", "300 Hz", 0.45)] },
-        "mix.assist": { summary: "Pocket −1.5 dB at 3.2 kHz", by: "Mixology's Vocal Pocket", bands: [{ type: "bell", hz: 3200, db: -1.5, q: 1.4 }], values: [v("Low Cut", "Off", 0), v("Mud", "Off", 0), v("Pocket", "−1.5 dB", 0.4, true)] },
+        "mix.assist": { summary: "Pocket −1.5 dB at 3.2 kHz", by: "Mixology's Vocal Pocket", bands: [{ name: "Pocket", type: "bell", hz: 3200, db: -1.5, q: 1.4 }], values: [v("Low Cut", "Off", 0), v("Mud", "Off", 0), v("Pocket", "−1.5 dB", 0.4, true)] },
       }),
       link("link-808", "808", H.bass, "track", -8, {
         "mix.comp": { summary: "4:1 · GR 3 dB", meterKind: "gr", meter: -3 + wob(13, 1.5), values: [v("Threshold", "−18 dB", 0.45), v("Ratio", "4.0:1", 0.45), v("Attack", "10 ms", 0.3), v("Release", "120 ms", 0.4), v("Makeup", "+2.0 dB", 0.56, true), v("Knee", "Medium", 0.5)] },
         "mix.stereo": { summary: "Lows in the middle below 120 Hz", values: [v("Width", "100 %", 0.5), v("Low Width", "0 %", 0)] },
       }),
       link("link-keys", "Keys", H.keys, "track", -16, {
-        "mix.eq": { summary: "Mud −2.5 dB at 300 Hz", by: "Mixology AUTO", bands: [{ type: "lowCut", hz: 90, q: 0.7 }, { type: "bell", hz: 300, db: -2.5, q: 1.3 }], values: [v("Low Cut", "90 Hz", 0.3), v("Mud", "−2.5 dB", 0.4, true)] },
+        "mix.eq": { summary: "Mud −2.5 dB at 300 Hz", by: "Mixology AUTO", bands: [{ type: "lowCut", hz: 90, q: 0.7 }, { name: "Mud", type: "bell", hz: 300, db: -2.5, q: 1.3 }], values: [v("Low Cut", "90 Hz", 0.3), v("Mud", "−2.5 dB", 0.4, true)] },
         "mix.comp": { summary: "2:1 · GR 1.5 dB", meterKind: "gr", meter: -1.5 + wob(14, 0.8), values: [v("Threshold", "−22 dB", 0.4), v("Ratio", "2.0:1", 0.2), v("Attack", "20 ms", 0.4), v("Release", "200 ms", 0.5)] },
         "mix.tone": { summary: "Air +1.5 dB", values: [v("Warmth", "0.0 dB", 0.5, true), v("Presence", "0.0 dB", 0.5, true), v("Air", "+1.5 dB", 0.62, true)] },
         "mix.stereo": { summary: "Width 120 %", values: [v("Width", "120 %", 0.6)] },
@@ -144,7 +144,7 @@
         modules: [
           { key: "mas.unlimiter", state: "off", summary: "Neutral" },
           { key: "mas.tonaleq", state: "on", summary: "Low End +1.0 · Upper Mid −0.5 · Air +1.5 dB",
-            bands: [{ type: "lowShelf", hz: 45, db: 1, q: 0.7 }, { type: "bell", hz: 100, db: 0, q: 0.8 }, { type: "bell", hz: 350, db: 0, q: 0.9 }, { type: "bell", hz: 1000, db: 0, q: 0.8 }, { type: "bell", hz: 2500, db: -0.5, q: 0.9 }, { type: "bell", hz: 5000, db: 0, q: 0.9 }, { type: "highShelf", hz: 12000, db: 1.5, q: 0.7 }],
+            bands: [{ name: "Low End", type: "lowShelf", hz: 45, db: 1, q: 0.7 }, { name: "Bass", type: "bell", hz: 100, db: 0, q: 0.8 }, { name: "Low Mid", type: "bell", hz: 350, db: 0, q: 0.9 }, { name: "Mid", type: "bell", hz: 1000, db: 0, q: 0.8 }, { name: "Upper Mid", type: "bell", hz: 2500, db: -0.5, q: 0.9 }, { name: "Presence", type: "bell", hz: 5000, db: 0, q: 0.9 }, { name: "Air", type: "highShelf", hz: 12000, db: 1.5, q: 0.7 }],
             values: [v("Low End", "+1.0", 0.56, true), v("Bass", "0.0", 0.5, true), v("Low Mid", "0.0", 0.5, true), v("Mid", "0.0", 0.5, true), v("Upper Mid", "−0.5", 0.47, true), v("Presence", "0.0", 0.5, true), v("Air", "+1.5", 0.58, true)] },
           { key: "mas.stemeq", state: "on", summary: "Vocals +1.0 dB", values: [v("Vocals", "+1.0 dB", 0.56, true), v("Drums", "0.0 dB", 0.5, true), v("Bass", "0.0 dB", 0.5, true), v("Other", "0.0 dB", 0.5, true)] },
           { key: "mas.steady", state: "on", summary: "Amount 40 %", values: [v("Amount", "40 %", 0.4), v("Range", "3 dB", 0.4), v("Speed", "Medium", 0.5)] },
