@@ -97,7 +97,7 @@ def honeycombs():
     colours. Three versions:
       glass: as in the concept (the left column, the Chain Flow strip, the Modules page's strips)
       dark:  the gold walls on navy glass (the honeycomb behind the logo)
-      ivory: faint light lines on ivory (the knob panel)"""
+      ivory: thin gold lines on ivory (the knob panel)"""
     import random
     src = Image.open(os.path.join(ROOT, "docs", "rack", "concepts", "rack-coach.png")).convert("RGB")
     # the concept's cell centres (x, y), measured from its walls (its cells: about 46 px wide, radius about 27)
@@ -159,9 +159,11 @@ def honeycombs():
     # the knob panel's lines are thinner than the glass honeycomb's walls
     wall = wall.filter(ImageFilter.MinFilter(5)).filter(ImageFilter.GaussianBlur(0.6))
     wall_glow = wall.filter(ImageFilter.GaussianBlur(3.5))
-    ivory = Image.merge("RGB", (lum.point(lambda v: 240 + (v - 180) * 0.10), lum.point(lambda v: 231 + (v - 180) * 0.10), lum.point(lambda v: 211 + (v - 180) * 0.08)))
-    ivory = Image.composite(Image.new("RGB", (tw, th), (198, 178, 136)), ivory, wall_glow.point(lambda v: v * 0.62))
-    ivory = Image.composite(Image.new("RGB", (tw, th), (255, 253, 247)), ivory, wall.point(lambda v: v * 0.95))
+    # pearly ivory cells framed by thin gold lines (as the concept's knob panel)
+    ivory = Image.merge("RGB", (lum.point(lambda v: 241 + (v - 180) * 0.10), lum.point(lambda v: 232 + (v - 180) * 0.10), lum.point(lambda v: 212 + (v - 180) * 0.08)))
+    ivory = Image.composite(Image.new("RGB", (tw, th), (226, 196, 128)), ivory, wall_glow.point(lambda v: v * 0.45))
+    ivory = Image.composite(Image.new("RGB", (tw, th), (206, 152, 58)), ivory, wall.point(lambda v: v * 0.95))
+    ivory = Image.composite(Image.new("RGB", (tw, th), (240, 202, 118)), ivory, wall.filter(ImageFilter.MinFilter(3)).point(lambda v: v * 0.7))
     save_rgb(ivory, "honey_ivory.webp")
 
 
