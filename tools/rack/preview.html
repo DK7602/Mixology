@@ -1,0 +1,27 @@
+<!doctype html>
+<!-- Sonicology Rack in a browser, with the made-up project (rack_mock.js). Not part of the plug-ins: it loads the
+     shared view from plugin/ui. Open it as a file, or serve the repo.
+     Query: ?host=voxology|mixology|masterology&page=rack|modules&track=<key>&unit=<id>&key=<module>&card=<module>&menu=1 -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sonicology Rack preview</title>
+  <link rel="stylesheet" href="../../plugin/ui/rack.css">
+  <style>html, body { margin: 0; height: 100%; background: #000; }</style>
+</head>
+<body>
+  <script src="rack_mock.js"></script>
+  <script src="../../plugin/ui/rack.js"></script>
+  <script>
+    const q = new URLSearchParams(location.search);
+    const host = q.get("host") || "mixology";
+    SonicologyRackMock.host = host;
+    SonicologyRack.open({ host, art: "../../plugin/ui/rack/", getRack: () => SonicologyRackMock.getRack(), back: () => setTimeout(() => location.reload(), 300) });
+    const want = {};
+    for (const k of ["page", "track", "unit", "key", "card", "filter"]) if (q.get(k)) want[k] = q.get(k);
+    if (q.get("menu")) want.menu = true;
+    if (Object.keys(want).length) setTimeout(() => SonicologyRack.show(want), 250);
+  </script>
+</body>
+</html>

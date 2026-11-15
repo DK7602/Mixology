@@ -35,8 +35,12 @@ sends higher-resolution art, re-run it.
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
 
-## NEXT: Sonicology Rack, stage 1 (planned 2026-11-14, not built; the user says when to start)
+## NOW: Sonicology Rack, stage 1 (planned 2026-11-14; step 1, the look, built 2026-11-15: waiting for the user's OK)
 - Plan: docs/rack/RACK-PLAN.md (all stages; stage 1 in detail, build order with approval gates, open questions).
+- Step 1 (2026-11-15): plugin/ui/rack.js + rack.css + plugin/ui/rack/ (art, font; tools/rack/make_art.py), preview at
+  tools/rack/preview.html with tools/rack/rack_mock.js. Screenshots sent: the Rack in each window size, the Modules page,
+  and the RACK button mock-ups (Voxology beside MY CHAINS, Mixology an icon tab after PRESETS, Masterology a pill before
+  the gear; injected in the preview only: the plug-ins' screens are unchanged until step 4). Next: step 2, RackLink.
   The look: docs/rack/concepts/*.png (the user's picked concept art); the user's art files: docs/rack/art/*.png
   (received 2026-11-14; the plan says what each becomes).
 - Decided: the Rack is a VIEW inside all three plug-ins (a RACK button on each current screen, the only change to the

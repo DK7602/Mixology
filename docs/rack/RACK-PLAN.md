@@ -90,9 +90,12 @@ Tune link). The Rack gets its own block next to them, so nothing the suite alrea
 
 ### The RACK button (the one change to each locked screen; spots shown for approval)
 
-- **Voxology**: top bar, between REC and the Voxology logo.
-- **Mixology**: a RACK tab after PRESETS (before the gear), the same style as the other tabs.
-- **Masterology**: top bar, next to the gear and ?.
+Measured in step 1 (the first spots didn't fit: Voxology's top and bottom bars have no free space, Mixology's tab row
+is full); each shows the Rack's crystal emblem:
+- **Voxology**: a RACK pill beside MY CHAINS, in the row under INTENSITY (the two share that row; nothing else moves).
+- **Mixology**: one more icon tab after PRESETS, like History / Settings / Help (the emblem); the text tabs get a few
+  pixels narrower to make room.
+- **Masterology**: a RACK pill (MATCH's style) before the gear and ?.
 - Mixology Link: a RACK button too, in stage 2 (decided below). Honey Tune: none (it shows up in the Rack).
 
 The Rack opens over the plug-in's own page in the same window; a "BACK TO VOXOLOGY / MIXOLOGY / MASTEROLOGY" button
@@ -153,6 +156,11 @@ resizable, Masterology keeps its 16:9): the view is designed at the concept's 4:
    the user's art files, fill it with a made-up project (`rack_mock.js`: Lead Vox with Voxology + Link, Chorus Vox with
    Honey Tune + Voxology + Link, Beat in Beat mode, Drums and Bass with Links, Full Mix, Master), screenshots of both
    pages at each plug-in's window size, and of the RACK button on each screen.
+   **Built 2026-11-15, waiting for the user's OK:** `plugin/ui/rack.js`, `plugin/ui/rack.css`, `plugin/ui/rack/` (art
+   and font, made by `tools/rack/make_art.py`), `tools/rack/preview.html` + `tools/rack/rack_mock.js` (the made-up
+   project; open the page in a browser: `?host=voxology|mixology|masterology&page=modules&track=master&unit=...&key=...`).
+   rack.js / rack.css are in Mixology's UI folder (its build embeds them, unused until step 4); the other repos get the
+   shared files in step 4.
 2. **The shared block** (`RackLink`) with its tests, Release and ASan / UBSan.
 3. **Each plug-in publishes** its modules (tests per repo).
 4. **Wire the view** to `getRack()`, the RACK buttons, the "together" checks.
