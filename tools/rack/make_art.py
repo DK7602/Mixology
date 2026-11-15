@@ -172,7 +172,12 @@ def honeycombs():
     ivory = Image.composite(layer((138, 84, 14)), ivory, t_soft)
     ivory = Image.composite(layer((232, 166, 46)), ivory, t_ridge)
     ivory = Image.composite(layer((255, 238, 166)), ivory, t_shine)
-    ivory = ivory.resize((tw, th), Image.LANCZOS).filter(ImageFilter.UnsharpMask(radius=1.0, percent=40, threshold=2))
+    # the concept's ivory haze over the gold: the lines show through a pearly film, softer and paler
+    plain = Image.merge("RGB", (cells_lum.point(lambda v: 244 + (v - 180) * 0.16), cells_lum.point(lambda v: 236 + (v - 180) * 0.16), cells_lum.point(lambda v: 219 + (v - 180) * 0.14)))
+    plain = Image.composite(layer((240, 214, 156)), plain, t_glow.point(lambda v: v * 0.30))   # the warm glow stays
+    ivory = Image.blend(plain, ivory.filter(ImageFilter.GaussianBlur(0.5 * big)), 0.66)
+    ivory = Image.composite(layer((255, 246, 214)), ivory, t_shine.point(lambda v: v * 0.35))  # the lines' bright shine
+    ivory = ivory.resize((tw, th), Image.LANCZOS)
     save_rgb(ivory, "honey_ivory.webp")
 
 
