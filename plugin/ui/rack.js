@@ -558,6 +558,7 @@
     const missing = ["voxology", "mixology", "masterology"].filter((p) => !counts[p] && !(p === "mixology" && counts.link));
     const miss = missing.length ? `<span class="sr-suite sr-suite-missing">NOT IN THIS PROJECT: ${missing.map((p) => PRODUCTS[p].name.toUpperCase()).join(", ")}</span>` : "";
     return `<header class="sr-head">
+      <i class="sr-liquid sr-liquid-l"></i><i class="sr-liquid sr-liquid-r"></i>
       <div class="sr-emblem"><img src="${ART}rack_emblem.webp" alt="" draggable="false"></div>
       <div class="sr-title">
         <img class="sr-lettering" src="${ART}rack_lettering.webp" alt="Sonicology Rack" draggable="false">

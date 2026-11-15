@@ -66,13 +66,21 @@
 
 /* ---- header ---------------------------------------------------------------------------------------------------- */
 .sr-head { position: relative; display: grid; grid-template-columns: 210px 1fr 330px; grid-template-rows: 96px 62px; column-gap: 12px; }
-.sr-head::before, .sr-head::after { /* the honeycomb behind the logo: gold walls on navy, glass glinting in the corner */
-  content: ""; position: absolute; left: -18px; top: 0; width: 380px; height: 176px; pointer-events: none;
-  background: url("rack/rack_honey_dark.webp") -30px -70px / 300px 260px;
-  -webkit-mask-image: radial-gradient(360px 200px at 30% 30%, #000 30%, transparent 80%); mask-image: radial-gradient(360px 200px at 30% 30%, #000 30%, transparent 80%);
+.sr-head::before, .sr-head::after { /* the honeycomb behind the logo, running up to the title (as the concept) */
+  content: ""; position: absolute; left: -18px; top: 0; width: calc(50% - 230px); height: 176px; pointer-events: none;   /* up to the title, in every window */
+  background: url("rack/rack_honey_dark.webp") -6px -10px / 152px 132px;
+  -webkit-mask-image: linear-gradient(90deg, #000 58%, transparent 100%); mask-image: linear-gradient(90deg, #000 58%, transparent 100%);
 }
-.sr-head::after { background: url("rack/rack_honey_glass.webp") -30px -70px / 300px 260px; filter: sepia(.55) saturate(1.25) brightness(1.08);
-  -webkit-mask-image: radial-gradient(190px 130px at 0% 0%, #000 35%, transparent 85%); mask-image: radial-gradient(190px 130px at 0% 0%, #000 35%, transparent 85%); }
+.sr-head::after { background: url("rack/rack_honey_glass.webp") -6px -10px / 152px 132px; filter: sepia(.5) saturate(1.2) brightness(1.1);
+  -webkit-mask-image: radial-gradient(150px 96px at 0% 0%, #000 45%, transparent 90%); mask-image: radial-gradient(150px 96px at 0% 0%, #000 45%, transparent 90%); }
+/* the red / blue liquid glass: a wave under the logo flowing into the button bar, a swirl behind the track picker */
+.sr-liquid { position: absolute; pointer-events: none; background: no-repeat center / 100% 100%; filter: drop-shadow(0 0 8px rgba(40, 120, 255, .35)); }
+.sr-liquid-l { left: -30px; top: 62px; width: 458px; height: 128px; background-image: url("rack/rack_liquid_left.webp");
+  -webkit-mask-image: linear-gradient(90deg, #000 72%, transparent); mask-image: linear-gradient(90deg, #000 72%, transparent); }
+.sr-liquid-r { right: -24px; top: -22px; width: 760px; height: 112px; background-image: url("rack/rack_liquid_right.webp"); }
+.sr-head::before, .sr-head::after, .sr-liquid { z-index: 0; }
+.sr-title, .sr-picker, .sr-bar { z-index: 1; }
+.sr-emblem { z-index: 2; }
 .sr-emblem { grid-row: 1 / 3; position: relative; display: flex; align-items: center; justify-content: center; }
 .sr-emblem img { width: 196px; height: auto; filter: drop-shadow(0 0 22px rgba(255, 170, 60, .45)); margin-top: -6px; }
 .sr-title { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 4px; }

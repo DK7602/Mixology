@@ -77,6 +77,7 @@ def main():
     save(fit(ring, 300), "knob_ring.webp")
 
     honeycombs()
+    liquids()
 
     # The font: Barlow Semi Condensed (SIL Open Font License, from Mixology's fonts), under rack_ names.
     fonts = os.path.join(ROOT, "plugin", "ui", "fonts")
@@ -179,6 +180,25 @@ def honeycombs():
     ivory = Image.composite(layer((255, 246, 214)), ivory, t_shine.point(lambda v: v * 0.35))  # the lines' bright shine
     ivory = ivory.resize((tw, th), Image.LANCZOS)
     save_rgb(ivory, "honey_ivory.webp")
+
+
+def liquids():
+    """The red / blue liquid glass that runs along the header (the concept: a wave under the logo flowing into the
+    button bar, a swirl behind the track picker at the top right). Cut from the user's header art
+    (03_red_blue_header_art.png): its bottom-left and top-right waves, keeping only the liquid itself (bright or
+    strongly coloured pixels), not the dark panel inside the bar."""
+    bar = load("03_red_blue_header_art.png")
+
+    def liquid_only(im):
+        r, g, b, a = im.split()
+        hi = ImageChops.lighter(ImageChops.lighter(r, g), b)
+        lo = ImageChops.darker(ImageChops.darker(r, g), b)
+        sat = ImageChops.subtract(hi, lo)
+        keep = ImageChops.lighter(sat.point(lambda v: max(0, min(255, (v - 50) * 3))), hi.point(lambda v: max(0, min(255, (v - 110) * 3))))
+        return Image.merge("RGBA", (r, g, b, ImageChops.multiply(a, keep.filter(ImageFilter.GaussianBlur(1.2)))))
+
+    save(fit(trim(liquid_only(bar.crop((0, 300, 760, 520)))), 760), "liquid_left.webp")
+    save(fit(trim(liquid_only(bar.crop((1000, 140, 2172, 330)))), 1172), "liquid_right.webp")
 
 
 def save_rgb(im, name, quality=86):
