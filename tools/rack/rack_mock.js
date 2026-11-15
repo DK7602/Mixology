@@ -82,7 +82,8 @@
   function voxBeat() {
     return { id: "vox-beat", product: "voxology", version: "0.55.0", track: "Beat", hash: H.beat, role: "beat", on: true, inDb: -9 + wob(12, 3), outDb: -9 + wob(12, 3),
       modules: [{ key: "vox.beat", state: "on", summary: "Hears F minor (sure) · shared with 3 vocals and Honey Tune", values: [v("Key", "F", 0.45), v("Scale", "Minor", 0.3)] }],
-      together: [{ level: "ok", text: "Voxology in Beat mode: it only listens for the key and changes nothing on the beat." }] };
+      together: [{ level: "ok", text: "Voxology in Beat mode: it listens for the song's key and shares it with your vocals and Honey Tune." },
+        { level: "ok", text: "Unmask dips the beat only where the vocal sits, while the vocal sings (Amount 50 %)." }] };
   }
 
   const linkMods = (on) => {

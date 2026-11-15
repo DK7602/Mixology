@@ -179,8 +179,16 @@ resizable, Masterology keeps its 16:9): the view is designed at the concept's 4:
    and knobs written as Mixology's pages write them, EQ and Assist EQ bands, gain-reduction meters, Space's effects and
    ducking); each Link and Mixology publish from their timers (the Link starts / stops with prepareToPlay /
    releaseResources now). Checked with the real plug-ins in tools/linkcheck (CI's "cross-library check"): both Links and
-   the Full Mix appear, brief then full when watched, gone when removed or stopped. Next: Voxology (13 cells, Honey Tune
-   on its track, the Beat), Masterology (12 modules).
+   the Full Mix appear, brief then full when watched, gone when removed or stopped.
+   **Voxology, Honey Tune and Masterology done 2026-11-15:** `vox/RackUnit.h` (the 13 cells in the window's order, idle
+   when switched on but set to do nothing, Pitch resting while Honey Tune tunes the track, the Tone EQ's bands, the
+   Dynamic EQ's cuts as they happen, the Beat Listener in Beat mode; its own meter copies and the vocal's spectrum while a
+   Rack watches), Honey Tune publishes itself, one entry per track with its clips (`honeyui::RackTrack` / `rackModule` in
+   HoneyView.h: notes edited, steadied, the key and where it comes from, Snap / Keep Drift / Keep Vibrato), and
+   `polisher/RackUnit.h` (the 12 modules, the Tonal EQ's bands, gain reduction for Resonance, Bass, Glue, Dynamics, the
+   clipper and the Maximizer; Drive, Input Trim, ceiling and the target in the Maximizer). Tests in each repo; real JSON
+   from all three rendered in rack.js (screenshots checked). The Beat line no longer says Beat mode changes nothing
+   (Unmask dips the beat under the vocal); unknown levels show a dash.
 4. **Wire the view** to `getRack()`, the RACK buttons, the "together" checks.
 5. **Manuals, versions, CI green in all three, Beta 14.** The user checks it in Cubase.
 

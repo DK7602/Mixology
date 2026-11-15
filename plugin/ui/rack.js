@@ -163,7 +163,7 @@
       ["Matching the level to before Voxology", "Gain staging into the mixer"],
       ["Output"]),
     "vox.beat": M("voxology", "Beat Listener", "BEAT", ["utility"], "note", "level", "notes",
-      "Voxology in Beat mode on the beat: it only listens for the song's key and shares it with your vocals and Honey Tune.",
+      "Voxology in Beat mode on the beat: it listens for the song's key and shares it with your vocals and Honey Tune; its Unmask dips the beat where the vocal sits.",
       ["Every vocal tuned to the beat's key", "Honey Tune's Auto key"],
       ["Key", "Scale"]),
 
@@ -292,7 +292,8 @@
   const MINUS = "−";
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const num = (v, d = 1) => (v < 0 ? MINUS : "") + Math.abs(v).toFixed(d);
-  const dbText = (v, d = 1) => (v == null || v <= -99 ? MINUS + "inf" : num(v, d));
+  // A reading with its unit; a dash while nothing is known (no audio yet, or no plug-in measuring it).
+  const dbText = (v, unit, d = 1) => (v == null || !isFinite(v) || v <= -99 ? "\u2014" : num(v, d) + " " + unit);
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const live = (m) => m.state === "on" || m.state === "rest" || m.state === "idle";
   const STATE_WORD = { on: "ON", off: "OFF", idle: "IDLE", rest: "RESTS" };
@@ -610,14 +611,14 @@
     const inDb = unit ? unit.inDb : null, outDb = unit ? unit.outDb : null;
     const who = unit ? (unit.role === "fullmix" ? "Full Mix" : unit.role === "master" ? "Master" : unit.track) + " · " + PRODUCTS[unit.product].name : "";
     return `<footer class="sr-foot">
-      <div class="sr-io"><b>IN</b>${seg(inDb ?? -100, "in")}<span data-val="in">${dbText(inDb)} dB</span></div>
+      <div class="sr-io"><b>IN</b>${seg(inDb ?? -100, "in")}<span data-val="in">${dbText(inDb, "dB")}</span></div>
       <div class="sr-loud">
         <div class="sr-loud-t">${icon("loud")}LOUDNESS<small>${esc(mix.source || "the mix")}</small></div>
-        <div class="sr-lbox"><b data-val="lufsI">${dbText(mix.lufsI)} LUFS</b><small>Integrated</small></div>
-        <div class="sr-lbox"><b data-val="lufsS">${dbText(mix.lufsS)} LUFS</b><small>Short-Term</small></div>
-        <div class="sr-lbox"><b data-val="tp">${dbText(mix.tp)} dBTP</b><small>True Peak</small></div>
+        <div class="sr-lbox"><b data-val="lufsI">${dbText(mix.lufsI, "LUFS")}</b><small>Integrated</small></div>
+        <div class="sr-lbox"><b data-val="lufsS">${dbText(mix.lufsS, "LUFS")}</b><small>Short-Term</small></div>
+        <div class="sr-lbox"><b data-val="tp">${dbText(mix.tp, "dBTP")}</b><small>True Peak</small></div>
       </div>
-      <div class="sr-io sr-io-out"><b>OUT</b>${seg(outDb ?? -100, "out")}<span data-val="out">${dbText(outDb)} dB</span></div>
+      <div class="sr-io sr-io-out"><b>OUT</b>${seg(outDb ?? -100, "out")}<span data-val="out">${dbText(outDb, "dB")}</span></div>
       <div class="sr-who">${esc(who)}</div>
     </footer>`;
   }
@@ -866,9 +867,9 @@
     const unit = sel ? sel.unit : t ? t.units[0] : null;
     const set = (sel2, text) => { const el = S.stage.querySelector(`[data-val="${sel2}"]`); if (el) el.textContent = text; };
     const meter = (id, db) => { const el = S.stage.querySelector(`[data-meter="${id}"] i`); if (el) el.style.width = (clamp((db + 60) / 60, 0, 1) * 100).toFixed(1) + "%"; };
-    if (unit) { meter("in", unit.inDb ?? -100); meter("out", unit.outDb ?? -100); set("in", dbText(unit.inDb) + " dB"); set("out", dbText(unit.outDb) + " dB"); }
+    if (unit) { meter("in", unit.inDb ?? -100); meter("out", unit.outDb ?? -100); set("in", dbText(unit.inDb, "dB")); set("out", dbText(unit.outDb, "dB")); }
     const mix = data.mix || {};
-    set("lufsI", dbText(mix.lufsI) + " LUFS"); set("lufsS", dbText(mix.lufsS) + " LUFS"); set("tp", dbText(mix.tp) + " dBTP");
+    set("lufsI", dbText(mix.lufsI, "LUFS")); set("lufsS", dbText(mix.lufsS, "LUFS")); set("tp", dbText(mix.tp, "dBTP"));
     if (sel) {
       const c = cat(sel.mod.key);
       if (sel.mod.meterKind === "gr") set("meter", num(sel.mod.meter || 0));

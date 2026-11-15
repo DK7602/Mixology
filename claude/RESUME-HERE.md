@@ -35,15 +35,17 @@ sends higher-resolution art, re-run it.
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
 
-## NOW: Sonicology Rack, stage 1 (planned 2026-11-14; step 1 the look and step 2 the shared link built 2026-11-15; next: step 3)
+## NOW: Sonicology Rack, stage 1 (planned 2026-11-14; steps 1 - 3 built 2026-11-15: the look, the shared link, every plug-in publishes; next: step 4, wire the view)
 - Plan: docs/rack/RACK-PLAN.md (all stages; stage 1 in detail, build order with approval gates, open questions).
 - Step 1 (2026-11-15): plugin/ui/rack.js + rack.css + plugin/ui/rack/ (art, font; tools/rack/make_art.py), preview at
   tools/rack/preview.html with tools/rack/rack_mock.js. Screenshots sent: the Rack in each window size, the Modules page,
   and the RACK button mock-ups (Voxology beside MY CHAINS, Mixology an icon tab after PRESETS, Masterology a pill before
   the gear; injected in the preview only: the plug-ins' screens are unchanged until step 4). Step 2 (2026-11-15): RackLink.h / .cpp + tests/test_rack_link.cpp, the same in all three repos (shared-files job);
   6 tests pass in all three (Release; Mixology also ASan / UBSan). Light view (click the cube), glows, darker blues,
-  EQ graph and honeycomb as the concept, all approved by the user along the way. Step 3 started: Mixology and every Link publish (RackUnit.h, rack::Publisher, linkcheck
-  checks); Voxology and Masterology next.
+  EQ graph and honeycomb as the concept, all approved by the user along the way. Step 3 done: Mixology and every Link publish (RackUnit.h, rack::Publisher, linkcheck
+  checks); Voxology (vox/RackUnit.h), Honey Tune (one entry per track it tunes) and Masterology (polisher/RackUnit.h)
+  too, tested in each repo. Next, step 4: getRack() in each plug-in (units + together + toJson), the RACK buttons, rack.js /
+  rack.css / art copied to Voxology and Masterology (add them to the shared-files job), theme saved via onTheme.
   The look: docs/rack/concepts/*.png (the user's picked concept art); the user's art files: docs/rack/art/*.png
   (received 2026-11-14; the plan says what each becomes).
 - Decided: the Rack is a VIEW inside all three plug-ins (a RACK button on each current screen, the only change to the
