@@ -473,13 +473,8 @@
 .sr-light .sr-pill-idle { color: #1f5fae; background: #e6f0fb; box-shadow: inset 0 0 0 1px rgba(58, 130, 220, .6); }
 /* chain flow */
 .sr-light .sr-flow::after { box-shadow: inset 0 0 0 3px rgba(184, 134, 42, .5), inset 0 0 22px rgba(255, 250, 235, .55); }
+/* the Chain Flow hexes keep their navy glass and glowing icons in the light view too (the user, 2026-11-15) */
 .sr-light .sr-flow-t { color: #8a5a10; background: linear-gradient(180deg, #fffaf0, #f2e3c2); border-right-color: rgba(184, 134, 42, .6); }
-.sr-light .sr-hex { background-image: url("rack/rack_hex_pearl.webp"); color: #3a2a10; filter: drop-shadow(0 3px 4px rgba(120, 80, 20, .3)); }
-.sr-light .sr-hex .sr-ic { color: #8a5a10; }
-.sr-light .sr-hex.sr-picked { color: #b0102a; filter: drop-shadow(0 0 4px #ff2e45) drop-shadow(0 0 10px rgba(255, 46, 69, .6)); }
-.sr-light .sr-hex.sr-picked .sr-ic { color: #c8102e; }
-.sr-light .sr-hex.sr-picked::before { background: radial-gradient(circle at 50% 45%, rgba(255, 120, 135, .35), rgba(255, 60, 80, .12)); }
-.sr-light .sr-hex-next .sr-ic { color: #b07a12; }
 /* the module */
 .sr-light .sr-mod-sum span { color: #3a2a10; }
 .sr-light .sr-mod-sum small { color: #1a7fb0; }
@@ -588,13 +583,13 @@
 /* the light view: the same glows, a little softer on white */
 .sr-light .sr-row .sr-ic, .sr-light .sr-ph .sr-ic, .sr-light .sr-catrow .sr-ic, .sr-light .sr-where .sr-ic, .sr-light .sr-fchip .sr-ic,
 .sr-light .sr-coach h4 .sr-ic, .sr-light .sr-cardinfo h4 .sr-ic, .sr-light .sr-back .sr-ic, .sr-light .sr-seg button .sr-ic,
-.sr-light .sr-li-ok, .sr-light .sr-uses .sr-ic, .sr-light .sr-hex .sr-ic, .sr-light .sr-hex-next .sr-ic {
+.sr-light .sr-li-ok, .sr-light .sr-uses .sr-ic {
   filter: drop-shadow(0 0 2px rgba(240, 170, 40, .75)) drop-shadow(0 0 6px rgba(240, 180, 60, .4)); }
 .sr-light .sr-pk-arrow .sr-ic, .sr-light .sr-pk-name .sr-ic { filter: drop-shadow(0 0 2px rgba(240, 170, 40, .6)); }
-.sr-light .sr-hex.sr-picked .sr-ic { filter: drop-shadow(0 0 3px rgba(255, 60, 80, .8)); }
 .sr-light .sr-row.sr-picked, .sr-light .sr-catrow.sr-picked {
   box-shadow: inset 0 0 0 2px #ff8a96, 0 0 0 1px rgba(255, 80, 100, .5), 0 0 12px rgba(255, 46, 69, .7), 0 0 26px rgba(255, 46, 69, .3); }
 .sr-light .sr-row.sr-picked .sr-ic, .sr-light .sr-catrow.sr-picked .sr-ic { filter: drop-shadow(0 0 3px rgba(255, 255, 255, .9)); }
 .sr-light .sr-ov-sel b { color: #d0142c !important; text-shadow: 0 0 6px rgba(255, 46, 69, .35); }
 .sr-light .sr-li-sel { color: #d0142c; }
 .sr-light .sr-meter { filter: drop-shadow(0 0 3px rgba(58, 150, 255, .35)); }
+.sr-light .sr-hex { color: #eaf2ff; }   /* as in the dark view (the plug-in tone colours don't apply to the hexes) */

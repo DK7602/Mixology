@@ -61,7 +61,6 @@ def main():
     save(fit(trim(load("03_red_blue_header_art.png")), 2172), "bar.webp", quality=90)
     # (04_honeycomb_tile.png is not used: the honeycomb backgrounds are made from the concept art, see honeycombs())
     save(fit(trim(load("06_hex_cell.png")), 260), "hex_navy.webp")
-    save(fit(trim(pearl_hex(load("06_hex_cell.png"))), 260), "hex_pearl.webp")
     save(fit(trim(load("07_frame_corner.png")), 260), "corner.webp")
 
     # Knob: the cap is the gold disc with its pointer (inside the dark ring, about 0.66 of the radius); it turns.

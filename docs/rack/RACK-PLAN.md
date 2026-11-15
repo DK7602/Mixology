@@ -249,7 +249,7 @@ checked.
 
 **The light view** (the user, 2026-11-15): clicking the cube switches between the dark view and a light one: divine white
 and ivory with a pearly sheen and gold instead of the dark blues; the gold, the red / blue chrome, the ON pills, meters
-and EQ colours stay. Its own art: `rack_hex_pearl`, `rack_honey_pearl`, `rack_bar_pearl` (the chrome bar with a pearl
+and EQ colours stay. The Chain Flow hexes stay navy with their glowing icons (the user's choice). Its own art: `rack_honey_pearl`, `rack_bar_pearl` (the chrome bar with a pearl
 inside), all from `make_art.py`. The Rack keeps the choice in the browser storage when it can; in step 4 each plug-in
 passes its saved choice (`theme`) and saves the new one (`onTheme`) with its settings, so it survives everywhere.
 
