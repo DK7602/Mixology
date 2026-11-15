@@ -162,6 +162,16 @@ resizable, Masterology keeps its 16:9): the view is designed at the concept's 4:
    rack.js / rack.css are in Mixology's UI folder (its build embeds them, unused until step 4); the other repos get the
    shared files in step 4.
 2. **The shared block** (`RackLink`) with its tests, Release and ASan / UBSan.
+   **Built 2026-11-15:** `dsp/include/suite/RackLink.h`, `dsp/src/RackLink.cpp`, `tests/test_rack_link.cpp`, the same in all
+   three repos (in the suite's "Shared files match" job). Block "SonicologyRack.v1.<pid>", 256 slots (about 4 MB of
+   address space; only the slots in use are touched): each a Unit (product, role, track, levels, latency, up to 16
+   modules with state / summary / "set by" / meter / 8 values / 8 EQ bands / Space layers, 4 own lines, a 128-bin
+   spectrum). `claim` / `publish` / `release` like the suite link (seqlock, heartbeat, take-over after 2 s); `view` /
+   `watched` (the viewer heartbeat: details only while a Rack is open); `units`; `together` (two compressors / reverbs /
+   delays on a vocal, a vocal without a Link, Honey Tune with Pitch resting or not, tracks sharing a name, the Beat,
+   two Mixologys or Masterologys, Mixology's Limiter before Masterology, no Mixology on the master, Links without
+   Mixology); `toJson` (locale-independent, finite numbers, the spectrum normalised for the EQ graph). Checked end to end:
+   units published through the real process block, read back, turned into JSON and shown by rack.js.
 3. **Each plug-in publishes** its modules (tests per repo).
 4. **Wire the view** to `getRack()`, the RACK buttons, the "together" checks.
 5. **Manuals, versions, CI green in all three, Beta 14.** The user checks it in Cubase.

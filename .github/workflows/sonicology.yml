@@ -52,7 +52,7 @@ jobs:
       - name: Compare
         run: |
           bad=0
-          for f in dsp/include/suite/SuiteLink.h dsp/src/SuiteLink.cpp plugin/ui/daws.js plugin/ui/mixstyles.js; do
+          for f in dsp/include/suite/SuiteLink.h dsp/src/SuiteLink.cpp dsp/include/suite/RackLink.h dsp/src/RackLink.cpp tests/test_rack_link.cpp plugin/ui/daws.js plugin/ui/mixstyles.js; do
             if [ "$(md5sum mixology/$f voxology/$f masterology/$f | cut -d' ' -f1 | sort -u | wc -l)" = 1 ]; then
               echo "same in all three: $f"
             else
