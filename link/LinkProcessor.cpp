@@ -120,6 +120,7 @@ void MixologyLinkProcessor::prepareToPlay (double sampleRate, int)
     trimGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (static_cast<double> (trimParam->load())));
     assist.setTarget (assistSettings());
     assist.prepare (sampleRate, juce::jmax (1, getTotalNumOutputChannels()));
+    rackPub.start();
     const auto values = procRaw.read();
     chain.prepare (sampleRate, juce::jmax (1, getTotalNumOutputChannels()));
     if (mixology::proc::isOn (values, mixology::proc::Module::space)) chain.ensureSpace();
@@ -239,6 +240,9 @@ void MixologyLinkProcessor::process (juce::AudioBuffer<Sample>& buffer)
         registry.publishMeters (slot, l, r, meter.momentaryLufs(), meter.shortTermLufs(), meter.channels(), now);
         const auto pm = chain.takeMeters();
         running.store (pm.running, std::memory_order_relaxed);
+        float mv[mixology::proc::kMeterValues];
+        mixology::proc::meterValues (pm, mv);
+        for (int i = 0; i < mixology::proc::kMeterValues; ++i) rackMeters[static_cast<std::size_t> (i)].store (mv[i], std::memory_order_relaxed);
         spaceWet.store (pm.spaceWet, std::memory_order_relaxed);
         registry.publishProcMeters (slot, pm, now);
         lastAudioMs.store (now, std::memory_order_relaxed);
@@ -252,6 +256,7 @@ void MixologyLinkProcessor::processBlock (juce::AudioBuffer<double>& buffer, juc
 template <typename Sample>
 void MixologyLinkProcessor::bypass (juce::AudioBuffer<Sample>& buffer)
 {
+    lastBypassMs.store (mixology::link::nowMs(), std::memory_order_relaxed);
     if (resetWanted.exchange (false))
     {
         assist.reset();
@@ -322,6 +327,7 @@ void MixologyLinkProcessor::timerCallback()
     {
         setAssist (wanted);
         trimNote = wanted.neutral() ? "Mixology cleared the Assist EQ" : "Mixology set the Assist EQ";
+        assistFromMixology = ! wanted.neutral();
     }
 
     // Processing: Mixology's page moves, applied like your own (host parameters), then what we have now.
@@ -346,6 +352,49 @@ void MixologyLinkProcessor::timerCallback()
         resolveDuck();
         registry.publishDuck (slot, duck);
     }
+
+    publishRack();
+}
+
+void MixologyLinkProcessor::publishRack()
+{
+    const auto now = suite::nowMs();
+    const auto due = rackPub.due (now);
+    if (due == rack::Publisher::Due::none) return;
+
+    const auto linkNow = mixology::link::nowMs();
+    const bool playing = linkNow - std::min (linkNow, lastAudioMs.load (std::memory_order_relaxed)) < 1000;
+    mixology::rackunit::State st;
+    st.values = procRaw.read();
+    st.assist = assistSettings();
+    if (st.assist.neutral()) assistFromMixology = false;
+    st.assistByMixology = assistFromMixology;
+    if (playing)
+    {
+        float mv[mixology::proc::kMeterValues];
+        for (int i = 0; i < mixology::proc::kMeterValues; ++i) mv[i] = rackMeters[static_cast<std::size_t> (i)].load (std::memory_order_relaxed);
+        st.meters = mixology::proc::metersFrom (mv, running.load (std::memory_order_relaxed));
+        st.hasMeters = true;
+    }
+    st.duckNames = duckNames().joinIntoString (", ").toStdString();
+
+    rack::Unit u;
+    u.product = rack::Product::link;
+    u.role = rack::Role::track;
+    u.track = trackIdentity.hasName ? trackIdentity.name.toStdString() : std::string();
+    u.version = static_cast<std::uint32_t> (JucePlugin_VersionCode);
+    u.on = linkNow - std::min (linkNow, lastBypassMs.load (std::memory_order_relaxed)) > 500;
+    if (playing)
+    {
+        u.inDb = std::max (st.meters.inL, st.meters.inR);
+        u.outDb = std::max (st.meters.outL, st.meters.outR);
+    }
+    const double rate = currentRate.load();
+    u.latencyMs = rate > 0.0 ? static_cast<float> (latencyTold.load() * 1000.0 / rate) : 0.0f;
+    u.modules = mixology::rackunit::modules (st, due == rack::Publisher::Due::full);
+    if (mixologyOpen() && pairing() == mixology::link::MatchStatus::matched)
+        u.lines.push_back ({ rack::Level::ok, "Mixology hears this track through its Link." });
+    rackPub.publish (std::move (u), now);
 }
 
 void MixologyLinkProcessor::setDuck (const mixology::link::DuckSources& d)

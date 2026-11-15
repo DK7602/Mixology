@@ -17,6 +17,7 @@ add_library(mixology_dsp STATIC
     src/SharedBlock.cpp
     src/SuiteLink.cpp
     src/RackLink.cpp
+    src/RackUnit.cpp
     src/SetupCheck.cpp
     src/Presets.cpp
     src/History.cpp

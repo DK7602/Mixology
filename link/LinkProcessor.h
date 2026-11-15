@@ -4,8 +4,10 @@
 #include "mixology/AudioRing.h"
 #include "mixology/LinkRegistry.h"
 #include "mixology/ProcChain.h"
+#include "mixology/RackUnit.h"
 #include "mixology/TrackAnalyzer.h"
 #include "mixology/TrackMeter.h"
+#include "suite/RackLink.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -42,7 +44,7 @@ public:
     ~MixologyLinkProcessor() override;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
-    void releaseResources() override {}
+    void releaseResources() override { rackPub.stop(); }   // out of the Sonicology Rack (another project plays)
     /** The host stops or jumps (AU Reset, VST3 processing off): reverb and delay tails stop, at the start of the
         next block (instant, so any thread may call this). */
     void reset() override { resetWanted.store (true); }
@@ -117,6 +119,7 @@ private:
     void publishIdentity();
     void setDuck (const mixology::link::DuckSources&);   // message thread: use, save with the project, publish
     void resolveDuck();                                  // message thread: which slots those tracks have now
+    void publishRack();                                  // message thread: what this Link does, for the Sonicology Rack
 
     struct AnalysisThread : juce::TimeSliceThread
     {
@@ -167,6 +170,12 @@ private:
 
     Identity trackIdentity;
     juce::String trimNote;
+
+    // The Sonicology Rack: this Link's modules (message thread), its module meters as the audio thread last took them.
+    rack::Publisher rackPub;
+    std::array<std::atomic<float>, mixology::proc::kMeterValues> rackMeters {};
+    std::atomic<std::uint64_t> lastBypassMs { 0 };
+    bool assistFromMixology = false;   // Mixology's Clean Up / Vocal Pocket set the Assist EQ
 
     std::array<std::atomic<float>, 2> editorPeak { -100.0f, -100.0f };
     std::atomic<float> momentary { -100.0f }, shortTerm { -100.0f };

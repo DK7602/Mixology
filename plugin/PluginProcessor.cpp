@@ -131,6 +131,53 @@ void MixologyAudioProcessor::timerCallback()
         ticksSinceFeed = 0;
         feedAnalysis();
     }
+    publishRack();
+}
+
+void MixologyAudioProcessor::publishRack()
+{
+    const auto now = suite::nowMs();
+    const auto due = rackPub.due (now);
+    if (due == rack::Publisher::Due::none) return;
+
+    const auto wall = juce::Time::currentTimeMillis();
+    const bool playing = wall - lastAudioMs.load (std::memory_order_relaxed) < 1000;
+    mixology::rackunit::State st;
+    st.link = false;
+    st.values = procRaw.read();
+    if (playing)
+    {
+        float mv[mixology::proc::kMeterValues];
+        for (int i = 0; i < mixology::proc::kMeterValues; ++i) mv[i] = rackMeters[static_cast<std::size_t> (i)].load (std::memory_order_relaxed);
+        st.meters = mixology::proc::metersFrom (mv, procRunning.load (std::memory_order_relaxed));
+        st.hasMeters = true;
+    }
+
+    rack::Unit u;
+    u.product = rack::Product::mixology;
+    juce::String name;
+    {
+        const juce::ScopedLock sl (stateLock);
+        name = trackName;
+    }
+    const bool onMaster = name.isEmpty() || BridgeHub::looksLikeMaster (name);
+    u.role = onMaster ? rack::Role::fullmix : rack::Role::track;
+    if (! onMaster) u.track = name.toStdString();
+    u.version = static_cast<std::uint32_t> (JucePlugin_VersionCode);
+    u.on = wall - lastBypassMs.load (std::memory_order_relaxed) > 500;
+    if (playing)
+    {
+        u.inDb = std::max (st.meters.inL, st.meters.inR);
+        u.outDb = std::max (st.meters.outL, st.meters.outR);
+    }
+    const double rate = getSampleRate();
+    u.latencyMs = rate > 0.0 ? static_cast<float> (latencyTold.load() * 1000.0 / rate) : 0.0f;
+    u.modules = mixology::rackunit::modules (st, due == rack::Publisher::Due::full);
+    const auto& v = st.values;
+    if (onMaster && mixology::proc::isOn (v, mixology::proc::Module::final) && v[mixology::proc::finOut] <= -0.5f)
+        u.lines.push_back ({ rack::Level::ok, "Room made for Masterology: the Full Mix's Final Output is "
+                                                  + mixology::rackunit::valueText (mixology::proc::finOut, v[mixology::proc::finOut]) + "." });
+    rackPub.publish (std::move (u), now);
 }
 
 void MixologyAudioProcessor::feedAnalysis()
@@ -246,11 +293,13 @@ void MixologyAudioProcessor::prepareToPlay (double sampleRate, int)
     latencyTold.store (getLatencySamples());
     prepared.store (true);
     suitePresence.start();   // on the suite link from the next look (timerCallback)
+    rackPub.start();         // ... and in the Sonicology Rack
 }
 
 void MixologyAudioProcessor::releaseResources()
 {
     suitePresence.stop();
+    rackPub.stop();
 }
 
 template <typename Sample>
@@ -276,6 +325,7 @@ void MixologyAudioProcessor::process (juce::AudioBuffer<Sample>& buffer)
         mixology::proc::meterValues (m, v);
         for (int i = 0; i < mixology::proc::kMeterValues; ++i)
         {
+            rackMeters[static_cast<std::size_t> (i)].store (v[i], std::memory_order_relaxed);
             auto& a = procMeters[static_cast<std::size_t> (i)];
             if (i == 8) { if (std::abs (v[i]) > std::abs (a.load (std::memory_order_relaxed))) a.store (v[i], std::memory_order_relaxed); }   // transient: largest move
             else storeMax (a, v[i]);
@@ -355,6 +405,7 @@ void MixologyAudioProcessor::processBlock (juce::AudioBuffer<double>& buffer, ju
 template <typename Sample>
 void MixologyAudioProcessor::bypass (juce::AudioBuffer<Sample>& buffer)
 {
+    lastBypassMs.store (juce::Time::currentTimeMillis(), std::memory_order_relaxed);
     if (resetWanted.exchange (false)) chain.reset();
     // JUCE's own bypass passes the sound on time while the host still moves it earlier by the latency it was told.
     chain.bypass (buffer.getArrayOfWritePointers(), buffer.getNumChannels(), buffer.getNumSamples(),

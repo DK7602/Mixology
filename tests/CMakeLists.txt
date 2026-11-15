@@ -15,6 +15,7 @@ add_executable(mixology_tests
     test_polish.cpp
     test_suite.cpp
     test_rack_link.cpp
+    test_rack_unit.cpp
     test_setup.cpp
     test_presets.cpp
     test_history.cpp

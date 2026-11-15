@@ -42,7 +42,8 @@ sends higher-resolution art, re-run it.
   and the RACK button mock-ups (Voxology beside MY CHAINS, Mixology an icon tab after PRESETS, Masterology a pill before
   the gear; injected in the preview only: the plug-ins' screens are unchanged until step 4). Step 2 (2026-11-15): RackLink.h / .cpp + tests/test_rack_link.cpp, the same in all three repos (shared-files job);
   6 tests pass in all three (Release; Mixology also ASan / UBSan). Light view (click the cube), glows, darker blues,
-  EQ graph and honeycomb as the concept, all approved by the user along the way. Next: step 3, each plug-in publishes.
+  EQ graph and honeycomb as the concept, all approved by the user along the way. Step 3 started: Mixology and every Link publish (RackUnit.h, rack::Publisher, linkcheck
+  checks); Voxology and Masterology next.
   The look: docs/rack/concepts/*.png (the user's picked concept art); the user's art files: docs/rack/art/*.png
   (received 2026-11-14; the plan says what each becomes).
 - Decided: the Rack is a VIEW inside all three plug-ins (a RACK button on each current screen, the only change to the

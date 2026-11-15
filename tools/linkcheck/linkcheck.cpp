@@ -11,6 +11,7 @@
 
 #include "mixology/BridgeProtocol.h"
 #include "mixology/LinkRegistry.h"
+#include "suite/RackLink.h"
 #include "suite/SuiteLink.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -62,6 +63,13 @@ namespace
             if (b > blocks / 2) peak = std::max (peak, buffer.getMagnitude (0, 0, block));
         }
         return peak;
+    }
+
+    const rack::Unit* rackUnit (const std::vector<rack::Unit>& units, rack::Product product, const std::string& track)
+    {
+        for (const auto& u : units)
+            if (u.product == product && u.track == track) return &u;
+        return nullptr;
     }
 
     const suite::VocalInfo* vocalNamed (const std::vector<suite::VocalInfo>& vocals, const std::string& name)
@@ -213,6 +221,27 @@ int main (int argc, char** argv)
     check (k->nameHash == mixology::bridge::nameHash ("Kick"), "name hash matches the Cubase bridge's");
     check (k->identity.hasColour && k->identity.rgb == 0xd23b3bu, "colour arrived: #" + juce::String::toHexString (static_cast<int> (k->identity.rgb)));
     check (k->audio && b->audio, "audio seen");
+
+    // The Sonicology Rack: both Links tell it their modules, briefly while no Rack view is open.
+    {
+        auto units = rack::Link::process().units (suite::nowMs());
+        const auto* rk = rackUnit (units, rack::Product::link, "Kick");
+        const auto* rb = rackUnit (units, rack::Product::link, "808 Bass");
+        check (rk != nullptr && rb != nullptr && rack::Link::processShared(), "Rack: both Links publish to the Sonicology Rack");
+        check (rk != nullptr && rk->modules.size() == 15 && rk->modules.front().key == "mix.assist" && rk->modules.back().key == "mix.limit",
+               "Rack: ... all 15 modules in signal order (Assist EQ .. Limiter)");
+        check (rk != nullptr && ! rk->detailed && rk->version != 0 && rk->hash == mixology::bridge::nameHash ("Kick"),
+               "Rack: ... briefly while no Rack view is open, with the bridge's name hash");
+        rack::Link::process().view (suite::nowMs());   // a Rack view opens
+        pump (500);
+        units = rack::Link::process().units (suite::nowMs());
+        rk = rackUnit (units, rack::Product::link, "Kick");
+        const rack::Module* comp = nullptr;
+        if (rk != nullptr)
+            for (const auto& m : rk->modules) if (m.key == "mix.comp") comp = &m;
+        check (rk != nullptr && rk->detailed && comp != nullptr && comp->values.size() >= 6 && comp->state == rack::State::off,
+               "Rack: ... in full once a Rack view watches (the Compressor's controls, switched off)");
+    }
     check (std::abs (k->peakL + 12.04f) < 0.3f, "Kick level -12 dBFS after its Trim: " + juce::String (k->peakL, 2));
     check (std::abs (b->peakR + 6.02f) < 0.3f, "808 level -6 dBFS: " + juce::String (b->peakR, 2));
     check (b->momentary < -5.0f && b->momentary > -9.0f, "808 loudness about -6 LUFS: " + juce::String (b->momentary, 2));
@@ -532,6 +561,11 @@ int main (int argc, char** argv)
     bass.reset();
     pump (100);
     check (registry.links (nowMs()).empty(), "removing the plug-ins frees their slots");
+    {
+        bool gone = true;
+        for (const auto& u : rack::Link::process().units (suite::nowMs())) gone &= u.product != rack::Product::link;
+        check (gone, "Rack: ... and their places in the Sonicology Rack");
+    }
 
     // Mixology itself (when its path is given): the Full Mix processing changes the sound through its host
     // parameters, the way the EQ / Dynamics / Tone / Stereo pages set them.
@@ -630,10 +664,30 @@ int main (int argc, char** argv)
         check (seen && handoff.integratedLufs > -40.0f && handoff.peakDbtp > -40.0f && handoff.version != 0,
                "... with the mix's loudness and peaks (" + juce::String (handoff.integratedLufs, 1) + " LUFS, " + juce::String (handoff.peakDbtp, 1) + " dBTP)");
 
+        // The Sonicology Rack: Mixology on the master channel publishes the Full Mix's modules; gone once the host stops it.
+        {
+            rack::Link::process().view (suite::nowMs());
+            pump (500);
+            auto units = rack::Link::process().units (suite::nowMs());
+            const rack::Unit* fm = nullptr;
+            for (const auto& u : units) if (u.product == rack::Product::mixology) fm = &u;
+            check (fm != nullptr && fm->role == rack::Role::fullmix && fm->modules.size() == 14 && fm->detailed,
+                   "Rack: Mixology publishes the Full Mix's 14 modules");
+            const auto lines = rack::together (units);
+            const auto json = rack::toJson ("mixology", 0, units, lines, {});
+            check (json.find ("\"product\":\"mixology\"") != std::string::npos && json.find ("\"role\":\"fullmix\"") != std::string::npos
+                       && json.find ("\"key\":\"mix.final\"") != std::string::npos,
+                   "Rack: ... and the view's JSON has it (" + juce::String (static_cast<int> (json.size())) + " bytes)");
+        }
+
         // Optional (local): the real Voxology and Masterology next to Mixology, all three in this one process.
         if (argc > 3) checkVoxology (format, juce::String::fromUTF8 (argv[3]), sr, block);
         if (argc > 4) checkMasterology (format, juce::String::fromUTF8 (argv[4]), sr, block);
         mix->releaseResources();
+        pump (400);
+        bool gone = true;
+        for (const auto& u : rack::Link::process().units (suite::nowMs())) gone &= u.product != rack::Product::mixology;
+        check (gone, "Rack: Mixology leaves the Rack when the host stops it (another project plays)");
     }
 
     std::printf ("%s (%d failed)\n", failures == 0 ? "ALL PASSED" : "FAILED", failures);

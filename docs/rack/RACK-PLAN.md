@@ -173,6 +173,14 @@ resizable, Masterology keeps its 16:9): the view is designed at the concept's 4:
    Mixology); `toJson` (locale-independent, finite numbers, the spectrum normalised for the EQ graph). Checked end to end:
    units published through the real process block, read back, turned into JSON and shown by rack.js.
 3. **Each plug-in publishes** its modules (tests per repo).
+   **Mixology done 2026-11-15:** `rack::Publisher` (in the shared RackLink: the slot, the suite link's "only the project
+   that plays" rule via suite::Presence, brief about every 0.8 s, full about 5 a second while a Rack view watches);
+   `mixology/RackUnit.h` (framework-free, tested: a Link's 15 modules / the Full Mix's 14 in signal order, states, summaries
+   and knobs written as Mixology's pages write them, EQ and Assist EQ bands, gain-reduction meters, Space's effects and
+   ducking); each Link and Mixology publish from their timers (the Link starts / stops with prepareToPlay /
+   releaseResources now). Checked with the real plug-ins in tools/linkcheck (CI's "cross-library check"): both Links and
+   the Full Mix appear, brief then full when watched, gone when removed or stopped. Next: Voxology (13 cells, Honey Tune
+   on its track, the Beat), Masterology (12 modules).
 4. **Wire the view** to `getRack()`, the RACK buttons, the "together" checks.
 5. **Manuals, versions, CI green in all three, Beta 14.** The user checks it in Cubase.
 

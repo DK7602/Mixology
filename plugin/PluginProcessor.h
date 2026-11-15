@@ -5,6 +5,8 @@
 #include "mixology/AudioRing.h"
 #include "mixology/LoudnessMeter.h"
 #include "mixology/ProcChain.h"
+#include "mixology/RackUnit.h"
+#include "suite/RackLink.h"
 #include "mixology/TrackAnalyzer.h"
 #include "BridgeHub.h"
 #include "ProcHost.h"
@@ -130,6 +132,13 @@ private:
     const std::uint64_t instanceId = (static_cast<std::uint64_t> (juce::Random::getSystemRandom().nextInt64()) | 1u);
     void syncStyle();
     suite::Presence suitePresence;   // taking part in the suite link (prepareToPlay .. releaseResources)
+
+    // The Sonicology Rack: the Full Mix's modules (message thread), its module meters from the last block (audio thread;
+    // not the window's, which are taken when read).
+    void publishRack();
+    rack::Publisher rackPub;
+    std::array<std::atomic<float>, mixology::proc::kMeterValues> rackMeters {};
+    std::atomic<juce::int64> lastBypassMs { 0 };
 
     // The project this Mixology belongs to (the hub keeps each open project's state apart), and what it last
     // loaded or saved for it.
