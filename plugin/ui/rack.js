@@ -7,7 +7,9 @@
 // The Rack only shows; the plug-ins do the processing (stage 1 of docs/rack/RACK-PLAN.md in Mixology's repo).
 // A plug-in opens it over its own page:
 //   SonicologyRack.open({ host: "voxology" | "mixology" | "masterology", getRack: () => Promise<data>, back: () => {},
-//                         art: "rack/" (where the rack_*.webp files are, from the page) })
+//                         art: "rack/" (where the rack_*.webp files are, from the page),
+//                         theme: "dark" | "light" (the plug-in's saved one), onTheme: (theme) => {} (save it) })
+// Clicking the cube switches between the dark and the light view.
 // getRack() returns what every plug-in publishes into the shared block (RackLink), as JSON:
 //   { host, hostHash, units: [ { id, product, version, track, hash, role, on, inDb, outDb, modules: [ { key, state,
 //     summary, by, meterKind, meter, values: [ { name, text, norm, bi } ], bands: [ { type, hz, db, q } ], layers } ],
@@ -301,7 +303,19 @@
     root: null, stage: null, opts: null, timer: 0, data: null, sig: "",
     page: "rack", track: null, sel: null, unfold: {}, hist: {},
     filter: "all", search: "", card: null, inProject: null,
+    theme: "dark",
   };
+
+  // The light / dark view: the plug-in's saved choice, else the last one in this browser (if it keeps any)
+  const THEME_KEY = "sonicologyRackTheme";
+  function savedTheme() {
+    try { const t = window.localStorage.getItem(THEME_KEY); return t === "light" || t === "dark" ? t : null; } catch (e) { return null; }
+  }
+  function setTheme(t) {
+    S.theme = t === "light" ? "light" : "dark";
+    if (S.root) S.root.classList.toggle("sr-light", S.theme === "light");
+    try { window.localStorage.setItem(THEME_KEY, S.theme); } catch (e) { /* no storage: fine */ }
+  }
 
   // The project's tracks, from the units: { key, name, role, units (in signal order) }.
   function tracks(data) {
@@ -559,7 +573,7 @@
     const miss = missing.length ? `<span class="sr-suite sr-suite-missing">NOT IN THIS PROJECT: ${missing.map((p) => PRODUCTS[p].name.toUpperCase()).join(", ")}</span>` : "";
     return `<header class="sr-head">
       <i class="sr-liquid sr-liquid-l"></i><i class="sr-liquid sr-liquid-r"></i>
-      <div class="sr-emblem"><img src="${ART}rack_emblem.webp" alt="" draggable="false"></div>
+      <div class="sr-emblem"><img src="${ART}rack_emblem.webp" alt="Light / dark view" title="Click: ${S.theme === "light" ? "dark" : "light"} view" draggable="false" data-sr="theme"></div>
       <div class="sr-title">
         <img class="sr-lettering" src="${ART}rack_lettering.webp" alt="Sonicology Rack" draggable="false">
         <div class="sr-sub"><span>YOUR WHOLE SUITE</span> IN ONE VIEW</div>
@@ -900,6 +914,10 @@
     const idx = list.findIndex((t) => t.key === S.track);
     if (a !== "track-menu" && a !== "menu") S.menu = false;
     if (a === "back") { close(); if (S.opts && S.opts.back) S.opts.back(); return; }
+    else if (a === "theme") {
+      setTheme(S.theme === "light" ? "dark" : "light");
+      if (S.opts && S.opts.onTheme) { try { S.opts.onTheme(S.theme); } catch (e) { /* the plug-in's problem */ } }
+    }
     else if (a === "page") { S.page = el.dataset.page; }
     else if (a === "track-prev" && idx > 0) { S.track = list[idx - 1].key; S.sel = null; }
     else if (a === "track-next" && idx >= 0 && idx < list.length - 1) { S.track = list[idx + 1].key; S.sel = null; }
@@ -945,6 +963,7 @@
     if (opts && opts.track) S.track = opts.track;
     S.root = document.createElement("div");
     S.root.className = "sr-root";
+    setTheme(S.opts.theme === "light" || S.opts.theme === "dark" ? S.opts.theme : savedTheme() || "dark");
     S.stage = document.createElement("div");
     S.stage.className = "sr-stage";
     S.root.appendChild(S.stage);
@@ -974,8 +993,9 @@
     if (o.card) S.card = o.card;
     if (o.filter) S.filter = o.filter;
     if (o.menu != null) S.menu = o.menu;
+    if (o.theme) setTheme(o.theme);
     render();
   }
 
-  window.SonicologyRack = { open, close, show, isOpen: () => !!S.root, catalog: CATALOG, products: PRODUCTS };
+  window.SonicologyRack = { open, close, show, isOpen: () => !!S.root, theme: () => S.theme, catalog: CATALOG, products: PRODUCTS };
 })();

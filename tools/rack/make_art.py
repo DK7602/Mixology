@@ -61,6 +61,7 @@ def main():
     save(fit(trim(load("03_red_blue_header_art.png")), 2172), "bar.webp", quality=90)
     # (04_honeycomb_tile.png is not used: the honeycomb backgrounds are made from the concept art, see honeycombs())
     save(fit(trim(load("06_hex_cell.png")), 260), "hex_navy.webp")
+    save(fit(trim(pearl_hex(load("06_hex_cell.png"))), 260), "hex_pearl.webp")
     save(fit(trim(load("07_frame_corner.png")), 260), "corner.webp")
 
     # Knob: the cap is the gold disc with its pointer (inside the dark ring, about 0.66 of the radius); it turns.
@@ -163,6 +164,15 @@ def honeycombs():
     navy = Image.composite(Image.new("RGB", (tw * OUTK, th * OUTK), (150, 96, 24)), navy, wall_glow.point(lambda v: v * 0.30))
     save_rgb(Image.composite(glass, navy, wall), "honey_dark.webp")
 
+    # the light view: pearly white cells (a faint pink / blue / gold sheen, from the glass's own shading) in the same
+    # gold walls
+    pearl = Image.merge("RGB", (lum.point(lambda v: 246 + (v - 170) * 0.07), lum.point(lambda v: 242 + (v - 170) * 0.07), lum.point(lambda v: 236 + (v - 170) * 0.08)))
+    sheen = Image.linear_gradient("L").resize((tw * OUTK, th * OUTK)).rotate(35, expand=False)
+    pearl = Image.composite(Image.new("RGB", (tw * OUTK, th * OUTK), (250, 236, 240)), pearl, sheen.point(lambda v: v * 0.35))
+    pearl = Image.composite(Image.new("RGB", (tw * OUTK, th * OUTK), (232, 242, 250)), pearl, sheen.point(lambda v: (255 - v) * 0.30))
+    pearl = Image.composite(Image.new("RGB", (tw * OUTK, th * OUTK), (246, 214, 140)), pearl, wall_glow.point(lambda v: v * 0.35))
+    save_rgb(Image.composite(glass, pearl, wall), "honey_pearl.webp")
+
     # the knob panel: pearly ivory cells framed by thin lines of real-looking gold (the same layers as the glass
     # honeycomb's walls: a darker edge, gold, a bright middle, a warm glow), as the concept's knob panel
     cells_lum = canvas.convert("L")
@@ -184,6 +194,24 @@ def honeycombs():
     save_rgb(ivory, "honey_ivory.webp")
 
 
+def pearl_hex(im):
+    """The hex cell for the light view: its navy glass turned to pearl, the gold frame kept."""
+    r, g, b, a = im.split()
+    gold = ImageChops.subtract(r, b).point(lambda v: max(0, min(255, (v - 25) * 4)))   # the gold frame (and red glow)
+    lum = im.convert("L")
+    blue = ImageChops.multiply(ImageChops.subtract(b, r).point(lambda v: max(0, min(255, (v - 70) * 3))), lum.point(lambda v: max(0, min(255, (v - 60) * 3))))
+    gold = ImageChops.lighter(gold, blue)                                                 # ... and the blue glow
+    w, h = im.size
+    base = Image.merge("RGB", (lum.point(lambda v: min(255, 244 + v * 0.05)), lum.point(lambda v: min(255, 240 + v * 0.05)), lum.point(lambda v: min(255, 232 + v * 0.06))))
+    shade = Image.radial_gradient("L").resize((w, h))            # brighter in the middle, a pearly edge
+    base = Image.composite(Image.new("RGB", (w, h), (226, 214, 196)), base, shade.point(lambda v: max(0, v - 120) * 0.9))
+    sheen = Image.linear_gradient("L").resize((w, h)).rotate(30)
+    base = Image.composite(Image.new("RGB", (w, h), (242, 228, 236)), base, sheen.point(lambda v: v * 0.25))
+    out = Image.composite(im.convert("RGB"), base, gold)
+    out.putalpha(a)
+    return out
+
+
 def liquids():
     """The red / blue liquid glass that runs along the header (the concept: a wave under the logo flowing into the
     button bar, a swirl behind the track picker at the top right). Cut from the user's header art
@@ -198,6 +226,22 @@ def liquids():
         sat = ImageChops.subtract(hi, lo)
         keep = ImageChops.lighter(sat.point(lambda v: max(0, min(255, (v - 50) * 3))), hi.point(lambda v: max(0, min(255, (v - 110) * 3))))
         return Image.merge("RGBA", (r, g, b, ImageChops.multiply(a, keep.filter(ImageFilter.GaussianBlur(1.2)))))
+
+    # the light view's bar: the same chrome edges, a pearly white inside
+    lq = liquid_only(bar)
+    w, h = bar.size
+    fill = Image.merge("RGB", tuple(Image.linear_gradient("L").resize((w, h)).point(lambda v, c=c: c[0] + (c[1] - c[0]) * v / 255) for c in ((255, 236), (253, 226), (247, 204))))
+    sheen = Image.linear_gradient("L").rotate(90).resize((w, h))
+    fill = Image.composite(Image.new("RGB", (w, h), (246, 236, 244)), fill, sheen.point(lambda v: v * 0.25))
+    # the dark panel inside the chrome: its dark pixels, closed into one shape; outside it the chrome stays as it is
+    lum = bar.convert("L")
+    dark = ImageChops.multiply(lum.point(lambda v: 255 if v < 46 else 0), bar.getchannel("A").point(lambda v: 255 if v > 200 else 0))
+    inside = dark.filter(ImageFilter.MaxFilter(15)).filter(ImageFilter.MinFilter(15)).filter(ImageFilter.GaussianBlur(3))
+    pearl = bar.copy()
+    pearl.paste(fill, (0, 0), inside)
+    glow = ImageChops.multiply(lq.getchannel("A"), inside)
+    pearl.paste(bar.convert("RGB"), (0, 0), glow)                # the liquid glints over the panel stay
+    save(fit(trim(pearl), 2172), "bar_pearl.webp")
 
     save(fit(trim(liquid_only(bar.crop((0, 300, 760, 520)))), 760), "liquid_left.webp")
     save(fit(trim(liquid_only(bar.crop((1000, 140, 2172, 330)))), 1172), "liquid_right.webp")

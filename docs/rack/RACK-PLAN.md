@@ -247,6 +247,12 @@ the list (in its gold frame), the Chain Flow strip, the Modules page's strip. Da
 corner): behind the logo. Ivory (thin lines of shaded gold, like the glass honeycomb's walls): the knob panel. Side-by-sides with the concept were
 checked.
 
+**The light view** (the user, 2026-11-15): clicking the cube switches between the dark view and a light one: divine white
+and ivory with a pearly sheen and gold instead of the dark blues; the gold, the red / blue chrome, the ON pills, meters
+and EQ colours stay. Its own art: `rack_hex_pearl`, `rack_honey_pearl`, `rack_bar_pearl` (the chrome bar with a pearl
+inside), all from `make_art.py`. The Rack keeps the choice in the browser storage when it can; in step 4 each plug-in
+passes its saved choice (`theme`) and saves the new one (`onTheme`) with its settings, so it survives everywhere.
+
 **The EQ graph** (the user, 2026-11-15: "just like the original"): the concept's drawing. A gold glowing curve; the area
 between it and 0 dB filled in the colour of the band that shapes it (gold where a band lifts, red where it cuts 2 dB or
 more, blue for gentle cuts and low / high cuts); round glossy points; a red line down from a hard cut with the spectrum
