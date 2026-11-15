@@ -702,7 +702,10 @@
     lines.sort((a, b) => (a.level === "warn" ? 0 : a.level === "info" ? 2 : 1) - (b.level === "warn" ? 0 : b.level === "info" ? 2 : 1));
     const together = lines.length ? lines.map((l) => `<li class="sr-tl sr-tl-${l.level || "ok"}">${lineIcon(l.level)}<span>${esc(l.text)}</span></li>`).join("")
       : `<li class="sr-tl">${lineIcon("info")}<span>Nothing else in the suite touches this track.</span></li>`;
-    const overview = flowMods.map((c) => `<li>${icon("check", "sr-li-ok")}<span><b>${esc(cat(c.mod.key).name)}</b> ${MINUS} ${esc(c.mod.summary || STATE_WORD[c.mod.state])}</span></li>`).join("");
+    const overview = flowMods.map((c) => {
+      const isSel = sel && c.unit.id === sel.unit.id && c.mod.key === sel.mod.key;   // the picked module, in red (as the concept)
+      return `<li class="${isSel ? "sr-ov-sel" : ""}">${icon("check", isSel ? "sr-li-sel" : "sr-li-ok")}<span><b>${esc(cat(c.mod.key).name)}</b> ${MINUS} ${esc(c.mod.summary || STATE_WORD[c.mod.state])}</span></li>`;
+    }).join("");
     const about = sel ? (() => {
       const c = cat(sel.mod.key);
       return `<h4>${icon("bulb")}ABOUT ${esc(c.name.toUpperCase())}</h4><p>${esc(c.desc)}</p><ul class="sr-uses">${c.uses.map((u) => `<li>${esc(u)}</li>`).join("")}</ul>`;
@@ -771,7 +774,7 @@
       maxbars: "M4 12 H56 M10 46 V20 M18 46 V14 M26 46 V16 M34 46 V13 M42 46 V18 M50 46 V24",
       lowwave: "M2 30 C12 6 22 6 30 30 S48 54 58 30",
     };
-    return `<svg class="sr-art" viewBox="0 0 60 56"><defs><linearGradient id="g-${kind}-${plug}" x1="0" x2="1"><stop offset="0" stop-color="${col[0]}"/><stop offset="1" stop-color="${col[1]}"/></linearGradient></defs><path d="${P[kind] || P.wave}" stroke="url(#g-${kind}-${plug})"/></svg>`;
+    return `<svg class="sr-art sr-art-${plug}" viewBox="0 0 60 56"><defs><linearGradient id="g-${kind}-${plug}" x1="0" x2="1"><stop offset="0" stop-color="${col[0]}"/><stop offset="1" stop-color="${col[1]}"/></linearGradient></defs><path d="${P[kind] || P.wave}" stroke="url(#g-${kind}-${plug})"/></svg>`;
   }
 
   function modulesPage(data) {

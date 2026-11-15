@@ -475,11 +475,11 @@
 .sr-light .sr-flow::after { box-shadow: inset 0 0 0 3px rgba(184, 134, 42, .5), inset 0 0 22px rgba(255, 250, 235, .55); }
 .sr-light .sr-flow-t { color: #8a5a10; background: linear-gradient(180deg, #fffaf0, #f2e3c2); border-right-color: rgba(184, 134, 42, .6); }
 .sr-light .sr-hex { background-image: url("rack/rack_hex_pearl.webp"); color: #3a2a10; filter: drop-shadow(0 3px 4px rgba(120, 80, 20, .3)); }
-.sr-light .sr-hex .sr-ic { color: #8a5a10; filter: none; }
+.sr-light .sr-hex .sr-ic { color: #8a5a10; }
 .sr-light .sr-hex.sr-picked { color: #b0102a; filter: drop-shadow(0 0 4px #ff2e45) drop-shadow(0 0 10px rgba(255, 46, 69, .6)); }
 .sr-light .sr-hex.sr-picked .sr-ic { color: #c8102e; }
 .sr-light .sr-hex.sr-picked::before { background: radial-gradient(circle at 50% 45%, rgba(255, 120, 135, .35), rgba(255, 60, 80, .12)); }
-.sr-light .sr-hex-next .sr-ic { color: #b07a12; filter: none; }
+.sr-light .sr-hex-next .sr-ic { color: #b07a12; }
 /* the module */
 .sr-light .sr-mod-sum span { color: #3a2a10; }
 .sr-light .sr-mod-sum small { color: #1a7fb0; }
@@ -534,9 +534,67 @@
 .sr-light .sr-from-mixology { color: #1f5fae; background: #eef5fd; box-shadow: inset 0 0 0 1px #8ab4ea; }
 .sr-light .sr-from-masterology { color: #b0102a; background: #fdeef0; box-shadow: inset 0 0 0 1px #f0909c; }
 .sr-light .sr-ci-art { background: linear-gradient(180deg, #ffffff, #f6eedd); box-shadow: inset 0 0 0 1px rgba(184, 134, 42, .4); }
-.sr-light .sr-art { filter: drop-shadow(0 0 3px rgba(184, 134, 42, .35)); }
 .sr-light .sr-ci-kn b { color: #8a5a10; }
 /* the cube switches the view */
 .sr-emblem img { cursor: pointer; }
 .sr-light .sr-honey { background-image: url("rack/rack_honey_pearl.webp"); filter: none; }
 .sr-light .sr-flow { background: url("rack/rack_honey_pearl.webp") -40px -60px / 300px 260px padding-box, var(--goldline) border-box; }
+
+/* ==== GLOWS (as the concept): whatever is bright and highlighted glows in its own colour ============================ */
+/* gold icons and check marks: a warm halo */
+.sr-row .sr-ic, .sr-ph .sr-ic, .sr-catrow .sr-ic, .sr-where .sr-ic, .sr-fchip .sr-ic, .sr-coach h4 .sr-ic, .sr-cardinfo h4 .sr-ic,
+.sr-back .sr-ic, .sr-seg button .sr-ic, .sr-li-ok, .sr-uses .sr-ic {
+  filter: drop-shadow(0 0 2.5px rgba(255, 200, 90, .85)) drop-shadow(0 0 7px rgba(242, 170, 60, .4)); }
+.sr-li-info { filter: drop-shadow(0 0 3px rgba(70, 180, 255, .85)) drop-shadow(0 0 7px rgba(58, 162, 255, .4)); }
+.sr-li-sel { color: #ff4d5e; filter: drop-shadow(0 0 3px rgba(255, 77, 94, .9)) drop-shadow(0 0 8px rgba(255, 46, 69, .5)); }
+.sr-ov-sel b { color: #ff5a6a !important; text-shadow: 0 0 8px rgba(255, 46, 69, .7); }
+.sr-pk-arrow .sr-ic, .sr-pk-name .sr-ic { filter: drop-shadow(0 0 3px rgba(160, 205, 255, .85)); }
+/* the picked row / category: a strong red bloom */
+.sr-row.sr-picked, .sr-catrow.sr-picked {
+  box-shadow: inset 0 0 0 2px #ff5a6a, 0 0 0 1px rgba(255, 110, 125, .55), 0 0 14px rgba(255, 46, 69, .9), 0 0 32px rgba(255, 46, 69, .45); }
+.sr-row.sr-picked .sr-ic, .sr-catrow.sr-picked .sr-ic { filter: drop-shadow(0 0 3px rgba(255, 150, 160, .95)) drop-shadow(0 0 8px rgba(255, 60, 80, .6)); }
+.sr-row.sr-picked .sr-rname { text-shadow: 0 0 8px rgba(255, 120, 135, .7); }
+.sr-card.sr-picked { box-shadow: 0 0 0 1px rgba(255, 110, 125, .5), 0 0 16px rgba(255, 46, 69, .75), 0 0 34px rgba(255, 46, 69, .35); }
+/* ON pills and blue badges: a blue glow */
+.sr-pill-on { box-shadow: 0 0 6px rgba(58, 162, 255, .95), 0 0 16px rgba(58, 162, 255, .5), inset 0 1px 0 rgba(255, 255, 255, .55); text-shadow: 0 0 6px rgba(210, 240, 255, .9); }
+.sr-catrow.sr-picked b { box-shadow: 0 0 8px rgba(58, 162, 255, .9); }
+.sr-pill-rest { box-shadow: 0 0 6px rgba(255, 200, 90, .9), 0 0 14px rgba(242, 180, 70, .45); }
+/* gold buttons */
+.sr-seg button.sr-on, .sr-fchip.sr-on {
+  box-shadow: 0 0 8px rgba(255, 205, 100, .9), 0 0 22px rgba(242, 180, 70, .45), inset 0 1px 0 #fff; }
+.sr-back:hover { box-shadow: 0 0 10px rgba(255, 205, 100, .75), 0 0 22px rgba(242, 180, 70, .35); }
+/* band pills, source pills, tags, badges */
+.sr-band-blue { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 0 0 1px #0a2a5c, 0 0 10px rgba(58, 162, 255, .65); }
+.sr-band-gold { box-shadow: inset 0 1px 0 #fff, 0 0 0 1px #8a5a14, 0 0 10px rgba(255, 196, 80, .7); }
+.sr-band-red { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 0 0 1px #6a0010, 0 0 14px rgba(255, 46, 69, .85); }
+.sr-from-voxology, .sr-from-honeytune { box-shadow: 0 0 8px rgba(255, 196, 80, .6); }
+.sr-from-mixology { box-shadow: inset 0 0 0 1px #8fb8ff, 0 0 8px rgba(58, 162, 255, .5); }
+.sr-from-masterology { box-shadow: inset 0 0 0 1px #ff6a78, 0 0 8px rgba(255, 46, 69, .5); }
+.sr-ctag { box-shadow: inset 0 0 0 1px #3a7ae0, 0 0 6px rgba(58, 140, 255, .55); }
+.sr-ctag-dynamics, .sr-ctag-creative { box-shadow: inset 0 0 0 1px #8a5ae0, 0 0 6px rgba(150, 100, 255, .55); }
+.sr-ctag-space, .sr-ctag-mastering { box-shadow: inset 0 0 0 1px #ff4d5e, 0 0 6px rgba(255, 60, 80, .55); }
+.sr-con { box-shadow: inset 0 0 0 1px #4fd25a, 0 0 6px rgba(80, 220, 90, .55); }
+.sr-badge.sr-tone-gold { box-shadow: 0 0 6px rgba(255, 196, 80, .7); }
+.sr-badge.sr-tone-honey { box-shadow: 0 0 6px rgba(255, 150, 40, .7); }
+.sr-badge.sr-tone-blue { box-shadow: 0 0 6px rgba(58, 162, 255, .7); }
+.sr-badge.sr-tone-red { box-shadow: 0 0 6px rgba(255, 46, 69, .7); }
+/* the module cards' waves: neon, in each plug-in's colour */
+.sr-art-voxology, .sr-art-honeytune { filter: drop-shadow(0 0 2.5px rgba(255, 200, 90, .95)) drop-shadow(0 0 8px rgba(255, 170, 50, .55)); }
+.sr-art-mixology { filter: drop-shadow(0 0 2.5px rgba(110, 200, 255, .95)) drop-shadow(0 0 8px rgba(58, 140, 255, .55)); }
+.sr-art-masterology { filter: drop-shadow(0 0 2.5px rgba(255, 110, 120, .95)) drop-shadow(0 0 8px rgba(255, 46, 69, .55)); }
+/* meters */
+.sr-meter { filter: drop-shadow(0 0 4px rgba(58, 170, 255, .45)); }
+
+/* the light view: the same glows, a little softer on white */
+.sr-light .sr-row .sr-ic, .sr-light .sr-ph .sr-ic, .sr-light .sr-catrow .sr-ic, .sr-light .sr-where .sr-ic, .sr-light .sr-fchip .sr-ic,
+.sr-light .sr-coach h4 .sr-ic, .sr-light .sr-cardinfo h4 .sr-ic, .sr-light .sr-back .sr-ic, .sr-light .sr-seg button .sr-ic,
+.sr-light .sr-li-ok, .sr-light .sr-uses .sr-ic, .sr-light .sr-hex .sr-ic, .sr-light .sr-hex-next .sr-ic {
+  filter: drop-shadow(0 0 2px rgba(240, 170, 40, .75)) drop-shadow(0 0 6px rgba(240, 180, 60, .4)); }
+.sr-light .sr-pk-arrow .sr-ic, .sr-light .sr-pk-name .sr-ic { filter: drop-shadow(0 0 2px rgba(240, 170, 40, .6)); }
+.sr-light .sr-hex.sr-picked .sr-ic { filter: drop-shadow(0 0 3px rgba(255, 60, 80, .8)); }
+.sr-light .sr-row.sr-picked, .sr-light .sr-catrow.sr-picked {
+  box-shadow: inset 0 0 0 2px #ff8a96, 0 0 0 1px rgba(255, 80, 100, .5), 0 0 12px rgba(255, 46, 69, .7), 0 0 26px rgba(255, 46, 69, .3); }
+.sr-light .sr-row.sr-picked .sr-ic, .sr-light .sr-catrow.sr-picked .sr-ic { filter: drop-shadow(0 0 3px rgba(255, 255, 255, .9)); }
+.sr-light .sr-ov-sel b { color: #d0142c !important; text-shadow: 0 0 6px rgba(255, 46, 69, .35); }
+.sr-light .sr-li-sel { color: #d0142c; }
+.sr-light .sr-meter { filter: drop-shadow(0 0 3px rgba(58, 150, 255, .35)); }
