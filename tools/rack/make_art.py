@@ -34,7 +34,7 @@ def fit(im, longest):
     return im.resize((max(1, round(im.size[0] * s)), max(1, round(im.size[1] * s))), Image.LANCZOS)
 
 
-def save(im, name, quality=88):
+def save(im, name, quality=90):
     name = "rack_" + name   # the plug-ins serve their files flat, by file name: every Rack file starts with rack_
     path = os.path.join(OUT, name)
     im.save(path, "WEBP", quality=quality, method=6)
@@ -52,10 +52,11 @@ def square(im):
 def main():
     os.makedirs(OUT, exist_ok=True)
 
-    save(fit(trim(load("01_sonicology_rack_logo_emblem.png")), 420), "emblem.webp")
+    # Sizes: big enough for the largest window (1.7x the design size) on a 2x (Retina / 4K) screen
+    save(fit(trim(load("01_sonicology_rack_logo_emblem.png")), 860), "emblem.webp", quality=94)
 
     # The title without its old subtitle (rows 419 - 479 of the original); the new subtitle is text.
-    save(fit(trim(load("02_sonicology_rack_lettering.png"), (0, 0, 2172, 417)), 1400), "lettering.webp")
+    save(fit(trim(load("02_sonicology_rack_lettering.png"), (0, 0, 2172, 417)), 2172), "lettering.webp", quality=92)
 
     save(fit(trim(load("03_red_blue_header_art.png")), 2172), "bar.webp", quality=90)
     # (04_honeycomb_tile.png is not used: the honeycomb backgrounds are made from the concept art, see honeycombs())
@@ -72,9 +73,9 @@ def main():
     mask = mask.resize((n, n), Image.LANCZOS)
     cap = Image.new("RGBA", (n, n), (0, 0, 0, 0))
     cap.paste(knob, (0, 0), mask)
-    save(fit(cap, 300), "knob_cap.webp")
+    save(fit(cap, 400), "knob_cap.webp", quality=92)
     ring = knob.copy()
-    save(fit(ring, 300), "knob_ring.webp")
+    save(fit(ring, 400), "knob_ring.webp", quality=92)
 
     honeycombs()
     liquids()
@@ -110,7 +111,8 @@ def honeycombs():
     WALL = 9.0                           # the gold wall's width, 2x
     cols, pairs = 4, 2
     tw, th = round(cols * W), round(pairs * 3 * R)   # repeats without a seam (to a fraction of a pixel)
-    big = 3                              # drawn at 3x, then shrunk (smooth walls)
+    OUTK = 2                             # the tiles are saved at 2x (sharp in big windows on a 2x screen)
+    big = 3 * OUTK                       # drawn at 3x that, then shrunk (smooth walls)
 
     def hexagon(cx, cy, r):
         return [(cx + r * math.cos(math.radians(60 * k + 30)), cy + r * math.sin(math.radians(60 * k + 30))) for k in range(6)]
@@ -151,14 +153,14 @@ def honeycombs():
     glass = Image.composite(layer((150, 92, 18)), glass, soft)                                 # the wall's darker edge
     glass = Image.composite(layer((246, 182, 58)), glass, ridge)                               # gold
     glass = Image.composite(layer((255, 238, 168)), glass, shine)                              # its bright middle
-    glass = glass.resize((tw, th), Image.LANCZOS).filter(ImageFilter.UnsharpMask(radius=1.0, percent=40, threshold=2))
+    glass = glass.resize((tw * OUTK, th * OUTK), Image.LANCZOS).filter(ImageFilter.UnsharpMask(radius=2.0, percent=40, threshold=2))
     save_rgb(glass, "honey_glass.webp")
 
-    wall = soft.resize((tw, th), Image.LANCZOS)
-    wall_glow = glow.resize((tw, th), Image.LANCZOS)
+    wall = soft.resize((tw * OUTK, th * OUTK), Image.LANCZOS)
+    wall_glow = glow.resize((tw * OUTK, th * OUTK), Image.LANCZOS)
     lum = glass.convert("L")
     navy = Image.merge("RGB", (lum.point(lambda v: 5 + v * 0.07), lum.point(lambda v: 12 + v * 0.10), lum.point(lambda v: 30 + v * 0.20)))
-    navy = Image.composite(Image.new("RGB", (tw, th), (150, 96, 24)), navy, wall_glow.point(lambda v: v * 0.30))
+    navy = Image.composite(Image.new("RGB", (tw * OUTK, th * OUTK), (150, 96, 24)), navy, wall_glow.point(lambda v: v * 0.30))
     save_rgb(Image.composite(glass, navy, wall), "honey_dark.webp")
 
     # the knob panel: pearly ivory cells framed by thin lines of real-looking gold (the same layers as the glass
@@ -178,7 +180,7 @@ def honeycombs():
     plain = Image.composite(layer((240, 214, 156)), plain, t_glow.point(lambda v: v * 0.30))   # the warm glow stays
     ivory = Image.blend(plain, ivory.filter(ImageFilter.GaussianBlur(0.5 * big)), 0.66)
     ivory = Image.composite(layer((255, 246, 214)), ivory, t_shine.point(lambda v: v * 0.35))  # the lines' bright shine
-    ivory = ivory.resize((tw, th), Image.LANCZOS)
+    ivory = ivory.resize((tw * OUTK, th * OUTK), Image.LANCZOS)
     save_rgb(ivory, "honey_ivory.webp")
 
 

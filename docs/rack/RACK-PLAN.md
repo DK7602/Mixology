@@ -83,7 +83,7 @@ Tune link). The Rack gets its own block next to them, so nothing the suite alrea
   (`rack::together (slots)`), so Catch2 tests cover them; the view only shows them.
 - **The art:** the user's art files (`art/`, see "The art files" below) for the logo, wordmark, chrome bars, frame
   corners, hex cells and knobs; CSS and SVG for the rest (panel bevels, buttons, pills, toggles, knob arcs, meters,
-  graphs, text). Trimmed, sized to 2x and saved as WebP: about 0.5 MB in each plug-in. It will look like the concepts,
+  graphs, text). Trimmed and saved as WebP, sharp up to the largest window on a 2x (Retina / 4K) screen (the cube emblem 860 px, the title 2092 px, the honeycomb tiles at 2x): about 0.9 MB in each plug-in. It will look like the concepts,
   not pixel for pixel: the concepts are AI art at 1448 x 1086.
 
 ## Stage 1: see everything
@@ -228,7 +228,7 @@ Roughly 3 to 5 build sessions, step 1 first.
 
 Seven PNGs from the user, real transparency, clean edges (checked on magenta), 1254 x 1254 or 2172 x 724. Originals are
 kept here; step 1 trims them, sizes them to 2x and saves WebP into `plugin/ui/rack/` (shared in all three repos, about
-470 KB together; the plug-ins already show WebP, also on macOS 11).
+about 0.9 MB together with the rest of the art; the plug-ins already show WebP, also on macOS 11).
 
 | File | What it becomes |
 |---|---|
