@@ -245,6 +245,18 @@ def liquids():
     save(fit(trim(liquid_only(bar.crop((0, 300, 760, 520)))), 760), "liquid_left.webp")
     save(fit(trim(liquid_only(bar.crop((1000, 140, 2172, 330)))), 1172), "liquid_right.webp")
 
+    # the light view's liquid: only its bright, coloured glass; its deep navy shading (which shows as a dark smudge on
+    # white) left out. The same size and trim as the dark one, so the page places both alike.
+    def bright_only(im):
+        r, g, b, a = im.split()
+        hi = ImageChops.lighter(ImageChops.lighter(r, g), b)
+        keep = hi.point(lambda v: max(0, min(255, (v - 95) * 2.4))).filter(ImageFilter.GaussianBlur(1.0))
+        return Image.merge("RGBA", (r, g, b, ImageChops.multiply(a, keep)))
+    for box, name, size in (((0, 300, 760, 520), "liquid_left", 760), ((1000, 140, 2172, 330), "liquid_right", 1172)):
+        dark = liquid_only(bar.crop(box))
+        bbox = dark.getchannel("A").point(lambda v: 255 if v > 6 else 0).getbbox()
+        save(fit(bright_only(dark.crop(bbox)), size), name + "_light.webp")
+
 
 def save_rgb(im, name, quality=86):
     name = "rack_" + name
