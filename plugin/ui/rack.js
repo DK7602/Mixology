@@ -627,6 +627,7 @@
       <section class="sr-panel sr-left">
         <h3 class="sr-ph">${icon("layers")}SIGNAL CHAIN<small>${esc(t.name)}</small></h3>
         <div class="sr-rows" data-scroll="rows">${rows}</div>
+        <div class="sr-honey"></div>
       </section>
       <div class="sr-centre">
         <section class="sr-panel sr-flow"><div class="sr-flow-t">CHAIN<br>FLOW</div><div class="sr-flow-hexes" data-scroll="flow">${flow}</div></section>
@@ -735,6 +736,7 @@
       <section class="sr-panel sr-left sr-browse">
         <h3 class="sr-ph">${icon("layers")}BROWSE MODULES</h3>
         <div class="sr-cats">${side}</div>
+        <div class="sr-honey sr-honey-strip"></div>
         <h3 class="sr-ph sr-ph2">${icon("chain")}IN THIS PROJECT</h3>
         <div class="sr-proj" data-scroll="proj">${proj || '<p class="sr-dim">No Sonicology plug-ins are playing.</p>'}</div>
       </section>

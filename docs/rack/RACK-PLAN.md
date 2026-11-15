@@ -235,10 +235,16 @@ kept here; step 1 trims them, sizes them to 2x and saves WebP into `plugin/ui/ra
 | `01_sonicology_rack_logo_emblem.png` (crystal cube in gold orbits) | the logo at the top left |
 | `02_sonicology_rack_lettering.png` (chrome SONICOLOGY + red RACK, with the subtitle) | the title; its subtitle line is cut off and "YOUR WHOLE SUITE IN ONE VIEW" set as text |
 | `03_red_blue_header_art.png` (red / blue chrome bar with a dark middle) | the top bar's plate and the bottom meter bar, stretched by its straight middle (CSS border-image) |
-| `04_honeycomb_tile.png` (one cream glass hex in a gold frame) | the honeycomb filler under the lists (tiled in offset rows) and the dim "off" hex |
+| `04_honeycomb_tile.png` (one cream glass hex in a gold frame) | not used: the user wants the honeycomb exactly as in the concept screens (2026-11-15), so the honeycomb backgrounds are made from the concept art itself (below) |
 | `05_gold_knob.png` (gold knob, blue ring, gold tabs, a pointer) | every knob: cut into a still bezel (tabs and ring) and a turning cap (the disc with the pointer), the value arc drawn in SVG over the blue ring |
 | `06_hex_cell.png` (navy hex, gold frame, red / blue inner glow) | the CHAIN FLOW hexes; "picked" adds the concept's red glow, "off" dims it (CSS) |
 | `07_frame_corner.png` (red / blue chrome over a gold corner) | the panels' corners (mirrored for all four), joined by a gold CSS edge |
+
+**The honeycomb backgrounds** (`rack_honey_glass/dark/ivory.webp`, made by `tools/rack/make_art.py` from
+`concepts/rack-coach.png`): the concept's own glass cells (cut from the clean honeycomb under its left column) set in a
+regular lattice that tiles without a seam, with gold walls drawn in the concept's colours. Glass: the left column under
+the list (in its gold frame), the Chain Flow strip, the Modules page's strip. Dark (gold walls on navy, warm glass in the
+corner): behind the logo. Ivory (thin light lines): the knob panel. A side-by-side with the concept was checked.
 
 Drawn in CSS / SVG (no file needed): the panels' gold bevels and navy glass, buttons and pills, ON toggles, meters,
 graphs, the swooshes behind the top corners (from 03 and 07), text.
