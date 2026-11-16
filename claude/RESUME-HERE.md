@@ -57,7 +57,9 @@ sends higher-resolution art, re-run it.
   Performance, plus a row in "What works"), versions Mixology 0.26.0 / Voxology 0.55.0 / Masterology 0.31.0, README
   rows, the installer Read Me's "NEW IN THIS BETA: THE SONICOLOGY RACK"; Masterology's Claude Docs copy updated.
   Beta 14 suite installers: run 43876865629 (label "Beta 14", version 0.14.0; Mixology 0.26.0 d6d2325, Voxology
-  0.55.0 37e32f5, Masterology 0.31.0 f4cbeac), started 2026-11-16 13:33 UTC. Then the user checks the Rack in Cubase.
+  0.55.0 37e32f5, Masterology 0.31.0 f4cbeac): all green, both installers built (Sonicology-Windows,
+  Sonicology-macOS; auval passed). Build & Test green: Mixology 43876712535, Voxology 43876723862; Masterology
+  43876733835 green on Windows + UI smoke (its ASan job ran on after). Next: the user checks the Rack in Cubase.
   The look: docs/rack/concepts/*.png (the user's picked concept art); the user's art files: docs/rack/art/*.png
   (received 2026-11-14; the plan says what each becomes).
 - Decided: the Rack is a VIEW inside all three plug-ins (a RACK button on each current screen, the only change to the
