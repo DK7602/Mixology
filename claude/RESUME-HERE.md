@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-11-16, v0.26.1; the Sonicology Rack: Beta 14 feedback fixed, Beta 15)
+# Mixology: resume here (updated 2026-11-16, v0.26.1; the Sonicology Rack: Beta 15; stage 2 step 1 built)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -34,6 +34,20 @@ sends higher-resolution art, re-run it.
   Cubase/Windows blocks a plug-in from opening the ports).
 - Protocol: dsp/include/mixology/BridgeProtocol.h (SysEx F0 7D 4D 58 01 ...). JS mirrors it (LAYOUT table).
   Bump kProtocolVersion + PROTOCOL_VERSION together.
+
+## NOW: Sonicology Rack, stage 2 (started 2026-11-16, while the user checks stage 1 / Beta 15 in Cubase)
+- User asked to start stage 2 before signing off stage 1. Build order agreed: (1) the plumbing (requests from a Rack
+  view to the plug-in that owns a module), (2) each plug-in publishes its controls (keys, ranges), (3) knobs and on /
+  off working in the Rack, (4) BYPASS, UNDO / REDO, A/B, SAVE CHAIN, (5) Link's RACK button, insert-order warning,
+  TURN ON HERE. Steps 3 - 5 go in a Beta 16 after the user signs off stage 1.
+- Step 1 BUILT in Mixology (2026-11-16): RackLink.h / .cpp layout 2 (requests, lock, generation; see RACK-PLAN.md
+  "Stage 2"), tests "Rack requests: ..." (6 new; 23 [rack] cases, all 248 pass; ASan / UBSan / TSan clean here).
+  NOT YET COPIED to Voxology / Masterology: this session couldn't attach those repos (add_repo was blocked). Copy
+  dsp/include/suite/RackLink.h, dsp/src/RackLink.cpp, tests/test_rack_link.cpp there before any suite installer
+  build (layout 2 vs 1: the plug-ins wouldn't see each other, and the "Shared files match" job fails). No plug-in
+  code changes needed for that copy: Unit only gained fields with defaults.
+- Decided in step 1: the padlock locks the Rack's hand too (as the plan says); the lock is per unit, a text the
+  owner publishes ("Auto Mix is running."), checked by the sender and again by the owner.
 
 ## NOW: Sonicology Rack, stage 1 (planned 2026-11-14; steps 1 - 3 built 2026-11-15: the look, the shared link, every plug-in publishes; next: step 4, wire the view)
 - Plan: docs/rack/RACK-PLAN.md (all stages; stage 1 in detail, build order with approval gates, open questions).

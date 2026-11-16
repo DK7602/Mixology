@@ -213,7 +213,7 @@ Roughly 3 to 5 build sessions, step 1 first.
 - No extra CPU while no Rack is open; little while one is.
 - CI green in all three, shared files the same.
 
-## Stage 2: quick controls (planned, not built)
+## Stage 2: quick controls (step 1 built 2026-11-16; the rest planned)
 
 - **First: a RACK button on Mixology Link's window** (the user said yes, 2026-11-14; when is ours to pick). It opens
   the Rack straight on that Link's track. Stage 2, not 1, because the Link's window is small (600 x 536): it has to
@@ -226,6 +226,18 @@ Roughly 3 to 5 build sessions, step 1 first.
   plug-in that owns the module applies it on its message thread like a move of your own mouse, so Cubase's undo and
   automation see it. Protected tracks (Mixology's padlock) and a running Auto-Edit / Auto Mix / Auto-Master are
   read-only meanwhile.
+  **Built (step 1, 2026-11-16, RackLink layout 2):** `rack::Request` (Change::value: module key + control key + where
+  the knob goes, 0..1; Change::state: module on / off; Gesture begin / move / end / set for a drag). `Link::request
+  (slot, generation, ...)` puts it in the unit's queue (32 places, many senders, lock-free; tickets from 1; the slot's
+  generation keeps a request from reaching a plug-in that took over the slot) and refuses at once with a reason when
+  the unit is gone, locked or its queue is full. The owner serves it from its timer with `Publisher::serve (now, lock,
+  apply)`: balanced gestures (a drag left open by a closed view ends after 2 s), moves of one knob in one batch merged,
+  everything refused while `lock` is set ("Auto Mix is running"). `Link::answer (slot, generation, ticket)`: pending /
+  applied / refused (the plug-in's reason) / gone. Units publish `lock` and carry `generation`; the JSON has `gen` and
+  `lock` per unit. Tests: "Rack requests: ..." in tests/test_rack_link.cpp (4 senders + the owner on threads, ASan /
+  UBSan / TSan clean). Next: step 2, each plug-in publishes its controls' keys and ranges; step 3, each plug-in's
+  serve() + apply() (JUCE: beginChangeGesture / setValueNotifyingHost / endChangeGesture) and the padlock reaching
+  the Links (Mixology knows it; the Link must publish it as its lock).
 - **The top bar comes alive:** BYPASS (this track's Sonicology plug-ins off, level-matched for a fair before / after),
   UNDO / REDO (the Rack's own moves), A/B (two snapshots of every Sonicology setting in the project), SAVE CHAIN (a
   track's Voxology + Link settings as a chain to load on another track).
