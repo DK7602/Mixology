@@ -42,8 +42,8 @@ sends higher-resolution art, re-run it.
   TURN ON HERE. Steps 3 - 5 go in a Beta 16 after the user signs off stage 1.
 - Step 1 BUILT in Mixology (2026-11-16): RackLink.h / .cpp layout 2 (requests, lock, generation; see RACK-PLAN.md
   "Stage 2"), tests "Rack requests: ..." (6 new; 23 [rack] cases, all 248 pass; ASan / UBSan / TSan clean here).
-  NOT YET COPIED to Voxology / Masterology: this session couldn't attach those repos (add_repo was blocked). Copy
-  dsp/include/suite/RackLink.h, dsp/src/RackLink.cpp, tests/test_rack_link.cpp there before any suite installer
+  Copied to Voxology (0be9176, [rack] tests pass). NOT YET in Masterology (add_repo for DK7602/polisher was blocked):
+  copy dsp/include/suite/RackLink.h, dsp/src/RackLink.cpp, tests/test_rack_link.cpp there before any suite installer
   build (layout 2 vs 1: the plug-ins wouldn't see each other, and the "Shared files match" job fails). No plug-in
   code changes needed for that copy: Unit only gained fields with defaults.
 - Decided in step 1: the padlock locks the Rack's hand too (as the plan says); the lock is per unit, a text the
