@@ -3,7 +3,7 @@
 Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list all three are under Sonicology.
 
-Manual for version 0.26.1 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
+Manual for version 0.27.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -52,6 +52,7 @@ fix):
 | Your ears per vocal track: Too quiet / Sounds right / Too loud for one lead vocal track | Live |
 | The Mix Assistant knows what's fixed (Done points) and opens the tool that fixes a point | Live: this is what we're testing now |
 | Sonicology Rack: every Sonicology plug-in in the project in one view (the Rack tab) | New: tested in the engine, the plug-ins and the browser preview, not yet in a DAW |
+| Sonicology Rack: turn knobs and switch modules of any Sonicology plug-in from the Rack | New in 0.27: tested in the engine and the browser preview, not yet in a DAW |
 
 Nothing changes your sound until you ask: every processing module starts switched off (the audio passes
 through bit for bit). What can change it: the Cubase faders and pans Mixology moves, the Assist EQ / Trim in
@@ -848,13 +849,13 @@ FL Studio don't make them bridged.
 
 The Sonicology Rack shows every Sonicology plug-in in your project in one place: Voxology and Honey Tune on your
 vocals, Mixology Link on your tracks, Mixology on the Full Mix and Masterology on the master. You see each track's
-chain, what every module is doing, and how the plug-ins work together. In this version the Rack only **shows**: you
-change settings in each plug-in as usual.
+chain, what every module is doing, and how the plug-ins work together. You can also **turn knobs and switch modules** right in the Rack: the plug-in that owns them makes the change,
+exactly as if you had done it in its own window (Cubase records it, and you can automate it).
 
 **Open it:** the **Rack emblem** tab (the spinning cube) after **PRESETS**, in the page tabs. It opens over this window; **BACK TO MIXOLOGY** (or Esc) brings you back.
 
 **What it needs**
-- Every Sonicology plug-in in the project at this version or newer (Voxology 0.55, Mixology 0.26, Masterology 0.31).
+- Every Sonicology plug-in in the project at this version or newer (Voxology 0.56, Mixology 0.27, Masterology 0.32).
   An older one is missing from the Rack.
 - **Press play.** Plug-ins join the Rack while your project plays (and only the project that plays), like the rest of
   the suite link. A stopped project shows "No Sonicology plug-ins are playing".
@@ -870,6 +871,13 @@ change settings in each plug-in as usual.
   row of icons.
 - **The module** (middle): its curve for an EQ (with the sound behind it) or its gain reduction / level over the last
   12 seconds, and its knobs exactly as set.
+- **Change it from the Rack:**
+  - **Drag a knob** up or down (hold **Shift** for fine moves). One drag is one move in Cubase's automation.
+  - **Click a knob with a few options** (Mode, Speed, Character...) to step to the next one.
+  - **Click ON / OFF** at the top right of the module to switch it.
+  - The line under the knobs says what you can do. Knobs that only show something (the key Pitch follows, what the
+    Beat Listener hears, Masterology's Dynamics bands and loudness target) don't turn.
+  - When a plug-in can't make a change, the Rack says why for a few seconds and the knob goes back.
 - **Rack Coach** (right): **How they work together** (green: fine, blue: good to know, red: fix it, for example two
   compressors on one vocal, Pitch and Honey Tune both tuning, two Masterologys, or Mixology's Limiter before
   Masterology), the chain overview, and what the picked module is for.
@@ -885,6 +893,15 @@ mastering...), what it's for, and where it plays in your project (click to jump 
 - Honey Tune has no RACK button: it shows up in the Rack above Voxology on the track it tunes.
 - Mixology Link has no RACK button yet: Links show up in the Rack opened from Voxology, Mixology or Masterology.
 - The Rack costs nothing while it's closed: the plug-ins send their details only while a Rack is open.
+- **Locked for a moment:** while Voxology's Auto-Edit or Masterology's Auto-Master listens or works, the Rack can't
+  change that plug-in (a lock and the reason show under its knobs). It can again as soon as it has finished.
+- **Mixology's padlock** stops Mixology's automatic moves (Auto Mix, AUTO), not your own: you can still change a
+  padlocked track's Link from the Rack, as on Mixology's own pages.
+- **Mixology's processing off on a track:** switching a module on in the Rack also switches the processing on, unless
+  other modules would start with it; then the Rack asks you to do it in Mixology.
+- **Honey Tune:** Snap to Note, Keep Drift and Keep Vibrato are its settings for all its clips (as in its window), so a
+  change from the Rack re-tunes every clip. A drag is applied once, where you let go. Key and Scale stay Honey Tune's
+  own choice.
 
 ## Performance (big sessions)
 

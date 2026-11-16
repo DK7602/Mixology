@@ -234,6 +234,20 @@ Roughly 3 to 5 build sessions, step 1 first.
   the Maximizer's Target (from the goal). Masterology's Glue "Ignore Lows" knob now sits where the host's curve puts
   it (skew for a 90 Hz centre; it was drawn linear). Tests in each repo check every published key exists in the
   plug-in's parameter code (Voxology: plugin/Params.h; Masterology: PluginProcessor.cpp + ModuleParams.h).
+  **Built (step 3, 2026-11-16; Mixology 0.27.0, Voxology 0.56.0, Masterology 0.32.0):** the knobs and switches work.
+  rack.js: a turnable knob (its unit has `gen`, no `lock`, the host gave `request`) drags up / down (220 stage px for
+  the whole range, Shift 900), a choice knob steps on a click, the module's ON / OFF pill is a button; requests go one
+  at a time in order (begin, moves about 25 a second, end); a knob is held where you put it until the plug-in's value
+  catches up (2.5 s at most); a refusal shows a toast for 4.5 s and the knob goes back. Native functions rackRequest
+  / rackAnswer in all three editors (plugin/RackHost.h, shared: requestFrom / answerFrom over rack::requestJson /
+  answerJson). The owners: Mixology + every Link (plugin/RackApply.h: switching a module on while the processing is
+  off switches it on too, unless another module would start with it), Voxology (applyRack; locked while Auto-Edit
+  listens / analyses), Masterology (applyRack; locked while Auto-Master listens / analyses), Honey Tune (serveRack,
+  ten times a second while a Rack is open; applies on a drag's end, its settings are for all its clips). Voxology and
+  Masterology run a 25 Hz rackTimer while a Rack is open (their main timers are 4 Hz). DECIDED (changed from the
+  plan): Mixology's padlock doesn't lock the Rack's hand (it stops only Mixology's automatic moves; Mixology's own
+  pages edit a padlocked track too); it will guard the Coach (stage 3). Preview: tools/rack/preview.html turns knobs
+  against rack_mock.js (?lock=1 locks Masterology; its Tonal EQ Air refuses).
 - **How:** a request queue per slot in RackLink (the way Mixology already asks a Link to change its Assist EQ): the
   plug-in that owns the module applies it on its message thread like a move of your own mouse, so Cubase's undo and
   automation see it. Protected tracks (Mixology's padlock) and a running Auto-Edit / Auto Mix / Auto-Master are

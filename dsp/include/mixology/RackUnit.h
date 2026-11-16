@@ -40,6 +40,9 @@ namespace mixology::rackunit
         proc::specs()) or an Assist EQ knob. Snapped to the control's step (choices to a whole option). False: no such
         control. */
     bool fromKnob (const std::string& key, float knob, float& value);
+    /** A processing module's on switch (its control's index) by the module's Rack key ("mix.comp"), -1 if none (the
+        Assist EQ has none: it is on while it does something). */
+    int switchOf (const std::string& moduleKey);
     /** A processing control's index by its id, -1 if none. */
     int indexOf (const std::string& key);
     /** An Assist EQ knob's position (0..1) for a value. */

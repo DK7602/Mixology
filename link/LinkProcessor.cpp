@@ -1,5 +1,6 @@
 #include "LinkProcessor.h"
 #include "LinkEditor.h"
+#include "../plugin/RackApply.h"
 
 namespace
 {
@@ -359,6 +360,14 @@ void MixologyLinkProcessor::timerCallback()
 void MixologyLinkProcessor::publishRack()
 {
     const auto now = suite::nowMs();
+    // Stage 2: knobs turned and modules switched in a Rack view (in any Sonicology plug-in), on this track's Link.
+    rackPub.serve (now, {}, [this] (const rack::Request& r) {
+        auto why = mixology::rackapply::apply (parameters, r, true);
+        if (why.empty() && (r.control == mixology::rackunit::kLowCutKey || r.control == mixology::rackunit::kMudKey
+                            || r.control == mixology::rackunit::kPocketKey))
+            assistFromMixology = false;   // yours now, not Clean Up's / Vocal Pocket's
+        return why;
+    });
     const auto due = rackPub.due (now);
     if (due == rack::Publisher::Due::none) return;
 

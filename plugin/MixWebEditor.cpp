@@ -4,6 +4,7 @@
 
 #include "mixology/LinkRegistry.h"
 #include "suite/RackLink.h"
+#include "RackHost.h"
 
 #include <cstring>
 
@@ -242,6 +243,11 @@ juce::WebBrowserComponent::Options MixWebEditor::makeEditorOptions()
                                                                  args.size() > 0 ? args[0].toString().toStdString() : std::string());   // the track it shows
                                  complete (juce::String::fromUTF8 (json.data(), static_cast<int> (json.size())));
                              })
+        // Stage 2: a knob turned or a module switched in the Rack, for the plug-in that owns it; and what became of it.
+        .withNativeFunction ("rackRequest", [] (const juce::Array<juce::var>& args, auto complete)
+                             { complete (rack::host::requestFrom (args)); })
+        .withNativeFunction ("rackAnswer", [] (const juce::Array<juce::var>& args, auto complete)
+                             { complete (rack::host::answerFrom (args)); })
         .withNativeFunction ("getRackTheme", [] (const juce::Array<juce::var>&, auto complete)
                              { complete (rackThemeFile().loadFileAsString().trim()); })
         .withNativeFunction ("setRackTheme", [] (const juce::Array<juce::var>& args, auto complete)

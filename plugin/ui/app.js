@@ -61,6 +61,8 @@ export const native = {
   getRack: fn("getRack"),
   getRackTheme: fn("getRackTheme"),
   setRackTheme: fn("setRackTheme"),
+  rackRequest: fn("rackRequest"),
+  rackAnswer: fn("rackAnswer"),
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -152,6 +154,9 @@ $("tab-rack").addEventListener("click", async () => {
     host: "mixology",
     theme: theme === "light" || theme === "dark" ? theme : undefined,
     getRack: async (track) => { const j = await native.getRack(track || ""); return j ? JSON.parse(j) : null; },
+    // stage 2: a knob turned or a module switched, for the plug-in that owns it; and what became of it
+    request: async (r) => JSON.parse(await native.rackRequest(r.unit, r.gen, r.change, r.module, r.control || "", r.value, r.gesture || "set")),
+    answer: async (unit, gen, ticket) => JSON.parse(await native.rackAnswer(unit, gen, ticket)),
     onTheme: (t) => native.setRackTheme(t),
     back: () => {},
   });

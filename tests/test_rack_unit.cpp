@@ -285,3 +285,15 @@ TEST_CASE ("Rack unit: every knob the Rack can turn names its control, and turns
     REQUIRE (rackunit::fromKnob (rackunit::kMudKey, 0.5f, back));
     CHECK (back == Catch::Approx (-6.0f));
 }
+
+TEST_CASE ("Rack unit: each processing module's on switch by its Rack key", "[rack]")
+{
+    CHECK (rackunit::switchOf ("mix.comp") == pr::compOn);
+    CHECK (rackunit::switchOf ("mix.space") == pr::spOn);
+    CHECK (rackunit::switchOf ("mix.limit") == pr::limOn);
+    CHECK (rackunit::switchOf ("mix.assist") == -1);
+    CHECK (rackunit::switchOf ("vox.comp") == -1);
+    rackunit::State st;
+    for (const auto& m : rackunit::modules (st, false))
+        if (m.switchable) CHECK (rackunit::switchOf (m.key) >= 0);
+}

@@ -172,6 +172,13 @@ namespace mixology::rackunit
         return false;
     }
 
+    int switchOf (const std::string& moduleKey)
+    {
+        for (int m = 0; m < kModules; ++m)
+            if (moduleKey == key (static_cast<Module> (m))) return onParam (static_cast<Module> (m));
+        return -1;
+    }
+
     int indexOf (const std::string& key)
     {
         for (int i = 0; i < count; ++i)

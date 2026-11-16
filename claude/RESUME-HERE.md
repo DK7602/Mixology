@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-11-16, v0.26.1; the Sonicology Rack: Beta 15; stage 2 steps 1 - 2 built)
+# Mixology: resume here (updated 2026-11-16, v0.27.0; the Sonicology Rack: stage 2 steps 1 - 3 built, Beta 15 out)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -50,8 +50,17 @@ sends higher-resolution art, re-run it.
   See RACK-PLAN.md "Stage 2". Mixology 249 tests pass; Voxology / Masterology [rack] pass. Next: step 3 (the plug-ins
   serve requests: Publisher::serve + apply via fromKnob / switchOf, JUCE gestures; rack.js turns knobs; the
   padlock reaching the Links; the Rack turns Mixology's processing on when a module is switched on while it's off).
-- Decided in step 1: the padlock locks the Rack's hand too (as the plan says); the lock is per unit, a text the
-  owner publishes ("Auto Mix is running."), checked by the sender and again by the owner.
+- Step 3 BUILT (2026-11-16): the Rack's knobs turn and its ON / OFF pills switch, in all three plug-ins + Honey Tune;
+  versions Mixology 0.27.0, Voxology 0.56.0, Masterology 0.32.0 (all three must be these or newer: RackLink layout
+  2), manuals' Rack sections (+ Masterology's Claude Docs copy), README rows. New shared file plugin/RackHost.h (in
+  sonicology.yml's list). Tested: engine tests in all three, the browser preview (Playwright: drag, choice click,
+  switch, refusal toast, lock), each plug-in's changed files compiled against JUCE 8.0.15 (+ ARA SDK for Honey
+  Tune) here; NOT in a DAW yet. Goes in Beta 16 once the user signs off stage 1 (Beta 15) and says build.
+  Next after that: step 4 (BYPASS, UNDO / REDO, A/B, SAVE CHAIN), step 5 (Link's RACK button, insert order, TURN ON HERE).
+- CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
+  moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
+  locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the
+  vocal."), checked by the sender and again by the owner.
 
 ## NOW: Sonicology Rack, stage 1 (planned 2026-11-14; steps 1 - 3 built 2026-11-15: the look, the shared link, every plug-in publishes; next: step 4, wire the view)
 - Plan: docs/rack/RACK-PLAN.md (all stages; stage 1 in detail, build order with approval gates, open questions).

@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "MixWebEditor.h"
+#include "RackApply.h"
 
 #include <cmath>
 
@@ -137,6 +138,8 @@ void MixologyAudioProcessor::timerCallback()
 void MixologyAudioProcessor::publishRack()
 {
     const auto now = suite::nowMs();
+    // Stage 2: knobs turned and modules switched in a Rack view (in any Sonicology plug-in), on the Full Mix's processing.
+    rackPub.serve (now, {}, [this] (const rack::Request& r) { return mixology::rackapply::apply (parameters, r, false); });
     const auto due = rackPub.due (now);
     if (due == rack::Publisher::Due::none) return;
 

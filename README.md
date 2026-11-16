@@ -7,7 +7,7 @@ HTML / CSS / JS interface in the platform web view, GitHub Actions builds on eve
 The plan and milestones: [docs/PLAN.md](docs/PLAN.md). User manual (also built into the plug-in): [docs/MANUAL.md](docs/MANUAL.md).
 Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_TEST.md) (passed), [docs/M3_TEST.md](docs/M3_TEST.md), [docs/M4_TEST.md](docs/M4_TEST.md), [docs/M5_TEST.md](docs/M5_TEST.md), [docs/M6_TEST.md](docs/M6_TEST.md) (current).
 
-## Status: v0.26.1
+## Status: v0.27.0
 
 | Piece | State |
 | --- | --- |
@@ -43,6 +43,7 @@ Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_T
 | No plug-in feedback loop (v0.24.0, with Voxology 0.53.0 and Masterology 0.30.0): Voxology leaves a vocal's level to Mixology when Mixology sets it (no FIT LEVEL, no "beat louder / quieter" card); Mixology publishes `MixInfo::changing` while it changes the mix and Masterology's Auto Analyze waits, then listens afresh (`BridgeHub::handoffChanging`) | Built, waiting for the test |
 | CPU check (v0.8.2): 48 real Links + Mixology timed on every build (tools/cpucheck); the idle chain made cheaper | Done: typical 48-track session about 17 % of one core |
 | Sonicology Rack (v0.26.0, with Voxology 0.55.0 and Masterology 0.31.0): every Sonicology plug-in in the project in one view (the Rack tab after PRESETS): each track's chain, every module's state and settings, how they work together. Shared view (rack.js / rack.css / art) and link (suite/RackLink.h) in all three; Mixology and every Mixology Link publish their modules (mixology/RackUnit.h) | Done: tested in the engine, the real plug-ins (tools/linkcheck) and the browser preview, not yet in a DAW |
+| Sonicology Rack stage 2 (v0.27.0, with Voxology 0.56.0 and Masterology 0.32.0): turn knobs and switch modules from the Rack. A click becomes a request in the owner's queue (suite/RackLink.h), the owner applies it like your own mouse move (plugin/RackHost.h, shared; plugin/RackApply.h), knobs name their parameter and turn back with the owner's curve (rackunit fromKnob) | New: tested in the engine and the browser preview, not yet in a DAW |
 
 ## Layout
 

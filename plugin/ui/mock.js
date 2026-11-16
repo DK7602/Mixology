@@ -449,7 +449,7 @@
     initialisationData: {
       __juce__platform: [], __juce__registeredGlobalEventIds: [], __juce__sliders: [], __juce__toggles: [], __juce__comboBoxes: [],
       __juce__functions: ["pickDaw", "pickStyle", "bridgeCommand", "getBridgeState", "getSettings", "setSetting", "setUiState", "setPage", "procTarget", "procSet", "setMonoListen", "spaceDuck",
-        "presetList", "presetApply", "presetSave", "presetDelete", "presetUndo", "getRack", "getRackTheme", "setRackTheme"],
+        "presetList", "presetApply", "presetSave", "presetDelete", "presetUndo", "getRack", "getRackTheme", "setRackTheme", "rackRequest", "rackAnswer"],
     },
     postMessage(message) {
       const { eventId, payload } = JSON.parse(message);
@@ -462,6 +462,15 @@
       else if (payload.name === "getRack") {   // tools/rack/rack_mock.js, when the preview loads it: a whole demo project
         if (window.SonicologyRackMock) { Promise.resolve(window.SonicologyRackMock.getRack()).then((d) => send("__juce__complete", { promiseId: payload.resultId, result: JSON.stringify(d) })); return; }
         result = null;
+      }
+      else if (payload.name === "rackRequest" || payload.name === "rackAnswer") {   // stage 2, against the same demo project
+        const p = payload.params || [];
+        const M = window.SonicologyRackMock;
+        const call = !M ? Promise.resolve({ ticket: 0, why: "No demo project in this preview." })
+          : payload.name === "rackRequest" ? M.request({ unit: p[0], gen: p[1], change: p[2], module: p[3], control: p[4], value: p[5], gesture: p[6] })
+          : M.answer(p[0], p[1], p[2]);
+        Promise.resolve(call).then((d) => send("__juce__complete", { promiseId: payload.resultId, result: JSON.stringify(d) }));
+        return;
       }
       else if (payload.name === "getRackTheme") { try { result = localStorage.getItem("sonicologyRackTheme") || ""; } catch (e) { result = ""; } }
       else if (payload.name === "setRackTheme") { try { localStorage.setItem("sonicologyRackTheme", a); } catch (e) { /* none */ } }

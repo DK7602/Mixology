@@ -1,7 +1,9 @@
 // Sonicology Rack: a made-up project for previewing the view in a browser (tools/rack/preview.html; not in the
 // plug-ins). Lead Vox with Voxology + a Link, Chorus Vox with Honey Tune + Voxology + a
 // Link, Ad-Libs with Voxology alone, the Beat with Voxology in Beat mode + a Link, drums / 808 / keys with Links, the
-// Full Mix (Mixology) and the Master (Masterology). Meters move; everything else stays as it is.
+// Full Mix (Mixology) and the Master (Masterology). Meters move. Stage 2: knobs turn and modules switch (request /
+// answer, about a fifth of a second later, as a plug-in would); ?lock=1 locks Masterology (Auto-Master running);
+// Masterology's Tonal EQ Air refuses (to see a refusal).
 (function () {
   "use strict";
   const t0 = Date.now();
@@ -94,7 +96,7 @@
     return { id, product: "link", version: "0.26.0", track, hash, role, on: true, inDb: inDb + wob(hash % 97, 3), outDb: inDb + 1 + wob(hash % 89, 3), modules: linkMods(on), together: together || [] };
   }
 
-  function units() {
+  function rawUnits() {
     return [
       voxLead(),
       link("link-lead", "Lead Vox", H.lead, "vocal", -12, {
@@ -162,8 +164,50 @@
     ];
   }
 
+  // Stage 2: every value a knob the Rack can turn (key from its name), choices stepped; what was turned or switched.
+  const CHOICES = { mode: 3, speed: 3, time: 6, character: 3, focus: 3, oversampling: 4, effect: 7, effects: 7, knee: 3 };
+  const SHOWN_ONLY = new Set(["ht.tune|key", "ht.tune|scale", "vox.beat|key", "vox.beat|scale"]);
+  const FIXED = new Set(["vox.output", "vox.beat", "ht.tune", "mix.assist", "mas.max"]);
+  const turned = {}, switched = {}, tickets = {};
+  let nextTicket = 1;
+  const lockMaster = new URLSearchParams(location.search).get("lock") === "1";
+  function units() {
+    const list = rawUnits();
+    for (const u of list) {
+      u.gen = 1;
+      if (u.product === "masterology" && lockMaster) u.lock = "Auto-Master is running.";
+      for (const m of u.modules || []) {
+        m.switchable = !FIXED.has(m.key);
+        const st = switched[u.id + "|" + m.key];
+        if (st) { m.state = st; if (st === "off") m.summary = "Off"; }
+        for (const x of m.values || []) {
+          const key = x.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+          if (SHOWN_ONLY.has(m.key + "|" + key)) continue;
+          x.key = key;
+          x.steps = CHOICES[key] || 0;
+          const t = turned[u.id + "|" + m.key + "|" + key];
+          if (t != null) { x.norm = t; x.text = x.steps ? "Option " + (Math.round(t * (x.steps - 1)) + 1) : Math.round(t * 100) + " %"; }
+        }
+      }
+    }
+    return list;
+  }
+
   window.SonicologyRackMock = {
     host: "mixology",
+    async request(r) {
+      const t = nextTicket++;
+      if (lockMaster && r.unit === "masterology") return { ticket: 0, why: "Auto-Master is running." };
+      setTimeout(() => {
+        if (r.module === "mas.tonaleq" && r.control === "air") { tickets[t] = { outcome: "refused", why: "Masterology can't change Air from the Rack." }; return; }
+        if (r.change === "state") switched[r.unit + "|" + r.module] = r.value >= 0.5 ? "on" : "off";
+        else turned[r.unit + "|" + r.module + "|" + r.control] = r.value;
+        tickets[t] = { outcome: "applied", why: "" };
+      }, 180);
+      tickets[t] = { outcome: "pending", why: "" };
+      return { ticket: t, why: "" };
+    },
+    async answer(unit, gen, ticket) { return tickets[ticket] || { outcome: "gone", why: "" }; },
     async getRack() {
       return {
         host: this.host, hostHash: this.host === "voxology" ? H.lead : 0,
