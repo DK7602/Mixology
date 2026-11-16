@@ -245,17 +245,31 @@ def liquids():
     save(fit(trim(liquid_only(bar.crop((0, 300, 760, 520)))), 760), "liquid_left.webp")
     save(fit(trim(liquid_only(bar.crop((1000, 140, 2172, 330)))), 1172), "liquid_right.webp")
 
-    # the light view's liquid: only its bright, coloured glass; its deep navy shading (which shows as a dark smudge on
-    # white) left out. The same size and trim as the dark one, so the page places both alike.
-    def bright_only(im):
+    # the light view's liquid: its red and blue glass kept strong, the white glints softer, and its deep navy body
+    # (black on white would show as a smudge, 2026-11-15) turned into a light blue tint, so on pearl it still reads as
+    # glass with volume, not as milky streaks (the user, Beta 14). The same size and trim as the dark one.
+    def glass_light(im):
         r, g, b, a = im.split()
         hi = ImageChops.lighter(ImageChops.lighter(r, g), b)
-        keep = hi.point(lambda v: max(0, min(255, (v - 95) * 2.4))).filter(ImageFilter.GaussianBlur(1.0))
-        return Image.merge("RGBA", (r, g, b, ImageChops.multiply(a, keep)))
+        lo = ImageChops.darker(ImageChops.darker(r, g), b)
+        sat = ImageChops.subtract(hi, lo)
+        colour = sat.point(lambda v: max(0, min(255, (v - 40) * 2.2)))
+        glint = ImageChops.subtract(hi.point(lambda v: max(0, min(255, (v - 150) * 2.0))), colour).point(lambda v: v * 0.55)
+        body = ImageChops.subtract(hi.point(lambda v: 255 - v), colour).point(lambda v: max(0, min(255, (v - 80) * 0.45)))
+        rgb = Image.merge("RGB", (r, g, b))
+        bodymask = ImageChops.subtract(body, ImageChops.lighter(colour, glint))
+        rgb = Image.composite(Image.new("RGB", im.size, (38, 92, 170)), rgb, bodymask.point(lambda v: 255 if v > 0 else 0))
+        alpha = ImageChops.multiply(ImageChops.lighter(ImageChops.lighter(colour, glint), body), a).filter(ImageFilter.GaussianBlur(0.8))
+        out = rgb.convert("RGBA")
+        out.putalpha(alpha)
+        return out
     for box, name, size in (((0, 300, 760, 520), "liquid_left", 760), ((1000, 140, 2172, 330), "liquid_right", 1172)):
         dark = liquid_only(bar.crop(box))
         bbox = dark.getchannel("A").point(lambda v: 255 if v > 6 else 0).getbbox()
-        save(fit(bright_only(dark.crop(bbox)), size), name + "_light.webp")
+        region = dark.crop(bbox).getchannel("A").filter(ImageFilter.MaxFilter(9)).filter(ImageFilter.GaussianBlur(3))
+        light = glass_light(bar.crop(box).crop(bbox))
+        light.putalpha(ImageChops.multiply(light.getchannel("A"), region))   # only where the liquid is
+        save(fit(light, size), name + "_light.webp")
 
 
 def save_rgb(im, name, quality=86):

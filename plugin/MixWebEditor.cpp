@@ -236,9 +236,10 @@ juce::WebBrowserComponent::Options MixWebEditor::makeEditorOptions()
                              { complete (presetUndo (args.size() > 0 ? args[0].toString() : juce::String ("mix"))); })
         // The Sonicology Rack (suite/RackLink.h): every Sonicology plug-in in the project, as rack.js shows it. Opened from
         // Mixology it starts on the Full Mix.
-        .withNativeFunction ("getRack", [] (const juce::Array<juce::var>&, auto complete)
+        .withNativeFunction ("getRack", [] (const juce::Array<juce::var>& args, auto complete)
                              {
-                                 const auto json = rack::viewJson ("mixology", 0, suite::nowMs());
+                                 const auto json = rack::viewJson ("mixology", 0, suite::nowMs(),
+                                                                 args.size() > 0 ? args[0].toString().toStdString() : std::string());   // the track it shows
                                  complete (juce::String::fromUTF8 (json.data(), static_cast<int> (json.size())));
                              })
         .withNativeFunction ("getRackTheme", [] (const juce::Array<juce::var>&, auto complete)

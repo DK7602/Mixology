@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-11-14, v0.25.2; next: the Sonicology Rack plan)
+# Mixology: resume here (updated 2026-11-16, v0.26.1; the Sonicology Rack: Beta 14 feedback fixed, Beta 15)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -60,6 +60,18 @@ sends higher-resolution art, re-run it.
   0.55.0 37e32f5, Masterology 0.31.0 f4cbeac): all green, both installers built (Sonicology-Windows,
   Sonicology-macOS; auval passed). Build & Test green: Mixology 43876712535, Voxology 43876723862; Masterology
   43876733835 green on Windows + UI smoke (its ASan job ran on after). Next: the user checks the Rack in Cubase.
+  Beta 14 feedback (2026-11-16, screenshot + 2 videos): (1) light view's liquid glass looked flat; (2) knobs appeared /
+  disappeared; (3) "the rack is ssooooooo slow". Fixed in Mixology 0.26.1 / Voxology 0.55.1 / Masterology 0.31.1:
+  - Speed + knobs: rack.js rebuilt the whole view (every knob) on every poll; clicks landed on elements that had been
+    replaced. Now render() builds 5 parts (frame, header, page, footer, menu) and only rewrites a part whose HTML
+    changed; a signature (picked track detailed, the rest keys + states) skips re-renders when only meters move; live
+    values / meters / EQ graph update in place; a render waits while the mouse is down. getRack(track) asks only for
+    the shown track's details (rack::viewJson's detailTrack: "fullmix", "master" or "t<hash>"; others come brief
+    and the view keeps their last details). Measured at 6x CPU throttle in the preview: clicks landed 1/6 -> 6/6.
+  - Knobs vanishing / Pitch flipping ON <-> RESTS: the DAW's window thread stalls (plug-in timers) pushed units past
+    kAliveMs; now kAliveMs 6000, kViewerMs 5000 (RackLink.h), Voxology's honey link kAliveMs 8000, kHoneyHoldMs 10000.
+  - Light liquid glass: make_art.py glass_light(): keeps the liquid's colour, softer glints, blue-tinted body, alpha
+    only where the dark art has liquid; .sr-light .sr-liquid drop-shadow.
   The look: docs/rack/concepts/*.png (the user's picked concept art); the user's art files: docs/rack/art/*.png
   (received 2026-11-14; the plan says what each becomes).
 - Decided: the Rack is a VIEW inside all three plug-ins (a RACK button on each current screen, the only change to the

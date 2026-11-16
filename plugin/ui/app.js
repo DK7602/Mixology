@@ -151,7 +151,7 @@ $("tab-rack").addEventListener("click", async () => {
   window.SonicologyRack.open({
     host: "mixology",
     theme: theme === "light" || theme === "dark" ? theme : undefined,
-    getRack: async () => { const j = await native.getRack(); return j ? JSON.parse(j) : null; },
+    getRack: async (track) => { const j = await native.getRack(track || ""); return j ? JSON.parse(j) : null; },
     onTheme: (t) => native.setRackTheme(t),
     back: () => {},
   });
