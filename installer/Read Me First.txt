@@ -7,6 +7,13 @@ The complete vocal, mixing and mastering suite
 
 Thanks for trying the beta. Nothing here is finished: tell us what's confusing, what breaks and what you'd change.
 
+NEW IN THIS BETA: THE SONICOLOGY RACK
+  Every Sonicology plug-in in your project in one view: each track's chain (Honey Tune, Voxology, Mixology Link),
+  the Full Mix and the master, what every module is doing, and how they work together (warnings in red).
+  Open it with the RACK button: in Voxology beside MY CHAINS, in Mixology the spinning-cube tab after PRESETS, in
+  Masterology the RACK pill before the gear. Press play first: plug-ins join the Rack while the project plays.
+  All three plug-ins need this version (an older one is missing from the Rack). Click the cube for light / dark.
+
 
 WHAT THE INSTALLER PUTS WHERE
   Windows   the plug-ins (VST3) in C:\Program Files\Common Files\VST3

@@ -52,8 +52,11 @@ sends higher-resolution art, re-run it.
   ui/rack/*.webp + *.ttf served flat, mock.js answers the Rack in the browser preview (with tools/rack/rack_mock.js).
   Voxology (RACK pill beside MY CHAINS, 8854824) and Masterology (RACK pill before the gear, cbcdada; its header row is
   full now: the logo gives up a little width) done; rack.js / rack.css / ui/rack/* are in sonicology.yml's
-  shared-files list (Mixology is the master copy). Left: CI green in all three, then step 5 (manuals incl. the
-  Masterology Claude Docs copy, versions Voxology 0.55.0 / Mixology 0.26.0 / Masterology 0.31.0, Beta 14).
+  shared-files list (Mixology is the master copy). Step 4 CI green in all three (2026-11-16).
+  Step 5 (2026-11-16): "Sonicology Rack: your whole suite in one view" section in all three manuals (Mixology: before
+  Performance, plus a row in "What works"), versions Mixology 0.26.0 / Voxology 0.55.0 / Masterology 0.31.0, README
+  rows, the installer Read Me's "NEW IN THIS BETA: THE SONICOLOGY RACK"; Masterology's Claude Docs copy updated.
+  Then Beta 14 (Sonicology suite: label "Beta 14", version 0.14.0) and the user checks it in Cubase.
   The look: docs/rack/concepts/*.png (the user's picked concept art); the user's art files: docs/rack/art/*.png
   (received 2026-11-14; the plan says what each becomes).
 - Decided: the Rack is a VIEW inside all three plug-ins (a RACK button on each current screen, the only change to the
