@@ -58,6 +58,9 @@ export const native = {
   presetSave: fn("presetSave"),
   presetDelete: fn("presetDelete"),
   presetUndo: fn("presetUndo"),
+  getRack: fn("getRack"),
+  getRackTheme: fn("getRackTheme"),
+  setRackTheme: fn("setRackTheme"),
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -141,6 +144,18 @@ $("tab-help").addEventListener("click", () => openHelp(app));
 $("tab-presets").addEventListener("click", () => openPresets(app));
 $("tab-history").innerHTML = icon("history", 'stroke-width="2.2"');
 $("tab-history").addEventListener("click", () => openHistory(app));
+// The Sonicology Rack: every Sonicology plug-in in the project in one view, over this page (BACK returns).
+$("tab-rack").addEventListener("click", async () => {
+  if (!window.SonicologyRack || window.SonicologyRack.isOpen()) return;
+  const theme = await native.getRackTheme();
+  window.SonicologyRack.open({
+    host: "mixology",
+    theme: theme === "light" || theme === "dark" ? theme : undefined,
+    getRack: async () => { const j = await native.getRack(); return j ? JSON.parse(j) : null; },
+    onTheme: (t) => native.setRackTheme(t),
+    back: () => {},
+  });
+});
 $("sheet-close").innerHTML = icon("close", 'stroke-width="2.6"');
 $("sheet-close").addEventListener("click", () => $("overlay").classList.remove("shown"));
 $("overlay").addEventListener("pointerdown", (e) => { if (e.target.id === "overlay") $("overlay").classList.remove("shown"); });

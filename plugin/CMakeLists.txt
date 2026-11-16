@@ -27,7 +27,9 @@ file(GLOB MIX_UI_FILES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/ui/*.css"
     "${CMAKE_CURRENT_SOURCE_DIR}/ui/*.js"
     "${CMAKE_CURRENT_SOURCE_DIR}/ui/assets/*"
-    "${CMAKE_CURRENT_SOURCE_DIR}/ui/fonts/*.ttf")
+    "${CMAKE_CURRENT_SOURCE_DIR}/ui/fonts/*.ttf"
+    "${CMAKE_CURRENT_SOURCE_DIR}/ui/rack/*.webp"   # the Sonicology Rack's art and fonts (rack.js / rack.css: the same in all three)
+    "${CMAKE_CURRENT_SOURCE_DIR}/ui/rack/*.ttf")
 
 juce_add_binary_data(MixologyUIData
     HEADER_NAME MixologyUIData.h

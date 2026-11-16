@@ -449,7 +449,7 @@
     initialisationData: {
       __juce__platform: [], __juce__registeredGlobalEventIds: [], __juce__sliders: [], __juce__toggles: [], __juce__comboBoxes: [],
       __juce__functions: ["pickDaw", "pickStyle", "bridgeCommand", "getBridgeState", "getSettings", "setSetting", "setUiState", "setPage", "procTarget", "procSet", "setMonoListen", "spaceDuck",
-        "presetList", "presetApply", "presetSave", "presetDelete", "presetUndo"],
+        "presetList", "presetApply", "presetSave", "presetDelete", "presetUndo", "getRack", "getRackTheme", "setRackTheme"],
     },
     postMessage(message) {
       const { eventId, payload } = JSON.parse(message);
@@ -459,6 +459,12 @@
       if (payload.name === "pickDaw") { MOCK_DAW.key = a || "cubase"; MOCK_DAW.picked = !!a; MOCK_DAW.from = 2; }
       else if (payload.name === "bridgeCommand") result = command(a, b);
       else if (payload.name === "getBridgeState") result = state(true);
+      else if (payload.name === "getRack") {   // tools/rack/rack_mock.js, when the preview loads it: a whole demo project
+        if (window.SonicologyRackMock) { Promise.resolve(window.SonicologyRackMock.getRack()).then((d) => send("__juce__complete", { promiseId: payload.resultId, result: JSON.stringify(d) })); return; }
+        result = null;
+      }
+      else if (payload.name === "getRackTheme") { try { result = localStorage.getItem("sonicologyRackTheme") || ""; } catch (e) { result = ""; } }
+      else if (payload.name === "setRackTheme") { try { localStorage.setItem("sonicologyRackTheme", a); } catch (e) { /* none */ } }
       else if (payload.name === "getSettings") {
         let ui = null; try { ui = localStorage.getItem("mixology-ui"); } catch (e) { /* none */ }
         result = { theme: null, ui: ui || JSON.stringify(demoUi), version: "0.3.0 (preview)" };

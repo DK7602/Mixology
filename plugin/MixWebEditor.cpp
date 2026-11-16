@@ -3,6 +3,7 @@
 #include "MixologyUIData.h"
 
 #include "mixology/LinkRegistry.h"
+#include "suite/RackLink.h"
 
 #include <cstring>
 
@@ -23,6 +24,17 @@ namespace
         if (ext == "json") return "application/json";
         if (ext == "md")   return "text/markdown";
         return "text/plain";
+    }
+
+    // The Sonicology Rack's light / dark view: one choice for all three plug-ins, kept in the user's own settings folder.
+    juce::File rackThemeFile()
+    {
+        const auto base = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory);
+       #if JUCE_MAC
+        return base.getChildFile ("Application Support/Sonicology/rack-theme.txt");
+       #else
+        return base.getChildFile ("Sonicology/rack-theme.txt");
+       #endif
     }
 
     float roundTo (float v, float step) { return std::round (v / step) * step; }
@@ -222,6 +234,21 @@ juce::WebBrowserComponent::Options MixWebEditor::makeEditorOptions()
                              { complete (args.size() > 0 && hub.deleteUserPreset (args[0].toString().toStdString())); })
         .withNativeFunction ("presetUndo", [this] (const juce::Array<juce::var>& args, auto complete)
                              { complete (presetUndo (args.size() > 0 ? args[0].toString() : juce::String ("mix"))); })
+        // The Sonicology Rack (suite/RackLink.h): every Sonicology plug-in in the project, as rack.js shows it. Opened from
+        // Mixology it starts on the Full Mix.
+        .withNativeFunction ("getRack", [] (const juce::Array<juce::var>&, auto complete)
+                             {
+                                 const auto json = rack::viewJson ("mixology", 0, suite::nowMs());
+                                 complete (juce::String::fromUTF8 (json.data(), static_cast<int> (json.size())));
+                             })
+        .withNativeFunction ("getRackTheme", [] (const juce::Array<juce::var>&, auto complete)
+                             { complete (rackThemeFile().loadFileAsString().trim()); })
+        .withNativeFunction ("setRackTheme", [] (const juce::Array<juce::var>& args, auto complete)
+                             {
+                                 const auto f = rackThemeFile();
+                                 f.getParentDirectory().createDirectory();
+                                 complete (f.replaceWithText (args.size() > 0 && args[0].toString() == "light" ? "light" : "dark"));
+                             })
         .withResourceProvider ([] (const auto& url) { return getResource (url); });
 }
 
