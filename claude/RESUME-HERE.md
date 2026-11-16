@@ -50,8 +50,10 @@ sends higher-resolution art, re-run it.
   tab after PRESETS (index.html, styles.css: 4 icon tabs), getRack / getRackTheme / setRackTheme native functions
   (MixWebEditor.cpp; the theme file Sonicology/rack-theme.txt in the user's app-data folder, shared by all three),
   ui/rack/*.webp + *.ttf served flat, mock.js answers the Rack in the browser preview (with tools/rack/rack_mock.js).
-  Next: Voxology (RACK pill beside MY CHAINS), Masterology (RACK pill before the gear), copy rack.js / rack.css /
-  ui/rack/ to both, add them to sonicology.yml's shared-files list, sync RackLink, tests, CI.
+  Voxology (RACK pill beside MY CHAINS, 8854824) and Masterology (RACK pill before the gear, cbcdada; its header row is
+  full now: the logo gives up a little width) done; rack.js / rack.css / ui/rack/* are in sonicology.yml's
+  shared-files list (Mixology is the master copy). Left: CI green in all three, then step 5 (manuals incl. the
+  Masterology Claude Docs copy, versions Voxology 0.55.0 / Mixology 0.26.0 / Masterology 0.31.0, Beta 14).
   The look: docs/rack/concepts/*.png (the user's picked concept art); the user's art files: docs/rack/art/*.png
   (received 2026-11-14; the plan says what each becomes).
 - Decided: the Rack is a VIEW inside all three plug-ins (a RACK button on each current screen, the only change to the

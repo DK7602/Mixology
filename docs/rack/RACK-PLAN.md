@@ -190,6 +190,14 @@ resizable, Masterology keeps its 16:9): the view is designed at the concept's 4:
    from all three rendered in rack.js (screenshots checked). The Beat line no longer says Beat mode changes nothing
    (Unmask dips the beat under the vocal); unknown levels show a dash.
 4. **Wire the view** to `getRack()`, the RACK buttons, the "together" checks.
+   **Done 2026-11-16:** `rack::viewJson` / `rack::overview` (shared, tested: the viewer heartbeat, every live unit, the
+   together lines, the mix's loudness and Masterology's goal from the suite link); each plug-in's window has
+   getRack / getRackTheme / setRackTheme (the light / dark choice is one file, Sonicology/rack-theme.txt in the user's
+   app-data folder, shared by all three) and its RACK button at the approved spot (Mixology an icon tab after PRESETS,
+   Voxology a pill beside MY CHAINS, Masterology a pill before the gear: its full header row takes a little width from
+   the logo); rack.js / rack.css / art served flat in all three and checked by the shared-files job. Checked in each
+   window's browser preview (opens, starts on the plug-in's own track, theme kept, BACK returns) and Masterology's UI
+   smoke test.
 5. **Manuals, versions, CI green in all three, Beta 14.** The user checks it in Cubase.
 
 Roughly 3 to 5 build sessions, step 1 first.
