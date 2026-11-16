@@ -72,6 +72,10 @@ sends higher-resolution art, re-run it.
     kAliveMs; now kAliveMs 6000, kViewerMs 5000 (RackLink.h), Voxology's honey link kAliveMs 8000, kHoneyHoldMs 10000.
   - Light liquid glass: make_art.py glass_light(): keeps the liquid's colour, softer glints, blue-tinted body, alpha
     only where the dark art has liquid; .sr-light .sr-liquid drop-shadow.
+  Beta 15 built 2026-11-16: Mixology's Sonicology suite run 43896548580 (label "Beta 15", version 0.15.0; Mixology
+  0.26.1 89c9c01, Voxology 0.55.1 d32231c, Masterology 0.31.1 6f9ab1e), all green, both installers. Build & Test:
+  Mixology 43896414539 green; Voxology 43896452035 and Masterology 43896463325 green on Windows (+ UI smoke), their
+  ASan jobs ran on after. Next: the user checks the Rack again in Cubase.
   The look: docs/rack/concepts/*.png (the user's picked concept art); the user's art files: docs/rack/art/*.png
   (received 2026-11-14; the plan says what each becomes).
 - Decided: the Rack is a VIEW inside all three plug-ins (a RACK button on each current screen, the only change to the
