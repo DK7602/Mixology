@@ -42,10 +42,9 @@ sends higher-resolution art, re-run it.
   TURN ON HERE. Steps 3 - 5 go in a Beta 16 after the user signs off stage 1.
 - Step 1 BUILT in Mixology (2026-11-16): RackLink.h / .cpp layout 2 (requests, lock, generation; see RACK-PLAN.md
   "Stage 2"), tests "Rack requests: ..." (6 new; 23 [rack] cases, all 248 pass; ASan / UBSan / TSan clean here).
-  Copied to Voxology (0be9176, [rack] tests pass). NOT YET in Masterology (add_repo for DK7602/polisher was blocked):
-  copy dsp/include/suite/RackLink.h, dsp/src/RackLink.cpp, tests/test_rack_link.cpp there before any suite installer
-  build (layout 2 vs 1: the plug-ins wouldn't see each other, and the "Shared files match" job fails). No plug-in
-  code changes needed for that copy: Unit only gained fields with defaults.
+  Copied to Voxology (0be9176; all 192 tests pass) and Masterology (4ef385c; [rack] tests pass, its full suite left to
+  CI): the three shared files are identical in all three repos again. No plug-in code changed (Unit only gained
+  fields with defaults). add_repo for Voxology / polisher went through once the user asked for it in the chat.
 - Decided in step 1: the padlock locks the Rack's hand too (as the plan says); the lock is per unit, a text the
   owner publishes ("Auto Mix is running."), checked by the sender and again by the owner.
 
