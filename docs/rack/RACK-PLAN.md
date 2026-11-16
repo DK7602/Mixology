@@ -213,7 +213,7 @@ Roughly 3 to 5 build sessions, step 1 first.
 - No extra CPU while no Rack is open; little while one is.
 - CI green in all three, shared files the same.
 
-## Stage 2: quick controls (step 1 built 2026-11-16; the rest planned)
+## Stage 2: quick controls (steps 1 - 2 built 2026-11-16; the rest planned)
 
 - **First: a RACK button on Mixology Link's window** (the user said yes, 2026-11-14; when is ours to pick). It opens
   the Rack straight on that Link's track. Stage 2, not 1, because the Link's window is small (600 x 536): it has to
@@ -222,6 +222,18 @@ Roughly 3 to 5 build sessions, step 1 first.
 
 - **Turn modules on / off and turn their main knobs from the Rack**, in any plug-in on any track. Each plug-in
   publishes its module's controls (name, range, unit, curve), so the shared view draws the gold knobs for any module.
+  **Built (step 2, 2026-11-16):** each knob (`rack::Value`) carries `key`, the control it turns (the plug-in's own
+  host parameter id: Mixology's proc ids "comp_thr", the Link's Assist EQ "lowcut" / "mudgain" / "pocketgain",
+  Voxology's "cpThr", Masterology's "glueRatio", Honey Tune's "snap" / "drift" / "vibrato"; "" = shown only), and
+  `steps` (a choice of that many, 0 = continuous); each module `switchable` (it has its own on switch). Range and curve
+  did NOT go into the shared block: the owner turns the Rack's 0..1 back into the value with its own curve, the one
+  that placed the knob (`fromKnob()` in each plug-in's RackUnit, tested to round-trip; the module's switch:
+  `switchOf()` in Voxology / Masterology, proc::onParam in Mixology). Shown only, on purpose: Pitch's Key (the key it
+  follows), the Beat Listener's Key / Scale / Tuning, Voices "MIDI notes", Honey Tune's Key / Scale (a re-tune of
+  every clip: chosen in Honey Tune), Masterology's Dynamics bands (gain reduction now), Tone Steady's Target and
+  the Maximizer's Target (from the goal). Masterology's Glue "Ignore Lows" knob now sits where the host's curve puts
+  it (skew for a 90 Hz centre; it was drawn linear). Tests in each repo check every published key exists in the
+  plug-in's parameter code (Voxology: plugin/Params.h; Masterology: PluginProcessor.cpp + ModuleParams.h).
 - **How:** a request queue per slot in RackLink (the way Mixology already asks a Link to change its Assist EQ): the
   plug-in that owns the module applies it on its message thread like a move of your own mouse, so Cubase's undo and
   automation see it. Protected tracks (Mixology's padlock) and a running Auto-Edit / Auto Mix / Auto-Master are

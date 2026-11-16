@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-11-16, v0.26.1; the Sonicology Rack: Beta 15; stage 2 step 1 built)
+# Mixology: resume here (updated 2026-11-16, v0.26.1; the Sonicology Rack: Beta 15; stage 2 steps 1 - 2 built)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -45,6 +45,11 @@ sends higher-resolution art, re-run it.
   Copied to Voxology (0be9176; all 192 tests pass) and Masterology (4ef385c; [rack] tests pass, its full suite left to
   CI): the three shared files are identical in all three repos again. No plug-in code changed (Unit only gained
   fields with defaults). add_repo for Voxology / polisher went through once the user asked for it in the chat.
+- Step 2 BUILT (2026-11-16) in all three: knobs carry `key` (the plug-in's parameter id) + `steps`, modules
+  `switchable`; each plug-in's RackUnit has fromKnob() (and Voxology / Masterology switchOf()); Honey Tune rackSet().
+  See RACK-PLAN.md "Stage 2". Mixology 249 tests pass; Voxology / Masterology [rack] pass. Next: step 3 (the plug-ins
+  serve requests: Publisher::serve + apply via fromKnob / switchOf, JUCE gestures; rack.js turns knobs; the
+  padlock reaching the Links; the Rack turns Mixology's processing on when a module is switched on while it's off).
 - Decided in step 1: the padlock locks the Rack's hand too (as the plan says); the lock is per unit, a text the
   owner publishes ("Auto Mix is running."), checked by the sender and again by the owner.
 

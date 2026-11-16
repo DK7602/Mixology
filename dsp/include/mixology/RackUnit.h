@@ -31,6 +31,20 @@ namespace mixology::rackunit
     /** The modules (brief: keys, states and summaries only; full: values, bands and meters too). */
     std::vector<rack::Module> modules (const State&, bool full);
 
+    /** The Assist EQ's knobs in the Rack: the Link's host parameter ids. */
+    inline constexpr const char* kLowCutKey = "lowcut";
+    inline constexpr const char* kMudKey = "mudgain";
+    inline constexpr const char* kPocketKey = "pocketgain";
+
+    /** Stage 2: where a Rack knob (0..1, as modules() published it) puts its control: a processing control (by its id,
+        proc::specs()) or an Assist EQ knob. Snapped to the control's step (choices to a whole option). False: no such
+        control. */
+    bool fromKnob (const std::string& key, float knob, float& value);
+    /** A processing control's index by its id, -1 if none. */
+    int indexOf (const std::string& key);
+    /** An Assist EQ knob's position (0..1) for a value. */
+    float assistNorm (const std::string& key, float value);
+
     /** A control's value as Mixology's pages write it ("3.2 kHz", "−3.0 dB", "4.0:1", "Soft"), and where it sits on its
         knob (0..1). */
     std::string valueText (int index, float value);

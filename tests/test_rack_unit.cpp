@@ -214,3 +214,74 @@ TEST_CASE ("Rack unit: a Link's modules through the Rack link, and what they do 
     for (const auto& l : rack::together (units)) twoComps |= l.text.find ("Two compressors") != std::string::npos;
     CHECK (twoComps);
 }
+
+TEST_CASE ("Rack unit: every knob the Rack can turn names its control, and turns back to the value it shows", "[rack]")
+{
+    // A Link with every module on and values off their defaults (choices included).
+    rackunit::State st;
+    set (st, pr::chainOn, 1.0f);
+    for (int m = 0; m < pr::kModules; ++m) set (st, pr::onParam (static_cast<pr::Module> (m)), 1.0f);
+    for (int i = 0; i < pr::count; ++i)
+    {
+        const auto& s = pr::specs()[static_cast<std::size_t> (i)];
+        if (s.kind == pr::Kind::number && i != pr::chainOn) st.values[static_cast<std::size_t> (i)] = s.min + 0.3f * (s.max - s.min);
+    }
+    set (st, pr::eq1Type, static_cast<float> (pr::EqShape::lowCut));
+    set (st, pr::eq2Gain, 4.5f);
+    set (st, pr::compKnee, 2.0f);
+    set (st, pr::gateMode, 1.0f);
+    set (st, pr::revOn, 1.0f);
+    set (st, pr::hallOn, 1.0f);
+    st.assist.lowCutHz = 110.0f;
+    st.assist.mudDb = -3.5f;
+    st.assist.mudHz = 300.0f;
+
+    int turnable = 0;
+    for (const auto& m : rackunit::modules (st, true))
+    {
+        CAPTURE (m.key);
+        CHECK (m.switchable == (m.key != "mix.assist"));   // the Assist EQ has no on switch of its own
+        for (const auto& v : m.values)
+        {
+            CAPTURE (v.name);
+            REQUIRE_FALSE (v.key.empty());   // every knob a Link shows is its own control
+            ++turnable;
+            float back = 0.0f;
+            REQUIRE (rackunit::fromKnob (v.key, v.norm, back));
+            const int index = rackunit::indexOf (v.key);
+            if (index >= 0)
+            {
+                const auto& s = pr::specs()[static_cast<std::size_t> (index)];
+                CHECK (v.steps == (s.kind == pr::Kind::number ? 0 : static_cast<int> (std::lround (s.max - s.min)) + 1));
+                CHECK (rackunit::valueNorm (index, back) == Catch::Approx (v.norm).margin (0.003));
+                const float was = st.values[static_cast<std::size_t> (index)];
+                CHECK (back == Catch::Approx (was).epsilon (0.002).margin (s.step > 0.0f ? s.step : 0.001f));
+                if (s.kind != pr::Kind::number) CHECK (rackunit::valueText (index, back) == v.text);
+            }
+            else
+                CHECK (rackunit::assistNorm (v.key, back) == Catch::Approx (v.norm).margin (0.003));
+        }
+    }
+    CHECK (turnable > 60);
+
+    // Every choice: each step lands on its option.
+    float back = 0.0f;
+    REQUIRE (rackunit::fromKnob ("gate_mode", 0.0f, back));
+    CHECK (back == 0.0f);
+    REQUIRE (rackunit::fromKnob ("gate_mode", 1.0f, back));
+    CHECK (back == pr::specs()[static_cast<std::size_t> (pr::gateMode)].max);
+    // Knobs past the ends, and values that aren't numbers, stay in range; unknown keys are refused.
+    const char* thr = pr::specs()[static_cast<std::size_t> (pr::compThr)].id;
+    REQUIRE (rackunit::fromKnob (thr, 7.0f, back));
+    CHECK (back == pr::specs()[static_cast<std::size_t> (pr::compThr)].max);
+    REQUIRE (rackunit::fromKnob (thr, std::nanf (""), back));
+    CHECK (back == pr::specs()[static_cast<std::size_t> (pr::compThr)].min);
+    CHECK_FALSE (rackunit::fromKnob ("noSuchKnob", 0.5f, back));
+    // The Assist EQ: the bottom of Low Cut is Off; Mud and Pocket dip 0 .. -12 dB.
+    REQUIRE (rackunit::fromKnob (rackunit::kLowCutKey, 0.0f, back));
+    CHECK (back == 0.0f);
+    REQUIRE (rackunit::fromKnob (rackunit::kLowCutKey, 1.0f, back));
+    CHECK (back == Catch::Approx (500.0f));
+    REQUIRE (rackunit::fromKnob (rackunit::kMudKey, 0.5f, back));
+    CHECK (back == Catch::Approx (-6.0f));
+}

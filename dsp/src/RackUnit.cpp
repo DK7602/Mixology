@@ -52,11 +52,23 @@ namespace mixology::rackunit
             return std::to_string (i);
         }
 
+        int stepsOf (const ParamSpec& s)
+        {
+            return s.kind == Kind::number ? 0 : static_cast<int> (std::lround (s.max - s.min)) + 1;
+        }
+
+        // A knob the Rack can turn: named by its control's id (what the host saves and automates).
+        rack::Value knob (int index, std::string label, std::string text, float value, bool bi)
+        {
+            const auto& s = specs()[static_cast<std::size_t> (index)];
+            return { std::move (label), std::move (text), valueNorm (index, value), bi, s.id, stepsOf (s) };
+        }
+
         rack::Value value (const State& st, int index, const char* label)
         {
             const float v = st.values[static_cast<std::size_t> (index)];
             const auto& s = specs()[static_cast<std::size_t> (index)];
-            return { label, valueText (index, v), valueNorm (index, v), s.kind == Kind::number && s.min < 0.0f && s.max > 0.0f };
+            return knob (index, label, valueText (index, v), v, s.kind == Kind::number && s.min < 0.0f && s.max > 0.0f);
         }
 
         void values (rack::Module& m, const State& st, std::initializer_list<std::pair<int, const char*>> list)
@@ -119,6 +131,54 @@ namespace mixology::rackunit
         }
     }
 
+    float assistNorm (const std::string& key, float value)
+    {
+        if (key == kLowCutKey)
+            return value < AssistSettings::kLowCutOff ? 0.0f
+                                                      : std::clamp (static_cast<float> (std::log (std::max (value, 20.0f) / 20.0) / std::log (25.0)), 0.0f, 1.0f);
+        if (key == kMudKey || key == kPocketKey) return std::clamp (1.0f + (std::isfinite (value) ? value : 0.0f) / 12.0f, 0.0f, 1.0f);
+        return 0.5f;
+    }
+
+    bool fromKnob (const std::string& key, float knob, float& value)
+    {
+        knob = std::clamp (std::isfinite (knob) ? knob : 0.0f, 0.0f, 1.0f);
+        if (key == kLowCutKey)
+        {
+            // The very bottom of the knob: Off; above it 20 Hz .. 500 Hz in octaves.
+            value = knob < 0.01f ? 0.0f : std::min (static_cast<float> (20.0 * std::pow (25.0, static_cast<double> (knob))), 500.0f);
+            return true;
+        }
+        if (key == kMudKey || key == kPocketKey)
+        {
+            value = std::clamp ((knob - 1.0f) * 12.0f, -12.0f, 0.0f);
+            return true;
+        }
+        for (int i = 0; i < count; ++i)
+        {
+            const auto& s = specs()[static_cast<std::size_t> (i)];
+            if (key != s.id) continue;
+            if (s.curve == Curve::log && s.min > 0.0f && s.kind == Kind::number)
+                value = static_cast<float> (s.min * std::pow (static_cast<double> (s.max) / s.min, static_cast<double> (knob)));
+            else if (s.curve == Curve::zeroMid)
+                value = fromNormalised (s, knob);
+            else
+                value = s.min + knob * (s.max - s.min);
+            if (s.kind != Kind::number) value = std::round (value);
+            else if (s.step > 0.0f) value = s.min + std::round ((value - s.min) / s.step) * s.step;
+            value = std::clamp (value, s.min, s.max);
+            return true;
+        }
+        return false;
+    }
+
+    int indexOf (const std::string& key)
+    {
+        for (int i = 0; i < count; ++i)
+            if (key == specs()[static_cast<std::size_t> (i)].id) return i;
+        return -1;
+    }
+
     std::string valueText (int index, float value)
     {
         if (index < 0 || index >= count) return {};
@@ -171,10 +231,10 @@ namespace mixology::rackunit
             if (! a.neutral() && st.assistByMixology) m.by = "Mixology's Clean Up / Vocal Pocket";
             if (full)
             {
-                m.values.push_back ({ "Low Cut", a.lowCutOn() ? hzText (a.lowCutHz) : "Off",
-                                      a.lowCutOn() ? static_cast<float> (std::log (a.lowCutHz / 20.0) / std::log (25.0)) : 0.0f, false });
-                m.values.push_back ({ "Mud", a.mudDb < -0.05f ? signedDb (a.mudDb) : "Off", std::clamp (1.0f + a.mudDb / 12.0f, 0.0f, 1.0f), false });
-                m.values.push_back ({ "Pocket", a.pocketDb < -0.05f ? signedDb (a.pocketDb) : "Off", std::clamp (1.0f + a.pocketDb / 12.0f, 0.0f, 1.0f), false });
+                m.values.push_back ({ "Low Cut", a.lowCutOn() ? hzText (a.lowCutHz) : "Off", assistNorm (kLowCutKey, a.lowCutOn() ? a.lowCutHz : 0.0f),
+                                      false, kLowCutKey });
+                m.values.push_back ({ "Mud", a.mudDb < -0.05f ? signedDb (a.mudDb) : "Off", assistNorm (kMudKey, a.mudDb), false, kMudKey });
+                m.values.push_back ({ "Pocket", a.pocketDb < -0.05f ? signedDb (a.pocketDb) : "Off", assistNorm (kPocketKey, a.pocketDb), false, kPocketKey });
                 if (a.lowCutOn()) m.bands.push_back ({ rack::BandType::lowCut, a.lowCutHz, 0.0f, 0.71f, "Low Cut", true });
                 if (a.mudDb < -0.05f) m.bands.push_back ({ rack::BandType::bell, a.mudHz, a.mudDb, static_cast<float> (AssistEq::kMudQ), "Mud", true });
                 if (a.pocketDb < -0.05f) m.bands.push_back ({ rack::BandType::bell, a.pocketHz, a.pocketDb, static_cast<float> (AssistEq::kPocketQ), "Pocket", true });
@@ -188,6 +248,7 @@ namespace mixology::rackunit
         {
             rack::Module m;
             m.key = key (mod);
+            m.switchable = true;   // its own on switch (the Rack also turns the processing on when it is off: step 3)
             const bool on = chain && v (st, onParam (mod)) >= 0.5f;
             m.state = on ? rack::State::on : rack::State::off;
             switch (mod)
@@ -211,8 +272,8 @@ namespace mixology::rackunit
                                                      : signedDb (db) + " at " + hzText (hz);
                         if (sum.size() < 60) sum += (sum.empty() ? "" : " \xC2\xB7 ") + what;
                         m.bands.push_back ({ type, hz, cut ? 0.0f : db, q, cut ? (type == rack::BandType::lowCut ? "Low Cut" : "High Cut") : hzText (hz), true });
-                        if (cut) m.values.push_back ({ type == rack::BandType::lowCut ? "Low Cut" : "High Cut", hzText (hz), valueNorm (eqFreq (b), hz), false });
-                        else m.values.push_back ({ hzText (hz), signedDb (db), valueNorm (eqGain (b), db), true });
+                        if (cut) m.values.push_back (knob (eqFreq (b), type == rack::BandType::lowCut ? "Low Cut" : "High Cut", hzText (hz), hz, false));
+                        else m.values.push_back (knob (eqGain (b), hzText (hz), signedDb (db), db, true));
                     }
                     m.summary = sum.empty() ? "Flat" : sum;
                     break;
@@ -263,7 +324,7 @@ namespace mixology::rackunit
                         if ((bits & (1u << t)) != 0)
                         {
                             const std::string name = effectNames (1u << t) + " Mix";
-                            m.values.push_back ({ name, valueText (kMix[t], v (st, kMix[t])), valueNorm (kMix[t], v (st, kMix[t])), false });
+                            m.values.push_back (knob (kMix[t], name, valueText (kMix[t], v (st, kMix[t])), v (st, kMix[t]), false));
                         }
                     values (m, st, { { duckAmount, "Ducking" }, { spLowCut, "Low Cut" }, { spHighCut, "High Cut" } });
                     m.summary = effectNames (bits);
