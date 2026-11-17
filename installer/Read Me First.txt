@@ -7,7 +7,17 @@ The complete vocal, mixing and mastering suite
 
 Thanks for trying the beta. Nothing here is finished: tell us what's confusing, what breaks and what you'd change.
 
-NEW IN THIS BETA: A QUICKER, SMARTER SONICOLOGY RACK
+NEW IN THIS BETA: VOXOLOGY SOUNDS AND TEACHES BETTER
+  - LISTEN (Voxology's Cleanup, Dynamic EQ and De-Esser: the LISTEN button next to ON): hear only what that
+    module takes out of your vocal, turned up so you can hear it. On the De-Esser you should hear only the "s"
+    sounds; if you hear whole words, it's set too strong. Listening only: never in a bounce.
+  - Compressor Style: Clean (as before), FET (grabs the front of each word: upfront, great for rap) or Opto
+    (smooth and slow to let go: great for sung R&B). Auto-Edit picks one for your style.
+  - Air (Saturation): sparkle on top, added only above 8 kHz so the vocal opens up without getting harsh.
+    Auto-Edit adds a little for most styles.
+  Voxology 0.58.0 (Mixology 0.28.0 and Masterology 0.33.0, as in Beta 18).
+
+ALSO NEW (BETA 18): A QUICKER, SMARTER SONICOLOGY RACK
   - Faster: knobs and meters in the Rack follow your changes straight away, and the plug-ins only send what the
     Rack is showing (lighter on your computer).
   - Bigger: the plug-in window grows while the Rack is open, and goes back to its size when you click BACK.

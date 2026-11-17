@@ -102,6 +102,14 @@ sends higher-resolution art, re-run it.
     git log); Playwright (scratchpad b18.js: wheel, Shift wheel, double-click, stepped wheel, drag text, fixes +
     UNDO, old-beta line, snap-back toast, base64) + the old rack_test.js; editors / processors / Honey Tune compiled
     against JUCE 8.0.15 here. NOT in a DAW yet. Next: trigger Beta 18; then Beta 19 (Voxology sound gaps).
+  Beta 18: Sonicology suite run 44175015421 (label "Beta 18", 0.18.0; Mixology 0f11e3e, Voxology d2e49b5, Masterology
+  e85b93a pinned by SHA). Attempt 1: the two Mac builds sat queued 15 min and were cancelled (never started);
+  re-run of the failed jobs (attempt 2) picked up Mac runners. Lesson: pin the other repos by SHA (voxology_ref /
+  masterology_ref take one) so later pushes can't leak into a build.
+- 2026-11-17: the user (away): "keep building, once you finish a version move on to the next". BETA 19 BUILT: Voxology
+  0.58.0 (LISTEN, Air, FET / Opto: details in Voxology's RESUME-HERE); here only the shared rack.js catalog text and
+  the installer Read Me (Mixology / Masterology versions unchanged). Beta 20's work (Rack UNDO / REDO, A / B, BYPASS via
+  Change::power) was parked in a copy while Beta 19 shipped.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the
