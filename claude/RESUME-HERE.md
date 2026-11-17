@@ -176,6 +176,13 @@ sends higher-resolution art, re-run it.
   "after" when likeOut < half likeIn; ten "before" in a row raise the warning (orderLine, a red Coach line), ten
   "after" clear it. Preview: rack_mock ?order=1 (Chorus Vox's Link before); scratchpad b25.js (warns after ~6 s,
   never on Lead Vox or without ?order). (2) Voxology's Output PEAKS (details: Voxology's RESUME-HERE).
+- BUILDS (2026-11-17, the user away): Beta 20 run 44188238494 GREEN (attempt 2: its Mixology Mac build was cancelled in
+  the Mac queue and re-run). Betas 21 - 25 then went out as ONE installer, "Beta 25" (version 0.25.0): run 44195754708
+  (Mixology afd7c93, Voxology 940c43bf023e2497cfffb31056c62b029ae54352, Masterology
+  3170a3a941a7004e6070138aed78c1a1ad71f00f by SHA). Why one: this account gets one Mac at a time, so each suite run
+  takes ~45 min of Mac time; five separate installers would have taken ~4 hours, and Beta 25's Read Me lists 21 - 25.
+  sonicology.yml since 1e22db4: `build` = the three Windows builds, `build-mac` = the three Macs with max-parallel 1.
+  Betas 22 - 25 were built in a worktree (/tmp/claude-0/mix22) and fast-forwarded onto claude/mixology.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the
