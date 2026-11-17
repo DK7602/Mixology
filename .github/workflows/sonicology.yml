@@ -71,16 +71,84 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      # This account gets one Mac at a time, and a Mac job that waits 15 minutes for one is cancelled. At most three
-      # jobs at once, in this order (Voxology's Mac first, the Windows builds, then the other two Macs), so a Mac job
-      # only starts once the Mac before it is nearly done.
-      max-parallel: 3
       matrix:
         include:
           - { plugin: Voxology, repo: DK7602/Voxology, ref: voxology, name: Windows, os: windows-latest, options: "-DVOX_BUILD_TESTS=OFF" }
-          - { plugin: Voxology, repo: DK7602/Voxology, ref: voxology, name: macOS, os: macos-15, options: "-DVOX_BUILD_TESTS=OFF" }
           - { plugin: Mixology, repo: DK7602/Mixology, ref: mixology, name: Windows, os: windows-latest, options: "-DMIX_BUILD_TESTS=OFF" }
           - { plugin: Masterology, repo: DK7602/polisher, ref: masterology, name: Windows, os: windows-latest, options: "-DPOLISHER_BUILD_TESTS=OFF" }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.repo }}
+          ref: ${{ matrix.ref == 'voxology' && inputs.voxology_ref || matrix.ref == 'masterology' && inputs.masterology_ref || github.sha }}
+          path: src
+
+      - name: Cache fetched dependencies (JUCE, ARA, Catch2)
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: suite-deps-${{ matrix.plugin }}-${{ runner.os }}-${{ hashFiles('src/CMakeLists.txt') }}
+
+      - name: Fetch WebView2 SDK (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $v = "1.0.3485.44"
+          $root = ("$env:RUNNER_TEMP/nuget") -replace '\\','/'
+          Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/$v" -OutFile webview2.zip
+          Expand-Archive webview2.zip -DestinationPath "$root/Microsoft.Web.WebView2.$v"
+          "WEBVIEW2_DIR=$root" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Configure
+        run: cmake -S src -B build -DCMAKE_BUILD_TYPE=Release ${{ matrix.options }} ${{ runner.os == 'Windows' && format('-DJUCE_WEBVIEW2_PACKAGE_LOCATION={0}', env.WEBVIEW2_DIR) || '' }}
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4
+
+      - name: Stage
+        shell: bash
+        run: |
+          P="part/${{ matrix.plugin }}"
+          mkdir -p "$P/VST3" "$P/AU"
+          case "${{ matrix.plugin }}" in
+            Voxology)    bundles=("plugin/Voxology_artefacts" "honeytune/HoneyTune_artefacts"); manual="docs/MANUAL.md" ;;
+            Mixology)    bundles=("plugin/Mixology_artefacts" "link/MixologyLink_artefacts"); manual="docs/MANUAL.md" ;;
+            Masterology) bundles=("plugin/Polisher_artefacts"); manual="docs/manual/polisher-manual.md" ;;
+          esac
+          for b in "${bundles[@]}"; do
+            cp -R build/$b/Release/VST3/*.vst3 "$P/VST3/"
+            if ls build/$b/Release/AU/*.component >/dev/null 2>&1; then cp -R build/$b/Release/AU/*.component "$P/AU/"; fi
+          done
+          cp "src/$manual" "$P/Manual.md"
+          grep -oE 'VERSION [0-9]+\.[0-9]+\.[0-9]+' src/CMakeLists.txt | head -1 | cut -d' ' -f2 > "$P/version.txt"
+          if [ "${{ matrix.plugin }}" = "Mixology" ]; then
+            mkdir -p "$P/Cubase MIDI Remote" "$P/FL Studio" "$P/Ableton"
+            cp -R src/bridge/cubase/Mixology "$P/Cubase MIDI Remote/"
+            cp -R "src/bridge/flstudio/Mixology Bridge" "$P/FL Studio/"
+            cp -R src/bridge/ableton/MixologyBridge "$P/Ableton/"
+          fi
+          find part -maxdepth 3 | sort
+          echo "${{ matrix.plugin }} $(cat "$P/version.txt")"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: part-${{ matrix.plugin }}-${{ matrix.name }}
+          path: part
+          if-no-files-found: error
+
+  # The Macs one after another: this account gets one Mac at a time, and a Mac job that waits 15 minutes for one is
+  # cancelled (two Mac builds queued at once lost the second one in Betas 18 - 20). KEEP THE STEPS THE SAME AS build's.
+  build-mac:
+    name: ${{ matrix.plugin }} (${{ matrix.name }})
+    needs: shared
+    if: inputs.reuse_run == ''
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - { plugin: Voxology, repo: DK7602/Voxology, ref: voxology, name: macOS, os: macos-15, options: "-DVOX_BUILD_TESTS=OFF" }
           - { plugin: Mixology, repo: DK7602/Mixology, ref: mixology, name: macOS, os: macos-15, options: "-DMIX_BUILD_TESTS=OFF" }
           - { plugin: Masterology, repo: DK7602/polisher, ref: masterology, name: macOS, os: macos-15, options: "-DPOLISHER_BUILD_TESTS=OFF" }
     steps:
@@ -182,8 +250,8 @@ jobs:
 
   macos:
     name: macOS installer
-    needs: [shared, build]
-    if: ${{ !cancelled() && (needs.shared.result == 'success' || needs.shared.result == 'skipped') && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
+    needs: [shared, build-mac]
+    if: ${{ !cancelled() && (needs.shared.result == 'success' || needs.shared.result == 'skipped') && (needs.build-mac.result == 'success' || needs.build-mac.result == 'skipped') }}
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
