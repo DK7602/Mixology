@@ -80,6 +80,9 @@ sends higher-resolution art, re-run it.
   (few backslashes) or serve a file. Rarely called ones still do (Auto-Edit / Auto-Master reports, reference info).
   Beta 17: Sonicology suite run 44008335747 (label "Beta 17", version 0.17.0; Mixology d2422a1, Voxology 4b4814f,
   Masterology c9c9a4a): ALL GREEN, both installers. Next: the user checks Cubase stays smooth with the Rack open.
+- 2026-11-17: user: Beta 17 WORKED (no freeze). Asked for a full audit, Rack improvements, and a study of Rackaholic
+  (YouTube's "#1 vocal plug-in of 2026"). Written: docs/rack/AUDIT-2026-11-17.md (findings A1 - A12, ranked Rack
+  ideas, Rackaholic vs Sonicology, proposed Betas 18 - 22). Nothing built yet: WAIT for the user's go / order.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the
