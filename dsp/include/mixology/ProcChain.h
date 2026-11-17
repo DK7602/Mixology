@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -118,7 +119,8 @@ namespace mixology::proc
             dsp::Coeffs k;
             int stages = 1;
         };
-        static BandDesign designBand (const Values&, int band, double sampleRate);
+        /** gainDb: the band's gain to design with instead of its control's (EQ Dynamic); NaN = the control's. */
+        static BandDesign designBand (const Values&, int band, double sampleRate, double gainDb = std::numeric_limits<double>::quiet_NaN());
 
     private:
         using Buffer = std::array<std::array<double, kChunk>, kMaxChannels>;
@@ -165,7 +167,14 @@ namespace mixology::proc
             bool active = false;
             int stages = 1;
             std::array<float, 5> last { -1.0f, -1.0f, -1.0f, -1.0f, -1.0f };   // type, freq, gain, q, mode
+            // EQ Dynamic: a detector on the band's own part of the sound (its level now and over ~1.5 s), how much of
+            // the band's gain is in use (0..1, glided) and the gain its filter was last designed with.
+            dsp::Filter2 det, det2;
+            bool detReady = false;
+            double env = 0.0, avg = 0.0, use = 1.0, designedGain = 1.0e9;
         };
+        void eqDynamic (Band& band, int b, double dyn, int nch, int n);
+        double dynAtk = 0.0, dynRel = 0.0, dynAvg = 0.0, dynGlide = 0.0;
         std::array<Band, kEqBands> bands;
 
         dsp::Compressor compressor;

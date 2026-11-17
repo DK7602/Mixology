@@ -202,6 +202,9 @@ namespace mixology::proc
             toggle ("hall_on", "Hall"),
             toggle ("room_on", "Room"),
             toggle ("spx_on", "Special FX"),
+
+            // Later additions (after the space layers: earlier indices never move)
+            num ("eq_dyn", "EQ Dynamic", 0.0f, 100.0f, 0.0f, L, 1.0f, "%"),
         }};
         // clang-format on
 
@@ -209,7 +212,7 @@ namespace mixology::proc
         constexpr const char* kModuleKeys[] = { "gate", "eq", "comp", "multi", "trans", "balance", "loud", "harm", "analog", "clip", "width", "final", "limit", "space" };
         static_assert (std::size (kOnParams) == kModules);
         static_assert (std::size (kModuleKeys) == kModules);
-        static_assert (spxOn - revOn + 1 == kSpaceTypes && spxOn == count - 1);
+        static_assert (spxOn - revOn + 1 == kSpaceTypes && eqDyn == spxOn + 1 && eqDyn == count - 1);
 
         constexpr const char* kSpaceNames[] = { "Reverb", "Delay", "Chorus", "Phaser", "Hall", "Room", "Special FX" };
     }

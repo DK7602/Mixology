@@ -3,7 +3,7 @@
 Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list all three are under Sonicology.
 
-Manual for version 0.29.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
+Manual for version 0.30.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -55,6 +55,7 @@ fix):
 | Sonicology Rack: turn knobs and switch modules of any Sonicology plug-in from the Rack | New in 0.27: tested in the engine and the browser preview, not yet in a DAW |
 | Sonicology Rack: mouse wheel, double-click for the default, one-click fixes in the Rack Coach, a bigger window, the automation and old-beta warnings | New in 0.28: tested in the engine and the browser preview, not yet in a DAW |
 | Sonicology Rack: UNDO / REDO, A / B and BYPASS for a track | New in 0.29: tested in the engine and the browser preview, not yet in a DAW |
+| EQ Dynamic: the EQ page as a dynamic EQ (bells and shelves move only when their part of the sound pushes out) | New in 0.30: tested in the engine and the browser preview, not yet in a DAW |
 
 Nothing changes your sound until you ask: every processing module starts switched off (the audio passes
 through bit for bit). What can change it: the Cubase faders and pans Mixology moves, the Assist EQ / Trim in
@@ -101,7 +102,13 @@ Mixology remembers your choice.
   The colour bar on top of each strip is the Cubase track colour. Every strip moves its real Cubase channel
   (see "Moving faders" below). Meters show on strips whose track has Mixology Link.
 - **EQ**: six bands on the track you pick (or the full mix). Drag a point to change frequency and gain; scroll on
-  it to change the width (Q); double-click it to make that band flat again.
+  it to change the width (Q); double-click it to make that band flat again. **Dynamic** (the chip on the graph's
+  top-right corner; click: Off, 35 %, 65 %, 100 %) makes it a dynamic EQ: each bell and shelf moves only while its
+  part of the sound pushes out over its usual level (a boomy note gets the cut, the rest of the track stays natural;
+  a boost comes in only when that part gets loud). At 100 % a steady sound gets none of a band's move and a sound
+  that jumps about 7 dB over its usual gets all of it; at 50 % half the move is always there. Low and high cuts stay
+  as they are. Measured: a −9 dB bell on a steady 300 Hz tone, Dynamic 100 %: under 2.5 dB of cut while steady,
+  over 5 dB while it jumps 9 dB.
 - **Dynamics**: Compressor, Multiband, Transient, Gate / Expand, Limiter, with in / out meters and gain reduction.
 - **Space**: Reverb, Delay, Chorus, Phaser, Hall, Room, Special FX on a track or an FX channel (up to three at
   once), each with its own controls, plus the effects' EQ and Ducking (they get quieter while the vocal sings). See

@@ -283,6 +283,13 @@ namespace mixology::rackunit
                         else m.values.push_back (knob (eqGain (b), hzText (hz), signedDb (db), db, true));
                     }
                     m.summary = sum.empty() ? "Flat" : sum;
+                    {
+                        // EQ Dynamic (Beta 22): a knob of its own (the bands' knobs come first, up to six)
+                        const float dyn = v (st, eqDyn);
+                        if (m.values.size() < static_cast<std::size_t> (rack::kMaxValues))
+                            m.values.push_back (knob (eqDyn, "Dynamic", dyn < 0.5f ? std::string ("Off") : std::to_string (static_cast<int> (std::lround (dyn))) + " %", dyn, false));
+                        if (dyn >= 0.5f && ! sum.empty()) m.summary = "Dynamic " + std::to_string (static_cast<int> (std::lround (dyn))) + " % \xC2\xB7 " + m.summary;
+                    }
                     break;
                 }
                 case Module::comp:

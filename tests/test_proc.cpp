@@ -224,6 +224,51 @@ TEST_CASE ("Processing EQ: each band does what its curve says", "[proc]")
     CHECK (sineGainDb (shelves, 19000.0) == Catch::Approx (-3.0).margin (0.4));
 }
 
+TEST_CASE ("Processing EQ Dynamic: a band moves only while its part of the sound pushes out", "[proc]")
+{
+    // A 300 Hz tone, steady at -24 dBFS with a burst 9 dB louder every second; a -9 dB bell at 300 Hz.
+    const double sr = 48000.0;
+    const auto sliceGainDb = [&] (const Values& vals, double from, double to)
+    {
+        Chain chain;
+        chain.prepare (sr, 2);
+        chain.setValues (vals);
+        Stereo x (static_cast<std::size_t> (4.0 * sr));
+        for (std::size_t i = 0; i < x.size(); ++i)
+        {
+            const double t = static_cast<double> (i) / sr;
+            const double a = std::fmod (t, 1.0) >= 0.5 && std::fmod (t, 1.0) < 0.7 ? 0.063 * 2.82 : 0.063;
+            x.l[i] = x.r[i] = a * std::sin (2.0 * kPi * 300.0 * t);
+        }
+        Stereo y = x;
+        run (chain, y);
+        const auto f = static_cast<std::size_t> (from * sr), t = static_cast<std::size_t> (to * sr);
+        return 20.0 * std::log10 (rms (y.l, f, t) / rms (x.l, f, t));
+    };
+    auto stat = with ({ { eqOn, 1.0f }, { eq3Freq, 300.0f }, { eq3Gain, -9.0f }, { eq3Q, 1.0f } });
+    auto dyn = stat;
+    dyn[eqDyn] = 100.0f;
+    // Static: the whole cut, steady or burst.
+    CHECK (sliceGainDb (stat, 3.1, 3.4) == Catch::Approx (-9.0).margin (0.3));
+    CHECK (sliceGainDb (stat, 3.55, 3.68) == Catch::Approx (-9.0).margin (0.3));
+    // Dynamic 100 %: little on the steady part, most of the cut while the burst pushes out.
+    const double steady = sliceGainDb (dyn, 3.1, 3.4), burst = sliceGainDb (dyn, 3.55, 3.68);
+    CHECK (steady > -2.5);
+    CHECK (burst < -5.0);
+    // 50 %: half the move always there.
+    auto half = stat;
+    half[eqDyn] = 50.0f;
+    CHECK (sliceGainDb (half, 3.1, 3.4) < -3.5);
+    CHECK (sliceGainDb (half, 3.1, 3.4) > -6.5);
+    // Cuts stay cuts (Dynamic leaves a low cut alone).
+    auto cut = with ({ { eqOn, 1.0f }, { eq1Type, 3.0f }, { eq1Freq, 100.0f }, { eq1Q, 0.7071f }, { eqDyn, 100.0f } });
+    CHECK (sineGainDb (cut, 50.0) == Catch::Approx (Chain::eqResponseDb (cut, 50.0, sr)).margin (0.2));
+    // At 0 % nothing changes (bit for bit the static EQ).
+    auto zero = stat;
+    zero[eqDyn] = 0.0f;
+    CHECK (sineGainDb (zero, 300.0) == sineGainDb (stat, 300.0));
+}
+
 TEST_CASE ("Processing compressor: threshold, ratio, makeup", "[proc]")
 {
     // Peak -8 dBFS, threshold -20, 4:1, hard knee: 12 dB over -> 9 dB off.

@@ -74,6 +74,8 @@ namespace mixology::proc
         spLevel,   // v0.7.1: the effect's level on an FX channel (there MIX doesn't apply: only the effect comes out)
         // Space layers: each effect's own on switch, in SpaceType order (revOn + type). See spaceLayers().
         revOn, dlyOn, choOn, phaOn, hallOn, roomOn, spxOn,
+        // v0.30 (Beta 22): later additions go after the space layers, so earlier indices never move
+        eqDyn,     // EQ Dynamic: 0 = a normal EQ; up to 100 % = each band moves only while its part of the sound pushes out
         count
     };
     enum class SpaceType : int { reverb = 0, delay = 1, chorus = 2, phaser = 3, hall = 4, room = 5, special = 6 };

@@ -56,6 +56,14 @@ export function buildEq(root, app) {
     c.addEventListener("click", () => proc.set("eq_mode", k));
     return c;
   });
+  // EQ Dynamic: each band moves only while its part of the sound pushes out (Off, 35 %, 65 %, 100 %).
+  const dynSteps = [0, 35, 65, 100];
+  const dynChip = el("div", "chip", panel, { position: "absolute", right: "34px", top: "92px", zIndex: 2 });   // on the graph's top-right corner
+  dynChip.title = "DYNAMIC: each band moves only while its part of the sound pushes out (a dynamic EQ: a boomy note gets the cut, the rest stays natural). Click: Off, 35 %, 65 %, 100 %. Low and high cuts stay as they are.";
+  dynChip.addEventListener("click", () => {
+    const now = proc.get("eq_dyn");
+    proc.set("eq_dyn", dynSteps.find((x) => x > now + 0.5) ?? 0);
+  });
   proc.targetSelect(panel, 1102, 16, 220);
   const gearBtn = el("button", "small-btn", panel, { position: "absolute", left: "1334px", top: "16px", width: "56px", height: "44px", padding: "8px", color: "var(--gold)" });
   gearBtn.innerHTML = icon("gear", 'width="26" height="26" style="display:block;margin:auto"');   // a fixed size: never larger than its button
@@ -209,6 +217,9 @@ export function buildEq(root, app) {
   function update() {
     const mode = Math.round(proc.get("eq_mode"));
     chipEls.forEach((x, k) => x.classList.toggle("on", k === mode));
+    const dyn = proc.get("eq_dyn");
+    dynChip.textContent = dyn >= 0.5 ? `Dynamic ${Math.round(dyn)} %` : "Dynamic";
+    dynChip.classList.toggle("on", dyn >= 0.5);
     EQ_BANDS.forEach((def, i) => {
       const b = band(i), cd = cards[i];
       cd.freq.textContent = fmt.hz(b.f);

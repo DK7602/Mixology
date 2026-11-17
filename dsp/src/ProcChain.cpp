@@ -152,6 +152,10 @@ namespace mixology::proc
         rate = sampleRate > 0.0 ? sampleRate : 48000.0;
         channels = std::clamp (numChannels, 1, kMaxChannels);
         compressor.prepare (rate);
+        dynAtk = 1.0 - std::exp (-1.0 / (0.005 * rate));      // EQ Dynamic's detector: 5 ms up, 80 ms down,
+        dynRel = 1.0 - std::exp (-1.0 / (0.080 * rate));
+        dynAvg = 1.0 - std::exp (-1.0 / (1.5 * rate));        // its usual level over ~1.5 s,
+        dynGlide = 1.0 - std::exp (-32.0 / (0.010 * rate));   // and the gain in use glides (per 32 samples)
         multiComp[0].prepare (rate); multiComp[0].configure (25.0, 180.0, 3.0, 10.0);
         multiComp[1].prepare (rate); multiComp[1].configure (8.0, 110.0, 3.0, 10.0);
         multiComp[2].prepare (rate); multiComp[2].configure (3.0, 70.0, 3.0, 10.0);
@@ -349,7 +353,11 @@ namespace mixology::proc
         {
             case Module::gate: gater.reset(); break;
             case Module::eq:
-                for (auto& b : bands) { b.a.reset(); b.b.reset(); b.active = false; b.last.fill (-1.0f); }
+                for (auto& b : bands)
+                {
+                    b.a.reset(); b.b.reset(); b.active = false; b.last.fill (-1.0f);
+                    b.det.reset(); b.det2.reset(); b.detReady = false; b.env = b.avg = 0.0; b.use = 1.0; b.designedGain = 1.0e9;
+                }
                 break;
             case Module::comp: compressor.reset(); break;
             case Module::multi:
@@ -406,16 +414,18 @@ namespace mixology::proc
         meters.gate = metric (meters.gate, static_cast<float> (most));
     }
 
-    Chain::BandDesign Chain::designBand (const Values& vals, int b, double sampleRate)
+    Chain::BandDesign Chain::designBand (const Values& vals, int b, double sampleRate, double gainDb)
     {
         BandDesign d;
         const auto shape = static_cast<EqShape> (std::clamp (static_cast<int> (vals[ix (eqType (b))]), 0, 4));
         const auto mode = static_cast<EqMode> (std::clamp (static_cast<int> (vals[ix (eqMode)]), 0, 2));
-        const double hz = vals[ix (eqFreq (b))], gain = vals[ix (eqGain (b))], q = vals[ix (eqQ (b))];
+        const double hz = vals[ix (eqFreq (b))], q = vals[ix (eqQ (b))];
+        const double control = vals[ix (eqGain (b))];
         const bool cut = shape == EqShape::lowCut || shape == EqShape::highCut;
-        d.active = cut || std::abs (gain) > 1.0e-4;
+        d.active = cut || std::abs (control) > 1.0e-4;
         if (! d.active) return d;
-        const double qq = effectiveQ (mode, shape, q, gain);
+        const double gain = std::isnan (gainDb) ? control : gainDb;   // (EQ Dynamic: the part of it in use now)
+        const double qq = effectiveQ (mode, shape, q, control);       // (its shape stays the control's)
         switch (shape)
         {
             case EqShape::bell: d.k = design (Shape::bell, hz, gain, qq, sampleRate); break;
@@ -454,8 +464,24 @@ namespace mixology::proc
                 band.active = d.active;
                 band.stages = d.stages;
                 if (d.active) band.a.k = band.b.k = d.k;
+                band.detReady = false;          // (EQ Dynamic's detector follows the band)
+                band.designedGain = 1.0e9;
             }
             if (! band.active) continue;
+            // EQ Dynamic: bells and shelves only (a cut stays a cut).
+            const auto shape = static_cast<EqShape> (std::clamp (static_cast<int> (cur[ix (eqType (b))]), 0, 4));
+            const double dyn = std::clamp (v (eqDyn), 0.0, 100.0) / 100.0;
+            if (dyn >= 0.005 && shape != EqShape::lowCut && shape != EqShape::highCut)
+            {
+                eqDynamic (band, b, dyn, nch, n);
+                continue;
+            }
+            if (band.designedGain < 1.0e8)
+            {
+                // back from Dynamic: the band's own (whole) gain again
+                band.a.k = designBand (cur, b, rate).k;
+                band.designedGain = 1.0e9;
+            }
             for (int c = 0; c < nch; ++c)
                 for (int i = 0; i < n; ++i)
                 {
@@ -463,6 +489,52 @@ namespace mixology::proc
                     if (band.stages == 2) x = band.b.process (c, x);
                     work[ix (c)][ix (i)] = x;
                 }
+        }
+    }
+
+    // EQ Dynamic: the band moves only while its part of the sound pushes out over its usual level. A detector (the
+    // band's region: an octave around a bell, below / above a shelf) follows that part's level (5 ms up, 80 ms down)
+    // and its usual level (~1.5 s); how far it stands over (1 - 7 dB) sets how much of the band's gain is in use, which
+    // glides, and the band's filter is redesigned for it every 32 samples (in steps of at least 0.05 dB). At Dynamic
+    // 100 % a steady sound gets none of the band's move and a sound that jumps 7 dB over its usual gets all of it; at
+    // 50 % half of the move is always there.
+    void Chain::eqDynamic (Band& band, int b, double dyn, int nch, int n)
+    {
+        const auto shape = static_cast<EqShape> (std::clamp (static_cast<int> (cur[ix (eqType (b))]), 0, 4));
+        const double hz = std::clamp (v (eqFreq (b)), 20.0, 0.45 * rate);
+        if (! band.detReady)
+        {
+            band.detReady = true;
+            band.det.reset(); band.det2.reset();
+            band.det.k = shape == EqShape::lowShelf ? dsp::Coeffs {} : design (Shape::highPass, shape == EqShape::highShelf ? hz : hz / 1.414, 0.0, 0.707, rate);
+            band.det2.k = shape == EqShape::highShelf ? dsp::Coeffs {} : design (Shape::lowPass, std::min (shape == EqShape::lowShelf ? hz : hz * 1.414, 0.45 * rate), 0.0, 0.707, rate);
+            band.designedGain = 1.0e9;
+        }
+        const double control = v (eqGain (b));
+        for (int s0 = 0; s0 < n; s0 += 32)
+        {
+            const int len = std::min (32, n - s0);
+            for (int i = s0; i < s0 + len; ++i)
+            {
+                double m = 0.0;
+                for (int c = 0; c < nch; ++c) m += work[ix (c)][ix (i)];
+                const double y = band.det2.process (0, band.det.process (0, m / nch));
+                const double e = y * y;
+                band.env += (e - band.env) * (e > band.env ? dynAtk : dynRel);
+                band.avg += (band.env - band.avg) * dynAvg;
+            }
+            const double overDb = 10.0 * std::log10 ((band.env + 1.0e-20) / (band.avg + 1.0e-20));
+            const double want = std::clamp ((overDb - 1.0) / 6.0, 0.0, 1.0);
+            band.use += (want - band.use) * dynGlide;
+            const double g = control * (1.0 - dyn + dyn * band.use);
+            if (std::abs (g - band.designedGain) >= 0.05)
+            {
+                band.a.k = designBand (cur, b, rate, g).k;
+                band.designedGain = g;
+            }
+            for (int c = 0; c < nch; ++c)
+                for (int i = s0; i < s0 + len; ++i)
+                    work[ix (c)][ix (i)] = band.a.process (c, work[ix (c)][ix (i)]);
         }
     }
 

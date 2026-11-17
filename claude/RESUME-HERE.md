@@ -130,6 +130,16 @@ sends higher-resolution art, re-run it.
   and Delay Character (details: Voxology's RESUME-HERE). The bigger EQ moved to Beta 22 (AUDIT plan rows renumbered:
   22 EQ, 23 gain staging / overview / step 5 / fader / SAVE CHAIN, 24+ the rest). Mac builds: GitHub runs one Mac job
   at a time here and cancels one that waited 15 min: expect to re-run a suite run's failed (cancelled) Mac job.
+- BETA 22 BUILT (Mixology 0.30.0): EQ Dynamic. Control `eq_dyn` (proc::eqDyn, 0..100 %, the first one AFTER the space
+  layers: earlier indices never move; LinkRegistry has 192 slots; procspec.js regenerated with tools/procspec --write).
+  ProcChain::eqDynamic: per band (bells and shelves; cuts untouched) a detector (HP / LP around the band), its level
+  (5 ms up / 80 ms down) against its ~1.5 s level; 1 - 7 dB over -> 0..1 of the gain in use (glided per 32 samples);
+  gain = control x (1 - dyn + dyn x use); the band's filter redesigned (designBand's new gainDb) when it moves 0.05 dB.
+  0 % = the static path bit for bit; back from Dynamic restores the static design. EQ page: a Dynamic chip on the
+  graph's top-right corner (Off / 35 / 65 / 100 %; the toolbar had no room: it pushed into AUTO). Rack: a Dynamic
+  value after the bands; summary "Dynamic N % · ...". Test: "Processing EQ Dynamic" (steady > -2.5 dB, burst < -5 dB
+  at 100 %, half at 50 %, cuts unchanged, 0 % = static). Built in a worktree (/tmp/claude-0/mix22, branch b22-eq)
+  while Betas 20 / 21 waited for their builds.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the

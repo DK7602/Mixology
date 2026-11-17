@@ -5,6 +5,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <memory>
 
@@ -96,10 +97,22 @@ TEST_CASE ("Rack unit: the EQ's bands draw its curve; flat bands are left out", 
     CHECK (eq->bands[1].db == Catch::Approx (-3.0f));
     CHECK (eq->bands[2].name == "3.5 kHz");
     CHECK (eq->summary == "Low cut 80 Hz \xC2\xB7 \xE2\x88\x92" "3.0 dB at 400 Hz \xC2\xB7 +2.0 dB at 3.5 kHz");
-    REQUIRE (eq->values.size() == 3);
+    REQUIRE (eq->values.size() == 4);   // the three bands in use, then EQ Dynamic (since Beta 22)
     CHECK (eq->values[1].name == "400 Hz");
     CHECK (eq->values[1].text == "\xE2\x88\x92" "3.0 dB");
     CHECK (eq->values[1].bi);
+    CHECK (eq->values[3].name == "Dynamic");
+    CHECK (eq->values[3].text == "Off");
+    CHECK (eq->values[3].key == "eq_dyn");
+    set (st, pr::eqDyn, 65.0f);
+    {
+        const auto ms2 = rackunit::modules (st, true);
+        const auto eq2 = std::find_if (ms2.begin(), ms2.end(), [] (const rack::Module& m) { return m.key == "mix.eq"; });
+        REQUIRE (eq2 != ms2.end());
+        CHECK (eq2->values[3].text == "65 %");
+        CHECK (eq2->summary.rfind ("Dynamic 65 %", 0) == 0);
+    }
+    set (st, pr::eqDyn, 0.0f);
 
     set (st, pr::eqType (0), static_cast<float> (pr::EqShape::lowShelf));
     set (st, pr::eqGain (2), 0.0f);

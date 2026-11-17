@@ -152,6 +152,7 @@ export const PROC = [
   { id: "hall_on", name: "Hall", kind: "toggle", min: 0, max: 1, def: 0, curve: "lin", step: 1, unit: "", choices: ["Off", "On"] },
   { id: "room_on", name: "Room", kind: "toggle", min: 0, max: 1, def: 0, curve: "lin", step: 1, unit: "", choices: ["Off", "On"] },
   { id: "spx_on", name: "Special FX", kind: "toggle", min: 0, max: 1, def: 0, curve: "lin", step: 1, unit: "", choices: ["Off", "On"] },
+  { id: "eq_dyn", name: "EQ Dynamic", kind: "number", min: 0, max: 100, def: 0, curve: "lin", step: 1, unit: "%" },
 ];
 
 export const PROC_INDEX = Object.fromEntries(PROC.map((p, i) => [p.id, i]));
