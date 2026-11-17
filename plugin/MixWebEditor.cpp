@@ -256,7 +256,10 @@ juce::WebBrowserComponent::Options MixWebEditor::makeEditorOptions()
                                  f.getParentDirectory().createDirectory();
                                  complete (f.replaceWithText (args.size() > 0 && args[0].toString() == "light" ? "light" : "dark"));
                              })
-        .withResourceProvider ([] (const auto& url) { return getResource (url); });
+        .withResourceProvider ([] (const auto& url) {
+            if (auto rack = rack::host::viewResource (url, "mixology", 0)) return rack;   // the Rack's data (rack.json)
+            return getResource (url);
+        });
 }
 
 MixWebEditor::MixWebEditor (MixologyAudioProcessor& p)

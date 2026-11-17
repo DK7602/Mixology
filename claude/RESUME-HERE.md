@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-11-16, v0.27.0; the Sonicology Rack: stage 2 steps 1 - 3 built, Beta 15 out)
+# Mixology: resume here (updated 2026-11-17, v0.27.1; the Sonicology Rack: stage 2 steps 1 - 3 built, Beta 15 out)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -65,6 +65,19 @@ sends higher-resolution art, re-run it.
   to take the light-view fix. Run 43990412113 ALL GREEN (shared files match, 6 builds, both installers,
   auval passed). Next: the user tries the Rack's knobs / switches in Cubase. Installer Read Me's "NEW IN
   THIS BETA" is about changing settings from the Rack.
+- 2026-11-17, Beta 16 feedback (2 videos): Cubase froze and went (its window ~1 - 2 updates a second, sound cutting
+  out now and then) WHILE A RACK WAS OPEN (not with Masterology's own page). Measured: our C++ is cheap (viewJson
+  < 2 ms, a Link's full publish 17 us, serve 0.4 us; the page as in Beta 15). CAUSE: JUCE's native-function result
+  path (WebBrowserComponent emitEvent: JSON::toString, then String::replace ("\\", "\\\\")) is QUADRATIC in the
+  number of backslashes; getRack returned the view as a JSON *string*, every quote escaped: 10 KB 83 ms, 40 KB
+  1.4 s, 70 KB 4.1 s of the DAW's window thread, ~7 times a second. Beta 15 had it too (Beta 14's "so slow" also);
+  Beta 16's knob fields made the text bigger. FIX (Mixology 0.27.1, Voxology 0.56.1, Masterology 0.32.1): the
+  editors' resource providers serve the view as the file rack-data/<track>.json (rack::host::viewResource in
+  plugin/RackHost.h; the track in the PATH because JUCE on macOS gives the provider the path without the query);
+  rack.js reads it (opts.dataFile) and falls back to getRack only if the file can't be read. Tested: preview +
+  a local server (reads rack-data/master.json, no getRack; 404 -> getRack), editors compiled against JUCE.
+  WATCH OUT: never return long text (JSON strings) from a native function in these plug-ins; return a var object
+  (few backslashes) or serve a file. Rarely called ones still do (Auto-Edit / Auto-Master reports, reference info).
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the

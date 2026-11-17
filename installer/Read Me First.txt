@@ -7,7 +7,12 @@ The complete vocal, mixing and mastering suite
 
 Thanks for trying the beta. Nothing here is finished: tell us what's confusing, what breaks and what you'd change.
 
-NEW IN THIS BETA: CHANGE SETTINGS FROM THE SONICOLOGY RACK
+NEW IN THIS BETA: THE RACK NO LONGER FREEZES CUBASE
+  With the Rack open, Cubase froze for a moment every second or so (its window, sometimes the sound). The Rack's
+  data now reaches the Rack's page by a much faster route, so Cubase stays smooth while it's open.
+  All three plug-ins need this version (Voxology 0.56.1, Mixology 0.27.1, Masterology 0.32.1).
+
+ALSO IN BETA 16 AND THIS ONE: CHANGE SETTINGS FROM THE SONICOLOGY RACK
   The Rack now changes settings, not just shows them, in Voxology, Honey Tune, Mixology Link, Mixology and
   Masterology, on any track. The plug-in that owns a setting makes the change, as if you'd done it in its window.
   - Drag a knob up or down to turn it (hold Shift for fine moves).

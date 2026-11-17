@@ -153,6 +153,7 @@ $("tab-rack").addEventListener("click", async () => {
   window.SonicologyRack.open({
     host: "mixology",
     theme: theme === "light" || theme === "dark" ? theme : undefined,
+    dataFile: true,   // the plug-in serves rack-data/<track>.json (fast); getRack only if that can't be read
     getRack: async (track) => { const j = await native.getRack(track || ""); return j ? JSON.parse(j) : null; },
     // stage 2: a knob turned or a module switched, for the plug-in that owns it; and what became of it
     request: async (r) => JSON.parse(await native.rackRequest(r.unit, r.gen, r.change, r.module, r.control || "", r.value, r.gesture || "set")),
