@@ -3,7 +3,7 @@
 Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list all three are under Sonicology.
 
-Manual for version 0.32.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
+Manual for version 0.33.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -58,6 +58,7 @@ fix):
 | EQ Dynamic: the EQ page as a dynamic EQ (bells and shelves move only when their part of the sound pushes out) | New in 0.30: tested in the engine and the browser preview, not yet in a DAW |
 | Sonicology Rack: the SESSION page, gain staging in the Rack Coach, TURN ON HERE on the MODULES page | New in 0.31: tested in the browser preview, not yet in a DAW |
 | Sonicology Rack: the track's fader (through Mixology's bridge), SAVE (Voxology's My Chains), Mixology Link's RACK button | New in 0.32: tested in the engine and the browser preview, not yet in a DAW |
+| Sonicology Rack: the insert-order check (Mixology Link before Voxology on a vocal) | New in 0.33: tested in the browser preview, not yet in a DAW |
 
 Nothing changes your sound until you ask: every processing module starts switched off (the audio passes
 through bit for bit). What can change it: the Cubase faders and pans Mixology moves, the Assist EQ / Trim in
@@ -927,6 +928,11 @@ and the window grows to about 85 % of your screen's height while it's open (the 
     DAW shows Mixology right now (Mixology's Tracks page); for another, the Rack says so.
 - **SAVE** (on Voxology's row in the Signal Chain): keeps this vocal's whole Voxology setup in Voxology's **MY
   CHAINS**, named after the track and the time ("Lead Vox 17 Nov 22.41"), to use on your next song.
+- **Insert order** (in the Rack Coach): Mixology Link belongs in the last insert slot, after Voxology, so Mixology
+  hears the finished vocal. Your DAW doesn't tell the plug-ins their order, so the Rack listens: while the vocal plays,
+  it compares how the Link's input moves with Voxology's input and output. When the Link plainly hears the vocal before
+  Voxology, a red line says so. It needs several seconds of singing and a Voxology that changes the vocal (its
+  compressor or Rider working); otherwise it says nothing rather than guess.
 - **The bottom bar:** IN and OUT of the picked plug-in, and the mix's loudness (from Mixology, or what reaches
   Masterology). A dash means nothing has measured it yet.
 

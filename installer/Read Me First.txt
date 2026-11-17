@@ -7,7 +7,14 @@ The complete vocal, mixing and mastering suite
 
 Thanks for trying the beta. Nothing here is finished: tell us what's confusing, what breaks and what you'd change.
 
-NEW IN THIS BETA: THE FADER, SAVE CHAIN AND A RACK BUTTON ON EVERY LINK
+NEW IN THIS BETA: PEAKS IN VOXOLOGY, AND THE RACK CHECKS YOUR INSERT ORDER
+  - Voxology's OUTPUT page: PEAKS (Off, Clip, Limit) and a Ceiling. Limit turns the vocal down for an instant when a
+    loud word would pass the Ceiling, so it never clips; Clip rounds those peaks off instead (a little grit).
+  - The Rack: when Mixology Link sits before Voxology on a vocal (it belongs last), the Rack Coach says so after a few
+    seconds of singing. Move Mixology Link to the last insert slot.
+  All three plug-ins need this version (Voxology 0.63.0, Mixology 0.33.0, Masterology 0.37.0).
+
+ALSO NEW (BETA 24): THE FADER, SAVE CHAIN AND A RACK BUTTON ON EVERY LINK
   - Track fader (Rack Coach, GAIN STAGING): the track's fader in Cubase, as a knob in the Rack. Drag it, use the
     mouse wheel, double-click for 0 dB; UNDO takes it back. Mixology on the master moves it through its bridge, so
     the bridge must be connected (and the track among the channels Mixology's Tracks page shows).

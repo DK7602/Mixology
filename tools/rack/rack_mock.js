@@ -4,7 +4,7 @@
 // Full Mix (Mixology) and the Master (Masterology). Meters move. Stage 2: knobs turn and modules switch (request /
 // answer, about a fifth of a second later, as a plug-in would); ?lock=1 locks Masterology (Auto-Master running);
 // Masterology's Tonal EQ Air refuses (to see a refusal); ?old=1 adds a plug-in from another
-// beta; ?auto=1 has the DAW's automation move a turned knob back.
+// beta; ?auto=1 has the DAW's automation move a turned knob back; ?order=1 puts Chorus Vox's Link before Voxology.
 (function () {
   "use strict";
   const t0 = Date.now();
@@ -174,6 +174,7 @@
   const lockMaster = new URLSearchParams(location.search).get("lock") === "1";
   const automation = new URLSearchParams(location.search).get("auto") === "1";   // ?auto=1: the DAW's automation moves knobs back
   const oldBeta = new URLSearchParams(location.search).get("old") === "1";   // ?old=1: a plug-in from another beta is in the project
+  const orderTest = new URLSearchParams(location.search).get("order") === "1";   // ?order=1: Chorus Vox's Link sits before Voxology
   function units() {
     const list = rawUnits();
     for (const u of list) {
@@ -193,6 +194,12 @@
           if (t != null) { x.norm = t; x.text = x.steps ? "Option " + (Math.round(t * (x.steps - 1)) + 1) : Math.round(t * 100) + " %"; }
         }
       }
+    }
+    // Beta 25 (?order=1): the Links' input follows Voxology's input on Chorus Vox (inserted before it), its output on Lead Vox.
+    if (orderTest) {
+      const at = (id) => list.find((u) => u.id === id);
+      if (at("vox-chorus") && at("link-chorus")) at("link-chorus").inDb = at("vox-chorus").inDb + 1.5 + wob(31, 0.3);
+      if (at("vox-lead") && at("link-lead")) at("link-lead").inDb = at("vox-lead").outDb - 0.5 + wob(32, 0.3);
     }
     // Beta 24: Mixology's faders of the tracks a Rack shows (Lead Vox movable; Chorus Vox not in the bridge's bank: refused).
     const mix = list.find((u) => u.id === "mixology");

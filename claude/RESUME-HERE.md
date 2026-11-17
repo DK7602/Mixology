@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-11-17, v0.32.0; the Sonicology Rack: Betas 18 - 24 built)
+# Mixology: resume here (updated 2026-11-17, v0.33.0; the Sonicology Rack: Betas 18 - 25 built)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -168,6 +168,14 @@ sends higher-resolution art, re-run it.
   tracks open views show ... and the faders in a track's view"; Playwright scratchpad b24.js (fader drag / undo /
   double-click, refused fader, SAVE toast) and linkrack.js (the Link's button, BACK TO LINK); plug-in files compiled
   against JUCE. Moved to 25: the insert-order check (no dependable signal: levels would guess).
+- BETA 25 BUILT (Mixology 0.33.0, Voxology 0.63.0, Masterology 0.37.0): (1) the insert-order check, rack.js only:
+  watchOrder() (called from poll) keeps, for the track the Rack shows, up to 50 distinct publishes of [Voxology in,
+  Voxology out, Link in] while the vocal plays (Voxology in > -50 dBFS; not Beat mode); with 30+: each series minus
+  its own mean (Trim / gain don't count); shaped = mean |vout - vin| (Voxology's reshaping), likeIn / likeOut = the
+  Link's distance to each; verdict "before" when shaped >= 1.2 dB and likeIn < half likeOut and < 0.6 x shaped,
+  "after" when likeOut < half likeIn; ten "before" in a row raise the warning (orderLine, a red Coach line), ten
+  "after" clear it. Preview: rack_mock ?order=1 (Chorus Vox's Link before); scratchpad b25.js (warns after ~6 s,
+  never on Lead Vox or without ?order). (2) Voxology's Output PEAKS (details: Voxology's RESUME-HERE).
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the

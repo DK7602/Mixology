@@ -7,7 +7,7 @@ HTML / CSS / JS interface in the platform web view, GitHub Actions builds on eve
 The plan and milestones: [docs/PLAN.md](docs/PLAN.md). User manual (also built into the plug-in): [docs/MANUAL.md](docs/MANUAL.md).
 Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_TEST.md) (passed), [docs/M3_TEST.md](docs/M3_TEST.md), [docs/M4_TEST.md](docs/M4_TEST.md), [docs/M5_TEST.md](docs/M5_TEST.md), [docs/M6_TEST.md](docs/M6_TEST.md) (current).
 
-## Status: v0.32.0
+## Status: v0.33.0
 
 | Piece | State |
 | --- | --- |
@@ -49,6 +49,7 @@ Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_T
 | EQ Dynamic (v0.30.0, Beta 22): `eq_dyn` (the first control after the space layers, so no index moves): each bell / shelf band's gain in use follows how far its region (an octave around a bell, below / above a shelf) stands over its ~1.5 s level (1 - 7 dB), glided, the filter redesigned every 32 samples; cuts untouched; 0 % = the static EQ bit for bit. Chip on the EQ graph; a Rack value | New: tested in the engine and the browser preview, not yet in a DAW |
 | Rack Beta 23 (v0.31.0, with Voxology 0.61.0 and Masterology 0.35.0): the Rack's SESSION page (every track, its modules as pills, its warning count; a pill opens the module on the RACK page), gain staging in the Rack Coach (each plug-in's peaks in and out, a warning for a big jump or peaks near 0 dBFS), TURN ON HERE on the MODULES page (a state request, one UNDO step) | New: tested in the browser preview, not yet in a DAW |
 | Rack Beta 24 (v0.32.0, with Voxology 0.62.0 and Masterology 0.36.0): the track's fader in the Rack's GAIN STAGING (the Mixology that owns the bridge publishes a "mix.faders" module with the faders of the tracks open Racks show, `rack::Link::shownTracks`; requests to control "fader.<hash>" go through `BridgeHub::rackFaderMove`, i.e. the Tracks page's own fader / faderEnd / setDb commands, History included); SAVE on Voxology's row (`rack::Change::save`); Mixology Link's RACK button (link.html / link.js / LinkEditor: the Rack's natives, rack-data files, a 16:10 window while it is open) | New: tested in the engine and the browser preview, not yet in a DAW |
+| Rack Beta 25 (v0.33.0, with Voxology 0.63.0 and Masterology 0.37.0): the insert-order check in rack.js (watchOrder / orderLine: Voxology's in / out and the Link's in, each with its own average taken out, over 30 - 50 publishes while the vocal plays; a red Coach line when the Link's input moves like Voxology's input and not its output, ten times running; only when Voxology clearly reshapes the vocal). Voxology's Output PEAKS (Clip / Limit at a Ceiling) | New: tested in the browser preview, not yet in a DAW |
 
 ## Layout
 
