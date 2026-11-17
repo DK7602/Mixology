@@ -71,13 +71,17 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
+      # This account gets one Mac at a time, and a Mac job that waits 15 minutes for one is cancelled. At most three
+      # jobs at once, in this order (Voxology's Mac first, the Windows builds, then the other two Macs), so a Mac job
+      # only starts once the Mac before it is nearly done.
+      max-parallel: 3
       matrix:
         include:
           - { plugin: Voxology, repo: DK7602/Voxology, ref: voxology, name: Windows, os: windows-latest, options: "-DVOX_BUILD_TESTS=OFF" }
           - { plugin: Voxology, repo: DK7602/Voxology, ref: voxology, name: macOS, os: macos-15, options: "-DVOX_BUILD_TESTS=OFF" }
           - { plugin: Mixology, repo: DK7602/Mixology, ref: mixology, name: Windows, os: windows-latest, options: "-DMIX_BUILD_TESTS=OFF" }
-          - { plugin: Mixology, repo: DK7602/Mixology, ref: mixology, name: macOS, os: macos-15, options: "-DMIX_BUILD_TESTS=OFF" }
           - { plugin: Masterology, repo: DK7602/polisher, ref: masterology, name: Windows, os: windows-latest, options: "-DPOLISHER_BUILD_TESTS=OFF" }
+          - { plugin: Mixology, repo: DK7602/Mixology, ref: mixology, name: macOS, os: macos-15, options: "-DMIX_BUILD_TESTS=OFF" }
           - { plugin: Masterology, repo: DK7602/polisher, ref: masterology, name: macOS, os: macos-15, options: "-DPOLISHER_BUILD_TESTS=OFF" }
     steps:
       - uses: actions/checkout@v4
