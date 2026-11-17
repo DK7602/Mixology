@@ -62,7 +62,8 @@ sends higher-resolution art, re-run it.
   on a solid backing (rack.css / rack.js, all three). Also: the glass honeycomb (Signal Chain + Chain
   Flow) in the light view too (was the pearl one). Beta 16: Sonicology suite run 43990412113 (label "Beta 16",
   version 0.16.0; Mixology b1aed43, Voxology 069b3de, Masterology ee88f76); the first try (43990172789) was cancelled
-  to take the light-view fix. Installer Read Me's "NEW IN
+  to take the light-view fix. Run 43990412113 ALL GREEN (shared files match, 6 builds, both installers,
+  auval passed). Next: the user tries the Rack's knobs / switches in Cubase. Installer Read Me's "NEW IN
   THIS BETA" is about changing settings from the Rack.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
