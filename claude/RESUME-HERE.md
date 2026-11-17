@@ -57,6 +57,11 @@ sends higher-resolution art, re-run it.
   switch, refusal toast, lock), each plug-in's changed files compiled against JUCE 8.0.15 (+ ARA SDK for Honey
   Tune) here; NOT in a DAW yet. Goes in Beta 16 once the user signs off stage 1 (Beta 15) and says build.
   Next after that: step 4 (BYPASS, UNDO / REDO, A/B, SAVE CHAIN), step 5 (Link's RACK button, insert order, TURN ON HERE).
+- 2026-11-17: user signed off stage 1 (Beta 15 checked in Cubase, "good"). One UI fix: the Signal Chain's glass
+  honeycomb is now the background the rows sit on (was a strip under the list); plug-in names and the fold button
+  on a solid backing (rack.css / rack.js, all three). Beta 16 started: Sonicology suite run 43990172789 (label
+  "Beta 16", version 0.16.0; Mixology 73cd71e, Voxology 43fe141, Masterology 1057230). Installer Read Me's "NEW IN
+  THIS BETA" is about changing settings from the Rack.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the
