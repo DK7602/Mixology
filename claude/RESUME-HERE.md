@@ -59,8 +59,10 @@ sends higher-resolution art, re-run it.
   Next after that: step 4 (BYPASS, UNDO / REDO, A/B, SAVE CHAIN), step 5 (Link's RACK button, insert order, TURN ON HERE).
 - 2026-11-17: user signed off stage 1 (Beta 15 checked in Cubase, "good"). One UI fix: the Signal Chain's glass
   honeycomb is now the background the rows sit on (was a strip under the list); plug-in names and the fold button
-  on a solid backing (rack.css / rack.js, all three). Beta 16 started: Sonicology suite run 43990172789 (label
-  "Beta 16", version 0.16.0; Mixology 73cd71e, Voxology 43fe141, Masterology 1057230). Installer Read Me's "NEW IN
+  on a solid backing (rack.css / rack.js, all three). Also: the glass honeycomb (Signal Chain + Chain
+  Flow) in the light view too (was the pearl one). Beta 16: Sonicology suite run 43990412113 (label "Beta 16",
+  version 0.16.0; Mixology b1aed43, Voxology 069b3de, Masterology ee88f76); the first try (43990172789) was cancelled
+  to take the light-view fix. Installer Read Me's "NEW IN
   THIS BETA" is about changing settings from the Rack.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
