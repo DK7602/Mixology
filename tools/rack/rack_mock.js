@@ -169,7 +169,7 @@
   const CHOICES = { mode: 3, speed: 3, time: 6, character: 3, focus: 3, oversampling: 4, effect: 7, effects: 7, knee: 3 };
   const SHOWN_ONLY = new Set(["ht.tune|key", "ht.tune|scale", "vox.beat|key", "vox.beat|scale"]);
   const FIXED = new Set(["vox.output", "vox.beat", "ht.tune", "mix.assist", "mas.max"]);
-  const turned = {}, switched = {}, powered = {}, tickets = {};
+  const turned = {}, switched = {}, powered = {}, tickets = {}, saved = [];
   let nextTicket = 1;
   const lockMaster = new URLSearchParams(location.search).get("lock") === "1";
   const automation = new URLSearchParams(location.search).get("auto") === "1";   // ?auto=1: the DAW's automation moves knobs back
@@ -194,6 +194,17 @@
         }
       }
     }
+    // Beta 24: Mixology's faders of the tracks a Rack shows (Lead Vox movable; Chorus Vox not in the bridge's bank: refused).
+    const mix = list.find((u) => u.id === "mixology");
+    if (mix) {
+      const fv = (hash, movable, start) => {
+        const k = "mixology|mix.faders|fader." + hash;
+        const n = turned[k] != null ? turned[k] : start;
+        const db = (n - 0.75) * 48;
+        return { name: "Fader", text: n <= 0.001 ? "−∞" : (db < 0 ? "−" : db > 0 ? "+" : "") + Math.abs(db).toFixed(1) + " dB", norm: n, bi: false, key: "fader." + hash, steps: 0 };
+      };
+      mix.modules.push({ key: "mix.faders", state: "on", summary: "", switchable: false, values: [fv(H.lead, true, 0.70), fv(H.chorus, false, 0.66)] });
+    }
     return list;
   }
 
@@ -204,10 +215,15 @@
       if (lockMaster && r.unit === "masterology") return { ticket: 0, why: "Auto-Master is running." };
       setTimeout(() => {
         if (r.module === "mas.tonaleq" && r.control === "air") { tickets[t] = { outcome: "refused", why: "Masterology can't change Air from the Rack." }; return; }
-        if (r.change === "power") {
+        if (r.module === "mix.faders" && r.control === "fader." + H.chorus) { tickets[t] = { outcome: "refused", why: "Chorus Vox isn't in the tracks Mixology's bridge shows now: open Mixology's Tracks page on it, then move its fader here." }; return; }
+        if (r.change === "save") {
+          if (!r.unit.startsWith("vox-")) { tickets[t] = { outcome: "refused", why: "Only Voxology keeps chains." }; return; }
+          saved.push(r.unit);
+        } else if (r.change === "power") {
           if (r.unit.startsWith("ht-")) { tickets[t] = { outcome: "refused", why: "Honey Tune has no bypass of its own." }; return; }
           powered[r.unit] = r.value >= 0.5;
         } else if (r.change === "state") switched[r.unit + "|" + r.module] = r.value >= 0.5 ? "on" : "off";
+        else if (r.change === "reset" && r.module === "mix.faders") turned[r.unit + "|" + r.module + "|" + r.control] = 0.75;   // 0 dB
         else if (r.change === "reset") delete turned[r.unit + "|" + r.module + "|" + r.control];
         else {
           const k = r.unit + "|" + r.module + "|" + r.control;

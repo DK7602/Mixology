@@ -8,7 +8,7 @@
   window.__JUCE__ = {
     initialisationData: {
       __juce__platform: [], __juce__registeredGlobalEventIds: [], __juce__sliders: [], __juce__toggles: [], __juce__comboBoxes: [],
-      __juce__functions: ["getLinkInfo", "setTrim", "trimGesture", "clearAssist", "setProcessing"],
+      __juce__functions: ["getLinkInfo", "setTrim", "trimGesture", "clearAssist", "setProcessing", "getRack", "rackRequest", "rackAnswer", "rackWindow", "getRackTheme", "setRackTheme"],
     },
     postMessage(message) {
       const { eventId, payload } = JSON.parse(message);
@@ -18,6 +18,18 @@
       if (payload.name === "setTrim") trim = payload.params[0];
       if (payload.name === "setProcessing") procOn = !!payload.params[0];
       if (payload.name === "clearAssist") assist = { lowCut: 0, mudHz: 300, mudDb: 0, pocketHz: 2500, pocketDb: 0 };
+      // The Rack: against tools/rack/rack_mock.js's demo project when the preview loads it.
+      const M = window.SonicologyRackMock, p = payload.params || [];
+      if (payload.name === "getRack" || payload.name === "rackRequest" || payload.name === "rackAnswer") {
+        const call = !M ? Promise.resolve(payload.name === "getRack" ? null : { ticket: 0, why: "No demo project in this preview." })
+          : payload.name === "getRack" ? M.getRack()
+          : payload.name === "rackRequest" ? M.request({ unit: p[0], gen: p[1], change: p[2], module: p[3], control: p[4], value: p[5], gesture: p[6] })
+          : M.answer(p[0], p[1], p[2]);
+        Promise.resolve(call).then((d) => send("__juce__complete", { promiseId: payload.resultId, result: d == null ? null : JSON.stringify(d) }));
+        return;
+      }
+      if (payload.name === "getRackTheme") { try { result = localStorage.getItem("sonicologyRackTheme") || ""; } catch (e) { result = ""; } }
+      if (payload.name === "setRackTheme") { try { localStorage.setItem("sonicologyRackTheme", p[0]); } catch (e) { /* none */ } }
       send("__juce__complete", { promiseId: payload.resultId, result });
     },
   };

@@ -1,6 +1,7 @@
 #include "LinkEditor.h"
 
 #include "MixologyLinkUIData.h"
+#include "../plugin/RackHost.h"
 #include "suite/SuiteLink.h"
 
 #include <cstring>
@@ -15,8 +16,24 @@ namespace
         if (ext == "css")  return "text/css";
         if (ext == "png")  return "image/png";
         if (ext == "ttf")  return "font/ttf";
+        if (ext == "webp") return "image/webp";
+        if (ext == "json") return "application/json";
         return "text/plain";
     }
+
+    // The Sonicology Rack's light / dark view: one choice for all three plug-ins (as Mixology's own window keeps it).
+    juce::File rackThemeFile()
+    {
+        const auto base = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory);
+       #if JUCE_MAC
+        return base.getChildFile ("Application Support/Sonicology/rack-theme.txt");
+       #else
+        return base.getChildFile ("Sonicology/rack-theme.txt");
+       #endif
+    }
+
+    constexpr int kMinW = 450, kMinH = 300, kMaxW = 1200, kMaxH = 800;
+    constexpr double kRackAspect = 1.6;   // the Rack's 1600 x 1000 stage
 
     float roundTo (float v, float step) { return std::round (v / step) * step; }
 
@@ -93,7 +110,65 @@ juce::WebBrowserComponent::Options LinkEditor::makeEditorOptions()
                                  processor.setProc (mixology::proc::chainOn, args.size() > 0 && static_cast<bool> (args[0]) ? 1.0f : 0.0f);
                                  complete (true);
                              })
-        .withResourceProvider ([] (const auto& url) { return getResource (url); });
+        // The Sonicology Rack: every Sonicology plug-in in the project, starting on this Link's track.
+        .withNativeFunction ("rackWindow", [this] (const juce::Array<juce::var>& args, auto complete)
+                             {
+                                 rackWindow (args.size() > 0 && static_cast<bool> (args[0]));
+                                 complete (true);
+                             })
+        .withNativeFunction ("getRack", [this] (const juce::Array<juce::var>& args, auto complete)
+                             { complete (rack::host::viewBase64 ("link", trackHash(), args.size() > 0 ? args[0] : juce::var())); })
+        .withNativeFunction ("rackRequest", [] (const juce::Array<juce::var>& args, auto complete)
+                             { complete (rack::host::requestFrom (args)); })
+        .withNativeFunction ("rackAnswer", [] (const juce::Array<juce::var>& args, auto complete)
+                             { complete (rack::host::answerFrom (args)); })
+        .withNativeFunction ("getRackTheme", [] (const juce::Array<juce::var>&, auto complete)
+                             { complete (rackThemeFile().loadFileAsString().trim()); })
+        .withNativeFunction ("setRackTheme", [] (const juce::Array<juce::var>& args, auto complete)
+                             {
+                                 const auto f = rackThemeFile();
+                                 f.getParentDirectory().createDirectory();
+                                 complete (f.replaceWithText (args.size() > 0 && args[0].toString() == "light" ? "light" : "dark"));
+                             })
+        .withResourceProvider ([this] (const auto& url) {
+            if (auto rack = rack::host::viewResource (url, "link", trackHash())) return rack;   // the Rack's data
+            return getResource (url);
+        });
+}
+
+std::uint32_t LinkEditor::trackHash() const
+{
+    const auto id = processor.identity();
+    return id.hasName ? suite::nameHash (id.name.toStdString()) : 0u;
+}
+
+void LinkEditor::rackWindow (bool open)
+{
+    auto* c = getConstrainer();
+    if (open && ! rackBig && c != nullptr && getWidth() > 0 && getHeight() > 0)
+    {
+        const auto screen = getScreenBounds();
+        const auto* d = juce::Desktop::getInstance().getDisplays().getDisplayForRect (screen);
+        if (d == nullptr) return;
+        const auto area = d->userBounds.toNearestInt();   // the screen less the taskbar / menu bar
+        const double k = screen.getHeight() > 0 ? screen.getHeight() / static_cast<double> (getHeight()) : 1.0;   // the host's scaling
+        double h = area.getHeight() * 0.85, w = h * kRackAspect;
+        if (w > area.getWidth() - 40.0) { w = area.getWidth() - 40.0; h = w / kRackAspect; }
+        w /= k; h /= k;
+        widthBefore = getWidth();
+        heightBefore = getHeight();
+        rackBig = true;
+        setResizeLimits (kMinW, kMinH, juce::jmax (kMaxW, juce::roundToInt (w) + 1), juce::jmax (kMaxH, juce::roundToInt (h) + 1));
+        c->setFixedAspectRatio (kRackAspect);
+        setSize (juce::roundToInt (w), juce::roundToInt (h));
+    }
+    else if (! open && rackBig && c != nullptr)
+    {
+        rackBig = false;
+        setResizeLimits (kMinW, kMinH, kMaxW, kMaxH);
+        c->setFixedAspectRatio (static_cast<double> (kDesignWidth) / kDesignHeight);
+        setSize (widthBefore, heightBefore);
+    }
 }
 
 LinkEditor::LinkEditor (MixologyLinkProcessor& p)
@@ -105,7 +180,7 @@ LinkEditor::LinkEditor (MixologyLinkProcessor& p)
     webView.goToURL (juce::WebBrowserComponent::getResourceProviderRoot());
 
     setResizable (true, true);
-    setResizeLimits (450, 300, 1200, 800);
+    setResizeLimits (kMinW, kMinH, kMaxW, kMaxH);
     if (auto* c = getConstrainer())
         c->setFixedAspectRatio (static_cast<double> (kDesignWidth) / kDesignHeight);
     setSize (kDesignWidth, kDesignHeight);

@@ -144,6 +144,21 @@ public:
         Returns { ok, message, warning, info }. */
     juce::var command (const juce::String& name, const juce::var& arg);
 
+    /** The Sonicology Rack (Beta 24): a track's fader for the Rack's GAIN STAGING (hash: its name's hash, as the Rack's),
+        or nothing when the bridge hasn't seen that track. inBank: it is in the strips the DAW shows Mixology now, so it
+        can move. */
+    struct RackFader
+    {
+        double db = 0.0, pos = 0.0;
+        bool inBank = false;
+        std::string title;
+    };
+    std::optional<RackFader> rackFader (std::uint32_t hash) const;
+    /** A Rack request for that fader: gesture "begin" / "move" / "end" / "set" to `pos` (0..1, the fader's own travel), or
+        "reset" (0 dB). Goes through command() like a drag on the Tracks page (History, padlock, the bridge's checks).
+        "" when it went, else why not (shown in the Rack). */
+    std::string rackFaderMove (std::uint32_t hash, const std::string& gesture, double pos);
+
     /** Protected channels, saved with the project (Mixology's plug-in state). Safe from any thread: the host
         may save or load state off the message thread, so both go through a small locked copy. */
     juce::String protectedState() const;

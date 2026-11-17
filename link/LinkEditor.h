@@ -10,7 +10,8 @@
     can see it. Same look as Mixology (shared stylesheet, knobs and meters), in its own 3:2 canvas.
 
     C++ -> JS: "linkFrame" at 30 Hz. JS -> C++: native functions getLinkInfo(), setTrim(db), trimGesture(on), clearAssist(),
-    setProcessing(on). */
+    setProcessing(on); the Sonicology Rack (its RACK button, Beta 24): getRack(track), rackRequest(...), rackAnswer(...),
+    rackWindow(open), getRackTheme(), setRackTheme(theme), and the file rack-data/<track>.json. */
 class LinkEditor final : public juce::AudioProcessorEditor,
                          private juce::Timer
 {
@@ -32,6 +33,12 @@ private:
     juce::WebBrowserComponent::Options makeEditorOptions();
     static std::optional<juce::WebBrowserComponent::Resource> getResource (const juce::String& url);
     static juce::String savedTheme();
+    std::uint32_t trackHash() const;
+    /** The Rack opens (true): the window grows to about 85 % of the screen's height in the Rack's shape (16:10); BACK
+        (false): the window as it was. */
+    void rackWindow (bool open);
+    bool rackBig = false;
+    int widthBefore = 0, heightBefore = 0;
 
     MixologyLinkProcessor& processor;
     juce::WebBrowserComponent webView;

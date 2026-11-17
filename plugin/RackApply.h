@@ -16,6 +16,7 @@ namespace mixology::rackapply
         using namespace mixology::proc;
         const auto param = [&apvts] (int index) { return rack::host::find (apvts, specs()[static_cast<std::size_t> (index)].id); };
 
+        if (r.change == rack::Change::save) return "Only Voxology saves chains from the Rack.";
         if (r.change == rack::Change::power)
         {
             // The Rack's BYPASS: this track's (or the Full Mix's) processing off / on, as Mixology's own ON switch.

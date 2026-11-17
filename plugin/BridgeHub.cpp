@@ -2060,6 +2060,45 @@ juce::var BridgeHub::getState (bool includeLog)
     return juce::var (o);
 }
 
+std::optional<BridgeHub::RackFader> BridgeHub::rackFader (std::uint32_t hash) const
+{
+    if (hash == 0) return std::nullopt;
+    for (int i = 0; i < bridge.slotCount(); ++i)
+    {
+        const auto& s = bridge.slot (i);
+        if (s.present && s.hash == hash && s.hasVolume)
+            return RackFader { s.volumeDb, s.volume, true, s.title };
+    }
+    const auto& known = bridge.knownFaders();
+    if (const auto f = known.find (hash); f != known.end())
+        return RackFader { f->second.db, f->second.volume, false, f->second.title };
+    return std::nullopt;
+}
+
+std::string BridgeHub::rackFaderMove (std::uint32_t hash, const std::string& gesture, double pos)
+{
+    int slot = -1;
+    for (int i = 0; i < bridge.slotCount() && slot < 0; ++i)
+        if (bridge.slot (i).present && bridge.slot (i).hash == hash) slot = i;
+    if (slot < 0)
+        return bridge.knownFaders().count (hash) != 0
+                   ? "Mixology's bridge can move this fader once the track is in view: open Mixology's Tracks page and page to it."
+                   : "Mixology's bridge hasn't seen this track yet.";
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("slot", slot);
+    o->setProperty ("hash", static_cast<juce::int64> (hash));
+    o->setProperty ("value", gesture == "reset" ? 0.0 : juce::jlimit (0.0, 1.0, pos));
+    const juce::var arg (o);
+    auto run = [&] (const char* name) -> std::string {
+        const auto r = command (name, arg);
+        return static_cast<bool> (r.getProperty ("ok", true)) ? std::string() : r.getProperty ("message", "").toString().toStdString();
+    };
+    if (gesture == "reset") return run ("setDb");
+    auto why = run ("fader");
+    if (gesture == "end" || gesture == "set") run ("faderEnd");
+    return why;
+}
+
 juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
 {
     using Result = mixology::BridgeSession::Result;

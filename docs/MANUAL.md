@@ -3,7 +3,7 @@
 Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list all three are under Sonicology.
 
-Manual for version 0.31.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
+Manual for version 0.32.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -57,6 +57,7 @@ fix):
 | Sonicology Rack: UNDO / REDO, A / B and BYPASS for a track | New in 0.29: tested in the engine and the browser preview, not yet in a DAW |
 | EQ Dynamic: the EQ page as a dynamic EQ (bells and shelves move only when their part of the sound pushes out) | New in 0.30: tested in the engine and the browser preview, not yet in a DAW |
 | Sonicology Rack: the SESSION page, gain staging in the Rack Coach, TURN ON HERE on the MODULES page | New in 0.31: tested in the browser preview, not yet in a DAW |
+| Sonicology Rack: the track's fader (through Mixology's bridge), SAVE (Voxology's My Chains), Mixology Link's RACK button | New in 0.32: tested in the engine and the browser preview, not yet in a DAW |
 
 Nothing changes your sound until you ask: every processing module starts switched off (the audio passes
 through bit for bit). What can change it: the Cubase faders and pans Mixology moves, the Assist EQ / Trim in
@@ -288,6 +289,8 @@ Mixology Link is a small plug-in for each track. Version 1:
 - **Processing** (Milestone 5, bottom of its window): the EQ, Dynamics, Tone and Stereo modules Mixology's pages
   switched on for this track (see "Processing" below). **On / Off** switches all of them off for a before / after.
   Only the Limiter adds latency (5 ms, while it's on); Cubase compensates.
+- **RACK** (the spinning cube, top right of its window): the Sonicology Rack, opened on this track (see "Sonicology
+  Rack" below).
 
 Each Link also listens to its track about five times a second (tone in 31 bands, loudness, punch, stereo width,
 left / right balance) for Analyze Mix and the analyzer's track colours. It runs on a background thread and
@@ -918,6 +921,12 @@ and the window grows to about 85 % of your screen's height while it's open (the 
   live) and how much it adds. It warns when one makes the track much louder (louder sounds better by itself, so
   compare at the same level: Voxology's MATCH does it for you) or peaks close to 0 dB. Masterology is meant to make
   the mix louder, so only its peaks count.
+  - **Track fader**: the track's fader in your DAW, as Mixology's DAW bridge reads it (so only with Mixology on the
+    master and its bridge connected). Turn it like any knob in the Rack (drag, mouse wheel, double-click for 0 dB,
+    UNDO); Mixology moves the fader, and its History has the move. It moves when the track is among the channels the
+    DAW shows Mixology right now (Mixology's Tracks page); for another, the Rack says so.
+- **SAVE** (on Voxology's row in the Signal Chain): keeps this vocal's whole Voxology setup in Voxology's **MY
+  CHAINS**, named after the track and the time ("Lead Vox 17 Nov 22.41"), to use on your next song.
 - **The bottom bar:** IN and OUT of the picked plug-in, and the mix's loudness (from Mixology, or what reaches
   Masterology). A dash means nothing has measured it yet.
 
@@ -934,7 +943,7 @@ that module on the RACK page.
 
 **Good to know**
 - Honey Tune has no RACK button: it shows up in the Rack above Voxology on the track it tunes.
-- Mixology Link has no RACK button yet: Links show up in the Rack opened from Voxology, Mixology or Masterology.
+- Mixology Link has a RACK button too (the spinning cube, top right of its window): the Rack opens on the Link's track.
 - The Rack costs nothing while it's closed: the plug-ins send their details only while a Rack is open.
 - **Locked for a moment:** while Voxology's Auto-Edit or Masterology's Auto-Master listens or works, the Rack can't
   change that plug-in (a lock and the reason show under its knobs). It can again as soon as it has finished.

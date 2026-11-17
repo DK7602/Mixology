@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-11-17, v0.31.0; the Sonicology Rack: Betas 18 - 23 built)
+# Mixology: resume here (updated 2026-11-17, v0.32.0; the Sonicology Rack: Betas 18 - 24 built)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -149,6 +149,25 @@ sends higher-resolution art, re-run it.
   UNDO). Tested: Playwright scratchpad b23.js (gain rows, session rows, pill -> RACK page, turn on + UNDO, light,
   1280 fit). Moved to Beta 24 (each needs new messages between the plug-ins): the track's fader, SAVE CHAIN, the
   Link's RACK button, the insert-order check.
+- BETA 24 BUILT (Mixology 0.32.0, Voxology 0.62.0, Masterology 0.36.0): (1) the track's fader in the Rack: shared
+  RackLink `Link::shownTracks()` (the tracks open views show, from the viewer slots, no layout change); the Mixology
+  that owns the bridge (on the master, bridge enabled) publishes a "mix.faders" module with one value per shown track
+  (name "Fader", key "fader.<decimal hash>", norm = the bridge's fader position, text "-3.2 dB"), publishing at the
+  full rate while any track is shown (its own modules stay brief unless the Full Mix is shown); viewJson keeps that
+  module's values in a track view. rack.js pulls it out of the modules (pullFaders, trackFader) and draws a knob in
+  GAIN STAGING (drag / wheel / double-click / UNDO through the usual knob code; the label "Track Fader"). Requests:
+  PluginProcessor::publishRack serves module "mix.faders" through BridgeHub::rackFaderMove (command "fader" +
+  "faderEnd", reset = "setDb" 0): only for a track in the bridge's current bank, else a refusal that says so.
+  (2) SAVE CHAIN: `rack::Change::save` (module "save", control "", value 1, always a set); Voxology's applyRack saves a
+  My Chain "<track> <d Mon HH.MM>" (rack.js's toast computes the same name); Mixology / Link / Masterology / Honey
+  Tune refuse ("Only Voxology saves chains from the Rack."). (3) Mixology Link's RACK button (link.html #lrack, link.js,
+  LinkEditor: getRack / rackRequest / rackAnswer / rackWindow / rack theme natives, rack-data files via
+  rack::host::viewResource ("link", its track hash), webp / json types; the window goes 16:10 at about 85 % of the
+  screen while the Rack is open and back after). Link's UI data now carries rack.js / rack.css / rack art (~1.5 MB).
+  rack.js HOSTS.link = "Link" (BACK TO LINK). Tests: [rack] "SAVE CHAIN reaches the owner as one Change::save", "the
+  tracks open views show ... and the faders in a track's view"; Playwright scratchpad b24.js (fader drag / undo /
+  double-click, refused fader, SAVE toast) and linkrack.js (the Link's button, BACK TO LINK); plug-in files compiled
+  against JUCE. Moved to 25: the insert-order check (no dependable signal: levels would guess).
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the

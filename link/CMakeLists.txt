@@ -26,6 +26,8 @@ juce_add_plugin(MixologyLink
 # The window shares Mixology's stylesheet, building blocks, DAW words, fonts and logo (served flat by file name).
 set(MIX_UI "${CMAKE_SOURCE_DIR}/plugin/ui")
 file(GLOB LINK_FONTS CONFIGURE_DEPENDS "${MIX_UI}/fonts/*.ttf")
+# The Sonicology Rack (Beta 24: the Link's RACK button): the same page, art and fonts as in Mixology.
+file(GLOB LINK_RACK CONFIGURE_DEPENDS "${MIX_UI}/rack/*.webp" "${MIX_UI}/rack/*.ttf")
 juce_add_binary_data(MixologyLinkUIData
     HEADER_NAME MixologyLinkUIData.h
     NAMESPACE   MixologyLinkUI
@@ -39,7 +41,10 @@ juce_add_binary_data(MixologyLinkUIData
         "${MIX_UI}/daws.js"
         "${MIX_UI}/assets/logo.png"
         "${MIX_UI}/assets/wordmark.png"
+        "${MIX_UI}/rack.js"
+        "${MIX_UI}/rack.css"
         ${LINK_FONTS}
+        ${LINK_RACK}
         "${juce_SOURCE_DIR}/modules/juce_gui_extra/native/javascript/index.js"
         "${juce_SOURCE_DIR}/modules/juce_gui_extra/native/javascript/check_native_interop.js")
 set_target_properties(MixologyLinkUIData PROPERTIES POSITION_INDEPENDENT_CODE ON)

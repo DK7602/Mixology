@@ -7,7 +7,7 @@ HTML / CSS / JS interface in the platform web view, GitHub Actions builds on eve
 The plan and milestones: [docs/PLAN.md](docs/PLAN.md). User manual (also built into the plug-in): [docs/MANUAL.md](docs/MANUAL.md).
 Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_TEST.md) (passed), [docs/M3_TEST.md](docs/M3_TEST.md), [docs/M4_TEST.md](docs/M4_TEST.md), [docs/M5_TEST.md](docs/M5_TEST.md), [docs/M6_TEST.md](docs/M6_TEST.md) (current).
 
-## Status: v0.31.0
+## Status: v0.32.0
 
 | Piece | State |
 | --- | --- |
@@ -48,6 +48,7 @@ Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_T
 | Rack tools (v0.29.0, Beta 20, with Voxology 0.59.0 and Masterology 0.34.0): UNDO / REDO of the Rack's own changes, A / B of a track's settings, BYPASS of a track's plug-ins (Change::power: each plug-in's own bypass; Honey Tune has none). All in rack.js through the existing requests; BYPASS comes back on when the Rack closes | New: tested in the engine and the browser preview, not yet in a DAW |
 | EQ Dynamic (v0.30.0, Beta 22): `eq_dyn` (the first control after the space layers, so no index moves): each bell / shelf band's gain in use follows how far its region (an octave around a bell, below / above a shelf) stands over its ~1.5 s level (1 - 7 dB), glided, the filter redesigned every 32 samples; cuts untouched; 0 % = the static EQ bit for bit. Chip on the EQ graph; a Rack value | New: tested in the engine and the browser preview, not yet in a DAW |
 | Rack Beta 23 (v0.31.0, with Voxology 0.61.0 and Masterology 0.35.0): the Rack's SESSION page (every track, its modules as pills, its warning count; a pill opens the module on the RACK page), gain staging in the Rack Coach (each plug-in's peaks in and out, a warning for a big jump or peaks near 0 dBFS), TURN ON HERE on the MODULES page (a state request, one UNDO step) | New: tested in the browser preview, not yet in a DAW |
+| Rack Beta 24 (v0.32.0, with Voxology 0.62.0 and Masterology 0.36.0): the track's fader in the Rack's GAIN STAGING (the Mixology that owns the bridge publishes a "mix.faders" module with the faders of the tracks open Racks show, `rack::Link::shownTracks`; requests to control "fader.<hash>" go through `BridgeHub::rackFaderMove`, i.e. the Tracks page's own fader / faderEnd / setDb commands, History included); SAVE on Voxology's row (`rack::Change::save`); Mixology Link's RACK button (link.html / link.js / LinkEditor: the Rack's natives, rack-data files, a 16:10 window while it is open) | New: tested in the engine and the browser preview, not yet in a DAW |
 
 ## Layout
 

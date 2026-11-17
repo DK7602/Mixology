@@ -139,8 +139,6 @@ void MixologyAudioProcessor::timerCallback()
 void MixologyAudioProcessor::publishRack()
 {
     const auto now = suite::nowMs();
-    // Stage 2: knobs turned and modules switched in a Rack view (in any Sonicology plug-in), on the Full Mix's processing.
-    rackPub.serve (now, {}, [this] (const rack::Request& r) { return mixology::rackapply::apply (parameters, r, false); });
     juce::String name;
     {
         const juce::ScopedLock sl (stateLock);
@@ -149,8 +147,29 @@ void MixologyAudioProcessor::publishRack()
     const bool onMaster = name.isEmpty() || BridgeHub::looksLikeMaster (name);
     const auto role = onMaster ? rack::Role::fullmix : rack::Role::track;
     const auto hash = onMaster ? 0u : suite::nameHash (name.toStdString());
-    // While a Rack shows this track, serve its knobs 25 times a second (from rackTimer, which calls this again).
-    const bool shown = rackPub.shows (now, hash, role);
+    // Beta 24: the Mixology that owns the DAW bridge publishes the faders of the tracks open Racks show ("mix.faders")
+    // and moves them for the Rack (control "fader.<hash>").
+    const bool faderOwner = onMaster && bridgeHub->isMixOwner (this) && bridgeHub->isEnabled();
+    const auto shownTracks = faderOwner ? rackPub.shownTracks (now) : std::vector<std::uint32_t> {};
+    // Stage 2: knobs turned and modules switched in a Rack view (in any Sonicology plug-in), on the Full Mix's processing.
+    rackPub.serve (now, {}, [this, faderOwner] (const rack::Request& r) -> std::string {
+        if (r.module == "mix.faders")
+        {
+            const auto dot = r.control.find ('.');
+            std::uint32_t h = 0;
+            for (std::size_t i = dot == std::string::npos ? r.control.size() : dot + 1; i < r.control.size() && r.control[i] >= '0' && r.control[i] <= '9'; ++i)
+                h = h * 10u + static_cast<std::uint32_t> (r.control[i] - '0');
+            if (! faderOwner || h == 0) return "Mixology's bridge isn't connected: the fader can't move from here.";
+            const char* gesture = r.change == rack::Change::reset ? "reset"
+                                : r.gesture == rack::Gesture::begin ? "begin" : r.gesture == rack::Gesture::move ? "move"
+                                : r.gesture == rack::Gesture::end ? "end" : "set";
+            return bridgeHub->rackFaderMove (h, gesture, r.value);
+        }
+        return mixology::rackapply::apply (parameters, r, false);
+    });
+    // While a Rack shows this track (or, for the faders, any track), serve its knobs 25 times a second (from rackTimer,
+    // which calls this again).
+    const bool shown = rackPub.shows (now, hash, role) || ! shownTracks.empty();
     if (shown && ! rackTimer.isTimerRunning())
     {
         rackTimer.tick = [this] { publishRack(); };
@@ -158,7 +177,7 @@ void MixologyAudioProcessor::publishRack()
     }
     else if (! shown && rackTimer.isTimerRunning())
         rackTimer.stopTimer();
-    const auto due = rackPub.due (now, hash, role);
+    const auto due = shownTracks.empty() ? rackPub.due (now, hash, role) : rackPub.due (now);
     if (due == rack::Publisher::Due::none) return;
 
     const auto wall = juce::Time::currentTimeMillis();
@@ -187,7 +206,29 @@ void MixologyAudioProcessor::publishRack()
     }
     const double rate = getSampleRate();
     u.latencyMs = rate > 0.0 ? static_cast<float> (latencyTold.load() * 1000.0 / rate) : 0.0f;
-    u.modules = mixology::rackunit::modules (st, due == rack::Publisher::Due::full);
+    u.modules = mixology::rackunit::modules (st, due == rack::Publisher::Due::full && rackPub.shows (now, hash, role));
+    if (! shownTracks.empty())
+    {
+        rack::Module faders;
+        faders.key = "mix.faders";
+        faders.state = rack::State::on;
+        for (const auto h : shownTracks)
+        {
+            const auto f = bridgeHub->rackFader (h);
+            if (! f || faders.values.size() >= static_cast<std::size_t> (rack::kMaxValues)) continue;
+            rack::Value v;
+            v.name = "Fader";
+            const bool silent = f->db <= mixology::FaderLaw::kMinusInf + 1.0;
+            const auto db = std::round (f->db * 10.0) / 10.0;
+            v.text = silent ? std::string ("\xE2\x88\x92\xE2\x88\x9E")   // −∞
+                            : (db < 0.0 ? std::string ("\xE2\x88\x92") : db > 0.0 ? std::string ("+") : std::string())
+                                  + juce::String (std::abs (db), 1).toStdString() + " dB";
+            v.norm = static_cast<float> (juce::jlimit (0.0, 1.0, f->pos));
+            v.key = "fader." + std::to_string (h);
+            faders.values.push_back (std::move (v));
+        }
+        if (! faders.values.empty() && u.modules.size() < static_cast<std::size_t> (rack::kMaxModules)) u.modules.push_back (std::move (faders));
+    }
     const auto& v = st.values;
     if (onMaster && mixology::proc::isOn (v, mixology::proc::Module::final) && v[mixology::proc::finOut] <= -0.5f)
         u.lines.push_back ({ rack::Level::ok, "Room made for Masterology: the Full Mix's Final Output is "

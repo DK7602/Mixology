@@ -15,7 +15,26 @@ function fit() {
 window.addEventListener("resize", fit);
 
 const fn = (name) => { const f = Juce.getNativeFunction(name); return (...a) => f(...a).catch(() => undefined); };
-const native = { getLinkInfo: fn("getLinkInfo"), setTrim: fn("setTrim"), trimGesture: fn("trimGesture"), clearAssist: fn("clearAssist"), setProcessing: fn("setProcessing") };
+const native = { getLinkInfo: fn("getLinkInfo"), setTrim: fn("setTrim"), trimGesture: fn("trimGesture"), clearAssist: fn("clearAssist"), setProcessing: fn("setProcessing"),
+  getRack: fn("getRack"), rackRequest: fn("rackRequest"), rackAnswer: fn("rackAnswer"), rackWindow: fn("rackWindow"), getRackTheme: fn("getRackTheme"), setRackTheme: fn("setRackTheme") };
+
+// The Sonicology Rack (Beta 24): every Sonicology plug-in in the project in one view, over this window (BACK returns),
+// starting on this Link's track. As Mixology's Rack tab.
+$("lrack").addEventListener("click", async () => {
+  if (!window.SonicologyRack || window.SonicologyRack.isOpen()) return;
+  const theme = await native.getRackTheme();
+  window.SonicologyRack.open({
+    host: "link",
+    theme: theme === "light" || theme === "dark" ? theme : undefined,
+    dataFile: true,   // the Link serves rack-data/<track>.json (fast); getRack only if that can't be read
+    getRack: async (track) => { const j = await native.getRack(track || ""); return j ? window.SonicologyRack.fromBase64Json(j) : null; },
+    request: async (r) => JSON.parse(await native.rackRequest(r.unit, r.gen, r.change, r.module, r.control || "", r.value, r.gesture || "set")),
+    answer: async (unit, gen, ticket) => JSON.parse(await native.rackAnswer(unit, gen, ticket)),
+    onTheme: (t) => native.setRackTheme(t),
+    back: () => { native.rackWindow(false); },   // the window as it was
+  });
+  native.rackWindow(true);   // a bigger window, the Rack's shape, while it is open
+});
 
 // Light / dark: follows Mixology's saved choice; the logo switches this window.
 function applyTheme(theme) {
