@@ -3,7 +3,8 @@
 // Link, Ad-Libs with Voxology alone, the Beat with Voxology in Beat mode + a Link, drums / 808 / keys with Links, the
 // Full Mix (Mixology) and the Master (Masterology). Meters move. Stage 2: knobs turn and modules switch (request /
 // answer, about a fifth of a second later, as a plug-in would); ?lock=1 locks Masterology (Auto-Master running);
-// Masterology's Tonal EQ Air refuses (to see a refusal).
+// Masterology's Tonal EQ Air refuses (to see a refusal); ?old=1 adds a plug-in from another
+// beta; ?auto=1 has the DAW's automation move a turned knob back.
 (function () {
   "use strict";
   const t0 = Date.now();
@@ -171,6 +172,8 @@
   const turned = {}, switched = {}, tickets = {};
   let nextTicket = 1;
   const lockMaster = new URLSearchParams(location.search).get("lock") === "1";
+  const automation = new URLSearchParams(location.search).get("auto") === "1";   // ?auto=1: the DAW's automation moves knobs back
+  const oldBeta = new URLSearchParams(location.search).get("old") === "1";   // ?old=1: a plug-in from another beta is in the project
   function units() {
     const list = rawUnits();
     for (const u of list) {
@@ -201,7 +204,12 @@
       setTimeout(() => {
         if (r.module === "mas.tonaleq" && r.control === "air") { tickets[t] = { outcome: "refused", why: "Masterology can't change Air from the Rack." }; return; }
         if (r.change === "state") switched[r.unit + "|" + r.module] = r.value >= 0.5 ? "on" : "off";
-        else turned[r.unit + "|" + r.module + "|" + r.control] = r.value;
+        else if (r.change === "reset") delete turned[r.unit + "|" + r.module + "|" + r.control];
+        else {
+          const k = r.unit + "|" + r.module + "|" + r.control;
+          turned[k] = r.value;
+          if (automation && r.gesture !== "begin" && r.gesture !== "move") setTimeout(() => { if (turned[k] === r.value) delete turned[k]; }, 700);
+        }
         tickets[t] = { outcome: "applied", why: "" };
       }, 180);
       tickets[t] = { outcome: "pending", why: "" };
@@ -215,7 +223,9 @@
         together: [
           { hash: H.lead, level: "ok", text: "Voxology compresses this vocal, so Mixology's Link adds no second compressor." },
           { hash: H.lead, level: "ok", text: "Voxology adds the reverb and delay here; Mixology adds none on top." },
-          { hash: H.chorus, level: "warn", text: "Two reverbs on this vocal: Voxology's Reverb (plate) and the Link's Space (hall). Stacked spaces can wash it out: turn one down or off." },
+          { hash: H.chorus, level: "warn", text: "Two reverbs on this vocal: Voxology's Reverb (plate) and the Link's Space (hall). Stacked spaces can wash it out: turn one down or off.",
+            fixes: [{ unit: "link-chorus", gen: 1, module: "mix.space", on: false, label: "Turn the Link's Space off (hall)" },
+                    { unit: "vox-chorus", gen: 1, module: "vox.reverb", on: false, label: "Turn Voxology's Reverb off" }] },
           { hash: H.adlibs, level: "warn", text: "Mixology can't hear this track: there is no Mixology Link on it." },
           { hash: H.keys, level: "ok", text: "The Space on Keys ducks under Lead Vox and Chorus Vox, so it blooms between the lines." },
           { hash: "fullmix", level: "ok", text: "Room made for Masterology: the Full Mix's Final Output is −3.5 dB, the mix peaks at −5.8 dBTP." },
@@ -224,6 +234,7 @@
         ],
         mix: { lufsI: -14.2, lufsS: -13.6 + wob(21, 1.2), tp: -1.1 + wob(22, 0.1), source: "after Masterology" },
         master: { goal: "Spotify / Apple Music", lufs: -14, ceiling: -1 },
+        otherLayouts: oldBeta ? [2] : [],
       };
     },
   };

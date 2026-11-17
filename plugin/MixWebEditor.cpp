@@ -237,11 +237,15 @@ juce::WebBrowserComponent::Options MixWebEditor::makeEditorOptions()
                              { complete (presetUndo (args.size() > 0 ? args[0].toString() : juce::String ("mix"))); })
         // The Sonicology Rack (suite/RackLink.h): every Sonicology plug-in in the project, as rack.js shows it. Opened from
         // Mixology it starts on the Full Mix.
+        .withNativeFunction ("rackWindow", [this] (const juce::Array<juce::var>& args, auto complete)
+        {
+            // the Rack opens (true) / goes BACK (false): a bigger window for it, then the one you had
+            if (args.size() > 0 && static_cast<bool> (args[0])) rackWindow.open (*this); else rackWindow.close (*this);
+            complete (juce::var());
+        })
         .withNativeFunction ("getRack", [] (const juce::Array<juce::var>& args, auto complete)
                              {
-                                 const auto json = rack::viewJson ("mixology", 0, suite::nowMs(),
-                                                                 args.size() > 0 ? args[0].toString().toStdString() : std::string());   // the track it shows
-                                 complete (juce::String::fromUTF8 (json.data(), static_cast<int> (json.size())));
+                                 complete (rack::host::viewBase64 ("mixology", 0, args.size() > 0 ? args[0] : juce::var()));   // the track it shows
                              })
         // Stage 2: a knob turned or a module switched in the Rack, for the plug-in that owns it; and what became of it.
         .withNativeFunction ("rackRequest", [] (const juce::Array<juce::var>& args, auto complete)

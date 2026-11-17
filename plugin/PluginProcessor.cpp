@@ -86,6 +86,7 @@ MixologyAudioProcessor::MixologyAudioProcessor()
 MixologyAudioProcessor::~MixologyAudioProcessor()
 {
     stopTimer();
+    rackTimer.stopTimer();
     bridgeHub->unregisterInstance (this);
     {
         const juce::ScopedLock sl (stateLock);
@@ -140,7 +141,24 @@ void MixologyAudioProcessor::publishRack()
     const auto now = suite::nowMs();
     // Stage 2: knobs turned and modules switched in a Rack view (in any Sonicology plug-in), on the Full Mix's processing.
     rackPub.serve (now, {}, [this] (const rack::Request& r) { return mixology::rackapply::apply (parameters, r, false); });
-    const auto due = rackPub.due (now);
+    juce::String name;
+    {
+        const juce::ScopedLock sl (stateLock);
+        name = trackName;
+    }
+    const bool onMaster = name.isEmpty() || BridgeHub::looksLikeMaster (name);
+    const auto role = onMaster ? rack::Role::fullmix : rack::Role::track;
+    const auto hash = onMaster ? 0u : suite::nameHash (name.toStdString());
+    // While a Rack shows this track, serve its knobs 25 times a second (from rackTimer, which calls this again).
+    const bool shown = rackPub.shows (now, hash, role);
+    if (shown && ! rackTimer.isTimerRunning())
+    {
+        rackTimer.tick = [this] { publishRack(); };
+        rackTimer.startTimerHz (25);
+    }
+    else if (! shown && rackTimer.isTimerRunning())
+        rackTimer.stopTimer();
+    const auto due = rackPub.due (now, hash, role);
     if (due == rack::Publisher::Due::none) return;
 
     const auto wall = juce::Time::currentTimeMillis();
@@ -158,13 +176,7 @@ void MixologyAudioProcessor::publishRack()
 
     rack::Unit u;
     u.product = rack::Product::mixology;
-    juce::String name;
-    {
-        const juce::ScopedLock sl (stateLock);
-        name = trackName;
-    }
-    const bool onMaster = name.isEmpty() || BridgeHub::looksLikeMaster (name);
-    u.role = onMaster ? rack::Role::fullmix : rack::Role::track;
+    u.role = role;
     if (! onMaster) u.track = name.toStdString();
     u.version = static_cast<std::uint32_t> (JucePlugin_VersionCode);
     u.on = wall - lastBypassMs.load (std::memory_order_relaxed) > 500;

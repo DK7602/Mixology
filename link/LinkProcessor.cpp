@@ -368,7 +368,7 @@ void MixologyLinkProcessor::publishRack()
             assistFromMixology = false;   // yours now, not Clean Up's / Vocal Pocket's
         return why;
     });
-    const auto due = rackPub.due (now);
+    const auto due = rackPub.due (now, trackIdentity.hasName ? suite::nameHash (trackIdentity.name.toStdString()) : 0u, rack::Role::track);
     if (due == rack::Publisher::Due::none) return;
 
     const auto linkNow = mixology::link::nowMs();

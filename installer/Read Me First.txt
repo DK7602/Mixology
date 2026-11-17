@@ -7,22 +7,28 @@ The complete vocal, mixing and mastering suite
 
 Thanks for trying the beta. Nothing here is finished: tell us what's confusing, what breaks and what you'd change.
 
-NEW IN THIS BETA: THE RACK NO LONGER FREEZES CUBASE
-  With the Rack open, Cubase froze for a moment every second or so (its window, sometimes the sound). The Rack's
-  data now reaches the Rack's page by a much faster route, so Cubase stays smooth while it's open.
-  All three plug-ins need this version (Voxology 0.56.1, Mixology 0.27.1, Masterology 0.32.1).
+NEW IN THIS BETA: A QUICKER, SMARTER SONICOLOGY RACK
+  - Faster: knobs and meters in the Rack follow your changes straight away, and the plug-ins only send what the
+    Rack is showing (lighter on your computer).
+  - Bigger: the plug-in window grows while the Rack is open, and goes back to its size when you click BACK.
+  - Mouse wheel over a knob: a small nudge (hold Shift for a finer one). Double-click a knob: back to its default.
+  - The value under a knob follows while you drag it.
+  - One-click fixes: many red warnings in the Rack Coach (two compressors on one vocal, two reverbs, two tuners,
+    Mixology's Limiter before Masterology) now have a button that switches the extra module off. UNDO switches it
+    back on.
+  - A knob jumps back by itself? The Rack tells you: that track's automation is on Read (R lit in Cubase).
+  - A plug-in from an older beta in the project? The Rack Coach tells you to install this beta for all three.
+  All three plug-ins need this version (Voxology 0.57.0, Mixology 0.28.0, Masterology 0.33.0).
 
-ALSO IN BETA 16 AND THIS ONE: CHANGE SETTINGS FROM THE SONICOLOGY RACK
-  The Rack now changes settings, not just shows them, in Voxology, Honey Tune, Mixology Link, Mixology and
+STILL IN THIS BETA: CHANGE SETTINGS FROM THE SONICOLOGY RACK
+  The Rack changes settings, not just shows them, in Voxology, Honey Tune, Mixology Link, Mixology and
   Masterology, on any track. The plug-in that owns a setting makes the change, as if you'd done it in its window.
   - Drag a knob up or down to turn it (hold Shift for fine moves).
   - Click a knob with a few options (Mode, Speed, Character...) to step to the next one.
   - Click a module's ON / OFF at the top right to switch it.
   Knobs that only show something don't turn. When a plug-in can't make a change, the Rack says why. While
   Auto-Edit or Auto-Master listens or works, that plug-in is locked for a moment. Honey Tune applies a drag where
-  you let go. Also: the Signal Chain's rows now sit on the glass honeycomb.
-  All three plug-ins need this version (Voxology 0.56, Mixology 0.27, Masterology 0.32): an older one is missing
-  from the Rack. Open the Rack with the RACK button in any of the three, and press play first.
+  you let go. Open the Rack with the RACK button in any of the three, and press play first.
 
 
 WHAT THE INSTALLER PUTS WHERE

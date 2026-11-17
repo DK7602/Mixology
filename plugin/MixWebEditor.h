@@ -1,6 +1,7 @@
 #pragma once
 
 #include "PluginProcessor.h"
+#include "RackHost.h"
 
 #include "mixology/TrackAnalyzer.h"
 
@@ -76,6 +77,7 @@ private:
 
     MixologyAudioProcessor& processor;
     BridgeHub& hub;
+    rack::host::RackWindow rackWindow;   // the window grows while the Rack is open (RackHost.h)
     juce::WebBrowserComponent webView;
 
     juce::dsp::FFT fft { kFftOrder };

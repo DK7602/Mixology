@@ -137,6 +137,13 @@ private:
     // not the window's, which are taken when read).
     void publishRack();
     rack::Publisher rackPub;
+    // While a Rack view shows this plug-in's track, a faster timer serves its knobs (the main timer runs 10 times a second).
+    struct RackTimer final : juce::Timer
+    {
+        std::function<void()> tick;
+        void timerCallback() override { if (tick) tick(); }
+    };
+    RackTimer rackTimer;
     std::array<std::atomic<float>, mixology::proc::kMeterValues> rackMeters {};
     std::atomic<juce::int64> lastBypassMs { 0 };
 

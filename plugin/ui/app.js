@@ -63,6 +63,7 @@ export const native = {
   setRackTheme: fn("setRackTheme"),
   rackRequest: fn("rackRequest"),
   rackAnswer: fn("rackAnswer"),
+  rackWindow: fn("rackWindow"),
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -154,13 +155,14 @@ $("tab-rack").addEventListener("click", async () => {
     host: "mixology",
     theme: theme === "light" || theme === "dark" ? theme : undefined,
     dataFile: true,   // the plug-in serves rack-data/<track>.json (fast); getRack only if that can't be read
-    getRack: async (track) => { const j = await native.getRack(track || ""); return j ? JSON.parse(j) : null; },
+    getRack: async (track) => { const j = await native.getRack(track || ""); return j ? window.SonicologyRack.fromBase64Json(j) : null; },
     // stage 2: a knob turned or a module switched, for the plug-in that owns it; and what became of it
     request: async (r) => JSON.parse(await native.rackRequest(r.unit, r.gen, r.change, r.module, r.control || "", r.value, r.gesture || "set")),
     answer: async (unit, gen, ticket) => JSON.parse(await native.rackAnswer(unit, gen, ticket)),
     onTheme: (t) => native.setRackTheme(t),
-    back: () => {},
+    back: () => { native.rackWindow(false).catch(() => {}); },   // the window as it was
   });
+  native.rackWindow(true).catch(() => {});   // a bigger window while the Rack is open
 });
 $("sheet-close").innerHTML = icon("close", 'stroke-width="2.6"');
 $("sheet-close").addEventListener("click", () => $("overlay").classList.remove("shown"));

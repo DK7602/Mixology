@@ -83,6 +83,25 @@ sends higher-resolution art, re-run it.
 - 2026-11-17: user: Beta 17 WORKED (no freeze). Asked for a full audit, Rack improvements, and a study of Rackaholic
   (YouTube's "#1 vocal plug-in of 2026"). Written: docs/rack/AUDIT-2026-11-17.md (findings A1 - A12, ranked Rack
   ideas, Rackaholic vs Sonicology, proposed Betas 18 - 22). Nothing built yet: WAIT for the user's go / order.
+- 2026-11-17: user: "go, use the new order" (AUDIT doc section 4: 18 audit fixes + quick wins; 19 Voxology's sound
+  gaps (listen to what's removed, Air, FET / opto); 20 BYPASS / A/B / UNDO / SAVE CHAIN + the fader; 21 bigger EQ +
+  reverb / delay character; 22 gain staging, session overview, step 5; 23+ shoot-out, separation, reorder, Coach).
+  BETA 18 BUILT (Mixology 0.28.0, Voxology 0.57.0, Masterology 0.33.0; RackLink layout 3):
+  - RackLink: viewers (kMaxViewers 4: Link::view(now, track) says which track a Rack shows; shows(now, hash, role));
+    plug-ins send details only for the shown track and run a 25 Hz timer only while shown; Publisher refreshes at
+    once after serve applied anything; Change::reset (setDefault; Honey Tune rackReset); together() lines carry
+    `fixes` (unit, gen, module, on, label); toJson ends with "otherLayouts" (Link::otherLayouts: another layout's
+    block in this machine's shared memory = a plug-in from another beta).
+  - RackHost.h: viewBase64 (getRack's fallback as base64: no escaping), jsonObject (report natives return objects:
+    Voxology / Masterology app.js jsonText() turns them back into text), RackWindow (the editor grows to ~85 % of the
+    screen height while the Rack is open; BACK restores; Masterology doesn't save that size).
+  - rack.js: fromBase64Json, double-click reset, wheel nudge (0.01, Shift 0.002; stepped: one option; one gesture
+    ended after 400 ms), live value text while dragging (poll 80 ms while turning), snap-back toast (automation R),
+    fix buttons + UNDO toast, old-beta Coach line, Honey Tune note. Mock: ?old=1, ?auto=1, reset.
+  - Tested: Mixology 255 cases pass; Voxology [rack],[manual] + Masterology [rack] pass (full suites run too, see
+    git log); Playwright (scratchpad b18.js: wheel, Shift wheel, double-click, stepped wheel, drag text, fixes +
+    UNDO, old-beta line, snap-back toast, base64) + the old rack_test.js; editors / processors / Honey Tune compiled
+    against JUCE 8.0.15 here. NOT in a DAW yet. Next: trigger Beta 18; then Beta 19 (Voxology sound gaps).
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the

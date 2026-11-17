@@ -45,6 +45,13 @@ namespace mixology::rackapply
 
         const bool assist = r.control == rackunit::kLowCutKey || r.control == rackunit::kMudKey || r.control == rackunit::kPocketKey;
         if (assist && ! link) return rack::host::cannot ("Mixology", r);
+        if (r.change == rack::Change::reset)
+        {
+            auto* p = assist || indexOf (r.control) >= 0 ? rack::host::find (apvts, r.control) : nullptr;
+            if (p == nullptr) return rack::host::cannot ("Mixology", r);
+            rack::host::setDefault (*p);
+            return {};
+        }
         float value = 0.0f;
         if (! rackunit::fromKnob (r.control, r.value, value)) return rack::host::cannot ("Mixology", r);
         auto* p = rack::host::find (apvts, r.control);

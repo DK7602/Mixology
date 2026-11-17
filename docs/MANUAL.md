@@ -3,7 +3,7 @@
 Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list all three are under Sonicology.
 
-Manual for version 0.27.1 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
+Manual for version 0.28.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -53,6 +53,7 @@ fix):
 | The Mix Assistant knows what's fixed (Done points) and opens the tool that fixes a point | Live: this is what we're testing now |
 | Sonicology Rack: every Sonicology plug-in in the project in one view (the Rack tab) | New: tested in the engine, the plug-ins and the browser preview, not yet in a DAW |
 | Sonicology Rack: turn knobs and switch modules of any Sonicology plug-in from the Rack | New in 0.27: tested in the engine and the browser preview, not yet in a DAW |
+| Sonicology Rack: mouse wheel, double-click for the default, one-click fixes in the Rack Coach, a bigger window, the automation and old-beta warnings | New in 0.28: tested in the engine and the browser preview, not yet in a DAW |
 
 Nothing changes your sound until you ask: every processing module starts switched off (the audio passes
 through bit for bit). What can change it: the Cubase faders and pans Mixology moves, the Assist EQ / Trim in
@@ -852,11 +853,14 @@ vocals, Mixology Link on your tracks, Mixology on the Full Mix and Masterology o
 chain, what every module is doing, and how the plug-ins work together. You can also **turn knobs and switch modules** right in the Rack: the plug-in that owns them makes the change,
 exactly as if you had done it in its own window (Cubase records it, and you can automate it).
 
-**Open it:** the **Rack emblem** tab (the spinning cube) after **PRESETS**, in the page tabs. It opens over this window; **BACK TO MIXOLOGY** (or Esc) brings you back.
+**Open it:** the **Rack emblem** tab (the spinning cube) after **PRESETS**, in the page tabs. It opens over this window,
+and the window grows to about 85 % of your screen's height while it's open (the Rack shows a lot); **BACK TO MIXOLOGY**
+(or Esc) brings you back, at the size the window had before.
 
 **What it needs**
-- Every Sonicology plug-in in the project at this version or newer (Voxology 0.56, Mixology 0.27, Masterology 0.32).
-  An older one is missing from the Rack.
+- Every Sonicology plug-in in the project at this version or newer (Voxology 0.57, Mixology 0.28, Masterology 0.33).
+  An older one is missing from the Rack, and the Rack Coach warns you when it finds one: install the same beta of all
+  three.
 - **Press play.** Plug-ins join the Rack while your project plays (and only the project that plays), like the rest of
   the suite link. A stopped project shows "No Sonicology plug-ins are playing".
 - **Named tracks.** The Rack matches plug-ins to tracks by the track's name. Two tracks with the same name get a
@@ -872,15 +876,24 @@ exactly as if you had done it in its own window (Cubase records it, and you can 
 - **The module** (middle): its curve for an EQ (with the sound behind it) or its gain reduction / level over the last
   12 seconds, and its knobs exactly as set.
 - **Change it from the Rack:**
-  - **Drag a knob** up or down (hold **Shift** for fine moves). One drag is one move in Cubase's automation.
+  - **Drag a knob** up or down (hold **Shift** for fine moves). One drag is one move in Cubase's automation. The value
+    under the knob follows as you drag.
+  - **Mouse wheel** over a knob: a small nudge (hold **Shift** for a finer one); on a knob with a few options, the next
+    or previous one.
+  - **Double-click a knob** to put it back to its default.
   - **Click a knob with a few options** (Mode, Speed, Character...) to step to the next one.
   - **Click ON / OFF** at the top right of the module to switch it.
   - The line under the knobs says what you can do. Knobs that only show something (the key Pitch follows, what the
     Beat Listener hears, Masterology's Dynamics bands and loudness target) don't turn.
   - When a plug-in can't make a change, the Rack says why for a few seconds and the knob goes back.
+  - **The knob jumps back by itself?** That track's automation is on Read (in Cubase, the **R** button is lit): Cubase
+    plays its automation and moves the knob back. The Rack tells you. Switch Read off, or switch on Write (**W**) to
+    record your move.
 - **Rack Coach** (right): **How they work together** (green: fine, blue: good to know, red: fix it, for example two
   compressors on one vocal, Pitch and Honey Tune both tuning, two Masterologys, or Mixology's Limiter before
-  Masterology), the chain overview, and what the picked module is for.
+  Masterology), the chain overview, and what the picked module is for. Many red lines come with **one-click fixes**
+  (for example "Turn the Link's Compressor off" or "Turn Voxology's Compressor off"): click one and the plug-in that
+  owns that module switches it off; **UNDO** in the message switches it back on.
 - **The bottom bar:** IN and OUT of the picked plug-in, and the mix's loudness (from Mixology, or what reaches
   Masterology). A dash means nothing has measured it yet.
 
