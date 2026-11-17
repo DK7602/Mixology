@@ -16,6 +16,14 @@ namespace mixology::rackapply
         using namespace mixology::proc;
         const auto param = [&apvts] (int index) { return rack::host::find (apvts, specs()[static_cast<std::size_t> (index)].id); };
 
+        if (r.change == rack::Change::power)
+        {
+            // The Rack's BYPASS: this track's (or the Full Mix's) processing off / on, as Mixology's own ON switch.
+            auto* chain = param (chainOn);
+            if (chain == nullptr) return rack::host::cannot ("Mixology", r);
+            rack::host::setSwitch (*chain, r.value >= 0.5f);
+            return {};
+        }
         if (r.change == rack::Change::state)
         {
             const int sw = rackunit::switchOf (r.module);

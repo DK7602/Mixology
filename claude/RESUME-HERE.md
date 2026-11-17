@@ -110,6 +110,19 @@ sends higher-resolution art, re-run it.
   0.58.0 (LISTEN, Air, FET / Opto: details in Voxology's RESUME-HERE); here only the shared rack.js catalog text and
   the installer Read Me (Mixology / Masterology versions unchanged). Beta 20's work (Rack UNDO / REDO, A / B, BYPASS via
   Change::power) was parked in a copy while Beta 19 shipped.
+  Beta 19: Sonicology suite run 44183363105 (label "Beta 19", 0.19.0; Mixology 7b72bc7, Voxology 861c70f, Masterology
+  ec183f7 by SHA).
+- BETA 20 BUILT (Mixology 0.29.0, Voxology 0.59.0, Masterology 0.34.0): the Rack's top bar tools (as the concept):
+  A / B, BYPASS, UNDO / REDO, on the RACK page for a track with something turnable. rack.js: rememberChange() records
+  each applied change (drag / wheel / click / reset / switch / fix) with before / after; replay() sends the before or
+  after values (applyItems: a pause every 12 so no queue overflows); A / B: snapshot() of every value with a key and
+  every switchable module of the track's units, flipAB() sends the differences (one batch, one undo step); BYPASS:
+  Change::power (RackLink, shared) to each unit but Honey Tune; close() brings bypassed units back. Plug-ins: power =
+  Voxology "bypass", Mixology / Link chainOn, Masterology "bypass"; Honey Tune refuses. WATCH OUT: rack.js already
+  had a remember(data) (meter history): the new one is rememberChange (a same-name function silently replaced it).
+  Deferred to Beta 22: the track's fader in the Rack, SAVE CHAIN (see the AUDIT plan). Tests: [rack] power request
+  test; Playwright scratchpad b20.js (undo / redo, A / B with a switch, BYPASS tags, narrow fit) + rack_test.js +
+  b18.js; plug-in files compiled against JUCE.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the

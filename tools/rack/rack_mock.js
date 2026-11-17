@@ -169,7 +169,7 @@
   const CHOICES = { mode: 3, speed: 3, time: 6, character: 3, focus: 3, oversampling: 4, effect: 7, effects: 7, knee: 3 };
   const SHOWN_ONLY = new Set(["ht.tune|key", "ht.tune|scale", "vox.beat|key", "vox.beat|scale"]);
   const FIXED = new Set(["vox.output", "vox.beat", "ht.tune", "mix.assist", "mas.max"]);
-  const turned = {}, switched = {}, tickets = {};
+  const turned = {}, switched = {}, powered = {}, tickets = {};
   let nextTicket = 1;
   const lockMaster = new URLSearchParams(location.search).get("lock") === "1";
   const automation = new URLSearchParams(location.search).get("auto") === "1";   // ?auto=1: the DAW's automation moves knobs back
@@ -178,6 +178,7 @@
     const list = rawUnits();
     for (const u of list) {
       u.gen = 1;
+      if (powered[u.id] === false) u.on = false;
       if (u.product === "masterology" && lockMaster) u.lock = "Auto-Master is running.";
       for (const m of u.modules || []) {
         m.switchable = !FIXED.has(m.key);
@@ -203,7 +204,10 @@
       if (lockMaster && r.unit === "masterology") return { ticket: 0, why: "Auto-Master is running." };
       setTimeout(() => {
         if (r.module === "mas.tonaleq" && r.control === "air") { tickets[t] = { outcome: "refused", why: "Masterology can't change Air from the Rack." }; return; }
-        if (r.change === "state") switched[r.unit + "|" + r.module] = r.value >= 0.5 ? "on" : "off";
+        if (r.change === "power") {
+          if (r.unit.startsWith("ht-")) { tickets[t] = { outcome: "refused", why: "Honey Tune has no bypass of its own." }; return; }
+          powered[r.unit] = r.value >= 0.5;
+        } else if (r.change === "state") switched[r.unit + "|" + r.module] = r.value >= 0.5 ? "on" : "off";
         else if (r.change === "reset") delete turned[r.unit + "|" + r.module + "|" + r.control];
         else {
           const k = r.unit + "|" + r.module + "|" + r.control;

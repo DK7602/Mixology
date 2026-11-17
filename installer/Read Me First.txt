@@ -7,7 +7,17 @@ The complete vocal, mixing and mastering suite
 
 Thanks for trying the beta. Nothing here is finished: tell us what's confusing, what breaks and what you'd change.
 
-NEW IN THIS BETA: VOXOLOGY SOUNDS AND TEACHES BETTER
+NEW IN THIS BETA: UNDO, A / B AND BYPASS IN THE SONICOLOGY RACK
+  On the Rack's RACK page, for the track you picked (the buttons next to RACK / MODULES):
+  - UNDO / REDO (the curved arrows): your changes in the Rack, one at a time. Cubase's own undo doesn't cover
+    plug-in knobs; this does, for what you changed in the Rack.
+  - A / B: two versions of this track's settings. Click B (it starts as a copy of A), change things, then flip
+    between A and B to compare.
+  - BYPASS: this track's Sonicology plug-ins off, to hear before and after. Click again (or leave the Rack) and
+    they come back. Tip: switch on Voxology's MATCH for a fair comparison on a vocal.
+  All three plug-ins need this version (Voxology 0.59.0, Mixology 0.29.0, Masterology 0.34.0).
+
+ALSO NEW (BETA 19): VOXOLOGY SOUNDS AND TEACHES BETTER
   - LISTEN (Voxology's Cleanup, Dynamic EQ and De-Esser: the LISTEN button next to ON): hear only what that
     module takes out of your vocal, turned up so you can hear it. On the De-Esser you should hear only the "s"
     sounds; if you hear whole words, it's set too strong. Listening only: never in a bounce.
@@ -15,7 +25,6 @@ NEW IN THIS BETA: VOXOLOGY SOUNDS AND TEACHES BETTER
     (smooth and slow to let go: great for sung R&B). Auto-Edit picks one for your style.
   - Air (Saturation): sparkle on top, added only above 8 kHz so the vocal opens up without getting harsh.
     Auto-Edit adds a little for most styles.
-  Voxology 0.58.0 (Mixology 0.28.0 and Masterology 0.33.0, as in Beta 18).
 
 ALSO NEW (BETA 18): A QUICKER, SMARTER SONICOLOGY RACK
   - Faster: knobs and meters in the Rack follow your changes straight away, and the plug-ins only send what the

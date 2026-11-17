@@ -3,7 +3,7 @@
 Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list all three are under Sonicology.
 
-Manual for version 0.28.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
+Manual for version 0.29.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -54,6 +54,7 @@ fix):
 | Sonicology Rack: every Sonicology plug-in in the project in one view (the Rack tab) | New: tested in the engine, the plug-ins and the browser preview, not yet in a DAW |
 | Sonicology Rack: turn knobs and switch modules of any Sonicology plug-in from the Rack | New in 0.27: tested in the engine and the browser preview, not yet in a DAW |
 | Sonicology Rack: mouse wheel, double-click for the default, one-click fixes in the Rack Coach, a bigger window, the automation and old-beta warnings | New in 0.28: tested in the engine and the browser preview, not yet in a DAW |
+| Sonicology Rack: UNDO / REDO, A / B and BYPASS for a track | New in 0.29: tested in the engine and the browser preview, not yet in a DAW |
 
 Nothing changes your sound until you ask: every processing module starts switched off (the audio passes
 through bit for bit). What can change it: the Cubase faders and pans Mixology moves, the Assist EQ / Trim in
@@ -889,6 +890,17 @@ and the window grows to about 85 % of your screen's height while it's open (the 
   - **The knob jumps back by itself?** That track's automation is on Read (in Cubase, the **R** button is lit): Cubase
     plays its automation and moves the knob back. The Rack tells you. Switch Read off, or switch on Write (**W**) to
     record your move.
+- **The top bar's tools** (on the RACK page, for the track you picked):
+  - **UNDO / REDO** (the curved arrows): the Rack's own changes, one at a time (a drag, a click, a switch, a fix, a
+    whole A / B flip or BYPASS). Your DAW's undo doesn't cover plug-in knobs; this does, for what you changed in the
+    Rack (up to 60 steps, while the Rack's page is open).
+  - **A / B**: two versions of this track's settings (every knob and switch the Rack shows for it). Click **B** and it
+    starts as a copy of A; change things, then click **A** or **B** to flip: the Rack sends just the differences. Each
+    flip is one UNDO step.
+  - **BYPASS**: this track's Sonicology plug-ins off (each one's own bypass: Voxology's, Mixology Link's processing,
+    Masterology's), to hear before and after. Click it again, or leave the Rack, and they come back on. Honey Tune
+    keeps playing what it tuned (it has no bypass of its own). For a fair comparison on a vocal, switch on Voxology's
+    MATCH first (Voxology's processed sound is often louder).
 - **Rack Coach** (right): **How they work together** (green: fine, blue: good to know, red: fix it, for example two
   compressors on one vocal, Pitch and Honey Tune both tuning, two Masterologys, or Mixology's Limiter before
   Masterology), the chain overview, and what the picked module is for. Many red lines come with **one-click fixes**

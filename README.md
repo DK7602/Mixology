@@ -7,7 +7,7 @@ HTML / CSS / JS interface in the platform web view, GitHub Actions builds on eve
 The plan and milestones: [docs/PLAN.md](docs/PLAN.md). User manual (also built into the plug-in): [docs/MANUAL.md](docs/MANUAL.md).
 Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_TEST.md) (passed), [docs/M3_TEST.md](docs/M3_TEST.md), [docs/M4_TEST.md](docs/M4_TEST.md), [docs/M5_TEST.md](docs/M5_TEST.md), [docs/M6_TEST.md](docs/M6_TEST.md) (current).
 
-## Status: v0.28.0
+## Status: v0.29.0
 
 | Piece | State |
 | --- | --- |
@@ -45,6 +45,7 @@ Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_T
 | Sonicology Rack (v0.26.0, with Voxology 0.55.0 and Masterology 0.31.0): every Sonicology plug-in in the project in one view (the Rack tab after PRESETS): each track's chain, every module's state and settings, how they work together. Shared view (rack.js / rack.css / art) and link (suite/RackLink.h) in all three; Mixology and every Mixology Link publish their modules (mixology/RackUnit.h) | Done: tested in the engine, the real plug-ins (tools/linkcheck) and the browser preview, not yet in a DAW |
 | Sonicology Rack stage 2 (v0.27.0, with Voxology 0.56.0 and Masterology 0.32.0): turn knobs and switch modules from the Rack. A click becomes a request in the owner's queue (suite/RackLink.h), the owner applies it like your own mouse move (plugin/RackHost.h, shared; plugin/RackApply.h), knobs name their parameter and turn back with the owner's curve (rackunit fromKnob) | New: tested in the engine and the browser preview, not yet in a DAW |
 | Rack audit fixes and quick wins (v0.28.0, Beta 18, with Voxology 0.57.0 and Masterology 0.33.0): plug-ins send details only for the track a Rack shows and publish at once after a change (25 a second while shown); the Rack's data as a file or base64, never long JSON through a native function; double-click resets a knob, the mouse wheel nudges it, its value follows a drag; one-click fixes with UNDO on the Coach's warnings; a warning when automation moves a knob back and when a plug-in from another beta is in the project (suite/RackLink.h otherLayouts); the window grows while the Rack is open (RackHost.h RackWindow). Audit: docs/rack/AUDIT-2026-11-17.md | New: tested in the engine and the browser preview, not yet in a DAW |
+| Rack tools (v0.29.0, Beta 20, with Voxology 0.59.0 and Masterology 0.34.0): UNDO / REDO of the Rack's own changes, A / B of a track's settings, BYPASS of a track's plug-ins (Change::power: each plug-in's own bypass; Honey Tune has none). All in rack.js through the existing requests; BYPASS comes back on when the Rack closes | New: tested in the engine and the browser preview, not yet in a DAW |
 
 ## Layout
 
