@@ -111,7 +111,10 @@ sends higher-resolution art, re-run it.
   the installer Read Me (Mixology / Masterology versions unchanged). Beta 20's work (Rack UNDO / REDO, A / B, BYPASS via
   Change::power) was parked in a copy while Beta 19 shipped.
   Beta 19: Sonicology suite run 44183363105 (label "Beta 19", 0.19.0; Mixology 7b72bc7, Voxology 861c70f, Masterology
-  ec183f7 by SHA).
+  ec183f7 by SHA): attempt 1's last Mac build cancelled in the queue, attempt 2 ALL GREEN, both installers.
+  Then sonicology.yml: max-parallel 3, the Mac builds after the Windows ones (one Mac at a time here; a Mac job
+  that waits 15 min for one is cancelled). Beta 20: run 44188238494 (0.20.0; Mixology 434420b = Beta 20 + that
+  workflow change, Voxology 4ed10e9, Masterology d078f7c).
 - BETA 20 BUILT (Mixology 0.29.0, Voxology 0.59.0, Masterology 0.34.0): the Rack's top bar tools (as the concept):
   A / B, BYPASS, UNDO / REDO, on the RACK page for a track with something turnable. rack.js: rememberChange() records
   each applied change (drag / wheel / click / reset / switch / fix) with before / after; replay() sends the before or
@@ -123,6 +126,10 @@ sends higher-resolution art, re-run it.
   Deferred to Beta 22: the track's fader in the Rack, SAVE CHAIN (see the AUDIT plan). Tests: [rack] power request
   test; Playwright scratchpad b20.js (undo / redo, A / B with a switch, BYPASS tags, narrow fit) + rack_test.js +
   b18.js; plug-in files compiled against JUCE.
+- BETA 21 BUILT (Voxology 0.60.0; Mixology / Masterology only the shared rack.js catalog text): Voxology's Reverb Type
+  and Delay Character (details: Voxology's RESUME-HERE). The bigger EQ moved to Beta 22 (AUDIT plan rows renumbered:
+  22 EQ, 23 gain staging / overview / step 5 / fader / SAVE CHAIN, 24+ the rest). Mac builds: GitHub runs one Mac job
+  at a time here and cancels one that waited 15 min: expect to re-run a suite run's failed (cancelled) Mac job.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the

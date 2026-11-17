@@ -7,7 +7,15 @@ The complete vocal, mixing and mastering suite
 
 Thanks for trying the beta. Nothing here is finished: tell us what's confusing, what breaks and what you'd change.
 
-NEW IN THIS BETA: UNDO, A / B AND BYPASS IN THE SONICOLOGY RACK
+NEW IN THIS BETA: REVERB SPACES AND DELAY CHARACTERS IN VOXOLOGY
+  - Reverb Type: Plate (as before: smooth and bright), Room (small and close, rap stays upfront), Hall (big and
+    smooth for sung lines), Chamber (warm and even).
+  - Delay Character: Clean (as before), Tape (the repeats waver a little and warm up as they fade), Analog (dark,
+    soft repeats that sit behind the voice).
+  - Auto-Edit picks both for your style (Rap: Room + Tape, R&B: Hall + Analog, Trap Lead: Plate + Clean ...).
+  Voxology 0.60.0 (Mixology 0.29.0 and Masterology 0.34.0, as in Beta 20).
+
+ALSO NEW (BETA 20): UNDO, A / B AND BYPASS IN THE SONICOLOGY RACK
   On the Rack's RACK page, for the track you picked (the buttons next to RACK / MODULES):
   - UNDO / REDO (the curved arrows): your changes in the Rack, one at a time. Cubase's own undo doesn't cover
     plug-in knobs; this does, for what you changed in the Rack.
