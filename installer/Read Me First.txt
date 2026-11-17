@@ -7,7 +7,18 @@ The complete vocal, mixing and mastering suite
 
 Thanks for trying the beta. Nothing here is finished: tell us what's confusing, what breaks and what you'd change.
 
-NEW IN THIS BETA: A DYNAMIC EQ IN MIXOLOGY
+NEW IN THIS BETA: THE WHOLE SESSION IN THE SONICOLOGY RACK
+  - SESSION (the third button next to RACK / MODULES): every track in your project on one screen, with what
+    plays on it (one pill per module; dim pills are off) and how many warnings the Rack Coach has for it. Click a
+    pill to open that module.
+  - Gain staging (in the Rack Coach on the RACK page): the level going into and coming out of each plug-in on the
+    track. It warns you when one makes the track much louder (louder always sounds better, so compare at the same
+    level) or peaks close to 0 dB.
+  - TURN ON HERE (MODULES page): when a module is off on the track you picked, one click switches it on there
+    (UNDO in the message switches it back off).
+  All three plug-ins need this version (Voxology 0.61.0, Mixology 0.31.0, Masterology 0.35.0).
+
+ALSO NEW (BETA 22): A DYNAMIC EQ IN MIXOLOGY
   - Mixology's EQ page: the Dynamic chip (top-right of the graph: Off, 35 %, 65 %, 100 %) turns the EQ into a
     dynamic EQ. Each band moves only while its part of the sound pushes out: a boomy note gets the cut, the rest of
     the track stays natural.

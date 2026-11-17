@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-11-17, v0.27.1; the Sonicology Rack: stage 2 steps 1 - 3 built, Beta 15 out)
+# Mixology: resume here (updated 2026-11-17, v0.31.0; the Sonicology Rack: Betas 18 - 23 built)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -140,6 +140,15 @@ sends higher-resolution art, re-run it.
   value after the bands; summary "Dynamic N % · ...". Test: "Processing EQ Dynamic" (steady > -2.5 dB, burst < -5 dB
   at 100 %, half at 50 %, cuts unchanged, 0 % = static). Built in a worktree (/tmp/claude-0/mix22, branch b22-eq)
   while Betas 20 / 21 waited for their builds.
+- BETA 23 BUILT (Mixology 0.31.0, Voxology 0.61.0, Masterology 0.35.0; only the shared rack.js / rack.css changed):
+  the SESSION page (third button after RACK / MODULES: sessionPage(), one row per track, its units' modules as pills
+  (data-sr="goto" opens the module on the RACK page), the Coach's warning count), GAIN STAGING in the Rack Coach
+  (gainLane / gainIo / gainDelta / gainNote: each unit's inDb / outDb, peaks; updateGain() keeps it live; warns for
+  peaks over -1 dBFS (Masterology: its Ceiling) or a jump over 6 dB, not on Masterology), TURN ON HERE on a MODULES
+  card's detail when the picked track has that module off (turnOnHere(); a state request, rememberChange, toast with
+  UNDO). Tested: Playwright scratchpad b23.js (gain rows, session rows, pill -> RACK page, turn on + UNDO, light,
+  1280 fit). Moved to Beta 24 (each needs new messages between the plug-ins): the track's fader, SAVE CHAIN, the
+  Link's RACK button, the insert-order check.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the

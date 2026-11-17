@@ -3,7 +3,7 @@
 Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list all three are under Sonicology.
 
-Manual for version 0.30.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
+Manual for version 0.31.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -56,6 +56,7 @@ fix):
 | Sonicology Rack: mouse wheel, double-click for the default, one-click fixes in the Rack Coach, a bigger window, the automation and old-beta warnings | New in 0.28: tested in the engine and the browser preview, not yet in a DAW |
 | Sonicology Rack: UNDO / REDO, A / B and BYPASS for a track | New in 0.29: tested in the engine and the browser preview, not yet in a DAW |
 | EQ Dynamic: the EQ page as a dynamic EQ (bells and shelves move only when their part of the sound pushes out) | New in 0.30: tested in the engine and the browser preview, not yet in a DAW |
+| Sonicology Rack: the SESSION page, gain staging in the Rack Coach, TURN ON HERE on the MODULES page | New in 0.31: tested in the browser preview, not yet in a DAW |
 
 Nothing changes your sound until you ask: every processing module starts switched off (the audio passes
 through bit for bit). What can change it: the Cubase faders and pans Mixology moves, the Assist EQ / Trim in
@@ -913,11 +914,21 @@ and the window grows to about 85 % of your screen's height while it's open (the 
   Masterology), the chain overview, and what the picked module is for. Many red lines come with **one-click fixes**
   (for example "Turn the Link's Compressor off" or "Turn Voxology's Compressor off"): click one and the plug-in that
   owns that module switches it off; **UNDO** in the message switches it back on.
+- **Gain staging** (in the Rack Coach, for the track you picked): each plug-in's level going in and coming out (peaks,
+  live) and how much it adds. It warns when one makes the track much louder (louder sounds better by itself, so
+  compare at the same level: Voxology's MATCH does it for you) or peaks close to 0 dB. Masterology is meant to make
+  the mix louder, so only its peaks count.
 - **The bottom bar:** IN and OUT of the picked plug-in, and the mix's loudness (from Mixology, or what reaches
   Masterology). A dash means nothing has measured it yet.
 
 **The MODULES page:** every module in the suite as a card: search, filter by kind (vocal, mixing, dynamics, space,
-mastering...), what it's for, and where it plays in your project (click to jump to it on the RACK page).
+mastering...), what it's for, and where it plays in your project (click to jump to it on the RACK page). When the
+module is off on the track you picked, **TURN ON HERE** switches it on there; **UNDO** in the message switches it back
+off.
+
+**The SESSION page:** every track in your project on one screen, each with what plays on it: one pill per module,
+grouped by plug-in (dim pills are off), and the number of warnings the Rack Coach has for it. Click a pill to open
+that module on the RACK page.
 
 **Light or dark:** click the spinning cube at the top left. All three plug-ins remember your choice.
 
