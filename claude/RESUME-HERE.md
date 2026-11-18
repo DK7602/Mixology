@@ -201,6 +201,8 @@ sends higher-resolution art, re-run it.
   Tests: scratchpad b26.js (idle -> listening -> ready -> applied -> undone, style / intensity, why, no-Voxology),
   b18 - b25, rack_test, linkrack all pass; Mixology 260 tests pass. Next Coach betas (Mixology tracks, Masterology
   master) only after the user's feedback.
+- Beta 26 installer: Sonicology suite run 44228949569 (label "Beta 26", version 0.26.0; Mixology b816f42, Voxology
+  8bc26329022ae949d4e9b0bdf51405d8ec0f065e, Masterology 7118eb9e855b819a756b8aa1e0404d390a922cb3 by SHA).
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the
