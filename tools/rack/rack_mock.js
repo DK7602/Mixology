@@ -4,7 +4,8 @@
 // Full Mix (Mixology) and the Master (Masterology). Meters move. Stage 2: knobs turn and modules switch (request /
 // answer, about a fifth of a second later, as a plug-in would); ?lock=1 locks Masterology (Auto-Master running);
 // Masterology's Tonal EQ Air refuses (to see a refusal); ?old=1 adds a plug-in from another
-// beta; ?auto=1 has the DAW's automation move a turned knob back; ?order=1 puts Chorus Vox's Link before Voxology.
+// beta; ?auto=1 has the DAW's automation move a turned knob back; ?order=1 puts Chorus Vox's Link before Voxology;
+// ?coach=ready starts Lead Vox with the Coach's plan ready (Beta 26).
 (function () {
   "use strict";
   const t0 = Date.now();
@@ -175,6 +176,68 @@
   const automation = new URLSearchParams(location.search).get("auto") === "1";   // ?auto=1: the DAW's automation moves knobs back
   const oldBeta = new URLSearchParams(location.search).get("old") === "1";   // ?old=1: a plug-in from another beta is in the project
   const orderTest = new URLSearchParams(location.search).get("order") === "1";   // ?order=1: Chorus Vox's Link sits before Voxology
+
+  // Beta 26: the Coach (Voxology's Auto-Edit plan): ANALYZE & BUILD listens ~4 s, builds ~1.5 s, then the plan below.
+  // ?coach=ready: Lead Vox starts with its plan ready.
+  const COACH_STYLES = ["Trap Lead", "Rap", "Melodic", "Robot", "R&B", "Pop", "Folk", "Natural Singer"];
+  const COACH_INTS = ["Light", "Balanced", "Strong"];
+  const coach = {};
+  if (new URLSearchParams(location.search).get("coach") === "ready") coach["vox-lead"] = { state: "ready", t0: 0, canUndo: false };
+  const HZ = [100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000];
+  const AIM = [-9, -7, -5, -3.5, -2.5, -2, -1.5, -0.8, -0.2, 0, 0.3, 0.6, 0.8, 1.2, 1.8, 2.2, 2.0, 1.0, -0.5, -2.0, -3.5, -5.5, -9];
+  const BEFORE = AIM.map((v, i) => +(v + (HZ[i] >= 200 && HZ[i] <= 400 ? 3.4 : 0) + (HZ[i] >= 2000 && HZ[i] <= 5000 ? 2.9 : 0) + (HZ[i] >= 10000 ? -4.1 : 0) + (HZ[i] <= 160 ? 1.2 : 0) + Math.sin(i * 1.7) * 0.5).toFixed(1));
+  const AFTER = AIM.map((v, i) => +(v + Math.sin(i * 2.3) * 0.6 + (HZ[i] >= 200 && HZ[i] <= 400 ? 0.8 : 0) + (HZ[i] >= 10000 ? -1.1 : 0)).toFixed(1));
+  const step = (key, caption, set, on = true) => ({ key, on, caption, kept: false, set: set.map(([control, value, why]) => ({ control, value, why })) });
+  function demoPlan(style, intensity) {
+    const name = COACH_STYLES[style];
+    return { ok: true, style: name, intensity: COACH_INTS[intensity], reference: "", aim: name + "'s balance",
+      summary: `Listened to 12.4 s of voice (${name}, ${COACH_INTS[intensity]}). Your vocal came in at −21.3 LUFS with peaks at −6.2 dB. The plan is set for a ${name} sound: upfront, bright and controlled, with a short wide space around it.`,
+      heard: ["Sung: 58 % of the notes are held", "Comes in around −21.3 LUFS, its loudest peak at −6.2 dB", "Between phrases: −61.5 dB of room and noise",
+        "The \"s\" sounds peak +0.2 dB against the voice (the aim: −4.0 dB)", "Loud and quiet lines 11.2 dB apart"],
+      issues: [
+        { key: "mud", name: "Mud", from: 200, to: 400, db: 3.4, warn: true, text: "200 - 400 Hz sits 3.4 dB over " + name + "'s balance" },
+        { key: "harsh", name: "Harshness", from: 2000, to: 5000, db: 2.9, warn: true, text: "2 - 5 kHz sits 2.9 dB over " + name + "'s balance" },
+        { key: "sibilance", name: "Sibilance", from: 5000, to: 9800, db: 4.2, warn: true, text: "the \"s\" sounds peak +0.2 dB against the voice; the aim is −4.0 dB" },
+        { key: "air", name: "Lack of air", from: 10000, to: 16000, db: -4.1, warn: false, text: "10 - 16 kHz sits 4.1 dB under " + name + "'s balance" },
+        { key: "swing", name: "Uneven level", from: 0, to: 0, db: 11.2, warn: false, text: "loud and quiet lines are 11.2 dB apart" }],
+      chain: [
+        step("vox.pitch", "Tune & align", [["Mode", "Classic", "Your take is sung and mostly in key (F minor from the beat): Classic at 25 ms tightens it without the robot sound."], ["Key", "F minor", "Pitch follows the beat's key."]]),
+        step("vox.cleanup", "Clean the take", [["Low Cut", "90 Hz", "Rumble under your lowest notes (110 Hz) goes; the voice keeps its weight."], ["Noise", "−8.0 dB", "Steady hiss 40 dB under your voice: a gentle cut keeps it natural."]]),
+        step("vox.eq", "Shape tone", [["Mud", "−3.0 dB at 300 Hz", "Your vocal has 3.4 dB more 200 - 400 Hz than a finished " + name + " vocal: clears the boxiness."], ["Air", "+3.5 dB at 12 kHz", "4.1 dB less top than the aim: opens it up."]]),
+        step("vox.dyneq", "Tame harsh spots", [["Harsh", "−4.5 dB at 3.2 kHz", "The 2 - 5 kHz zone jumps out on loud words only: cut there, only then."]]),
+        step("vox.deess", "Tame sibilance", [["Amount", "58 % at 6.8 kHz", "Your loudest \"s\" sit 4.2 dB over the aim: the De-Esser brings them to it."]]),
+        step("vox.rider", "Even levels", [["Range", "±4.0 dB, Medium", "Loud and quiet lines are 11.2 dB apart: the rider evens them word by word."]]),
+        step("vox.comp", "Add control", [["Style", "FET", "Grabs the front of each word: upfront, as " + name + " wants."], ["Peak", "−10.5 dB", "Catches the sudden loud syllables."]]),
+        step("vox.sat", "Add character", [["Mode", "Tube", "Warmth and a rich forward low-mid."], ["Air", "20 %", "A touch of sparkle above 8 kHz."]]),
+        step("vox.voices", "Add width", [["Double", "30 %, Width 80 %", "Two drifting copies left and right for a bigger hook."]]),
+        step("vox.dimension", "Movement", [], false),
+        step("vox.delay", "Add depth", [["Time", "1/4 at 140 BPM", "Echoes on the beat fill the gaps between lines; Duck keeps them out of the words."]]),
+        step("vox.reverb", "Add space", [["Type", "Plate", "Smooth and bright, the classic vocal sound."], ["Mix", "12 %", "A short, wide space around it."]]),
+        step("vox.output", "Polish & finish", [["Output", "+0.5 dB", "Matches the loudness it came in at, so it doesn't jump in your mix."]])],
+      changes: 31, modulesOn: 12,
+      bands: { hz: HZ, before: BEFORE, after: AFTER, target: AIM },
+      results: [
+        { key: "sibilance", name: "Sibilance (the \"s\" sounds)", before: 4.2, after: 0.2, unit: "dB vs the aim", better: true },
+        { key: "swing", name: "Level swing (loud vs quiet lines)", before: 11.2, after: 6.3, unit: "dB apart", better: true },
+        { key: "mud", name: "Mud (200 - 400 Hz)", before: 3.4, after: 0.8, unit: "dB vs the aim", better: true },
+        { key: "air", name: "Lack of air (10 - 16 kHz)", before: -4.1, after: -1.1, unit: "dB vs the aim", better: true },
+        { key: "harsh", name: "Harshness (2 - 5 kHz)", before: 2.9, after: 0.7, unit: "dB vs the aim", better: true }],
+      first: ["Compare with A / B and MATCH on: MATCH plays both at the same loudness, so you judge the tone, not the volume.",
+        "Tone EQ: the 200 - 400 Hz cut is the biggest move; take it back a little if the voice gets thin.",
+        "Reverb and Delay: set them to taste for the space you want on this song."] };
+  }
+  function coachReport(u) {
+    const c = coach[u.id] || { state: "idle" };
+    const t = (Date.now() - (c.t0 || 0)) / 1000;
+    if (c.state === "listening" && t > 4) c.state = "working";
+    if (c.state === "working" && t > 5.5) c.state = "ready";
+    const sty = turned[u.id + "|coach|aeStyle"], int = turned[u.id + "|coach|aeIntensity"];
+    const style = sty != null ? Math.round(sty * 7) : 0, intensity = int != null ? Math.round(int * 2) : 1;
+    const r = { state: c.state, progress: c.state === "listening" ? Math.min(100, Math.round(t * 25)) : 0, hearing: c.state === "listening" && t > 0.4,
+      style, intensity, styles: COACH_STYLES, intensities: COACH_INTS, reference: "", canUndo: !!c.canUndo, beat: false, honey: u.id === "vox-chorus" };
+    if (c.state === "ready" || c.state === "applied") r.plan = demoPlan(style, intensity);
+    return r;
+  }
   function units() {
     const list = rawUnits();
     for (const u of list) {
@@ -195,6 +258,14 @@
         }
       }
     }
+    // Beta 26: the Coach's reports on the vocals (locked while Auto-Edit listens and builds, as in Voxology)
+    for (const u of list)
+      if (u.product === "voxology" && u.role === "vocal") {
+        const r = coachReport(u);
+        u.report = JSON.stringify(r);
+        if (r.state === "listening") u.lock = "Auto-Edit is listening to the vocal.";
+        else if (r.state === "working") u.lock = "Auto-Edit is working out the settings.";
+      }
     // Beta 25 (?order=1): the Links' input follows Voxology's input on Chorus Vox (inserted before it), its output on Lead Vox.
     if (orderTest) {
       const at = (id) => list.find((u) => u.id === id);
@@ -220,8 +291,19 @@
     async request(r) {
       const t = nextTicket++;
       if (lockMaster && r.unit === "masterology") return { ticket: 0, why: "Auto-Master is running." };
+      const cs = coach[r.unit] && coach[r.unit].state;
+      if (cs === "listening" || cs === "working") return { ticket: 0, why: cs === "listening" ? "Auto-Edit is listening to the vocal." : "Auto-Edit is working out the settings." };
       setTimeout(() => {
         if (r.module === "mas.tonaleq" && r.control === "air") { tickets[t] = { outcome: "refused", why: "Masterology can't change Air from the Rack." }; return; }
+        if (r.change === "coach") {
+          const c = (coach[r.unit] = coach[r.unit] || { state: "idle" });
+          if (r.control === "plan") { c.state = "listening"; c.t0 = Date.now(); }
+          else if (r.control === "apply" && c.state === "ready") { c.state = "applied"; c.canUndo = true; }
+          else if (r.control === "undo" && c.canUndo) { c.state = c.state === "applied" ? "ready" : c.state; c.canUndo = false; }
+          else if (r.control === "apply") { tickets[t] = { outcome: "refused", why: "There's no plan to apply yet: press ANALYZE & BUILD and play the song." }; return; }
+          tickets[t] = { outcome: "applied", why: "" };
+          return;
+        }
         if (r.module === "mix.faders" && r.control === "fader." + H.chorus) { tickets[t] = { outcome: "refused", why: "Chorus Vox isn't in the tracks Mixology's bridge shows now: open Mixology's Tracks page on it, then move its fader here." }; return; }
         if (r.change === "save") {
           if (!r.unit.startsWith("vox-")) { tickets[t] = { outcome: "refused", why: "Only Voxology keeps chains." }; return; }

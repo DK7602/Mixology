@@ -7,7 +7,16 @@ The complete vocal, mixing and mastering suite
 
 Thanks for trying the beta. Nothing here is finished: tell us what's confusing, what breaks and what you'd change.
 
-NEW IN THIS BETA: PEAKS IN VOXOLOGY, AND THE RACK CHECKS YOUR INSERT ORDER
+NEW IN THIS BETA: THE COACH (THE RACK BUILDS YOUR VOCAL CHAIN)
+  - The Rack's new COACH page (next to SESSION): pick a vocal, choose a style and intensity, press ANALYZE & BUILD
+    and play the song. Voxology listens to about 12 seconds of singing, then the Coach shows what stands out in your
+    take (mud, harshness, sibilance...), the chain it would build and why, and the result measured on your own take
+    (for example "Mud +3.4 -> +0.8 dB").
+  - Nothing changes until you click APPLY TO TRACK. UNDO puts back what you had. SAVE CHAIN keeps it for next time.
+  - Vocals first (it works through Voxology's Auto-Edit). Mixology's tracks and Masterology's master come later.
+  All three plug-ins need this version (Voxology 0.64.0, Mixology 0.34.0, Masterology 0.38.0).
+
+ALSO NEW (BETA 25): PEAKS IN VOXOLOGY, AND THE RACK CHECKS YOUR INSERT ORDER
   - Voxology's OUTPUT page: PEAKS (Off, Clip, Limit) and a Ceiling. Limit turns the vocal down for an instant when a
     loud word would pass the Ceiling, so it never clips; Clip rounds those peaks off instead (a little grit).
   - The Rack: when Mixology Link sits before Voxology on a vocal (it belongs last), the Rack Coach says so after a few

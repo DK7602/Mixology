@@ -1,4 +1,4 @@
-# Mixology: resume here (updated 2026-11-17, v0.33.0; the Sonicology Rack: Betas 18 - 25 built)
+# Mixology: resume here (updated 2026-11-18, v0.34.0; the Sonicology Rack: Betas 18 - 26 built)
 
 Read this first in a new chat. Code: github.com/DK7602/Mixology, branch `claude/mixology`.
 Sister projects (same user, same template): Masterology (mastering), Voxology (vocals, + Honey Tune).
@@ -188,6 +188,19 @@ sends higher-resolution art, re-run it.
   (shared RackHost.h named WebBrowserComponent with JUCE_WEB_BROWSER=0): viewResource is now `#if JUCE_WEB_BROWSER`
   (19f0c93 here, the same file in all three). Mixology CI green at 19f0c93. The leftover branch claude/mixology-beta22
   (= afd7c93) couldn't be deleted from the session (the push was refused): the user can delete it on GitHub.
+- 2026-11-18: user on Beta 25: "track fader worked, haven't found any bugs yet". Asked what's next; picked the Coach
+  (stage 3), vocals first, in 2 - 3 betas.
+- BETA 26 BUILT (Mixology 0.34.0, Voxology 0.64.0, Masterology 0.38.0): the Coach for vocals, the Rack's COACH page.
+  Shared RackLink layout 4 (`Unit::report`: JSON text <= kReportBytes 8192, with the details only, dropped whole when
+  too long; `Change::coach` with control plan / apply / undo; 2 new [rack] tests). Voxology builds the plan
+  (`vox/CoachPlan.h`, `AutoEditController::startPlan / applyPlan`, `coachReport`; details: Voxology's RESUME-HERE).
+  rack.js: coachPage / coachBar (setup: STYLE / INTENSITY turn aeStyle / aeIntensity, REFERENCE shown; ANALYZE &
+  BUILD; the tone graph with HTML labels and issue tags; RECOMMENDED CHAIN strip (click a hex = its WHY lit on the
+  right); BEFORE vs PROPOSED; RESULTS bars; APPLY TO TRACK / UNDO / SAVE CHAIN / TWEAK MANUALLY in the bottom bar).
+  Narrow stage (< 1440 wide): SOURCE left out. Mock: rack_mock simulates listening -> working -> ready (?coach=ready).
+  Tests: scratchpad b26.js (idle -> listening -> ready -> applied -> undone, style / intensity, why, no-Voxology),
+  b18 - b25, rack_test, linkrack all pass; Mixology 260 tests pass. Next Coach betas (Mixology tracks, Masterology
+  master) only after the user's feedback.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the

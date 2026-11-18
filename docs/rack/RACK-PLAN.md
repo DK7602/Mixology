@@ -270,7 +270,24 @@ Roughly 3 to 5 build sessions, step 1 first.
 - **Insert order check:** from the levels, whether the Link really sits after Voxology; a warning when not.
 - **MODULES page:** TURN ON HERE where the track's plug-in has the module.
 
-## Stage 3: the Coach (planned, not built; concept `rack-coach.png`)
+## Stage 3: the Coach (vocals built in Beta 26; tracks and master next; concept `rack-coach.png`)
+
+**Built 2026-11-18 (Beta 26: Mixology 0.34.0, Voxology 0.64.0, Masterology 0.38.0), vocals:**
+- The COACH page (rack.js `coachPage` / `coachBar`; header button next to SESSION) on a track with Voxology (not BEAT).
+  Its data come from Voxology in `Unit::report` (RackLink layout 4: JSON text up to `kReportBytes` 8 KB, sent with the
+  details only, dropped whole when too long); requests go back as `Change::coach` (control `plan` / `apply` / `undo`).
+- Voxology: `AutoEditController::startPlan` listens and decides exactly as Auto-Edit does but keeps the plan; the job
+  then plays the take through the plan (`VocalChain::render`) and measures it again; `vox::coach::planJson` writes
+  heard, issues (regions against `toneTarget`, sibilance against `sibilanceTargetDb`, swing, noise, clipping), the
+  13-module chain with each setting's reason, bands before / after / target, measured results and ADJUST FIRST.
+  `applyPlan` sets it like an Auto-Edit (one UNDO step; after UNDO the plan can be applied again). STYLE / INTENSITY on
+  the page turn Voxology's `aeStyle` / `aeIntensity`; the reference is Voxology's.
+- Preview: tools/rack/rack_mock.js simulates it (`?coach=ready` starts on a finished plan).
+
+**Next (after the user's feedback on Beta 26):** Mixology's tracks (per-track AUTO rules / Analyze Mix), Masterology's
+master (Auto-Master), a project view of what to fix first.
+
+**The plan as written before building:**
 
 - **AUTO RACK SETUP:** Source (the track's role, from Mixology / Voxology), Style (the song style, already shared),
   Gentle / Balanced / Strong, Reference (Voxology's references for a vocal, Masterology's for the master).

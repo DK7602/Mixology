@@ -3,7 +3,7 @@
 Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list all three are under Sonicology.
 
-Manual for version 0.33.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
+Manual for version 0.34.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -59,6 +59,7 @@ fix):
 | Sonicology Rack: the SESSION page, gain staging in the Rack Coach, TURN ON HERE on the MODULES page | New in 0.31: tested in the browser preview, not yet in a DAW |
 | Sonicology Rack: the track's fader (through Mixology's bridge), SAVE (Voxology's My Chains), Mixology Link's RACK button | New in 0.32: tested in the engine and the browser preview, not yet in a DAW |
 | Sonicology Rack: the insert-order check (Mixology Link before Voxology on a vocal) | New in 0.33: tested in the browser preview, not yet in a DAW |
+| Sonicology Rack: the COACH page (ANALYZE & BUILD for a vocal, through Voxology's Auto-Edit: the plan, why, measured before and after, APPLY / UNDO) | New in 0.34: tested in the engine and the browser preview, not yet in a DAW |
 
 Nothing changes your sound until you ask: every processing module starts switched off (the audio passes
 through bit for bit). What can change it: the Cubase faders and pans Mixology moves, the Assist EQ / Trim in
@@ -944,6 +945,26 @@ off.
 **The SESSION page:** every track in your project on one screen, each with what plays on it: one pill per module,
 grouped by plug-in (dim pills are off), and the number of warnings the Rack Coach has for it. Click a pill to open
 that module on the RACK page.
+
+**The COACH page (vocals):** the Coach builds a vocal's whole chain for you, shows you why, and measures the result
+before you take it. It works through Voxology's Auto-Edit (Voxology 0.64 or newer), on a vocal track with Voxology
+(not in BEAT mode).
+1. **AUTO RACK SETUP:** pick the **STYLE** and **INTENSITY** to aim for (the same choices as Voxology's Auto-Edit; a
+   reference you picked in Voxology counts too). Press **ANALYZE & BUILD** and play the song: Voxology listens to about
+   12 seconds of singing, works out every module, then plays your take through the plan and measures it again.
+   Nothing changes your sound yet.
+2. **ANALYSIS RESULTS:** your take's tone (blue) against what Auto-Edit aims for (the dashed line), and **what stands
+   out** (red: worth fixing, amber: good to know): mud, harshness, sibilance, not enough air, an uneven level, noise.
+3. **RECOMMENDED CHAIN:** the modules the plan uses, in signal order. Click one: **WHY I BUILT THIS RACK** (right)
+   lights up its settings and the reason for each.
+4. **BEFORE vs PROPOSED** and **RESULTS:** measured on your own take, before and through the plan (for example "Mud
+   +3.4 → +0.8 dB"). No guesses.
+5. **APPLY TO TRACK** sets every module as planned, in one step: **UNDO** puts back what you had (and the plan can be
+   applied again). **SAVE CHAIN** keeps the result in Voxology's My Chains; **TWEAK MANUALLY** opens the RACK page.
+   **ADJUST FIRST** (right) says which knobs to try first if you want it a little different.
+
+Auto-Edit in Voxology's own window still works as before (it applies straight away). The Coach for Mixology's tracks
+and Masterology's master comes in a later beta.
 
 **Light or dark:** click the spinning cube at the top left. All three plug-ins remember your choice.
 
