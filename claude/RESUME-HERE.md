@@ -300,6 +300,13 @@ sends higher-resolution art, re-run it.
 - 17:15: CI on all three Beta 32 commits GREEN (Voxology 44339010780, Masterology 44339164990 incl. ASan + plug-in
   tests). Suite re-run 1: Masterology (macOS) green; Mixology (macOS) cancelled again after 15 min without a macOS
   runner (no steps), so the macOS installer was skipped. Re-run 2 queued (17:15). The Windows installer is unaffected.
+- 17:55: re-run 2 failed the same way: "The job was not acquired by Runner of type hosted even after multiple
+  attempts" + GitHub's notice "Due to capacity constraints, jobs targeting macOS arm64 runners may experience longer
+  queue times" (also an "Internal server error" annotation). Not our code: build-mac uses os: macos-15 (arm64, no
+  timeout set) as in every earlier beta, which got runners (Beta 31's macOS jobs fine). reuse_run can't build only
+  one part (it skips all builds). Re-run 3 queued 17:55. If GitHub's macOS queue stays stuck, an option for the user:
+  macos-15-intel / macos-14 for the build-mac matrix (not changed: ask first). User told how to download the Windows
+  installer (Artifacts: Sonicology-Windows, direct link .../runs/44339024476/artifacts/14442019921).
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the
