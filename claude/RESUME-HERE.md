@@ -218,6 +218,10 @@ sends higher-resolution art, re-run it.
   RACK page a read-only knob's text and arc change in place (updateLive, data-vi). Mock: Masterology Dynamics readings
   move (SHOWN_ONLY). Scratchpad renders.js / live27.js. Honest status to the user: likely cause, not proven in Cubase.
   Not done: Honey Tune's AI pitch check runs 8 normal-priority threads while it analyses clips (could do the same).
+- Beta 27 installer: Sonicology suite run 44247042823 (label "Beta 27", version 0.27.0; Mixology b25855a, Voxology
+  e9d3ad125b77db62ae9e6ad50054a21528245648, Masterology 5dc6af7c58a280511a38f950a7c346cfecfaf641 by SHA).
+  User away ("continue with steps until done, I will test in the morning"): next Beta 28 = the Coach for Mixology's
+  tracks, then Beta 29 = the Coach for Masterology's master.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the
