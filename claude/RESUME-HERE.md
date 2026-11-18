@@ -222,6 +222,12 @@ sends higher-resolution art, re-run it.
   e9d3ad125b77db62ae9e6ad50054a21528245648, Masterology 5dc6af7c58a280511a38f950a7c346cfecfaf641 by SHA).
   User away ("continue with steps until done, I will test in the morning"): next Beta 28 = the Coach for Mixology's
   tracks, then Beta 29 = the Coach for Masterology's master.
+- BETA 28 BUILT (Mixology 0.36.0, Voxology 0.66.0, Masterology 0.40.0): the Coach for Mixology's tracks. Details in
+  docs/rack/RACK-PLAN.md stage 3 ("Built ... Mixology's tracks"). Tests: tests/test_track_coach.cpp (every page at once,
+  nothing twice, nothing left after applying; refusals; planJson valid / sized / tone curves; a hidden [.print]),
+  test_rack_link (viewJson keeps the report for its track). Preview: rack_mock ?mixcoach=ready, Kick listens 3 s first
+  (preview.html now passes getRack its track); scratchpad b28.js. BridgeHub's Coach code has no unit test (like AUTO's)
+  and has never run in a DAW: the plan / JSON halves are tested, the wiring (trackListen, History, Links) is AUTO's own.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the

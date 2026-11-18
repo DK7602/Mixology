@@ -153,6 +153,16 @@ void MixologyAudioProcessor::publishRack()
     const auto shownTracks = faderOwner ? rackPub.shownTracks (now) : std::vector<std::uint32_t> {};
     // Stage 2: knobs turned and modules switched in a Rack view (in any Sonicology plug-in), on the Full Mix's processing.
     rackPub.serve (now, {}, [this, faderOwner] (const rack::Request& r) -> std::string {
+        if (r.change == rack::Change::coach)
+        {
+            // Beta 28: the Coach on one of Mixology's tracks ("plan.<hash>", "apply.<hash>", "undo.<hash>", "discard.<hash>").
+            const auto dot = r.control.find ('.');
+            std::uint32_t h = 0;
+            for (std::size_t i = dot == std::string::npos ? r.control.size() : dot + 1; i < r.control.size() && r.control[i] >= '0' && r.control[i] <= '9'; ++i)
+                h = h * 10u + static_cast<std::uint32_t> (r.control[i] - '0');
+            if (! faderOwner) return "Only the Mixology on your master channel coaches tracks (with its Analyze Mix).";
+            return bridgeHub->rackCoach (r.control.substr (0, dot), h);
+        }
         if (r.module == "mix.faders")
         {
             const auto dot = r.control.find ('.');
@@ -228,6 +238,7 @@ void MixologyAudioProcessor::publishRack()
             faders.values.push_back (std::move (v));
         }
         if (! faders.values.empty() && u.modules.size() < static_cast<std::size_t> (rack::kMaxModules)) u.modules.push_back (std::move (faders));
+        u.report = bridgeHub->coachReport (shownTracks);   // Beta 28: the Coach on the track the Rack shows
     }
     const auto& v = st.values;
     if (onMaster && mixology::proc::isOn (v, mixology::proc::Module::final) && v[mixology::proc::finOut] <= -0.5f)

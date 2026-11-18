@@ -17,7 +17,7 @@
     const q = new URLSearchParams(location.search);
     const host = q.get("host") || "mixology";
     SonicologyRackMock.host = host;
-    SonicologyRack.open({ host, art: "../../plugin/ui/rack/", getRack: () => SonicologyRackMock.getRack(), back: () => setTimeout(() => location.reload(), 300),
+    SonicologyRack.open({ host, art: "../../plugin/ui/rack/", getRack: (track) => SonicologyRackMock.getRack(track), back: () => setTimeout(() => location.reload(), 300),
                           request: (r) => SonicologyRackMock.request(r), answer: (u, g, t) => SonicologyRackMock.answer(u, g, t) });
     const want = {};
     for (const k of ["page", "track", "unit", "key", "card", "filter", "theme"]) if (q.get(k)) want[k] = q.get(k);

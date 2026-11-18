@@ -19,7 +19,8 @@ add_executable(mixology_tests
     test_setup.cpp
     test_presets.cpp
     test_history.cpp
-    test_auto.cpp)
+    test_auto.cpp
+    test_track_coach.cpp)
 
 target_link_libraries(mixology_tests PRIVATE mixology_dsp Catch2::Catch2WithMain)
 target_compile_definitions(mixology_tests PRIVATE MIXOLOGY_TESTS_DIR="${CMAKE_CURRENT_SOURCE_DIR}")

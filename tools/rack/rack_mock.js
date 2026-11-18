@@ -244,6 +244,55 @@
     if (c.state === "ready" || c.state === "applied") r.plan = demoPlan(style, intensity);
     return r;
   }
+  // Beta 28: Mixology's Coach on its tracks (Keys, Beat, 808...): the Mixology on the master builds it and sends the report for
+  // the track the Rack shows ({"track": <hash>, ...}). Keys was heard by Analyze Mix (plans at once); Kick wasn't (it listens
+  // 3 s first). ?mixcoach=ready starts Keys with its plan ready.
+  let shownTrack = "";
+  const mixCoach = {};
+  if (new URLSearchParams(location.search).get("mixcoach") === "ready") mixCoach[H.keys] = { state: "ready", t0: 0, canUndo: false };
+  const MHZ = [39, 50, 62, 79, 99, 125, 157, 198, 250, 315, 397, 500, 630, 794, 1000, 1260, 1587, 2000, 2520, 3175, 4000, 5040, 6350, 8000, 10079, 12699, 16000];
+  const MBEFORE = MHZ.map((f, i) => +(-24 * Math.max(0, Math.log2(90 / f)) + 6.5 * Math.exp(-Math.pow(Math.log2(f / 315), 2) / 0.5) - 5 * Math.max(0, Math.log2(f / 4000)) + Math.sin(i * 1.3) * 0.6).toFixed(1));
+  const MAFTER = MBEFORE.map((v, i) => +(v - 3.0 * Math.exp(-Math.pow(Math.log2(MHZ[i] / 315), 2) / 0.35) + 3.0 * Math.min(1, Math.max(0, Math.log2(MHZ[i] / 5000)))).toFixed(1));
+  function mixPlan(name, role) {
+    return { ok: true, kind: "mix", role, style: "Hip Hop - Trap", aim: "Hip Hop - Trap",
+      summary: `Cut mud at 315 Hz (-3.0 dB), opened the top (+3.0 dB air), gave it a short plate (12 % mix) and opened it a little wider (140 %): '${name}' sounded muddy, dull and narrow and was dry for Hip Hop - Trap`,
+      heard: [`Heard as ${role} (from its name)`, "Played 48 s while Mixology listened", "Loud and quiet parts 4.0 dB apart", "Stereo: 4 % on the sides",
+        "At 1.6 - 4 kHz it sits −3.1 dB against the lead vocal (it covers its words)"],
+      issues: [
+        { key: "mud", name: "Mud", from: 250, to: 500, warn: true, text: "250 - 500 Hz is 7.9 dB over its mids: heavy for the keys in Hip Hop - Trap: a dip there clears the mud" },
+        { key: "dull", name: "Dull top", from: 8000, to: 16000, warn: false, text: "its top end (8 - 12 kHz) is 9.2 dB under its mids" },
+        { key: "dry", name: "Dry", from: 0, to: 0, warn: false, text: "a short plate (1.5 s, mix 12 %) puts the keys in the same space as the song" },
+        { key: "narrow", name: "Narrow", from: 0, to: 0, warn: false, text: "it is stereo but narrow (4 % on the sides): a little wider gives the vocal more room in the middle" }],
+      chain: [
+        { key: "mix.eq", name: "EQ", on: true, was: false, caption: "Shape tone", kept: false, set: [
+          { control: "-3.0 dB at 315 Hz", from: "Flat", value: "", why: "250 - 500 Hz is 7.9 dB over its mids: heavy for the keys in Hip Hop - Trap: a dip there clears the mud" },
+          { control: "+3.0 dB at 10 kHz (shelf)", from: "Flat", value: "", why: "its top end (8 - 12 kHz) is 9.2 dB under its mids" }] },
+        { key: "mix.comp", name: "Compressor", on: true, was: true, caption: "Even levels", kept: true, set: [] },
+        { key: "mix.stereo", name: "Width", on: true, was: false, caption: "Width", kept: false, set: [
+          { control: "Width 140 %", from: "Width 100 %", value: "", why: "it is stereo but narrow (4 % on the sides): a little wider gives the vocal more room in the middle" }] },
+        { key: "mix.space", name: "Space", on: true, was: false, caption: "Add space", kept: false, set: [
+          { control: "Plate 1.5 s, mix 12 %", from: "Dry", value: "", why: "a short plate (1.5 s, mix 12 %) puts the keys in the same space as the song" }] }],
+      changes: 4, modulesOn: 4,
+      bands: { hz: MHZ, before: MBEFORE, after: MAFTER },
+      results: [
+        { key: "mud", name: "Mud (250 - 500 Hz)", before: 7.9, after: 5.8, unit: "dB vs its mids", better: true },
+        { key: "top", name: "Top (8 - 13 kHz)", before: -9.2, after: -6.3, unit: "dB vs its mids", better: true }],
+      moves: [{ module: "EQ", from: "Flat", to: "-3.0 dB at 315 Hz" }, { module: "EQ", from: "Flat", to: "+3.0 dB at 10 kHz (shelf)" },
+        { module: "Space", from: "Dry", to: "Plate 1.5 s, mix 12 %" }, { module: "Width", from: "Width 100 %", to: "Width 140 %" }],
+      first: [`If another plug-in already gives ${name} its reverb, leave Mixology's Space off: one space is enough.`] };
+  }
+  const ROLE_OF = { [H.keys]: "Keys", [H.beat]: "Beat", [H.bass]: "Bass / 808", [H.kick]: "Kick", [H.snare]: "Snare", [H.hats]: "Hats" };
+  function mixCoachReport(hash, name) {
+    const c = mixCoach[hash] || { state: "idle" };
+    const heardEnough = hash !== H.kick || c.heard;
+    const t = (Date.now() - (c.t0 || 0)) / 1000;
+    if (c.state === "listening" && t > 3) { c.state = "ready"; c.heard = true; }
+    const r = { track: hash, kind: "mix", state: c.state, progress: c.state === "listening" ? Math.min(100, Math.round(t * 34)) : 0, hearing: c.state === "listening" && t > 0.4,
+      need: 8, style: "Hip Hop - Trap", role: ROLE_OF[hash] || "Other", heardSeconds: heardEnough ? 48 : 0, heardEnough: !!heardEnough, analyzed: true, canUndo: !!c.canUndo };
+    if (c.state === "ready" || c.state === "applied") r.plan = mixPlan(name, r.role);
+    return r;
+  }
+
   function units() {
     const list = rawUnits();
     for (const u of list) {
@@ -288,6 +337,9 @@
         return { name: "Fader", text: n <= 0.001 ? "−∞" : (db < 0 ? "−" : db > 0 ? "+" : "") + Math.abs(db).toFixed(1) + " dB", norm: n, bi: false, key: "fader." + hash, steps: 0 };
       };
       mix.modules.push({ key: "mix.faders", state: "on", summary: "", switchable: false, values: [fv(H.lead, true, 0.70), fv(H.chorus, false, 0.66)] });
+      const shown = shownTrack.startsWith("t") ? +shownTrack.slice(1) : 0;
+      const link = shown && list.find((u) => u.product === "link" && u.hash === shown);
+      if (link) mix.report = JSON.stringify(mixCoachReport(shown, link.track));
     }
     return list;
   }
@@ -301,6 +353,17 @@
       if (cs === "listening" || cs === "working") return { ticket: 0, why: cs === "listening" ? "Auto-Edit is listening to the vocal." : "Auto-Edit is working out the settings." };
       setTimeout(() => {
         if (r.module === "mas.tonaleq" && r.control === "air") { tickets[t] = { outcome: "refused", why: "Masterology can't change Air from the Rack." }; return; }
+        if (r.change === "coach" && r.unit === "mixology") {
+          const [stepName, h] = r.control.split(".");
+          const hash = +h;
+          const c = (mixCoach[hash] = mixCoach[hash] || { state: "idle" });
+          if (stepName === "plan") { c.state = hash === H.kick && !c.heard ? "listening" : "ready"; c.t0 = Date.now(); c.canUndo = false; }
+          else if (stepName === "apply" && c.state === "ready") { c.state = "applied"; c.canUndo = true; }
+          else if (stepName === "undo" && c.canUndo) { c.state = "ready"; c.canUndo = false; }
+          else if (stepName === "apply") { tickets[t] = { outcome: "refused", why: "There's no plan to apply yet: press ANALYZE & BUILD." }; return; }
+          tickets[t] = { outcome: "applied", why: "" };
+          return;
+        }
         if (r.change === "coach") {
           const c = (coach[r.unit] = coach[r.unit] || { state: "idle" });
           if (r.control === "plan") { c.state = "listening"; c.t0 = Date.now(); }
@@ -331,7 +394,8 @@
       return { ticket: t, why: "" };
     },
     async answer(unit, gen, ticket) { return tickets[ticket] || { outcome: "gone", why: "" }; },
-    async getRack() {
+    async getRack(track) {
+      shownTrack = track || "";
       return {
         host: this.host, hostHash: this.host === "voxology" ? H.lead : 0,
         units: units(),

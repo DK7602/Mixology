@@ -159,6 +159,14 @@ public:
         "" when it went, else why not (shown in the Rack). */
     std::string rackFaderMove (std::uint32_t hash, const std::string& gesture, double pos);
 
+    /** Beta 28: the Sonicology Rack's Coach on one of Mixology's tracks. step "plan" (ANALYZE & BUILD: AUTO's rules on
+        every page, nothing applied; it first listens to the track when Analyze Mix didn't hear it), "apply" (one History
+        step), "undo", "discard". Returns "" or why not (the Rack shows it). Message thread. */
+    std::string rackCoach (const std::string& step, std::uint32_t hash);
+    /** The Coach's report for the Rack (Unit::report of the Mixology that owns the mix): the first of the tracks the open
+        Racks show, its state and plan, as JSON ({"track":<hash>, ...}); "" when none of them is a track. */
+    std::string coachReport (const std::vector<std::uint32_t>& shownTracks) const;
+
     /** Protected channels, saved with the project (Mixology's plug-in state). Safe from any thread: the host
         may save or load state off the message thread, so both go through a small locked copy. */
     juce::String protectedState() const;
@@ -232,8 +240,25 @@ private:
         double startedAt = 0.0;
         int played = 0;                 // moments the track played
         std::uint64_t key = 0;          // its processing and Assist EQ (listening starts again when they change)
+        bool forCoach = false;          // the Rack's Coach asked (it builds a plan; AUTO applies its page)
     };
     TrackListen trackListen;
+    // ---- the Rack's Coach on one track (Beta 28): every page's rules at once (mix::makeCoachPlan), applied on APPLY --
+    struct CoachState
+    {
+        std::uint32_t hash = 0;
+        std::string name;
+        std::string state = "idle";     // idle, listening, ready, applied, failed
+        mixology::mix::Plan plan;
+        std::string json;               // the plan as the Rack reads it (mix::coach::planJson)
+        std::uint64_t step = 0;         // the History step APPLY made (its UNDO)
+        double heard = 0.0;             // listening: how long the track has played so far (s)
+        bool playing = false;
+    };
+    CoachState coach;
+    void coachBuild (std::uint32_t hash);
+    void coachFailed (const std::string& why);
+    mixology::BridgeSession::Result undoStep (std::uint64_t step, const std::string& label, std::string& info);
     /** Tracks AUTO heard on its own: merged into every report made from moments that didn't hear them (kept with the
         project in the advice block), with the processing they had while it listened. */
     struct LiveTrack

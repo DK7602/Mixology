@@ -7,7 +7,16 @@ The complete vocal, mixing and mastering suite
 
 Thanks for trying the beta. Nothing here is finished: tell us what's confusing, what breaks and what you'd change.
 
-NEW IN THIS BETA: SMOOTHER PLAYBACK WHILE THE COACH WORKS
+NEW IN THIS BETA: THE COACH FOR EVERY TRACK (BEATS, DRUMS, BASS, KEYS...)
+  - The Rack's COACH page now works on any track with Mixology Link, not just vocals. Pick the track, press
+    ANALYZE & BUILD: Mixology plans the whole track at once (EQ, Dynamics, Space, Tone, Stereo) with the same rules as
+    its AUTO buttons, and shows what stands out, every setting with its reason, and the tone now and with the plan.
+  - If Mixology hasn't heard that track play yet, the Coach listens to it first: play a part where it plays.
+  - Nothing changes until you click APPLY TO TRACK (one step in Mixology's History). UNDO takes it back.
+  - Vocals with Voxology still get Voxology's Coach. Masterology's master comes next.
+  All three plug-ins need this version (Voxology 0.66.0, Mixology 0.36.0, Masterology 0.40.0).
+
+ALSO NEW (BETA 27): SMOOTHER PLAYBACK WHILE THE COACH WORKS
   - Beta 26's Coach could make the song cut out for a moment while it analysed. Voxology now does that work in short
     bursts with pauses (Auto-Edit, the Coach and Auto Analyze), so your playback stays smooth. It takes a little longer
     (about 10 - 30 seconds after it has heard enough).

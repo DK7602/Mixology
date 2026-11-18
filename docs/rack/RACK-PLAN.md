@@ -284,8 +284,23 @@ Roughly 3 to 5 build sessions, step 1 first.
   the page turn Voxology's `aeStyle` / `aeIntensity`; the reference is Voxology's.
 - Preview: tools/rack/rack_mock.js simulates it (`?coach=ready` starts on a finished plan).
 
-**Next (after the user's feedback on Beta 26):** Mixology's tracks (per-track AUTO rules / Analyze Mix), Masterology's
-master (Auto-Master), a project view of what to fix first.
+**Built 2026-11-18 (Beta 28: Mixology 0.36.0, Voxology 0.66.0, Masterology 0.40.0), Mixology's tracks:**
+- `mix::makeCoachPlan (hash, report, channels, mix)` (MixPlanner.cpp): AUTO's refusals, then all five pages' rules in
+  ONE joint `Rules` (like Polish for one track: a fix goes on the page that suits it, EQ and Tone never both fix it); an
+  FX return gets `leadSpace`. `mix::coach::planJson` (TrackCoach.h / .cpp): heard (role, seconds, swing, width, masking,
+  rumble, noise), issues (from each change's heard word / phrase), the Link's modules with each setting (from -> to, why),
+  bands now / with the plan (the Analyze Mix spectrum + the EQ and Tone Balance responses now / planned, each minus the
+  response at analysis; against the track's mids, 1.5 dB / oct tilt), region results, moves, notes.
+- Mixology (the mix owner, on the master) serves `Change::coach` with control "plan.<hash>" / "apply.<hash>" /
+  "undo.<hash>" / "discard.<hash>" (BridgeHub::rackCoach): listens first through trackListen (forCoach) when the track
+  wasn't heard (8 s of it playing, gives up after 90 s); APPLY rebuilds the plan and refuses if it changed (shows the
+  new one), then one History step "Coach on '<track>'"; UNDO = undoStep (AUTO's Undo, shared). Its Unit::report
+  carries `coachReport(shownTracks)`: {"track":<hash>, kind, state, progress, hearing, need, style, role, heardSeconds,
+  heardEnough, analyzed, canUndo, plan}; `rack::viewJson` keeps a report that starts {"track":<shown hash>,.
+- rack.js: coachOf returns Voxology's Coach on a vocal it processes, else Mixology's (kind "mix") on a track with a
+  Link; the page's setup shows ROLE / STYLE / HEARD; RESULTS adds the moves in words; no SAVE CHAIN.
+
+**Next:** Masterology's master (Auto-Master planned first, applied on APPLY), a project view of what to fix first.
 
 **The plan as written before building:**
 

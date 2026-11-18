@@ -2,6 +2,8 @@
 
 #include "mixology/Pack.h"
 #include "mixology/ProcChain.h"
+#include "mixology/TrackCoach.h"
+#include "suite/RackLink.h"
 
 #include <algorithm>
 #include <array>
@@ -437,8 +439,10 @@ void BridgeHub::timerCallback()
     if (trackListen.active && t - trackListen.startedAt > 90.0)
     {
         const auto who = trackListen.name;
+        const bool forCoach = trackListen.forCoach;
         trackListen = {};
-        autoResult ("stopped", "AUTO stopped listening: '" + who + "' didn't play long enough in a minute and a half. Play a part where it plays, then press AUTO again.");
+        if (forCoach) coachFailed ("'" + who + "' didn't play long enough in a minute and a half. Play a part where it plays, then press ANALYZE & BUILD again.");
+        else autoResult ("stopped", "AUTO stopped listening: '" + who + "' didn't play long enough in a minute and a half. Play a part where it plays, then press AUTO again.");
     }
     if (t - doneCheckedAt >= 0.5)
     {
@@ -2256,8 +2260,10 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
             if (report.valid && analyzeState == Analyze::done) adviceAnalysis = analysis;   // Cancel goes back to it
             if (trackListen.active)
             {
+                const bool forCoach = trackListen.forCoach;
                 trackListen = {};
-                autoResult ("stopped", "Analyze Mix started: AUTO stopped listening (Analyze Mix hears every track). Press AUTO again when it has finished.");
+                if (forCoach) { coach.state = "idle"; coach.heard = 0.0; }
+                else autoResult ("stopped", "Analyze Mix started: AUTO stopped listening (Analyze Mix hears every track). Press AUTO again when it has finished.");
             }
             analysis.begin (style);
             analysis.setVocalOffset (vocalOffset, vocalFromYou);
@@ -3577,6 +3583,12 @@ juce::var BridgeHub::autoCommand (const juce::var& arg)
         return autoStateVar();
     }
     // Pressed again while it listens: it stops (on another page or track: that one starts instead).
+    if (trackListen.active && trackListen.forCoach)
+    {
+        trackListen = {};
+        coach.state = "idle";
+        coach.heard = 0.0;
+    }
     if (trackListen.active)
     {
         const bool same = trackListen.hash == hash && trackListen.page == *page;
@@ -3652,7 +3664,12 @@ void BridgeHub::trackListenTick (const mixology::AnalysisFrame& mixFrame, const 
         if (plays) ++L.played;
     }
     const double heard = L.played * mix::Analysis::kMomentSeconds;
-    if (static_cast<int> (heard) != static_cast<int> (heardBefore) || playing != autoState.playing)
+    if (L.forCoach)
+    {
+        coach.heard = heard;
+        coach.playing = playing;
+    }
+    else if (static_cast<int> (heard) != static_cast<int> (heardBefore) || playing != autoState.playing)
     {
         autoState.playing = playing;
         autoState.heard = heard;
@@ -3698,6 +3715,7 @@ void BridgeHub::trackListenTick (const mixology::AnalysisFrame& mixFrame, const 
     if (const auto f = bridge.knownFaders().find (L.hash); f != bridge.knownFaders().end()) { lt.faderKnown = true; lt.fader = f->second.db; }
     const auto hash = L.hash;
     const auto page = L.page;
+    const bool forCoach = L.forCoach;
     liveTracks[hash] = std::move (lt);
     if (report.valid)
     {
@@ -3708,6 +3726,11 @@ void BridgeHub::trackListenTick (const mixology::AnalysisFrame& mixFrame, const 
     }
     else liveOnly = fresh;
     trackListen = {};
+    if (forCoach)
+    {
+        coachBuild (hash);
+        return;
+    }
     autoState.heard = heard;
     autoRun (page, hash);
 }
@@ -3771,12 +3794,222 @@ void BridgeHub::autoRun (mixology::mix::Page page, std::uint32_t hash)
     autoResult ("applied", line, step);
 }
 
+// ---------------------------------------------------------------------------------------------
+// Beta 28: the Sonicology Rack's Coach on one of Mixology's tracks: AUTO's rules on every page at once (mix::makeCoachPlan),
+// shown first (the Rack's COACH page), applied on APPLY as one History step; UNDO takes that step back.
+
+void BridgeHub::coachFailed (const std::string& why)
+{
+    coach.state = "failed";
+    coach.plan = {};
+    coach.step = 0;
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("ok", false);
+    o->setProperty ("kind", "mix");
+    o->setProperty ("summary", juce::String::fromUTF8 (why.c_str()));
+    o->setProperty ("tipTitle", "The Coach couldn't build a plan");
+    o->setProperty ("tip", juce::String::fromUTF8 (why.c_str()));
+    coach.json = juce::JSON::toString (juce::var (o), true).toStdString();
+}
+
+void BridgeHub::coachBuild (std::uint32_t hash)
+{
+    using namespace mixology;
+    const auto& r = report.valid ? report : liveOnly;
+    const auto channels = channelsNow();
+    coach.hash = hash;
+    coach.plan = mix::makeCoachPlan (hash, r, channels, mixNow());
+    coach.json = mix::coach::planJson (coach.plan, r, hash, channels, 7000);
+    coach.state = coach.plan.valid ? "ready" : "failed";
+    coach.step = 0;
+}
+
+std::string BridgeHub::rackCoach (const std::string& step, std::uint32_t hash)
+{
+    using namespace mixology;
+    if (hash == 0) return "The Coach works on one track at a time: pick a track (Auto Mix on Mixology's Overview does the whole mix).";
+    const auto links = link::processRegistry().links (link::nowMs());
+    std::string name;
+    for (const auto& l : links)
+        if (l.identity.hasName && l.nameHash == hash) name = l.identity.name;
+    const auto quoted = "'" + name + "'";
+
+    if (step == "discard")
+    {
+        if (trackListen.active && trackListen.forCoach) trackListen = {};
+        coach = {};
+        return {};
+    }
+    if (step == "plan")
+    {
+        if (analyzeState == Analyze::reading || analyzeState == Analyze::listening)
+            return "Analyze Mix is listening right now: press ANALYZE & BUILD again when it has finished (it hears this track too).";
+        if (name.empty()) return "That track's Mixology Link isn't answering (track removed, or the host gives it no name).";
+        if (uniqueLink (links, hash) == nullptr) return quoted + ": another track has the same name, so Mixology can't tell their Links apart. Rename one of them.";
+        if (bridge.isProtected (hash)) return quoted + " is protected (padlock): the Coach leaves it alone.";
+        if (trackListen.active)   // AUTO on a page, or the Coach on another track: this one instead
+        {
+            if (! trackListen.forCoach) autoResult ("stopped", "AUTO stopped listening: the Rack's Coach asked for '" + name + "'.");
+            trackListen = {};
+        }
+        coach = {};
+        coach.hash = hash;
+        coach.name = name;
+        const auto& r = report.valid ? report : liveOnly;
+        if (mix::autoListensFirst (mix::Page::space, hash, r, channelsNow()))
+        {
+            // Mixology didn't hear it play (or never listened): listen to it now, with the mix around it.
+            trackListen.active = true;
+            trackListen.forCoach = true;
+            trackListen.page = mix::Page::eq;
+            trackListen.hash = hash;
+            trackListen.name = name;
+            trackListen.heard.begin (report.valid ? report.style : autoStyleKnown ? autoStyle : mix::Style {});
+            trackListen.heard.setVocalOffset (vocalOffset, vocalFromYou);
+            trackListen.startedAt = now();
+            trackListen.played = 0;
+            trackListen.key = trackKey (hash);
+            coach.state = "listening";
+            coach.playing = transportPlaying;
+            return {};
+        }
+        coachBuild (hash);
+        return {};
+    }
+    if (step == "apply")
+    {
+        if (coach.hash != hash || coach.state != "ready") return "There's no plan to apply yet: press ANALYZE & BUILD.";
+        if (coach.plan.changes.empty()) return quoted + " already fits: nothing to apply.";
+        if (bridge.isProtected (hash)) return quoted + " is protected (padlock): the Coach leaves it alone.";
+        // What APPLY sets is what the page shows: the same plan again from the track as it is now.
+        const auto fresh = mix::makeCoachPlan (hash, report.valid ? report : liveOnly, channelsNow(), mixNow());
+        auto same = [] (const mix::Plan& a, const mix::Plan& b) {
+            if (a.changes.size() != b.changes.size()) return false;
+            for (std::size_t i = 0; i < a.changes.size(); ++i)
+                if (a.changes[i].hash != b.changes[i].hash || a.changes[i].proc != b.changes[i].proc || a.changes[i].duck != b.changes[i].duck) return false;
+            return true;
+        };
+        if (! same (fresh, coach.plan))
+        {
+            coachBuild (hash);
+            return quoted + " changed since the plan was built: here is the plan for it now. Check it, then press APPLY TO TRACK.";
+        }
+        auto& registry = link::processRegistry();
+        std::vector<HChange> hist;
+        std::vector<std::string> missing;
+        for (const auto& c : coach.plan.changes)
+        {
+            const auto* l = c.fullMix ? nullptr : uniqueLink (links, c.hash);
+            if (l == nullptr) { missing.push_back (c.name); continue; }
+            proc::Values before {};
+            if (! registry.readProc (l->slot, l->generation, before)) before = proc::defaults();
+            const auto target = linkChange (HWhat::proc, *l);
+            for (const auto& [id, v] : c.proc)
+            {
+                auto pc = target;
+                pc.index = id;
+                pc.before = before[static_cast<std::size_t> (id)];
+                pc.after = v;
+                hist.push_back (std::move (pc));
+                registry.requestProc (l->slot, l->generation, id, v);
+            }
+            if (c.setDuck)
+            {
+                link::DuckSources d;
+                for (auto h : c.duck)
+                    if (d.count < link::kMaxDuckSources) d.hashes[static_cast<std::size_t> (d.count++)] = h;
+                auto dc = linkChange (HWhat::duck, *l);
+                dc.listBefore = duckList (l->duck);
+                dc.listAfter = duckList (d);
+                hist.push_back (std::move (dc));
+                registry.requestDuck (l->slot, l->generation, d);
+            }
+        }
+        const auto made = history.record ("Coach on " + quoted, "", std::move (hist), wallClock());
+        if (made == 0)
+            return missing.empty() ? quoted + " already fits: nothing changed." : "The Coach couldn't reach the Mixology Link of '" + missing.front() + "': nothing changed.";
+        coach.step = made;
+        coach.state = "applied";
+        return {};
+    }
+    if (step == "undo")
+    {
+        if (coach.hash != hash || coach.step == 0) return "Nothing of the Coach's to undo on " + quoted + ".";
+        std::string info;
+        const auto r = undoStep (coach.step, "Coach", info);
+        if (! r.ok) return r.message;
+        coach.step = 0;
+        coach.state = "ready";   // the plan can be applied again
+        return {};
+    }
+    return "The Coach can't do \"" + step + "\".";
+}
+
+std::string BridgeHub::coachReport (const std::vector<std::uint32_t>& shownTracks) const
+{
+    using namespace mixology;
+    std::uint32_t hash = 0;
+    for (const auto h : shownTracks)
+        if (h != 0 && (hash == 0 || h == coach.hash)) hash = h;
+    if (hash == 0) return {};
+    const bool mine = coach.hash == hash;
+    const auto& r = report.valid ? report : liveOnly;
+    const auto* t = [&r, hash]() -> const mix::TrackReport* { for (const auto& x : r.tracks) if (x.hash == hash) return &x; return nullptr; }();
+    std::string state = mine ? coach.state : std::string ("idle");
+    if (! mine && (analyzeState == Analyze::reading || analyzeState == Analyze::listening)) state = "busy";
+    if (! mine && trackListen.active && ! trackListen.forCoach && trackListen.hash == hash) state = "busy";
+
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("track", static_cast<juce::int64> (hash));
+    o->setProperty ("kind", "mix");
+    o->setProperty ("state", juce::String (state));
+    o->setProperty ("progress", mine && coach.state == "listening" ? juce::roundToInt (100.0 * std::min (1.0, coach.heard / mix::kAutoListenSeconds)) : 0);
+    o->setProperty ("hearing", mine && coach.playing);
+    o->setProperty ("need", mix::kAutoListenSeconds);
+    o->setProperty ("style", juce::String::fromUTF8 ((report.valid ? report.style : autoStyleKnown ? autoStyle : mix::Style {}).name.c_str()));
+    if (t != nullptr)
+    {
+        o->setProperty ("role", juce::String (mix::coach::roleWord (t->role)));
+        o->setProperty ("heardSeconds", std::floor (t->activeSeconds));
+    }
+    o->setProperty ("heardEnough", mix::heardEnough (r, hash));
+    o->setProperty ("analyzed", report.valid);
+    o->setProperty ("canUndo", mine && coach.step != 0);
+    auto text = juce::JSON::toString (juce::var (o), true).trimEnd();
+    // {"track": first: the Rack keeps this report for that track's view (rack::viewJson)
+    text = "{\"track\":" + juce::String (static_cast<juce::int64> (hash)) + "," + text.fromFirstOccurrenceOf (",", false, false);
+    if (mine && ! coach.json.empty() && (coach.state == "ready" || coach.state == "applied" || coach.state == "failed") && text.endsWithChar ('}'))
+        text = text.dropLastCharacters (1) + ",\"plan\":" + juce::String::fromUTF8 (coach.json.c_str()) + "}";
+    auto utf8 = text.toStdString();
+    if (utf8.size() >= rack::kReportBytes)
+        utf8 = "{\"track\":" + std::to_string (hash) + ",\"kind\":\"mix\",\"state\":\"failed\",\"plan\":{\"ok\":false,\"summary\":\"The plan is too long for the Rack.\"}}";
+    return utf8;
+}
+
 mixology::BridgeSession::Result BridgeHub::autoUndo (std::uint64_t step, std::string& info)
+{
+    const auto* s = history.find (step);
+    const auto what = s != nullptr ? s->what : std::string();
+    const auto r = undoStep (step, "AUTO", info);
+    if (! r.ok) return r;
+    // The page and track it was on show it (their line loses its Undo).
+    if (const auto it = autoSteps.find (step); it != autoSteps.end())
+    {
+        autoState.page = it->second.page;
+        autoState.hash = it->second.hash;
+        autoState.name = it->second.name;
+    }
+    autoState.heard = 0.0;
+    autoResult ("undone", "Undone: " + what + ". Everything it changed is back.");
+    return { true, {} };
+}
+
+mixology::BridgeSession::Result BridgeHub::undoStep (std::uint64_t step, const std::string& label, std::string& info)
 {
     using namespace mixology;
     const auto* s = history.find (step);
-    if (s == nullptr) return { false, "That AUTO isn't in the History any more." };
-    if (s->undone) return { false, "That AUTO is undone already (History, top bar)." };
+    if (s == nullptr) return { false, "That " + label + " isn't in the History any more." };
+    if (s->undone) return { false, "That " + label + " is undone already (History, top bar)." };
     const auto what = s->what;
     if (history.current() == step)
     {
@@ -3801,7 +4034,7 @@ mixology::BridgeSession::Result BridgeHub::autoUndo (std::uint64_t step, std::st
             }
             else if (c.what == HWhat::duck && duckList (l->duck) == c.listAfter) back.push_back (c.reversed());
         }
-        if (back.empty()) return { false, "Everything that AUTO changed has been changed again since: nothing of it left to undo." };
+        if (back.empty()) return { false, "Everything that " + label + " changed has been changed again since: nothing of it left to undo." };
         const auto r = playHistory (back, "Undo " + what, info);
         if (! r.ok) return r;
         history.record ("Undo " + what, "", std::move (back), wallClock());
@@ -3809,15 +4042,6 @@ mixology::BridgeSession::Result BridgeHub::autoUndo (std::uint64_t step, std::st
         presetUndo.clear();
         ++applyVersion;
     }
-    // The page and track it was on show it (their line loses its Undo).
-    if (const auto it = autoSteps.find (step); it != autoSteps.end())
-    {
-        autoState.page = it->second.page;
-        autoState.hash = it->second.hash;
-        autoState.name = it->second.name;
-    }
-    autoState.heard = 0.0;
-    autoResult ("undone", "Undone: " + what + ". Everything it changed is back.");
     return { true, {} };
 }
 

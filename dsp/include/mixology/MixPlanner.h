@@ -192,6 +192,11 @@ namespace mixology::mix
         changes and the line says why. plan.valid false: AUTO can't work here (no Analyze Mix, Full Mix, the track
         didn't play); the line says why. */
     Plan makeTrackPlan (Page, std::uint32_t hash, const Report&, const std::vector<ChannelNow>&, const MixNow& mix = {});
+    /** The Sonicology Rack's Coach on one track (Beta 28): AUTO's rules on all five pages at once, joint like Polish (a
+        fix goes on the page that suits it, so the EQ and Tone Balance never make the same fix twice), nothing applied.
+        The same refusals as AUTO (plan.valid false, the line says why); an FX channel gets the lead vocal's reverb.
+        plan.line: what it would do and what it heard ("Cut mud at 315 Hz (-2.5 dB) and ...: 'Keys' sounded muddy"). */
+    Plan makeCoachPlan (std::uint32_t hash, const Report&, const std::vector<ChannelNow>&, const MixNow& mix = {});
     /** AUTO needs to hear this track first (Analyze Mix didn't hear it play long enough: heardEnough). Not for an FX
         channel's Space: that works from the lead vocal going into it. */
     bool autoListensFirst (Page, std::uint32_t hash, const Report&, const std::vector<ChannelNow>&);

@@ -2958,6 +2958,58 @@ namespace mixology::mix
         return plan;
     }
 
+    Plan makeCoachPlan (std::uint32_t hash, const Report& r, const std::vector<ChannelNow>& channels, const MixNow&)
+    {
+        // The Rack's Coach on one track: every page's AUTO rules at once, as Polish does for each track (joint: a fix
+        // goes on the page that suits it, so the EQ and Tone Balance never make the same fix twice).
+        Plan plan;
+        plan.tool = Tool::polish;
+        plan.title = "Coach";
+        auto stop = [&plan] (const std::string& line) { plan.line = plan.summary = line; return plan; };
+        if (hash == 0) return stop ("Pick a track: the Coach works on one track at a time (Auto Mix on Mixology's Overview does the whole mix).");
+        const ChannelNow* ch = nullptr;
+        for (const auto& c : channels)
+            if (c.hash == hash) ch = &c;
+        const auto* t = trackIn (r, hash);
+        const std::string name = ch != nullptr ? ch->name : t != nullptr ? t->name : std::string ("This track");
+        if (! r.valid) return stop ("Mixology hasn't heard the mix yet: press ANALYZE & BUILD and play the song.");
+        if (ch == nullptr || ! ch->hasLink) return stop (quoted (name) + " has no Mixology Link Mixology can reach: the Coach works in a track's Link.");
+        if (ch->sharedName) return stop (quoted (name) + ": another track has the same name, so Mixology can't tell their Links apart. Rename one of them.");
+        if (ch->locked) return stop (quoted (name) + " is protected (padlock): the Coach leaves it alone.");
+        if (! ch->hasProc) return stop (quoted (name) + "'s Mixology Link has no processing (update Mixology Link).");
+        if (pv (ch->proc, proc::chainOn) < 0.5f)
+            return stop (quoted (name) + ": its Link's processing is switched off (On / Off in its window): switch it on, then press ANALYZE & BUILD again.");
+        const Lookup look (channels);
+        Rules R (r, look, channels, plan, true);
+        const bool fxReturn = isFxReturn (*ch, r) || (t != nullptr && t->role == Role::fx);
+        if (fxReturn)
+        {
+            // An FX channel plays what you send to it: its Space is the lead vocal's reverb.
+            plan.valid = true;
+            if (R.lead != nullptr) leadSpace (R, hash);
+            else R.note (quoted (name) + " is an FX channel: it plays what you send to it. With no lead vocal heard, the Coach sets nothing here.");
+        }
+        else
+        {
+            if (t == nullptr || ! counts (*t) || t->bands.size() < static_cast<std::size_t> (kBands))
+                return stop ("Mixology didn't hear " + quoted (name) + " play: play a part where it plays, then press ANALYZE & BUILD again.");
+            if (t->excluded)
+                return stop (quoted (name) + (t->reference ? " is your reference song" : " is left out of Analyze Mix") + ": the Coach leaves it alone.");
+            plan.valid = true;
+            for (Page p : { Page::eq, Page::dynamics, Page::space, Page::tone, Page::stereo })
+                runPage (R, p, *t, *ch);
+        }
+        std::vector<std::string> unique;
+        for (auto& n : plan.notes)
+            if (std::find (unique.begin(), unique.end(), n) == unique.end()) unique.push_back (n);
+        plan.notes = std::move (unique);
+        auto line = autoLine (plan, name, r.style);
+        if (line.rfind ("AUTO: ", 0) == 0) line = line.substr (6);
+        if (! line.empty()) line[0] = static_cast<char> (std::toupper (static_cast<unsigned char> (line[0])));
+        plan.line = plan.summary = line;
+        return plan;
+    }
+
     std::optional<Tool> toolFromKey (const std::string& k)
     {
         for (auto t : { Tool::autoMix, Tool::balance, Tool::stereo, Tool::cleanUp, Tool::pocket, Tool::polish })
