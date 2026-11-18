@@ -205,6 +205,19 @@ sends higher-resolution art, re-run it.
   8bc26329022ae949d4e9b0bdf51405d8ec0f065e, Masterology 7118eb9e855b819a756b8aa1e0404d390a922cb3 by SHA).
   GREEN (all 8 jobs, Macs one at a time, none cancelled). Mixology CI (44228930603) and Voxology CI green; Masterology's
   Windows CI failed one plug-in test once (see Masterology's RESUME-HERE: intermittent, Windows only).
+- 2026-11-18, user on Beta 26: "works: coach, analyze, and undo. One thing: when it analyzed, the song cut out a couple
+  of times. Fix that and move on to the next step."
+- BETA 27 BUILT (Mixology 0.35.0, Voxology 0.65.0, Masterology 0.39.0): the cut-outs. Not reproducible here (no DAW);
+  looked for every cause: Voxology's audio thread takes no lock and (new test) never allocates; the analysis job was
+  already 1 thread at Priority::low; its work: autoEdit ~10 s of one core per 14 s take, + the Coach's render ~1 s,
+  1.3 GB in 252 big allocations. Fixes: (1) vox/Pace.h: the analysis rests 8 ms after every 20 ms of work (ticks in the
+  long loops: longest stretch 2.7 s -> ~0.1 s), in every AutoEditController job (Auto-Edit, Coach, Auto Analyze,
+  reference); same decisions (test). (2) rack.js: signature() on COACH / MODULES / SESSION took every unit's knob texts,
+  and Masterology's Dynamics publishes live GR as text, so a playing song recomputed those pages' HTML ~6x a second
+  (render() then found no change: HTML only, but wasted work on the GUI thread); now state / summary / lock only; on the
+  RACK page a read-only knob's text and arc change in place (updateLive, data-vi). Mock: Masterology Dynamics readings
+  move (SHOWN_ONLY). Scratchpad renders.js / live27.js. Honest status to the user: likely cause, not proven in Cubase.
+  Not done: Honey Tune's AI pitch check runs 8 normal-priority threads while it analyses clips (could do the same).
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the

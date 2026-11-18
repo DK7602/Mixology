@@ -7,7 +7,14 @@ The complete vocal, mixing and mastering suite
 
 Thanks for trying the beta. Nothing here is finished: tell us what's confusing, what breaks and what you'd change.
 
-NEW IN THIS BETA: THE COACH (THE RACK BUILDS YOUR VOCAL CHAIN)
+NEW IN THIS BETA: SMOOTHER PLAYBACK WHILE THE COACH WORKS
+  - Beta 26's Coach could make the song cut out for a moment while it analysed. Voxology now does that work in short
+    bursts with pauses (Auto-Edit, the Coach and Auto Analyze), so your playback stays smooth. It takes a little longer
+    (about 10 - 30 seconds after it has heard enough).
+  - The Rack's COACH, MODULES and SESSION pages also do far less work while the song plays.
+  All three plug-ins need this version (Voxology 0.65.0, Mixology 0.35.0, Masterology 0.39.0).
+
+ALSO NEW (BETA 26): THE COACH (THE RACK BUILDS YOUR VOCAL CHAIN)
   - The Rack's new COACH page (next to SESSION): pick a vocal, choose a style and intensity, press ANALYZE & BUILD
     and play the song. Voxology listens to about 12 seconds of singing, then the Coach shows what stands out in your
     take (mud, harshness, sibilance...), the chain it would build and why, and the result measured on your own take

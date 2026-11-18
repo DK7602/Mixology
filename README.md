@@ -7,7 +7,7 @@ HTML / CSS / JS interface in the platform web view, GitHub Actions builds on eve
 The plan and milestones: [docs/PLAN.md](docs/PLAN.md). User manual (also built into the plug-in): [docs/MANUAL.md](docs/MANUAL.md).
 Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_TEST.md) (passed), [docs/M3_TEST.md](docs/M3_TEST.md), [docs/M4_TEST.md](docs/M4_TEST.md), [docs/M5_TEST.md](docs/M5_TEST.md), [docs/M6_TEST.md](docs/M6_TEST.md) (current).
 
-## Status: v0.34.0
+## Status: v0.35.0
 
 | Piece | State |
 | --- | --- |
@@ -51,6 +51,7 @@ Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_T
 | Rack Beta 24 (v0.32.0, with Voxology 0.62.0 and Masterology 0.36.0): the track's fader in the Rack's GAIN STAGING (the Mixology that owns the bridge publishes a "mix.faders" module with the faders of the tracks open Racks show, `rack::Link::shownTracks`; requests to control "fader.<hash>" go through `BridgeHub::rackFaderMove`, i.e. the Tracks page's own fader / faderEnd / setDb commands, History included); SAVE on Voxology's row (`rack::Change::save`); Mixology Link's RACK button (link.html / link.js / LinkEditor: the Rack's natives, rack-data files, a 16:10 window while it is open) | New: tested in the engine and the browser preview, not yet in a DAW |
 | Rack Beta 25 (v0.33.0, with Voxology 0.63.0 and Masterology 0.37.0): the insert-order check in rack.js (watchOrder / orderLine: Voxology's in / out and the Link's in, each with its own average taken out, over 30 - 50 publishes while the vocal plays; a red Coach line when the Link's input moves like Voxology's input and not its output, ten times running; only when Voxology clearly reshapes the vocal). Voxology's Output PEAKS (Clip / Limit at a Ceiling) | New: tested in the browser preview, not yet in a DAW |
 | Rack Beta 26 (v0.34.0, with Voxology 0.64.0 and Masterology 0.38.0): the Rack's COACH page for a vocal (stage 3, vocals first). RackLink layout 4: `Unit::report` (the Coach's JSON, up to 8 KB, sent with the details only) and `Change::coach` (control plan / apply / undo). Voxology does the work (vox::coach::planJson: Auto-Edit's plan, what stands out against its aim, the take played through the plan and measured again); rack.js draws it (coachPage / coachBar) | New: tested in the engine and the browser preview, not yet in a DAW |
+| Rack Beta 27 (v0.35.0, with Voxology 0.65.0 and Masterology 0.39.0): the user heard the song cut out while the Coach analysed. Voxology's analysis now rests on purpose (vox/Pace.h); rack.js rebuilds the COACH / MODULES / SESSION pages only when what they show changes (their signature took every plug-in's knob texts, and Masterology's Dynamics readings move all the time), and a knob that only shows a reading changes in place on the RACK page | New: tested in the engine and the browser preview, not yet in a DAW |
 
 ## Layout
 

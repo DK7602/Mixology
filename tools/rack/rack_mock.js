@@ -14,6 +14,7 @@
     return depth * (Math.sin(t * 2.1 + seed) * 0.55 + Math.sin(t * 5.3 + seed * 1.7) * 0.3 + Math.sin(t * 11.7 + seed * 0.3) * 0.15);
   };
   const v = (name, text, norm, bi) => ({ name, text, norm, bi: !!bi });
+  const MINUS = "\u2212", clamp01 = (x) => Math.max(0, Math.min(1, x));
   const off = (key) => ({ key, state: "off", summary: "Off" });
   const H = { lead: 0x1a2b301, chorus: 0x1a2b302, adlibs: 0x1a2b303, beat: 0x1a2b304, kick: 0x1a2b305, snare: 0x1a2b306, hats: 0x1a2b307, bass: 0x1a2b308, keys: 0x1a2b309 };
 
@@ -156,7 +157,11 @@
           { key: "mas.resonance", state: "on", summary: "Amount 30 %", values: [v("Amount", "30 %", 0.3), v("Sensitivity", "50 %", 0.5), v("Release", "Med", 0.5), v("Focus", "Highs", 0.7)] },
           { key: "mas.bass", state: "on", summary: "Mono below 120 Hz · Punch 20 %", values: [v("Mono Below", "120 Hz", 0.4), v("Sub Tame", "10 %", 0.1), v("Punch", "20 %", 0.2)] },
           { key: "mas.glue", state: "on", summary: "2:1 · GR 1.5 dB", meterKind: "gr", meter: -1.5 + wob(17, 0.7), values: [v("Character", "Clean", 0.3), v("Threshold", "−14 dB", 0.5), v("Ratio", "2.0:1", 0.2), v("Attack", "30 ms", 0.4), v("Release", "Auto", 0.5), v("Mix", "100 %", 1)] },
-          { key: "mas.dynamics", state: "on", summary: "4 bands · GR 1 - 2 dB", meterKind: "gr", meter: -1.2 + wob(18, 0.6), values: [v("Low", "−1.5 dB", 0.4), v("Lo-Mid", "−1.0 dB", 0.45), v("Hi-Mid", "−0.5 dB", 0.48), v("High", "−1.0 dB", 0.45)] },
+          { key: "mas.dynamics", state: "on", summary: "4 bands · GR 1 - 2 dB", meterKind: "gr", meter: -1.2 + wob(18, 0.6), values: [["Low", 21, 1.5], ["Lo-Mid", 22, 1.0], ["Hi-Mid", 23, 0.5], ["High", 24, 1.0]].map(([n, seed, d]) => {
+            // as Masterology: each band's gain reduction now, a reading (moves all the time while the song plays)
+            const g = Math.min(0, -d + wob(seed, 0.6));
+            return v(n, (g < -0.05 ? MINUS + Math.abs(g).toFixed(1) : "0.0") + " dB", clamp01(-g / 12));
+          }) },
           { key: "mas.imager", state: "on", summary: "Highs 115 %", values: [v("Lows", "0 %", 0), v("Mids", "100 %", 0.5), v("Highs", "115 %", 0.58)] },
           { key: "mas.sat", state: "off", summary: "Off" },
           { key: "mas.clipper", state: "on", summary: "Clip level −1.0 dB", meterKind: "gr", meter: Math.min(0, -0.6 + wob(19, 0.9)), values: [v("Clip Level", "−1.0 dB", 0.6), v("Softness", "50 %", 0.5), v("Oversampling", "4x", 0.66)] },
@@ -168,7 +173,8 @@
 
   // Stage 2: every value a knob the Rack can turn (key from its name), choices stepped; what was turned or switched.
   const CHOICES = { mode: 3, speed: 3, time: 6, character: 3, focus: 3, oversampling: 4, effect: 7, effects: 7, knee: 3 };
-  const SHOWN_ONLY = new Set(["ht.tune|key", "ht.tune|scale", "vox.beat|key", "vox.beat|scale"]);
+  const SHOWN_ONLY = new Set(["ht.tune|key", "ht.tune|scale", "vox.beat|key", "vox.beat|scale",
+    "mas.dynamics|low", "mas.dynamics|lomid", "mas.dynamics|himid", "mas.dynamics|high"]);   // (readings, as in Masterology)
   const FIXED = new Set(["vox.output", "vox.beat", "ht.tune", "mix.assist", "mas.max"]);
   const turned = {}, switched = {}, powered = {}, tickets = {}, saved = [];
   let nextTicket = 1;
