@@ -278,6 +278,38 @@ TEST_CASE ("Registry: Space keys and duck lists (a reverb ducks under the vocal)
     CHECK (r.keyLevel (again, 200) == 0.0f);
 }
 
+TEST_CASE ("Registry: the Coach's PREVIEW gain (only down, ends on its own, only its own Link)", "[link]")
+{
+    SharedBlock mem (testName ("preview"), Registry::bytes());
+    Registry r (mem.data());
+    const int a = r.claim (1, 10);
+    r.heartbeat (a, 100);
+    const auto gen = r.links (100)[0].generation;
+
+    CHECK (r.previewGainDb (a, 100) == 0.0f);   // never set
+    r.setPreviewGain (a, gen + 1, -3.0f, 100);   // an older owner
+    CHECK (r.previewGainDb (a, 100) == 0.0f);
+    r.setPreviewGain (a, gen, -3.0f, 100);
+    CHECK (r.previewGainDb (a, 150) == -3.0f);
+    CHECK (r.previewGainDb (a, 100 + kPreviewMs + 1) == 0.0f);   // Mixology stopped renewing it
+    r.setPreviewGain (a, gen, 6.0f, 200);   // never up
+    CHECK (r.previewGainDb (a, 200) == 0.0f);
+    r.setPreviewGain (a, gen, -40.0f, 200);   // never more than kPreviewMaxDb down
+    CHECK (r.previewGainDb (a, 200) == -kPreviewMaxDb);
+    r.setPreviewGain (a, gen, std::numeric_limits<float>::quiet_NaN(), 200);
+    CHECK (r.previewGainDb (a, 200) == 0.0f);
+    r.setPreviewGain (a, gen, -2.0f, 300);
+    r.clearPreview (a, gen);
+    CHECK (r.previewGainDb (a, 300) == 0.0f);
+
+    // A new Link in the slot starts without one.
+    r.setPreviewGain (a, gen, -2.0f, 400);
+    r.release (a, 1);
+    const int again = r.claim (2, 400);
+    CHECK (again == a);
+    CHECK (r.previewGainDb (again, 400) == 0.0f);
+}
+
 TEST_CASE ("Registry: Mixology tells each Link whether it is paired", "[link]")
 {
     SharedBlock mem (testName ("match"), Registry::bytes());

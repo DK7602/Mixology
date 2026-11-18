@@ -119,6 +119,8 @@ void MixologyLinkProcessor::prepareToPlay (double sampleRate, int)
     publishedWindows = meter.windowCount();
     trimGain.reset (sampleRate, 0.02);
     trimGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (static_cast<double> (trimParam->load())));
+    previewGain.reset (sampleRate, 0.05);
+    previewGain.setCurrentAndTargetValue (1.0);
     assist.setTarget (assistSettings());
     assist.prepare (sampleRate, juce::jmax (1, getTotalNumOutputChannels()));
     rackPub.start();
@@ -247,6 +249,24 @@ void MixologyLinkProcessor::process (juce::AudioBuffer<Sample>& buffer)
         spaceWet.store (pm.spaceWet, std::memory_order_relaxed);
         registry.publishProcMeters (slot, pm, now);
         lastAudioMs.store (now, std::memory_order_relaxed);
+    }
+
+    // The Coach's PREVIEW (Mixology): it turns the louder of the plan and yours down, so you hear what changed,
+    // not just "louder". After the meters (Mixology still reads the track as it is); never in an export.
+    const float previewDb = isNonRealtime() ? 0.0f : registry.previewGainDb (slot, now);
+    previewGain.setTargetValue (juce::Decibels::decibelsToGain (static_cast<double> (previewDb)));
+    if (previewGain.isSmoothing())
+    {
+        for (int i = 0; i < n; ++i)
+        {
+            const auto g = static_cast<Sample> (previewGain.getNextValue());
+            for (int c = 0; c < channels; ++c)
+                buffer.getWritePointer (c)[i] *= g;
+        }
+    }
+    else if (std::abs (previewGain.getTargetValue() - 1.0) > 1.0e-9)
+    {
+        buffer.applyGain (static_cast<Sample> (previewGain.getTargetValue()));
     }
 }
 

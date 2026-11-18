@@ -252,6 +252,7 @@ TEST_CASE ("Coach (a Mixology track): the plan as the Rack reads it, the tone be
     CHECK (has (json, "\"after\":["));
     CHECK (has (json, "\"name\":\"Mud\""));
     CHECK (has (json, "\"role\":\"Keys\""));
+    CHECK (has (json, "\"upToDate\":false"));
 
     // The mud region: the plan's EQ takes it down, measured on the curves (exact filter responses).
     const auto& g = coach::regions()[1];
@@ -263,6 +264,26 @@ TEST_CASE ("Coach (a Mixology track): the plan as the Rack reads it, the tone be
     for (int i = 0; i < kBands; ++i) after[static_cast<std::size_t> (i)] += coach::toneResponseDb (then, bandHz (i));
     CHECK (coach::regionDb (after, g.from, g.to) < coach::regionDb (keys.bands, g.from, g.to) - 1.0);
     CHECK (coach::toneResponseDb (proc::defaults(), 1000.0) == Catch::Approx (0.0));
+
+    // After APPLY, ANALYZE AGAIN has nothing (or only small things) left: the rules start from the Link's values now.
+    {
+        auto applied = chans;
+        applied[0].proc = then;
+        const auto again = makeCoachPlan (keys.hash, r, applied);
+        REQUIRE (again.valid);
+        CHECK (again.changes.size() < plan.changes.size());
+        const auto againJson = coach::planJson (again, r, keys.hash, applied, 7000);
+        CHECK (validJson (againJson));
+        CHECK (has (againJson, again.changes.empty() ? "\"upToDate\":true" : "\"upToDate\":false"));
+    }
+
+    // PREVIEW's level match: the mud cut takes more off than the air shelf adds on these keys (dull top), so the plan
+    // plays a little quieter; a plan that changes nothing plays the same; a track it doesn't know: 0.
+    const double gap = coach::loudnessGapDb (plan, r, keys.hash, chans);
+    CHECK (gap < -0.2);
+    CHECK (gap > -4.0);
+    CHECK (coach::loudnessGapDb (Plan {}, r, keys.hash, chans) == Catch::Approx (0.0).margin (1.0e-9));
+    CHECK (coach::loudnessGapDb (plan, r, 12345u, chans) == 0.0);
 
     // Squeezed: still valid, shorter, then smaller.
     for (const std::size_t room : { std::size_t { 3000 }, std::size_t { 1500 }, std::size_t { 600 } })

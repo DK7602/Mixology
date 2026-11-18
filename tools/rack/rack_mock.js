@@ -242,6 +242,21 @@
     const r = { state: c.state, progress: c.state === "listening" ? Math.min(100, Math.round(t * 25)) : 0, hearing: c.state === "listening" && t > 0.4,
       style, intensity, styles: COACH_STYLES, intensities: COACH_INTS, reference: "", canUndo: !!c.canUndo, beat: false, honey: u.id === "vox-chorus" };
     if (c.state === "ready" || c.state === "applied") r.plan = c.wasApplied ? upToDate(demoPlan(style, intensity), "Voxology is already set the way I'd set it for this take: nothing to change. ") : demoPlan(style, intensity);
+    if (c.state === "ready" && c.gap == null) c.gap = 2.3;
+    return previewFields(c, r);
+  }
+  // Beta 32: PREVIEW (the plan plays, flip with yours at the same loudness, KEEP or BACK). `gap`: the plan minus yours.
+  function previewStep(c, step, gap, refuse) {
+    if (step === "preview") { if (c.state !== "ready") return refuse("There's no plan to hear yet: press ANALYZE & BUILD."); c.preview = "plan"; c.gap = gap; return true; }
+    if (step === "flip") { if (!c.preview) return refuse("PREVIEW isn't on: press PREVIEW first."); c.preview = c.preview === "plan" ? "yours" : "plan"; return true; }
+    if (step === "back") { c.preview = null; return true; }
+    if (step === "keep") { if (!c.preview) return refuse("PREVIEW isn't on: press PREVIEW first."); c.preview = null; c.state = "applied"; c.canUndo = true; return true; }
+    if (step === "plan" || step === "apply" || step === "undo" || step === "discard" || step === "cancel") c.preview = null;
+    return false;
+  }
+  function previewFields(c, r) {
+    if (c.preview) { r.preview = c.preview; r.previewGainDb = c.preview === "plan" ? -Math.max(0, c.gap) : -Math.max(0, -c.gap); }
+    if (c.state === "ready") r.planGapDb = c.gap != null ? c.gap : null;
     return r;
   }
   // Beta 30: ANALYZE AGAIN after APPLY: the same take, the same plan, already set (what stands out measured through it).
@@ -297,7 +312,8 @@
     const r = { track: hash, kind: "mix", state: c.state, progress: c.state === "listening" ? Math.min(100, Math.round(t * 34)) : 0, hearing: c.state === "listening" && t > 0.4,
       need: 8, style: "Hip Hop - Trap", role: ROLE_OF[hash] || "Other", heardSeconds: heardEnough ? 48 : 0, heardEnough: !!heardEnough, analyzed: true, canUndo: !!c.canUndo };
     if (c.state === "ready" || c.state === "applied") r.plan = mixPlan(name, r.role);
-    return r;
+    if (c.state === "ready" && c.gap == null) c.gap = -1.4;
+    return previewFields(c, r);
   }
 
   // Beta 29: Masterology's Coach on the master (Auto-Master's plan). Listens fast here: BUILD NOW after "12 s" (3 s), the
@@ -320,7 +336,8 @@
       genre: g != null ? Math.round(g * 5) : 1, genres: MASTER_GENRES, intensity: i != null ? Math.round(i * 2) : 1, intensities: MASTER_INTS,
       target: tg != null ? Math.round(tg * 2) : 1, targets: MASTER_TARGETS, reference: "", canUndo: !!c.canUndo };
     if (c.state === "ready" || c.state === "applied") r.plan = c.wasApplied ? upToDate(MASTER_PLAN, "Masterology is already set the way I'd master this mix: nothing to change. ") : MASTER_PLAN;
-    return r;
+    if (c.state === "ready" && c.gap == null) c.gap = 0.8;   // (Masterology matches the master after its Maximizer: a small gap)
+    return previewFields(c, r);
   }
 
   // Beta 31: Mixology's WHAT TO FIX FIRST (BridgeHub::fixReport): the setup check, then the Mix Assistant's points.
@@ -407,6 +424,10 @@
           const [stepName, h] = r.control.split(".");
           const hash = +h;
           const c = (mixCoach[hash] = mixCoach[hash] || { state: "idle" });
+          const refuseMix = (why) => { tickets[t] = { outcome: "refused", why }; return null; };
+          const pv = previewStep(c, stepName, -1.4, refuseMix);
+          if (pv === null) return;
+          if (pv) { tickets[t] = { outcome: "applied", why: "" }; return; }
           if (stepName === "plan") { c.state = hash === H.kick && !c.heard ? "listening" : "ready"; c.t0 = Date.now(); c.canUndo = false; }
           else if (stepName === "apply" && c.state === "ready") { c.state = "applied"; c.canUndo = true; }
           else if (stepName === "undo" && c.canUndo) { c.state = "ready"; c.canUndo = false; }
@@ -417,6 +438,9 @@
         if (r.change === "coach" && r.unit === "masterology") {
           const c = masterCoach, heard = (Date.now() - c.t0) / 1000 * 4;
           const refuse = (why) => { tickets[t] = { outcome: "refused", why }; };
+          const pv = previewStep(c, r.control, 0.8, (why) => { refuse(why); return null; });
+          if (pv === null) return;
+          if (pv) { tickets[t] = { outcome: "applied", why: "" }; return; }
           if (r.control === "plan") { if (c.state === "listening" || c.state === "working") return refuse("The Coach is already listening to the song."); c.wasApplied = c.state === "applied"; c.state = "listening"; c.t0 = Date.now(); c.canUndo = false; }
           else if (r.control === "finish") { if (c.state !== "listening") return refuse("The Coach isn't listening."); if (heard < 12) return refuse("Let the Coach hear at least 12 seconds of the song first."); c.state = "working"; c.t1 = Date.now(); }
           else if (r.control === "cancel") { if (c.state === "listening" || c.state === "working") c.state = "idle"; }
@@ -427,6 +451,9 @@
         }
         if (r.change === "coach") {
           const c = (coach[r.unit] = coach[r.unit] || { state: "idle" });
+          const pv = previewStep(c, r.control, 2.3, (why) => { tickets[t] = { outcome: "refused", why }; return null; });
+          if (pv === null) return;
+          if (pv) { tickets[t] = { outcome: "applied", why: "" }; return; }
           if (r.control === "cancel") { if (c.state === "listening") c.state = "idle"; }
           else if (r.control === "plan") { c.wasApplied = c.state === "applied"; c.state = "listening"; c.t0 = Date.now(); }
           else if (r.control === "apply" && c.state === "ready") { c.state = "applied"; c.canUndo = true; }

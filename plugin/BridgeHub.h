@@ -161,8 +161,12 @@ public:
 
     /** Beta 28: the Sonicology Rack's Coach on one of Mixology's tracks. step "plan" (ANALYZE & BUILD: AUTO's rules on
         every page, nothing applied; it first listens to the track when Analyze Mix didn't hear it), "apply" (one History
-        step), "undo", "discard". Returns "" or why not (the Rack shows it). Message thread. */
+        step), "undo", "discard". Beta 32: "preview" (the plan plays on the track, nothing in History, the louder of the
+        plan and yours turned down to the other), "flip" (the plan / yours), "keep" (APPLY, one History step), "back"
+        (yours again). Returns "" or why not (the Rack shows it). Message thread. */
     std::string rackCoach (const std::string& step, std::uint32_t hash);
+    /** Beta 32: the tracks the open Racks show now (keeps a PREVIEW playing while its track is shown). Message thread. */
+    void coachSeen (const std::vector<std::uint32_t>& shownTracks);
     /** The Coach's report for the Rack (Unit::report of the Mixology that owns the mix): the first of the tracks the open
         Racks show, its state and plan, as JSON ({"track":<hash>, ...}); "" when none of them is a track. */
     std::string coachReport (const std::vector<std::uint32_t>& shownTracks) const;
@@ -259,8 +263,29 @@ private:
         std::uint64_t step = 0;         // the History step APPLY made (its UNDO)
         double heard = 0.0;             // listening: how long the track has played so far (s)
         bool playing = false;
+        std::uint32_t rev = 0;          // bumped by every plan built (the Rack redraws an identical one too)
+        // Beta 32: PREVIEW. Your values of every control the plan sets (to put back), the plan or yours playing.
+        struct Yours
+        {
+            std::uint32_t hash = 0;
+            int slot = -1;
+            std::uint32_t generation = 0;
+            std::vector<std::pair<int, float>> proc;
+            bool setDuck = false;
+            mixology::link::DuckSources duck;
+        };
+        bool previewing = false;
+        bool previewPlan = true;        // the plan plays (else yours)
+        double gapDb = 0.0;             // the plan plays this much louder than yours (an estimate: mix::coach::loudnessGapDb)
+        double seenAt = 0.0;            // when a Rack last showed the track (now())
+        double renewedAt = 0.0;         // the level match last renewed on the Link (it ends on its own without)
+        std::vector<Yours> yours;
     };
     CoachState coach;
+    void previewPlay (bool plan);       // the plan's values or yours on the Links, and the level match on the track's Link
+    void previewEnd (bool putYoursBack);
+    float previewGainDb() const;        // on the track's Link now (0 or below)
+    bool coachStepDone() const;         // the APPLY step is still done in Mixology's History
     void coachBuild (std::uint32_t hash);
     void coachFailed (const std::string& why);
     mixology::BridgeSession::Result undoStep (std::uint64_t step, const std::string& label, std::string& info);

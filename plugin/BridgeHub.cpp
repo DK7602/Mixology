@@ -258,6 +258,7 @@ void BridgeHub::setDaw (const std::string& key)
 BridgeHub::~BridgeHub()
 {
     stopTimer();
+    previewEnd (true);   // Mixology closed during PREVIEW: the track plays yours again
     saveMcuLaw();
     closePorts ("Mixology closed");
     settingsFile->setValue (lawKey (dawKey), juce::String (bridge.faderLaw().serialise()));
@@ -367,6 +368,18 @@ void BridgeHub::handleIncomingMidiMessage (juce::MidiInput*, const juce::MidiMes
 void BridgeHub::timerCallback()
 {
     const double t = now();
+    if (coach.previewing)
+    {
+        // PREVIEW plays while a Rack shows its track; 4 s without one (Rack closed, another track picked): yours again.
+        // Analyze Mix starting hears yours too.
+        if (t - coach.seenAt > 4.0 || analyzeState == Analyze::reading || analyzeState == Analyze::listening) previewEnd (true);
+        else if (t - coach.renewedAt >= 0.5)
+        {
+            coach.renewedAt = t;
+            for (const auto& y : coach.yours)
+                if (y.hash == coach.hash) mixology::link::processRegistry().setPreviewGain (y.slot, y.generation, previewGainDb(), mixology::link::nowMs());
+        }
+    }
     if (t - lastProjectCheck >= 0.5)
     {
         lastProjectCheck = t;
@@ -2797,6 +2810,8 @@ void BridgeHub::resetProject()
     autoSnapshot = {};
     autoScanAsked = false;
     trackListen = {};
+    previewEnd (true);   // (yours back on that project's track before it goes)
+    coach = {};   // the Coach's plan, listen and APPLY step belong to this project (its History step ids start again)
     liveTracks.clear();
     liveOnly = {};
     autoSteps.clear();
@@ -3800,6 +3815,7 @@ void BridgeHub::autoRun (mixology::mix::Page page, std::uint32_t hash)
 
 void BridgeHub::coachFailed (const std::string& why)
 {
+    ++coach.rev;
     coach.state = "failed";
     coach.plan = {};
     coach.step = 0;
@@ -3818,8 +3834,10 @@ void BridgeHub::coachBuild (std::uint32_t hash)
     const auto& r = report.valid ? report : liveOnly;
     const auto channels = channelsNow();
     coach.hash = hash;
+    ++coach.rev;
     coach.plan = mix::makeCoachPlan (hash, r, channels, mixNow());
     coach.json = mix::coach::planJson (coach.plan, r, hash, channels, 7000);
+    coach.gapDb = coach.plan.valid ? mix::coach::loudnessGapDb (coach.plan, r, hash, channels) : 0.0;
     coach.state = coach.plan.valid ? "ready" : "failed";
     coach.step = 0;
 }
@@ -3833,11 +3851,86 @@ std::string BridgeHub::rackCoach (const std::string& step, std::uint32_t hash)
     for (const auto& l : links)
         if (l.identity.hasName && l.nameHash == hash) name = l.identity.name;
     const auto quoted = "'" + name + "'";
+    if (coach.state == "applied" && ! coachStepDone())
+    {
+        coach.state = "ready";
+        coach.step = 0;
+    }
 
     if (step == "discard")
     {
+        previewEnd (true);
         if (trackListen.active && trackListen.forCoach) trackListen = {};
         coach = {};
+        return {};
+    }
+    // Beta 32, PREVIEW: the plan plays on the track (nothing in History) until KEEP (APPLY) or BACK (yours again).
+    if (step == "back")
+    {
+        previewEnd (true);
+        return {};
+    }
+    if (step == "flip")
+    {
+        if (! coach.previewing || coach.hash != hash) return "PREVIEW isn't on: press PREVIEW first.";
+        previewPlay (! coach.previewPlan);
+        return {};
+    }
+    auto samePlan = [] (const mix::Plan& a, const mix::Plan& b) {
+        if (a.changes.size() != b.changes.size()) return false;
+        for (std::size_t i = 0; i < a.changes.size(); ++i)
+            if (a.changes[i].hash != b.changes[i].hash || a.changes[i].proc != b.changes[i].proc || a.changes[i].duck != b.changes[i].duck) return false;
+        return true;
+    };
+    if (step == "preview")
+    {
+        if (coach.previewing && coach.hash == hash) return {};
+        if (coach.hash != hash || coach.state != "ready") return "There's no plan to hear yet: press ANALYZE & BUILD.";
+        if (coach.plan.changes.empty()) return quoted + " already fits: nothing to hear.";
+        if (analyzeState == Analyze::reading || analyzeState == Analyze::listening)
+            return "Analyze Mix is listening right now: press PREVIEW when it has finished.";
+        if (bridge.isProtected (hash)) return quoted + " is protected (padlock): the Coach leaves it alone.";
+        const auto& r = report.valid ? report : liveOnly;
+        const auto channels = channelsNow();
+        if (! samePlan (mix::makeCoachPlan (hash, r, channels, mixNow()), coach.plan))
+        {
+            coachBuild (hash);
+            return quoted + " changed since the plan was built: here is the plan for it now. Check it, then press PREVIEW.";
+        }
+        auto& registry = link::processRegistry();
+        std::vector<CoachState::Yours> yours;
+        for (const auto& c : coach.plan.changes)
+        {
+            if (c.fullMix) continue;
+            const auto* l = uniqueLink (links, c.hash);
+            if (l == nullptr) return "The Coach couldn't reach the Mixology Link of '" + c.name + "'.";
+            auto y = std::find_if (yours.begin(), yours.end(), [&c] (const CoachState::Yours& x) { return x.hash == c.hash; });
+            if (y == yours.end())
+            {
+                yours.push_back ({});
+                y = std::prev (yours.end());
+                y->hash = c.hash;
+                y->slot = l->slot;
+                y->generation = l->generation;
+            }
+            proc::Values before {};
+            if (! registry.readProc (l->slot, l->generation, before)) before = proc::defaults();
+            for (const auto& [id, v] : c.proc)
+                if (id >= 0 && id < proc::count
+                    && std::none_of (y->proc.begin(), y->proc.end(), [id = id] (const std::pair<int, float>& p) { return p.first == id; }))
+                    y->proc.push_back ({ id, before[static_cast<std::size_t> (id)] });
+            if (c.setDuck && ! y->setDuck)
+            {
+                y->setDuck = true;
+                y->duck = l->duck;
+            }
+        }
+        if (yours.empty()) return quoted + ": this plan changes only the Full Mix, so there's nothing to hear on the track. Press APPLY TO TRACK.";
+        coach.yours = std::move (yours);
+        coach.gapDb = mix::coach::loudnessGapDb (coach.plan, r, hash, channels);
+        coach.previewing = true;
+        coach.seenAt = now();
+        previewPlay (true);
         return {};
     }
     if (step == "plan")
@@ -3852,6 +3945,7 @@ std::string BridgeHub::rackCoach (const std::string& step, std::uint32_t hash)
             if (! trackListen.forCoach) autoResult ("stopped", "AUTO stopped listening: the Rack's Coach asked for '" + name + "'.");
             trackListen = {};
         }
+        previewEnd (true);
         coach = {};
         coach.hash = hash;
         coach.name = name;
@@ -3876,20 +3970,18 @@ std::string BridgeHub::rackCoach (const std::string& step, std::uint32_t hash)
         coachBuild (hash);
         return {};
     }
-    if (step == "apply")
+    if (step == "apply" || step == "keep")
     {
+        if (step == "keep" && ! (coach.previewing && coach.hash == hash)) return "PREVIEW isn't on: press PREVIEW first.";
         if (coach.hash != hash || coach.state != "ready") return "There's no plan to apply yet: press ANALYZE & BUILD.";
         if (coach.plan.changes.empty()) return quoted + " already fits: nothing to apply.";
+        if (analyzeState == Analyze::reading || analyzeState == Analyze::listening)
+            return "Analyze Mix is listening right now: press APPLY TO TRACK when it has finished.";
         if (bridge.isProtected (hash)) return quoted + " is protected (padlock): the Coach leaves it alone.";
-        // What APPLY sets is what the page shows: the same plan again from the track as it is now.
-        const auto fresh = mix::makeCoachPlan (hash, report.valid ? report : liveOnly, channelsNow(), mixNow());
-        auto same = [] (const mix::Plan& a, const mix::Plan& b) {
-            if (a.changes.size() != b.changes.size()) return false;
-            for (std::size_t i = 0; i < a.changes.size(); ++i)
-                if (a.changes[i].hash != b.changes[i].hash || a.changes[i].proc != b.changes[i].proc || a.changes[i].duck != b.changes[i].duck) return false;
-            return true;
-        };
-        if (! same (fresh, coach.plan))
+        // What APPLY sets is what the page shows: the same plan again from the track as it is now. (During PREVIEW the
+        // plan may be playing: it was checked when PREVIEW started, and History gets your values from before it.)
+        const bool previewed = coach.previewing;
+        if (! previewed && ! samePlan (mix::makeCoachPlan (hash, report.valid ? report : liveOnly, channelsNow(), mixNow()), coach.plan))
         {
             coachBuild (hash);
             return quoted + " changed since the plan was built: here is the plan for it now. Check it, then press APPLY TO TRACK.";
@@ -3903,6 +3995,14 @@ std::string BridgeHub::rackCoach (const std::string& step, std::uint32_t hash)
             if (l == nullptr) { missing.push_back (c.name); continue; }
             proc::Values before {};
             if (! registry.readProc (l->slot, l->generation, before)) before = proc::defaults();
+            link::DuckSources duckBefore = l->duck;
+            if (previewed)
+                for (const auto& y : coach.yours)
+                    if (y.hash == c.hash)
+                    {
+                        for (const auto& [id, v] : y.proc) before[static_cast<std::size_t> (id)] = v;
+                        if (y.setDuck) duckBefore = y.duck;
+                    }
             const auto target = linkChange (HWhat::proc, *l);
             for (const auto& [id, v] : c.proc)
             {
@@ -3919,7 +4019,7 @@ std::string BridgeHub::rackCoach (const std::string& step, std::uint32_t hash)
                 for (auto h : c.duck)
                     if (d.count < link::kMaxDuckSources) d.hashes[static_cast<std::size_t> (d.count++)] = h;
                 auto dc = linkChange (HWhat::duck, *l);
-                dc.listBefore = duckList (l->duck);
+                dc.listBefore = duckList (duckBefore);
                 dc.listAfter = duckList (d);
                 hist.push_back (std::move (dc));
                 registry.requestDuck (l->slot, l->generation, d);
@@ -3927,7 +4027,11 @@ std::string BridgeHub::rackCoach (const std::string& step, std::uint32_t hash)
         }
         const auto made = history.record ("Coach on " + quoted, "", std::move (hist), wallClock());
         if (made == 0)
+        {
+            previewEnd (true);
             return missing.empty() ? quoted + " already fits: nothing changed." : "The Coach couldn't reach the Mixology Link of '" + missing.front() + "': nothing changed.";
+        }
+        previewEnd (false);   // the plan stays (what KEEP means); the level match ends
         coach.step = made;
         coach.state = "applied";
         return {};
@@ -3935,6 +4039,7 @@ std::string BridgeHub::rackCoach (const std::string& step, std::uint32_t hash)
     if (step == "undo")
     {
         if (coach.hash != hash || coach.step == 0) return "Nothing of the Coach's to undo on " + quoted + ".";
+        previewEnd (true);
         std::string info;
         const auto r = undoStep (coach.step, "Coach", info);
         if (! r.ok) return r.message;
@@ -3953,9 +4058,10 @@ std::string BridgeHub::coachReport (const std::vector<std::uint32_t>& shownTrack
         if (h != 0 && (hash == 0 || h == coach.hash)) hash = h;
     if (hash == 0) return {};
     const bool mine = coach.hash == hash;
+    const bool stale = mine && coach.state == "applied" && ! coachStepDone();   // undone in Mixology's History, or gone
     const auto& r = report.valid ? report : liveOnly;
     const auto* t = [&r, hash]() -> const mix::TrackReport* { for (const auto& x : r.tracks) if (x.hash == hash) return &x; return nullptr; }();
-    std::string state = mine ? coach.state : std::string ("idle");
+    std::string state = mine ? (stale ? std::string ("ready") : coach.state) : std::string ("idle");
     if (! mine && (analyzeState == Analyze::reading || analyzeState == Analyze::listening)) state = "busy";
     if (! mine && trackListen.active && ! trackListen.forCoach && trackListen.hash == hash) state = "busy";
 
@@ -3974,7 +4080,15 @@ std::string BridgeHub::coachReport (const std::vector<std::uint32_t>& shownTrack
     }
     o->setProperty ("heardEnough", mix::heardEnough (r, hash));
     o->setProperty ("analyzed", report.valid);
-    o->setProperty ("canUndo", mine && coach.step != 0);
+    o->setProperty ("canUndo", mine && coach.step != 0 && ! stale);
+    o->setProperty ("rev", mine ? static_cast<int> (coach.rev) : 0);   // a plan built again (the Rack redraws it)
+    if (mine && coach.previewing)
+    {
+        o->setProperty ("preview", coach.previewPlan ? "plan" : "yours");
+        o->setProperty ("previewGainDb", std::round (previewGainDb() * 10.0f) / 10.0f);
+    }
+    if (mine && coach.state == "ready" && coach.plan.valid && ! coach.plan.changes.empty())
+        o->setProperty ("planGapDb", std::round (coach.gapDb * 10.0) / 10.0);   // the plan minus yours, loudness (+ = louder, an estimate)
     auto text = juce::JSON::toString (juce::var (o), true).trimEnd();
     // {"track": first: the Rack keeps this report for that track's view (rack::viewJson)
     text = "{\"track\":" + juce::String (static_cast<juce::int64> (hash)) + "," + text.fromFirstOccurrenceOf (",", false, false);
@@ -3984,6 +4098,76 @@ std::string BridgeHub::coachReport (const std::vector<std::uint32_t>& shownTrack
     if (utf8.size() >= rack::kReportBytes)
         utf8 = "{\"track\":" + std::to_string (hash) + ",\"kind\":\"mix\",\"state\":\"failed\",\"plan\":{\"ok\":false,\"summary\":\"The plan is too long for the Rack.\"}}";
     return utf8;
+}
+
+bool BridgeHub::coachStepDone() const
+{
+    const auto* s = coach.step != 0 ? history.find (coach.step) : nullptr;
+    return s != nullptr && ! s->undone;
+}
+
+float BridgeHub::previewGainDb() const
+{
+    if (! coach.previewing) return 0.0f;
+    // Only ever down: the louder of the plan and yours meets the other.
+    const double g = coach.gapDb;
+    return static_cast<float> (coach.previewPlan ? -std::max (0.0, g) : -std::max (0.0, -g));
+}
+
+void BridgeHub::previewPlay (bool plan)
+{
+    using namespace mixology;
+    if (! coach.previewing) return;
+    auto& registry = link::processRegistry();
+    coach.previewPlan = plan;
+    for (const auto& y : coach.yours)
+    {
+        if (plan)
+        {
+            for (const auto& c : coach.plan.changes)
+            {
+                if (c.fullMix || c.hash != y.hash) continue;
+                for (const auto& [id, v] : c.proc) registry.requestProc (y.slot, y.generation, id, v);
+                if (c.setDuck)
+                {
+                    link::DuckSources d;
+                    for (auto h : c.duck)
+                        if (d.count < link::kMaxDuckSources) d.hashes[static_cast<std::size_t> (d.count++)] = h;
+                    registry.requestDuck (y.slot, y.generation, d);
+                }
+            }
+        }
+        else
+        {
+            for (const auto& [id, v] : y.proc) registry.requestProc (y.slot, y.generation, id, v);
+            if (y.setDuck) registry.requestDuck (y.slot, y.generation, y.duck);
+        }
+        if (y.hash == coach.hash) registry.setPreviewGain (y.slot, y.generation, previewGainDb(), link::nowMs());
+    }
+}
+
+void BridgeHub::previewEnd (bool putYoursBack)
+{
+    using namespace mixology;
+    if (! coach.previewing) return;
+    auto& registry = link::processRegistry();
+    for (const auto& y : coach.yours)
+    {
+        if (putYoursBack)
+        {
+            for (const auto& [id, v] : y.proc) registry.requestProc (y.slot, y.generation, id, v);
+            if (y.setDuck) registry.requestDuck (y.slot, y.generation, y.duck);
+        }
+        registry.clearPreview (y.slot, y.generation);
+    }
+    coach.previewing = false;
+    coach.previewPlan = true;
+    coach.yours.clear();
+}
+
+void BridgeHub::coachSeen (const std::vector<std::uint32_t>& shownTracks)
+{
+    if (coach.previewing && std::find (shownTracks.begin(), shownTracks.end(), coach.hash) != shownTracks.end()) coach.seenAt = now();
 }
 
 std::string BridgeHub::fixReport() const
@@ -4031,7 +4215,7 @@ std::string BridgeHub::fixReport() const
             x->setProperty ("need", clip (it.sg->need, 160));
             x->setProperty ("text", clip (it.sg->text, 240));
             juce::Array<juce::var> names;
-            for (std::size_t k = 0; k < it.sg->tracks.size() && k < 4; ++k) names.add (clip (it.sg->tracks[k], 40));
+            for (std::size_t k = 0; k < it.sg->tracks.size() && k < 4; ++k) names.add (clip (it.sg->tracks[k], 120));   // whole (the Rack matches names)
             x->setProperty ("tracks", names);
             if (! it.tool.empty()) x->setProperty ("tool", juce::String (it.tool));
             if (it.done) x->setProperty ("done", true);

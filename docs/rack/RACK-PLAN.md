@@ -327,6 +327,15 @@ Roughly 3 to 5 build sessions, step 1 first.
   tracks (open on the RACK page), COACH (when the track has a Coach), the one-click fixes, the smart tool's name.
   SESSION rows count what is worth fixing on each track.
 
+**Built 2026-11-18 (Beta 32: Mixology 0.40.0, Voxology 0.70.0, Masterology 0.44.0), PREVIEW:**
+- The COACH page's bottom bar: PREVIEW (a ready plan that changes something) -> KEEP PLAN | PLAN / YOURS | BACK TO
+  YOURS, and how the two are matched. Coach steps "preview", "flip", "keep", "back" (Mixology: "<step>.<hash>"); the
+  report adds "preview" ("plan" / "yours"), "previewGainDb" and "planGapDb" (the plan minus yours, + = louder). The
+  louder side is turned down to the other, never up. Voxology and Masterology measure the gap (the clip rendered both
+  ways; MATCH's place while it plays); Mixology estimates it (EQ / Tone Balance curves over the heard spectrum) and
+  turns the track's Link down (LinkRegistry layout 7). Nothing goes into UNDO / History until KEEP; a preview ends
+  (yours back) when no Rack shows the track for 4 s. A save during a preview keeps yours (Voxology, Masterology).
+
 **Next (stage 3 is done):** whatever the user picks: the blind shoot-out's findings, a chain you can reorder, AI
 voice / room / noise separation.
 

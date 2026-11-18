@@ -109,6 +109,8 @@ namespace mixology::link
             s.latency.store (0, kRelaxed);
             s.keyLevel.store (0.0f, kRelaxed);
             s.keyMs.store (0, kRelaxed);
+            s.previewDb.store (0.0f, kRelaxed);
+            s.previewMs.store (0, kRelaxed);
             storeDuck (s.duckNowSeq, s.duckNowCount, s.duckNow, DuckSources {});
             s.heartbeatMs.store (nowMs, kRelaxed);
             s.generation.fetch_add (1, kRelease);
@@ -371,6 +373,16 @@ namespace mixology::link
         return std::isfinite (k) ? std::clamp (k, 0.0f, 16.0f) : 0.0f;
     }
 
+    float Registry::previewGainDb (int slot, std::uint64_t nowMs) const noexcept
+    {
+        auto* s = slotPtr (slot);
+        if (s == nullptr) return 0.0f;
+        const auto when = s->previewMs.load (kAcquire);
+        if (when == 0 || nowMs - std::min (nowMs, when) > kPreviewMs) return 0.0f;
+        const float db = s->previewDb.load (kRelaxed);
+        return std::isfinite (db) ? std::clamp (db, -kPreviewMaxDb, 0.0f) : 0.0f;
+    }
+
     bool Registry::takeDuckRequest (int slot, std::uint32_t& lastSeq, DuckSources& d) const
     {
         auto* s = slotPtr (slot);
@@ -423,6 +435,22 @@ namespace mixology::link
         auto* s = slotPtr (slot);
         if (s == nullptr || s->generation.load (kRelaxed) != generation) return;
         storeDuck (s->duckRequestSeq, s->duckRequestCount, s->duckRequest, d);
+    }
+
+    void Registry::setPreviewGain (int slot, std::uint32_t generation, float db, std::uint64_t nowMs)
+    {
+        auto* s = slotPtr (slot);
+        if (s == nullptr || s->generation.load (kRelaxed) != generation) return;
+        s->previewDb.store (std::isfinite (db) ? std::clamp (db, -kPreviewMaxDb, 0.0f) : 0.0f, kRelaxed);
+        s->previewMs.store (std::max<std::uint64_t> (nowMs, 1), kRelease);
+    }
+
+    void Registry::clearPreview (int slot, std::uint32_t generation)
+    {
+        auto* s = slotPtr (slot);
+        if (s == nullptr || s->generation.load (kRelaxed) != generation) return;
+        s->previewMs.store (0, kRelease);
+        s->previewDb.store (0.0f, kRelaxed);
     }
 
     void Registry::requestProc (int slot, std::uint32_t generation, int index, float value)

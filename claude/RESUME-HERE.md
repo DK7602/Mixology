@@ -274,6 +274,19 @@ sends higher-resolution art, re-run it.
 - Beta 30's installer run (44325675350) was cancelled on purpose: Beta 31 contains all of it. Beta 31 installer: run
   44327493199 (label "Beta 31", version 0.31.0; Mixology 80e965c, Voxology 5c0623c6ce5b..., Masterology c462189701d7...).
   Masterology manual's Claude Docs copy: rev 184.
+- 2026-11-18, user: "what do you recommend we do next?" -> recommended (1) a Beta 31 Cubase checklist
+  (docs/rack/BETA31_TEST.md, sent) + a code review of Betas 26 - 31 with fixes, (2) PREVIEW for the Coach. User: "yes do
+  one and two".
+- BETA 32 BUILT (Mixology 0.40.0, Voxology 0.70.0, Masterology 0.44.0): PREVIEW (RACK-PLAN "Built ... PREVIEW") and
+  the review's fixes. Mixology: BridgeHub preview / flip / keep / back (CoachState::yours, previewPlay / previewEnd,
+  coachSeen from publishRack, renewed / ended in timerCallback), LinkRegistry layout 7 (previewDb / previewMs; test
+  in test_link), the Link's previewGain after its meters (not offline), mix::coach::loudnessGapDb (test_track_coach).
+  Review fixes: resetProject clears the Coach; CoachState::rev (the Rack redraws an identical plan), a stale APPLIED
+  after History's UNDO reads "ready", APPLY refused during Analyze Mix, track names cut to 120 in fixReport,
+  "upToDate" in TrackCoach's JSON, locale-free num(). Shared rack.js: mixOwner() (the Mixology with faders / a report),
+  coachAsks() (a shown track can ask Mixology's Coach while it reports another), redraw() after every Coach answer.
+  Known limit: on a Mixology track a save during PREVIEW saves what plays (the Link keeps its own state); the manual
+  says to KEEP or go BACK first. Preview: rack_mock previewStep, scratchpad b32.js.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the

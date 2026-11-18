@@ -149,6 +149,7 @@ private:
     std::atomic<std::uint32_t> running { 0 };
     std::array<std::uint32_t, mixology::link::kProcSlots> procRequestSeen {};
     juce::SmoothedValue<double, juce::ValueSmoothingTypes::Multiplicative> trimGain;
+    juce::SmoothedValue<double, juce::ValueSmoothingTypes::Multiplicative> previewGain;   // the Coach's PREVIEW (Mixology sets it)
     mixology::TrackMeter meter;
     std::uint32_t publishedWindows = 0;
 

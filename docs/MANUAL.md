@@ -3,7 +3,7 @@
 Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list all three are under Sonicology.
 
-Manual for version 0.39.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
+Manual for version 0.40.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -64,6 +64,7 @@ fix):
 | Sonicology Rack: the COACH page on the master (through Masterology's Auto-Master), STOP while the Coach listens | New in 0.37: tested in the engine and the browser preview, not yet in a DAW |
 | The Coach after APPLY (Already set / NOTHING TO CHANGE); RACK as a word; the manual in Settings | New in 0.38: tested in the engine and the browser preview, not yet in a DAW |
 | Sonicology Rack: WHAT TO FIX FIRST on the SESSION page (the Mix Assistant's points, the setup check and the Rack's warnings, worst first) | New in 0.39: tested in the browser preview, not yet in a DAW |
+| The Coach's PREVIEW (hear the plan, flip PLAN / YOURS at the same loudness, KEEP PLAN or BACK TO YOURS) | New in 0.40: tested in the engine and the browser preview, not yet in a DAW |
 
 Nothing changes your sound until you ask: every processing module starts switched off (the audio passes
 through bit for bit). What can change it: the Cubase faders and pans Mixology moves, the Assist EQ / Trim in
@@ -1011,6 +1012,15 @@ Masterology's UNDO; **UNDO** takes it back. Auto-Master in Masterology's own win
 now (and, for a vocal, measures your take through them): each module already set as planned says **Already set**, and
 when nothing is left to change it says so and the button reads **NOTHING TO CHANGE** (it no longer offers the same plan
 again).
+
+**PREVIEW (hear it before you apply it):** when a plan is ready, press **PREVIEW**: the plan plays on the track (or the
+master), but nothing is kept yet and nothing goes into UNDO or Mixology's History. While the song plays, flip
+**PLAN / YOURS** to compare. The louder of the two is turned down to match the other, so you judge the sound, not the
+volume; the bottom bar says by how much (on a Mixology track it's an estimate from the plan's EQ and Tone Balance;
+Voxology and Masterology measure it). **KEEP PLAN** applies it, as APPLY does (one UNDO step); **BACK TO YOURS** puts
+your settings back. If no Rack shows the track for a few seconds, the preview ends by itself and your settings come
+back. Saving the project during a preview keeps your settings in Voxology and Masterology; on a Mixology track, press
+KEEP PLAN or BACK TO YOURS before you save.
 
 **Light or dark:** click the spinning cube at the top left. All three plug-ins remember your choice.
 

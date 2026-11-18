@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 #include <cstdio>
 
 namespace mixology::mix::coach
@@ -20,11 +21,20 @@ namespace mixology::mix::coach
 
         std::string num (double v, int decimals = 1)
         {
-            char b[48];
-            std::snprintf (b, sizeof (b), "%.*f", decimals, v);
-            std::string s = b;
-            if (s == "-0" || s == "-0.0") s = s.substr (1);
-            return s;
+            // Locale-free (a host that sets a comma-decimal LC_NUMERIC would make printf write "4,1": invalid JSON).
+            if (! std::isfinite (v)) v = 0.0;
+            static constexpr long long kScale[] = { 1, 10, 100, 1000 };
+            decimals = std::clamp (decimals, 0, 3);
+            const double scaled = std::round (std::abs (v) * static_cast<double> (kScale[decimals]));
+            if (scaled > 9.0e15) return "0";   // (nothing near this size is ever shown)
+            const auto n = static_cast<long long> (scaled);
+            std::string s = std::to_string (n / kScale[decimals]);
+            if (decimals > 0)
+            {
+                const auto frac = std::to_string (n % kScale[decimals]);
+                s += "." + std::string (static_cast<std::size_t> (decimals) - frac.size(), '0') + frac;
+            }
+            return v < 0.0 && n != 0 ? "-" + s : s;
         }
         /** Text for people: a real minus sign. */
         std::string signedText (double v, int decimals = 1)
@@ -187,6 +197,35 @@ namespace mixology::mix::coach
         return db;
     }
 
+    double loudnessGapDb (const Plan& plan, const Report& r, std::uint32_t hash, const std::vector<ChannelNow>& channels)
+    {
+        const ChannelNow* ch = nullptr;
+        for (const auto& c : channels)
+            if (c.hash == hash) ch = &c;
+        const TrackReport* t = nullptr;
+        for (const auto& x : r.tracks)
+            if (x.hash == hash) t = &x;
+        if (ch == nullptr || ! ch->hasProc || t == nullptr || t->bands.size() < static_cast<std::size_t> (kBands)) return 0.0;
+        const auto atAnalysis = ch->procAtAnalysisKnown ? ch->procAtAnalysis : ch->proc;
+        const auto then = planned (*ch, plan, hash);
+        // BS.1770's K weighting (its shelf and high-pass), as a response.
+        const auto shelf = dsp::design (dsp::Shape::highShelf, 1681.97, 4.0, 0.7072, kRate);
+        const auto highPass = dsp::design (dsp::Shape::highPass, 38.135, 0.0, 0.5003, kRate);
+        double yours = 0.0, planEnergy = 0.0;
+        for (int i = 0; i < kBands; ++i)
+        {
+            const double hz = bandHz (i);
+            const double band = t->bands[static_cast<std::size_t> (i)];
+            if (! std::isfinite (band)) continue;
+            const double heard = band - toneResponseDb (atAnalysis, hz)
+                               + dsp::magnitudeDb (shelf, hz, kRate) + dsp::magnitudeDb (highPass, hz, kRate);
+            yours += std::pow (10.0, (heard + toneResponseDb (ch->proc, hz)) / 10.0);
+            planEnergy += std::pow (10.0, (heard + toneResponseDb (then, hz)) / 10.0);
+        }
+        if (! (yours > 0.0) || ! (planEnergy > 0.0) || ! std::isfinite (yours) || ! std::isfinite (planEnergy)) return 0.0;
+        return std::clamp (10.0 * std::log10 (planEnergy / yours), -12.0, 12.0);
+    }
+
     std::string planJson (const Plan& plan, const Report& r, std::uint32_t hash, const std::vector<ChannelNow>& channels, std::size_t maxBytes)
     {
         const ChannelNow* ch = nullptr;
@@ -316,7 +355,8 @@ namespace mixology::mix::coach
                 }
                 o += "]}";
             }
-            o += "],\"changes\":" + std::to_string (plan.changes.size()) + ",\"modulesOn\":" + std::to_string (modulesOn);
+            o += "],\"changes\":" + std::to_string (plan.changes.size()) + ",\"modulesOn\":" + std::to_string (modulesOn)
+               + ",\"upToDate\":" + (plan.changes.empty() ? "true" : "false");
             if (tone)
             {
                 const double mids = level (now, kMidFrom, kMidTo);

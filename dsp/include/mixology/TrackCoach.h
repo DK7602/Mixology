@@ -26,6 +26,11 @@ namespace mixology::mix::coach
     /** The response (dB) of a Link's EQ and Tone Balance at `hz`, as `v` sets them (0 where they are off). */
     double toneResponseDb (const proc::Values& v, double hz);
 
+    /** PREVIEW: how much louder (dB, + louder) the track plays with the plan than as it is now: its EQ and Tone Balance
+        (the plan's and yours) over the spectrum Analyze Mix heard, K-weighted as loudness meters weight it. An estimate
+        (the other modules are left out: the plan's compressor makes its own level back up); 0 when it can't tell. */
+    double loudnessGapDb (const Plan&, const Report&, std::uint32_t hash, const std::vector<ChannelNow>&);
+
     /** The plan as the Rack reads it (a JSON object): summary, heard, issues, the Link's modules with each setting's
         reason, bands (before / after, against the track's mids), results, moves, what it left alone. At most
         `maxBytes` (reasons shortened, then dropped; always valid JSON). */

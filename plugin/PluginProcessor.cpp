@@ -238,6 +238,7 @@ void MixologyAudioProcessor::publishRack()
             faders.values.push_back (std::move (v));
         }
         if (! faders.values.empty() && u.modules.size() < static_cast<std::size_t> (rack::kMaxModules)) u.modules.push_back (std::move (faders));
+        bridgeHub->coachSeen (shownTracks);   // Beta 32: a PREVIEW plays while its track is shown
         u.report = bridgeHub->coachReport (shownTracks);   // Beta 28: the Coach on the track the Rack shows
     }
     // Beta 31: a Rack showing the Full Mix (its SESSION page asks for it) gets WHAT TO FIX FIRST: the setup check and the

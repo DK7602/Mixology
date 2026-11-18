@@ -7,7 +7,21 @@ The complete vocal, mixing and mastering suite
 
 Thanks for trying the beta. Nothing here is finished: tell us what's confusing, what breaks and what you'd change.
 
-NEW IN THIS BETA: WHAT TO FIX FIRST (THE RACK'S SESSION PAGE)
+NEW IN THIS BETA: PREVIEW (HEAR THE COACH'S PLAN BEFORE YOU APPLY IT)
+  - When the Coach has a plan, press PREVIEW: the plan plays on the track (or the master), but nothing is kept yet.
+  - Flip PLAN / YOURS while the song plays. The louder one is turned down to match the other, so you hear the
+    difference in sound, not just "louder".
+  - KEEP PLAN applies it (UNDO takes it back); BACK TO YOURS puts your settings back. Closing the Rack ends it too.
+
+ALSO IN THIS BETA: FIXES FROM A CHECK OF BETAS 26 - 31
+  - The Coach's page could stay empty on a computer that writes numbers with a comma (4,1 instead of 4.1).
+  - NOTHING TO CHANGE now works on Mixology's tracks too (it did on vocals and the master).
+  - UNDO on the Coach page only ever takes back the Coach's own step.
+  - Loading a preset or another project while the Coach works no longer leaves an old plan behind.
+  - A Coach button that was refused no longer stays greyed out.
+  All three plug-ins need this version (Voxology 0.70.0, Mixology 0.40.0, Masterology 0.44.0).
+
+ALSO NEW (BETA 31): WHAT TO FIX FIRST (THE RACK'S SESSION PAGE)
   - The Rack's SESSION page has a new list on the right: what to fix first in your whole project, worst first.
   - It puts together Mixology's Mix Assistant (press ANALYZE MIX in Mixology first: a buried vocal, a kick and 808
     that clash, mud...), Mixology's setup check (a vocal without Mixology Link...) and the Rack's own warnings (two

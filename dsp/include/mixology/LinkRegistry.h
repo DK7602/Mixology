@@ -26,7 +26,7 @@
       it, undo works). */
 namespace mixology::link
 {
-    constexpr std::uint32_t kLayoutVersion = 6;   // 2: analysis frames (M3), 3: + left / right balance, 4: + Assist EQ (M4), 5: + processing (M5), 6: + Space keys / ducking (M5.2)
+    constexpr std::uint32_t kLayoutVersion = 7;   // 2: analysis frames (M3), 3: + left / right balance, 4: + Assist EQ (M4), 5: + processing (M5), 6: + Space keys / ducking (M5.2), 7: + the Coach's PREVIEW gain
     constexpr std::uint32_t kNoRequestSeen = 0xFFFFFFFFu;   // a Link's first look at a request counter: take none
     constexpr int kMaxLinks = 256;
     constexpr std::size_t kNameBytes = 128;
@@ -37,6 +37,8 @@ namespace mixology::link
     static_assert (proc::count <= kProcSlots);
     constexpr int kMaxDuckSources = 8;         // a Space effect ducks under at most this many tracks
     constexpr std::uint64_t kKeyMs = 250;      // a track's key level older than this counts as silence
+    constexpr std::uint64_t kPreviewMs = 3000; // a PREVIEW gain Mixology hasn't renewed for this long ends (back to 0 dB)
+    constexpr float kPreviewMaxDb = 12.0f;     // a PREVIEW gain only ever turns a Link down, by at most this
 
     /** The tracks a Link's Space effect ducks under (their name hashes, as in the Cubase bridge). */
     struct DuckSources
@@ -121,6 +123,11 @@ namespace mixology::link
         std::atomic<std::uint32_t> duckNowSeq;
         std::atomic<std::uint32_t> duckNowCount;
         std::array<std::atomic<std::uint32_t>, kMaxDuckSources> duckNow;
+
+        // The Coach's PREVIEW (Mixology -> Link): a gain after everything else in the Link, so the plan and yours
+        // play at the same loudness while you flip between them. Mixology renews it while the preview plays.
+        std::atomic<float> previewDb;
+        std::atomic<std::uint64_t> previewMs;      // when Mixology last set it (0: no preview)
     };
 
     struct alignas (64) Header
@@ -217,6 +224,8 @@ namespace mixology::link
         void publishKey (int slot, float level, std::uint64_t nowMs) noexcept;
         /** Audio thread: another track's key level (0 when it has gone quiet for kKeyMs or stopped). */
         float keyLevel (int slot, std::uint64_t nowMs) const noexcept;
+        /** Audio thread: the Coach's PREVIEW gain (dB, 0 or below); 0 when Mixology hasn't renewed it for kPreviewMs. */
+        float previewGainDb (int slot, std::uint64_t nowMs) const noexcept;
         /** Like takeTrimRequest, for the tracks to duck under. */
         bool takeDuckRequest (int slot, std::uint32_t& lastSeq, DuckSources&) const;
         /** The tracks this Link's Space ducks under now (message thread). */
@@ -233,6 +242,10 @@ namespace mixology::link
         void requestAssist (int slot, std::uint32_t generation, const AssistSettings&);
         void requestProc (int slot, std::uint32_t generation, int index, float value);
         void requestDuck (int slot, std::uint32_t generation, const DuckSources&);
+        /** The Coach's PREVIEW: turn this Link down by `db` (clamped to 0 .. -kPreviewMaxDb) until it isn't renewed
+            for kPreviewMs. Call it again (any value) to keep it; clearPreview ends it now. */
+        void setPreviewGain (int slot, std::uint32_t generation, float db, std::uint64_t nowMs);
+        void clearPreview (int slot, std::uint32_t generation);
         /** A Link's processing controls as it published them last (false: no such Link, or no processing). */
         bool readProc (int slot, std::uint32_t generation, proc::Values&) const;
         /** Its processing meters (false when it hasn't processed audio within kAudioMs). */
