@@ -307,6 +307,8 @@ sends higher-resolution art, re-run it.
   one part (it skips all builds). Re-run 3 queued 17:55. If GitHub's macOS queue stays stuck, an option for the user:
   macos-15-intel / macos-14 for the build-mac matrix (not changed: ask first). User told how to download the Windows
   installer (Artifacts: Sonicology-Windows, direct link .../runs/44339024476/artifacts/14442019921).
+- 18:41: re-run 3 (attempt 4) failed the same way (Mixology (macOS) never got a macOS runner; no Sonicology-macOS
+  artifact). Stopped re-running. Offered the user: switch build-mac / macos to another GitHub Mac type (needs their OK).
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the
