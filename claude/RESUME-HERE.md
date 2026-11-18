@@ -271,6 +271,9 @@ sends higher-resolution art, re-run it.
   only), published as the master Mixology's report when a Rack shows the Full Mix (PluginProcessor::publishRack);
   compiled against JUCE here (scratchpad c28.sh), no unit test (BridgeHub has none). Preview: rack_mock FIX_REPORT
   (?fix=none: not analyzed), scratchpad b31.js. Stage 3 (the Coach) is done; next is the user's pick.
+- Beta 30's installer run (44325675350) was cancelled on purpose: Beta 31 contains all of it. Beta 31 installer: run
+  44327493199 (label "Beta 31", version 0.31.0; Mixology 80e965c, Voxology 5c0623c6ce5b..., Masterology c462189701d7...).
+  Masterology manual's Claude Docs copy: rev 184.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the
