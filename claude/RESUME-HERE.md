@@ -321,6 +321,9 @@ sends higher-resolution art, re-run it.
   MOVABLE / orders; scratchpad b33.js (drag, click still picks, UNDO / REDO, RESET ORDER, a fixed row doesn't move).
   Known: LISTEN's take-out timing assumes Saturation after the listened module (a few samples off otherwise: monitoring
   only); the plug-ins' own windows keep their fixed layout. Masterology manual's Claude Docs copy: rev 186.
+- Beta 33 pushed (Mixology fca4d93, Voxology 34be9da, Masterology 9982248); installer run 44383920227 (label "Beta 33",
+  version 0.33.0). Local tests: Mixology 267/267 cases, Masterology ctest 316/316, Voxology 226/227 (the one: test_manual
+  on a binary built before the version bump; passes rebuilt).
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the
