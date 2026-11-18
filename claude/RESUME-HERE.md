@@ -228,6 +228,19 @@ sends higher-resolution art, re-run it.
   test_rack_link (viewJson keeps the report for its track). Preview: rack_mock ?mixcoach=ready, Kick listens 3 s first
   (preview.html now passes getRack its track); scratchpad b28.js. BridgeHub's Coach code has no unit test (like AUTO's)
   and has never run in a DAW: the plan / JSON halves are tested, the wiring (trackListen, History, Links) is AUTO's own.
+- Beta 28 installer: Sonicology suite run 44250741145 (label "Beta 28", version 0.28.0; Mixology 055d87c, Voxology
+  cb92fd4, Masterology 0dc43fb). Windows half GREEN (3 builds + Windows installer); the Macs were still building (one at
+  a time) when Beta 29 was pushed.
+- BETA 29 BUILT (Mixology 0.37.0, Voxology 0.67.0, Masterology 0.41.0): the Coach for the master. Details in
+  docs/rack/RACK-PLAN.md stage 3 ("Built ... the master"). Masterology does the work (MasterCoach.h / .cpp,
+  AutoMasterController plan mode, ScopedPace); shared RackLink: Change::coach passes a unit's lock (BUILD NOW and STOP
+  while the Coach's own listen locks it; Voxology now refuses Coach steps while Auto-Edit runs from its own window and
+  has "cancel"). rack.js: kind "master" (GENRE / INTENSITY / TARGET, BUILD NOW, RESULTS with units) and STOP for every
+  Coach. Tests: polisher test_master_coach.cpp (plan JSON, paced = same decisions, [.print]) and a plug-in test
+  through the real Rack link ("Coach (the master): ANALYZE & BUILD plans without changing anything; ..."): listen,
+  BUILD NOW, plan with nothing changed, APPLY = one UNDO step, UNDO, STOP, busy guard. test_rack_link: a coach step
+  goes through a lock, a knob doesn't. Preview: rack_mock ?mastercoach=ready; scratchpad b29.js.
+  Found while testing: JUCE's JSON::toString puts a space after each colon (the Rack parses it, so no harm).
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the

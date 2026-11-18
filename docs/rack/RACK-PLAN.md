@@ -270,7 +270,7 @@ Roughly 3 to 5 build sessions, step 1 first.
 - **Insert order check:** from the levels, whether the Link really sits after Voxology; a warning when not.
 - **MODULES page:** TURN ON HERE where the track's plug-in has the module.
 
-## Stage 3: the Coach (vocals built in Beta 26; tracks and master next; concept `rack-coach.png`)
+## Stage 3: the Coach (vocals Beta 26, tracks Beta 28, the master Beta 29; concept `rack-coach.png`)
 
 **Built 2026-11-18 (Beta 26: Mixology 0.34.0, Voxology 0.64.0, Masterology 0.38.0), vocals:**
 - The COACH page (rack.js `coachPage` / `coachBar`; header button next to SESSION) on a track with Voxology (not BEAT).
@@ -300,7 +300,24 @@ Roughly 3 to 5 build sessions, step 1 first.
 - rack.js: coachOf returns Voxology's Coach on a vocal it processes, else Mixology's (kind "mix") on a track with a
   Link; the page's setup shows ROLE / STYLE / HEARD; RESULTS adds the moves in words; no SAVE CHAIN.
 
-**Next:** Masterology's master (Auto-Master planned first, applied on APPLY), a project view of what to fix first.
+**Built 2026-11-18 (Beta 29: Mixology 0.37.0, Voxology 0.67.0, Masterology 0.41.0), the master:**
+- Masterology: `AutoMasterController::startPlan` listens like Auto-Master (the whole song, or BUILD NOW = `finish`
+  after 12 s) and decides the same, keeps the plan; the job renders the loudest 12 s through the planned chain
+  (`renderMaster`) and measures it again (`analyseMix`). `polisher::coach::planJson` (MasterCoach.h / .cpp): heard
+  (the listen, the song's loudness and range, the loudest 12 s, punch, stereo bass, correlation), issues (7 tone bands
+  against the genre's or reference's aim, quiet, peaks, squashed, wide low end, phase), the 12 modules with each
+  setting's reason (moves first), bands before / aim / after, results (loudness LUFS, true peak dBTP, punch dB, stereo
+  bass %, each band against the aim), notes. `applyPlan` = Auto-Master's apply (one UNDO step); UNDO only while that
+  step is still the last one. The analysis rests while the song plays (`ScopedPace`, as Voxology's `vox::pace`).
+- Steps: `plan` / `finish` / `cancel` / `apply` / `undo` / `discard`; GENRE / INTENSITY / TARGET turn `amGenre` /
+  `amIntensity` / `amTarget`. coachReport: {kind "master", state, progress, heardSeconds, canFinish, hearing, genre(s),
+  intensity(ies), target(s), reference, canUndo, plan}.
+- Shared RackLink: `Change::coach` requests pass a unit's lock (the Coach's own listen locks the unit; BUILD NOW and
+  STOP must still go; each plug-in refuses what doesn't fit: Voxology refuses while Auto-Edit runs from its own window).
+- rack.js: coachOf on the Master track (kind "master"): GENRE / INTENSITY / TARGET (REFERENCE when wide), BUILD NOW
+  with the seconds heard, RESULTS rows each on their own scale with their unit; STOP for every Coach while it listens.
+
+**Next:** a project view of what to fix first across tracks (Mixology's Mix Assistant points).
 
 **The plan as written before building:**
 

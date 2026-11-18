@@ -7,7 +7,7 @@ HTML / CSS / JS interface in the platform web view, GitHub Actions builds on eve
 The plan and milestones: [docs/PLAN.md](docs/PLAN.md). User manual (also built into the plug-in): [docs/MANUAL.md](docs/MANUAL.md).
 Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_TEST.md) (passed), [docs/M3_TEST.md](docs/M3_TEST.md), [docs/M4_TEST.md](docs/M4_TEST.md), [docs/M5_TEST.md](docs/M5_TEST.md), [docs/M6_TEST.md](docs/M6_TEST.md) (current).
 
-## Status: v0.36.0
+## Status: v0.37.0
 
 | Piece | State |
 | --- | --- |
@@ -53,6 +53,7 @@ Tests in Cubase: [docs/M1_TEST.md](docs/M1_TEST.md), [docs/M2_TEST.md](docs/M2_T
 | Rack Beta 26 (v0.34.0, with Voxology 0.64.0 and Masterology 0.38.0): the Rack's COACH page for a vocal (stage 3, vocals first). RackLink layout 4: `Unit::report` (the Coach's JSON, up to 8 KB, sent with the details only) and `Change::coach` (control plan / apply / undo). Voxology does the work (vox::coach::planJson: Auto-Edit's plan, what stands out against its aim, the take played through the plan and measured again); rack.js draws it (coachPage / coachBar) | New: tested in the engine and the browser preview, not yet in a DAW |
 | Rack Beta 27 (v0.35.0, with Voxology 0.65.0 and Masterology 0.39.0): the user heard the song cut out while the Coach analysed. Voxology's analysis now rests on purpose (vox/Pace.h); rack.js rebuilds the COACH / MODULES / SESSION pages only when what they show changes (their signature took every plug-in's knob texts, and Masterology's Dynamics readings move all the time), and a knob that only shows a reading changes in place on the RACK page | New: tested in the engine and the browser preview, not yet in a DAW |
 | Rack Beta 28 (v0.36.0, with Voxology 0.66.0 and Masterology 0.40.0): the Coach on Mixology's tracks. `mix::makeCoachPlan` (MixPlanner: every page's rules in one joint `Rules`, like Polish for one track), `mix::coach::planJson` (TrackCoach: what it heard, what stands out, the Link's modules with each setting's reason, the tone now / with the plan from the EQ and Tone Balance curves, results, moves). BridgeHub::rackCoach (plan / apply / undo / discard; listens first through trackListen when the track wasn't heard; APPLY = one History step "Coach on '<track>'", checked against a fresh plan; UNDO via undoStep, shared with AUTO's Undo) and coachReport (the Mixology on the master's Unit::report, {"track":<hash>, ...}; rack::viewJson keeps it for that track's view). rack.js: coachOf / coachPage for kind "mix" (ROLE / STYLE / HEARD, moves in RESULTS) | New: tested in the engine and the browser preview, not yet in a DAW |
+| Rack Beta 29 (v0.37.0, with Voxology 0.67.0 and Masterology 0.41.0): the Coach on the master. Masterology does the work (polisher::coach::planJson in MasterCoach.h / .cpp: Auto-Master's plan as the Rack reads it, the mix against its genre / reference aim, the loudest 12 s rendered through the plan and measured again; AutoMasterController's plan mode; BUILD NOW / STOP). Shared RackLink: the Coach's steps pass a unit's lock (the plug-in decides). rack.js: coachPage for kind "master" (GENRE / INTENSITY / TARGET, BUILD NOW, results with their own units) and STOP for every Coach while it listens | New: tested in the engine and the browser preview, not yet in a DAW |
 
 ## Layout
 

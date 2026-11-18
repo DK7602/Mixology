@@ -7,13 +7,23 @@ The complete vocal, mixing and mastering suite
 
 Thanks for trying the beta. Nothing here is finished: tell us what's confusing, what breaks and what you'd change.
 
-NEW IN THIS BETA: THE COACH FOR EVERY TRACK (BEATS, DRUMS, BASS, KEYS...)
+NEW IN THIS BETA: THE COACH FOR THE MASTER
+  - Pick Master in the Rack and open COACH: the Coach plans your whole master through Masterology's Auto-Master.
+    Choose the GENRE, INTENSITY and TARGET (Streaming, Loud release or Club), press ANALYZE & BUILD and play the song.
+  - Let the whole song play (best), or press BUILD NOW once it has heard 12 seconds. STOP stops listening.
+  - It shows what stands out against your genre's masters, every module it would use and why, and the result measured
+    on your own mix (loudness, true peak, punch, stereo bass, tone).
+  - Nothing changes until you click APPLY TO MASTER (one step in Masterology's UNDO). UNDO takes it back.
+  - STOP now works for every Coach (vocals and tracks too) while it listens.
+  All three plug-ins need this version (Voxology 0.67.0, Mixology 0.37.0, Masterology 0.41.0).
+
+ALSO NEW (BETA 28): THE COACH FOR EVERY TRACK (BEATS, DRUMS, BASS, KEYS...)
   - The Rack's COACH page now works on any track with Mixology Link, not just vocals. Pick the track, press
     ANALYZE & BUILD: Mixology plans the whole track at once (EQ, Dynamics, Space, Tone, Stereo) with the same rules as
     its AUTO buttons, and shows what stands out, every setting with its reason, and the tone now and with the plan.
   - If Mixology hasn't heard that track play yet, the Coach listens to it first: play a part where it plays.
   - Nothing changes until you click APPLY TO TRACK (one step in Mixology's History). UNDO takes it back.
-  - Vocals with Voxology still get Voxology's Coach. Masterology's master comes next.
+  - Vocals with Voxology still get Voxology's Coach.
   All three plug-ins need this version (Voxology 0.66.0, Mixology 0.36.0, Masterology 0.40.0).
 
 ALSO NEW (BETA 27): SMOOTHER PLAYBACK WHILE THE COACH WORKS

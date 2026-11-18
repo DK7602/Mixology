@@ -5,7 +5,7 @@
 // answer, about a fifth of a second later, as a plug-in would); ?lock=1 locks Masterology (Auto-Master running);
 // Masterology's Tonal EQ Air refuses (to see a refusal); ?old=1 adds a plug-in from another
 // beta; ?auto=1 has the DAW's automation move a turned knob back; ?order=1 puts Chorus Vox's Link before Voxology;
-// ?coach=ready starts Lead Vox with the Coach's plan ready (Beta 26).
+// ?coach=ready starts Lead Vox with the Coach's plan ready (Beta 26); ?mastercoach=ready the master's (Beta 29).
 (function () {
   "use strict";
   const t0 = Date.now();
@@ -293,12 +293,41 @@
     return r;
   }
 
+  // Beta 29: Masterology's Coach on the master (Auto-Master's plan). Listens fast here: BUILD NOW after "12 s" (3 s), the
+  // song "ends" at 40 s (10 s), builds 1.5 s. The plan is a real one (polisher tests: "Coach (the master): print a plan").
+  // ?mastercoach=ready starts with its plan ready.
+  const MASTER_GENRES = ["Pop", "Trap / Hip-Hop", "R&B", "Rock", "EDM", "Acoustic"];
+  const MASTER_INTS = ["Gentle", "Balanced", "Punchy"];
+  const MASTER_TARGETS = ["Streaming", "Loud release", "Club"];
+  const MASTER_PLAN = {"ok": true, "kind": "master", "summary": "Listened to 12 s of your mix. Your mix measured −30.1 LUFS with peaks at −16.5 dBTP. Settings: Trap / Hip-Hop, Balanced, Loud −9. The master now measures −9.0 LUFS with true peak −1.5 dBTP. The full song will read about 1 LU lower than this loud section, which is normal.", "genre": "Trap / Hip-Hop", "intensity": "Balanced", "target": "Loud release", "targetLufs": -9.0, "aim": "Trap / Hip-Hop", "reference": "", "heard": ["Listened to 2:45 of the song (the whole song)", "The song: −19.5 LUFS, loudness range 6.0 LU", "Its loudest 12 s: −30.1 LUFS, peaks −16.5 dBTP", "Punch (peak to loudness): 13.6 dB", "Bass below 150 Hz: 18 % stereo", "Stereo: correlation 0.70, sides of the mids 0 dB"], "issues": [{"key": "lowend", "name": "Too much low end", "from": 20, "to": 65, "warn": true, "text": "Low end (20 - 65 Hz) sits +4.8 dB against Trap / Hip-Hop"}, {"key": "lowmid", "name": "Not enough low mids", "from": 180, "to": 600, "warn": true, "text": "Low mids (180 - 600 Hz) sits −4.3 dB against Trap / Hip-Hop"}, {"key": "air", "name": "Too much air", "from": 8000, "to": 20000, "warn": true, "text": "Air (8.0k - 20k Hz) sits +10.2 dB against Trap / Hip-Hop"}, {"key": "presence", "name": "Too much presence", "from": 3500, "to": 8000, "warn": false, "text": "Presence (3.5k - 8.0k Hz) sits +3.9 dB against Trap / Hip-Hop"}, {"key": "quiet", "name": "Quieter than the target", "from": 0, "to": 0, "warn": false, "text": "its loudest part comes in at −30.1 LUFS; the target is −9.0 LUFS"}], "chain": [{"key": "mas.unlimiter", "name": "Unlimiter", "on": false, "caption": "Restore peaks", "kept": false, "set": [{"control": "Amount", "value": "0 %", "why": "Your mix still has its punch (Squash 14.3 dB, like an unmastered mix: its peaks stand well above the average…"}]}, {"key": "mas.tonaleq", "name": "Tonal EQ", "on": true, "caption": "Balance tone", "kept": false, "set": [{"control": "Low End", "value": "−1.6 dB", "why": "Your mix has about 4.8 dB more sub (below 65 Hz) than typical Trap / Hip-Hop masters, so a 1.6 dB cut closes…"}, {"control": "Bass", "value": "−0.7 dB", "why": "Your mix has about 2.4 dB more bass (65–180 Hz) than typical Trap / Hip-Hop masters, so a 0.7 dB cut closes…"}]}, {"key": "mas.stemeq", "name": "Stem EQ", "on": false, "caption": "Balance stems", "kept": false, "set": [{"control": "Vocals", "value": "try +3.0 dB", "why": "The model hears your vocal at −13.9 dB against the whole mix; in Trap / Hip-Hop masters it usually sits…"}]}, {"key": "mas.steady", "name": "Tone Steady", "on": false, "caption": "Hold the tone", "kept": false, "set": [{"control": "Amount", "value": "0 %", "why": "Your tone stays consistent through what I heard (at full strength Tone Steady would move only 0.09 dB on…"}]}, {"key": "mas.resonance", "name": "Resonance Tamer", "on": false, "caption": "Tame harsh spots", "kept": false, "set": [{"control": "Amount", "value": "0 %", "why": "I hardly hear any tones ringing out of your mix (at full strength the tamer would cut only 0.00 dB on average,…"}]}, {"key": "mas.bass", "name": "Bass Control", "on": true, "caption": "Tighten low end", "kept": false, "set": [{"control": "Mono Below", "value": "100 Hz", "why": "Your bass is 18 % stereo below 150 Hz. Club systems and phones play bass in mono, so stereo bass partly…"}, {"control": "Punch", "value": "25 %", "why": "Your low end is fairly sustained, so kicks can get lost under it. Punch adds thump to the start of each kick…"}]}, {"key": "mas.dynamics", "name": "Dynamics", "on": true, "caption": "Control bands", "kept": false, "set": [{"control": "Low", "value": "2.0:1 at −29.6 dB", "why": "Holds the kick and 808 down by up to about 1.5 dB on the loudest moments, and gives back 0.7 dB so the band's…"}, {"control": "Low Mid", "value": "2.0:1 at −34.6 dB", "why": "Holds the body, snare and vocal warmth down by up to about 1.5 dB on the loudest moments, and gives back 0.4…"}]}, {"key": "mas.imager", "name": "Stereo Imager", "on": true, "caption": "Width", "kept": false, "set": [{"control": "Lows", "value": "100 %", "why": "The lows stay as they are: wide bass costs punch and cancels on mono speakers (Mono Below in Bass Control…"}, {"control": "Mids", "value": "92 %", "why": "Your mids are already very wide (stereo part only 0.4 dB below the center), so they're pulled in a little to…"}]}, {"key": "mas.sat", "name": "Saturation", "on": true, "caption": "Add warmth", "kept": false, "set": [{"control": "Mode", "value": "Tube", "why": "Tube leans on the 2nd harmonic: the 808 sounds fuller and richer, which Trap / Hip-Hop needs."}, {"control": "Focus", "value": "Bass only", "why": "Harmonics go on the 808 and kick only, so the 808 shows up on phone and laptop speakers (they can't play its…"}]}, {"key": "mas.clipper", "name": "Soft Clipper", "on": true, "caption": "Catch peaks", "kept": false, "set": [{"control": "Soft Clipper", "value": "On", "why": "Your mix has 13.6 dB between its peaks and its average loudness. The clipper shaves about 4.1 dB off the drum…"}, {"control": "Clip Level", "value": "+2.7 dB", "why": "Clipping starts 2.7 dB above the ceiling, so only the biggest peaks are touched: about as much clipping as…"}]}, {"key": "mas.max", "name": "Maximizer", "on": true, "caption": "Loudness", "kept": false, "set": [{"control": "Drive", "value": "+23.9 dB", "why": "+23.9 dB of Drive lands this part at −9.0 LUFS, your Loud −9 target. Holding the peaks down costs about…"}, {"control": "Ceiling", "value": "−1.5 dBTP", "why": "Streaming services convert your master to MP3/AAC/Ogg. Masters this loud peak higher after that conversion, so…"}]}], "changes": 97, "modulesOn": 7, "bands": {"hz": [36, 108, 329, 980, 2366, 5292, 12649], "before": [-0.1, 4.5, -3.7, -2.1, -0.2, 1.5, 3.3], "target": [-4.9, 2.1, 0.6, 0.1, -0.4, -2.4, -6.9], "after": [-1.4, 2.9, -1.9, -1.4, -0.2, 0.7, 2.1]}, "results": [{"name": "Loudness (loudest 12 s)", "before": -30.1, "after": -9.0, "unit": "LUFS", "better": true}, {"name": "True peak", "before": -16.5, "after": -1.5, "unit": "dBTP", "better": true}, {"name": "Punch (peak to loudness)", "before": 13.6, "after": 7.5, "unit": "dB", "better": true}, {"name": "Bass stereo (below 150 Hz)", "before": 18, "after": 1, "unit": "%", "better": true}, {"name": "Low end vs the aim", "before": 4.8, "after": 3.5, "unit": "dB", "better": true}, {"name": "Bass vs the aim", "before": 2.4, "after": 0.8, "unit": "dB", "better": true}, {"name": "Low mids vs the aim", "before": -4.3, "after": -2.5, "unit": "dB", "better": true}, {"name": "Mids vs the aim", "before": -2.2, "after": -1.5, "unit": "dB", "better": true}], "moves": [], "first": ["FIX IT IN THE MIX: your mix is 10.2 dB higher in the air (above 8 kHz) than typical Trap / Hip-Hop masters.…", "Compare with A / B and MATCH on: MATCH plays both at the same loudness, so you judge the master, not the…"]};
+  const masterCoach = { state: new URLSearchParams(location.search).get("mastercoach") === "ready" ? "ready" : "idle", t0: 0, canUndo: false };
+  function masterCoachReport() {
+    const c = masterCoach;
+    const t = (Date.now() - (c.t0 || 0)) / 1000;
+    if (c.state === "listening" && t * 4 >= 40) { c.state = "working"; c.t1 = Date.now(); }
+    if (c.state === "working" && (Date.now() - c.t1) / 1000 > 1.5) c.state = "ready";
+    const g = turned["masterology|coach|amGenre"], i = turned["masterology|coach|amIntensity"], tg = turned["masterology|coach|amTarget"];
+    const heard = c.state === "listening" ? Math.floor(t * 4) : 0;
+    const r = { kind: "master", state: c.state, progress: c.state === "listening" ? Math.min(100, Math.round((t * 4 / 12) * 100)) : 0, heardSeconds: heard,
+      canFinish: c.state === "listening" && heard >= 12, hearing: c.state === "listening" && t > 0.4,
+      genre: g != null ? Math.round(g * 5) : 1, genres: MASTER_GENRES, intensity: i != null ? Math.round(i * 2) : 1, intensities: MASTER_INTS,
+      target: tg != null ? Math.round(tg * 2) : 1, targets: MASTER_TARGETS, reference: "", canUndo: !!c.canUndo };
+    if (c.state === "ready" || c.state === "applied") r.plan = MASTER_PLAN;
+    return r;
+  }
+
   function units() {
     const list = rawUnits();
     for (const u of list) {
       u.gen = 1;
       if (powered[u.id] === false) u.on = false;
       if (u.product === "masterology" && lockMaster) u.lock = "Auto-Master is running.";
+      if (u.product === "masterology") {
+        const r = masterCoachReport();
+        u.report = JSON.stringify(r);
+        if (r.state === "listening") u.lock = "Auto-Master is listening to the mix.";
+        else if (r.state === "working") u.lock = "Auto-Master is working out the master.";
+      }
       for (const m of u.modules || []) {
         m.switchable = !FIXED.has(m.key);
         const st = switched[u.id + "|" + m.key];
@@ -350,7 +379,9 @@
       const t = nextTicket++;
       if (lockMaster && r.unit === "masterology") return { ticket: 0, why: "Auto-Master is running." };
       const cs = coach[r.unit] && coach[r.unit].state;
-      if (cs === "listening" || cs === "working") return { ticket: 0, why: cs === "listening" ? "Auto-Edit is listening to the vocal." : "Auto-Edit is working out the settings." };
+      if (r.change !== "coach" && (cs === "listening" || cs === "working")) return { ticket: 0, why: cs === "listening" ? "Auto-Edit is listening to the vocal." : "Auto-Edit is working out the settings." };
+      const ms = r.unit === "masterology" && masterCoach.state;
+      if (r.change !== "coach" && (ms === "listening" || ms === "working")) return { ticket: 0, why: "Auto-Master is listening to the mix." };
       setTimeout(() => {
         if (r.module === "mas.tonaleq" && r.control === "air") { tickets[t] = { outcome: "refused", why: "Masterology can't change Air from the Rack." }; return; }
         if (r.change === "coach" && r.unit === "mixology") {
@@ -364,9 +395,21 @@
           tickets[t] = { outcome: "applied", why: "" };
           return;
         }
+        if (r.change === "coach" && r.unit === "masterology") {
+          const c = masterCoach, heard = (Date.now() - c.t0) / 1000 * 4;
+          const refuse = (why) => { tickets[t] = { outcome: "refused", why }; };
+          if (r.control === "plan") { if (c.state === "listening" || c.state === "working") return refuse("The Coach is already listening to the song."); c.state = "listening"; c.t0 = Date.now(); c.canUndo = false; }
+          else if (r.control === "finish") { if (c.state !== "listening") return refuse("The Coach isn't listening."); if (heard < 12) return refuse("Let the Coach hear at least 12 seconds of the song first."); c.state = "working"; c.t1 = Date.now(); }
+          else if (r.control === "cancel") { if (c.state === "listening" || c.state === "working") c.state = "idle"; }
+          else if (r.control === "apply") { if (c.state !== "ready") return refuse("There's no plan to apply yet: press ANALYZE & BUILD and play the song."); c.state = "applied"; c.canUndo = true; }
+          else if (r.control === "undo") { if (!c.canUndo) return refuse("Nothing to undo."); c.state = "ready"; c.canUndo = false; }
+          tickets[t] = { outcome: "applied", why: "" };
+          return;
+        }
         if (r.change === "coach") {
           const c = (coach[r.unit] = coach[r.unit] || { state: "idle" });
-          if (r.control === "plan") { c.state = "listening"; c.t0 = Date.now(); }
+          if (r.control === "cancel") { if (c.state === "listening") c.state = "idle"; }
+          else if (r.control === "plan") { c.state = "listening"; c.t0 = Date.now(); }
           else if (r.control === "apply" && c.state === "ready") { c.state = "applied"; c.canUndo = true; }
           else if (r.control === "undo" && c.canUndo) { c.state = c.state === "applied" ? "ready" : c.state; c.canUndo = false; }
           else if (r.control === "apply") { tickets[t] = { outcome: "refused", why: "There's no plan to apply yet: press ANALYZE & BUILD and play the song." }; return; }
