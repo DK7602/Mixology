@@ -241,8 +241,15 @@
     const style = sty != null ? Math.round(sty * 7) : 0, intensity = int != null ? Math.round(int * 2) : 1;
     const r = { state: c.state, progress: c.state === "listening" ? Math.min(100, Math.round(t * 25)) : 0, hearing: c.state === "listening" && t > 0.4,
       style, intensity, styles: COACH_STYLES, intensities: COACH_INTS, reference: "", canUndo: !!c.canUndo, beat: false, honey: u.id === "vox-chorus" };
-    if (c.state === "ready" || c.state === "applied") r.plan = demoPlan(style, intensity);
+    if (c.state === "ready" || c.state === "applied") r.plan = c.wasApplied ? upToDate(demoPlan(style, intensity), "Voxology is already set the way I'd set it for this take: nothing to change. ") : demoPlan(style, intensity);
     return r;
+  }
+  // Beta 30: ANALYZE AGAIN after APPLY: the same take, the same plan, already set (what stands out measured through it).
+  function upToDate(p, lead) {
+    return Object.assign({}, p, { summary: lead + p.summary, upToDate: true, changes: 0, beforeNow: true,
+      issues: (p.issues || []).filter((i) => !i.warn), chain: (p.chain || []).map((m) => Object.assign({}, m, { same: true })),
+      bands: p.bands && p.bands.after ? Object.assign({}, p.bands, { before: p.bands.after }) : p.bands,
+      results: (p.results || []).map((x) => Object.assign({}, x, { before: x.after, better: false })) });
   }
   // Beta 28: Mixology's Coach on its tracks (Keys, Beat, 808...): the Mixology on the master builds it and sends the report for
   // the track the Rack shows ({"track": <hash>, ...}). Keys was heard by Analyze Mix (plans at once); Kick wasn't (it listens
@@ -312,7 +319,7 @@
       canFinish: c.state === "listening" && heard >= 12, hearing: c.state === "listening" && t > 0.4,
       genre: g != null ? Math.round(g * 5) : 1, genres: MASTER_GENRES, intensity: i != null ? Math.round(i * 2) : 1, intensities: MASTER_INTS,
       target: tg != null ? Math.round(tg * 2) : 1, targets: MASTER_TARGETS, reference: "", canUndo: !!c.canUndo };
-    if (c.state === "ready" || c.state === "applied") r.plan = MASTER_PLAN;
+    if (c.state === "ready" || c.state === "applied") r.plan = c.wasApplied ? upToDate(MASTER_PLAN, "Masterology is already set the way I'd master this mix: nothing to change. ") : MASTER_PLAN;
     return r;
   }
 
@@ -398,7 +405,7 @@
         if (r.change === "coach" && r.unit === "masterology") {
           const c = masterCoach, heard = (Date.now() - c.t0) / 1000 * 4;
           const refuse = (why) => { tickets[t] = { outcome: "refused", why }; };
-          if (r.control === "plan") { if (c.state === "listening" || c.state === "working") return refuse("The Coach is already listening to the song."); c.state = "listening"; c.t0 = Date.now(); c.canUndo = false; }
+          if (r.control === "plan") { if (c.state === "listening" || c.state === "working") return refuse("The Coach is already listening to the song."); c.wasApplied = c.state === "applied"; c.state = "listening"; c.t0 = Date.now(); c.canUndo = false; }
           else if (r.control === "finish") { if (c.state !== "listening") return refuse("The Coach isn't listening."); if (heard < 12) return refuse("Let the Coach hear at least 12 seconds of the song first."); c.state = "working"; c.t1 = Date.now(); }
           else if (r.control === "cancel") { if (c.state === "listening" || c.state === "working") c.state = "idle"; }
           else if (r.control === "apply") { if (c.state !== "ready") return refuse("There's no plan to apply yet: press ANALYZE & BUILD and play the song."); c.state = "applied"; c.canUndo = true; }
@@ -409,7 +416,7 @@
         if (r.change === "coach") {
           const c = (coach[r.unit] = coach[r.unit] || { state: "idle" });
           if (r.control === "cancel") { if (c.state === "listening") c.state = "idle"; }
-          else if (r.control === "plan") { c.state = "listening"; c.t0 = Date.now(); }
+          else if (r.control === "plan") { c.wasApplied = c.state === "applied"; c.state = "listening"; c.t0 = Date.now(); }
           else if (r.control === "apply" && c.state === "ready") { c.state = "applied"; c.canUndo = true; }
           else if (r.control === "undo" && c.canUndo) { c.state = c.state === "applied" ? "ready" : c.state; c.canUndo = false; }
           else if (r.control === "apply") { tickets[t] = { outcome: "refused", why: "There's no plan to apply yet: press ANALYZE & BUILD and play the song." }; return; }

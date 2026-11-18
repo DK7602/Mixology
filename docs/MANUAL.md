@@ -3,7 +3,7 @@
 Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list all three are under Sonicology.
 
-Manual for version 0.37.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
+Manual for version 0.38.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -62,6 +62,7 @@ fix):
 | Sonicology Rack: the COACH page (ANALYZE & BUILD for a vocal, through Voxology's Auto-Edit: the plan, why, measured before and after, APPLY / UNDO) | New in 0.34: tested in the engine and the browser preview, not yet in a DAW |
 | Sonicology Rack: the COACH page on Mixology's tracks (AUTO's rules on all five pages at once, planned first, one History step) | New in 0.36: tested in the engine and the browser preview, not yet in a DAW |
 | Sonicology Rack: the COACH page on the master (through Masterology's Auto-Master), STOP while the Coach listens | New in 0.37: tested in the engine and the browser preview, not yet in a DAW |
+| The Coach after APPLY (Already set / NOTHING TO CHANGE); RACK as a word; the manual in Settings | New in 0.38: tested in the engine and the browser preview, not yet in a DAW |
 
 Nothing changes your sound until you ask: every processing module starts switched off (the audio passes
 through bit for bit). What can change it: the Cubase faders and pans Mixology moves, the Assist EQ / Trim in
@@ -127,6 +128,9 @@ Mixology remembers your choice.
 - **Stereo**: Width (and Low / Mid / High Width), Mono Check, and how wide your mix is.
 - EQ, Dynamics, Space, Tone and Stereo each have an **AUTO** button in their top row: it sets that page for the track
   you picked, straight away (see "AUTO on a page" below).
+- **RACK** (after PRESETS): the Sonicology Rack, every Sonicology plug-in in the project in one view (see
+  "Sonicology Rack" below).
+- **This manual**: Settings (the gear) > **Manual**.
 - **Master**: loudness over the last minute, a checklist for handing the mix to Masterology (the peaks and overall
   loudness count from the last time you pressed play), and four finishing
   knobs on the Full Mix (before Masterology): **Glue** (gentle bus compression), **Tilt** (+ brighter, − warmer),
@@ -293,8 +297,7 @@ Mixology Link is a small plug-in for each track. Version 1:
 - **Processing** (Milestone 5, bottom of its window): the EQ, Dynamics, Tone and Stereo modules Mixology's pages
   switched on for this track (see "Processing" below). **On / Off** switches all of them off for a before / after.
   Only the Limiter adds latency (5 ms, while it's on); Cubase compensates.
-- **RACK** (the spinning cube, top right of its window): the Sonicology Rack, opened on this track (see "Sonicology
-  Rack" below).
+- **RACK** (top right of its window): the Sonicology Rack, opened on this track (see "Sonicology Rack" below).
 
 Each Link also listens to its track about five times a second (tone in 31 bands, loudness, punch, stereo width,
 left / right balance) for Analyze Mix and the analyzer's track colours. It runs on a background thread and
@@ -871,7 +874,7 @@ vocals, Mixology Link on your tracks, Mixology on the Full Mix and Masterology o
 chain, what every module is doing, and how the plug-ins work together. You can also **turn knobs and switch modules** right in the Rack: the plug-in that owns them makes the change,
 exactly as if you had done it in its own window (Cubase records it, and you can automate it).
 
-**Open it:** the **Rack emblem** tab (the spinning cube) after **PRESETS**, in the page tabs. It opens over this window,
+**Open it:** the **RACK** tab after **PRESETS**, in the page tabs. It opens over this window,
 and the window grows to about 85 % of your screen's height while it's open (the Rack shows a lot); **BACK TO MIXOLOGY**
 (or Esc) brings you back, at the size the window had before.
 
@@ -994,11 +997,16 @@ against your genre's masters (too much low end, not enough low mids, too much ai
 true peak, punch, stereo bass, each tone band against the aim). **APPLY TO MASTER** sets it all as one step in
 Masterology's UNDO; **UNDO** takes it back. Auto-Master in Masterology's own window still works as before.
 
+**After APPLY:** press **ANALYZE AGAIN** whenever you like. The Coach compares its plan with the settings the plug-in has
+now (and, for a vocal, measures your take through them): each module already set as planned says **Already set**, and
+when nothing is left to change it says so and the button reads **NOTHING TO CHANGE** (it no longer offers the same plan
+again).
+
 **Light or dark:** click the spinning cube at the top left. All three plug-ins remember your choice.
 
 **Good to know**
 - Honey Tune has no RACK button: it shows up in the Rack above Voxology on the track it tunes.
-- Mixology Link has a RACK button too (the spinning cube, top right of its window): the Rack opens on the Link's track.
+- Mixology Link has a RACK button too (top right of its window): the Rack opens on the Link's track.
 - The Rack costs nothing while it's closed: the plug-ins send their details only while a Rack is open.
 - **Locked for a moment:** while Voxology's Auto-Edit or Masterology's Auto-Master listens or works, the Rack can't
   change that plug-in (a lock and the reason show under its knobs). It can again as soon as it has finished.

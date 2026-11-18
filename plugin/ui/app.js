@@ -6,7 +6,7 @@ import { $, el, icon, store, setRenderScale, closeMenu } from "./ui.js";
 import { buildOverview, buildTracks } from "./pages_main.js";
 import { buildEq, buildDynamics, buildSpace } from "./pages_process.js";
 import { buildTone, buildStereo, buildMaster } from "./pages_output.js";
-import { openSettings, openHelp, openPresets, openStyles, openHistory, hookBridge } from "./sheets.js";
+import { openSettings, openPresets, openStyles, openHistory, hookBridge } from "./sheets.js";
 import { hookTools } from "./tools.js";
 import { styleByKey } from "./mixstyles.js";
 import { fillDaw, dawOf, dawName, hasBridge } from "./daws.js";
@@ -140,10 +140,8 @@ function showPage(id) {
 document.querySelectorAll(".tab[data-page]").forEach((t) => t.addEventListener("click", () => showPage(t.dataset.page)));
 
 $("tab-settings").innerHTML = icon("gear");
-$("tab-help").innerHTML = icon("help", 'stroke-width="2.4"');
 $("tab-settings").addEventListener("click", () => openSettings(app));
-const settingsTip = () => { $("tab-settings").title = `Settings and ${hasBridge(app.daw) ? dawName(app.daw) : "DAW"} bridge`; };   // your DAW's bridge
-$("tab-help").addEventListener("click", () => openHelp(app));
+const settingsTip = () => { $("tab-settings").title = `Settings, ${hasBridge(app.daw) ? dawName(app.daw) : "DAW"} bridge and the manual`; };   // your DAW's bridge
 $("tab-presets").addEventListener("click", () => openPresets(app));
 $("tab-history").innerHTML = icon("history", 'stroke-width="2.2"');
 $("tab-history").addEventListener("click", () => openHistory(app));

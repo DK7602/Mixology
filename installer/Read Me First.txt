@@ -7,7 +7,15 @@ The complete vocal, mixing and mastering suite
 
 Thanks for trying the beta. Nothing here is finished: tell us what's confusing, what breaks and what you'd change.
 
-NEW IN THIS BETA: THE COACH FOR THE MASTER
+NEW IN THIS BETA: FIXES FROM YOUR BETA 29 TEST
+  - The Coach after APPLY: press ANALYZE AGAIN and it now compares its plan with your settings. Modules already set
+    say "Already set", and when nothing is left to change it says so (the button reads NOTHING TO CHANGE) instead of
+    giving the same advice again.
+  - The RACK buttons show the word RACK (no cube) in all three plug-ins and in Mixology Link.
+  - Mixology: the manual is in Settings (Manual); the RACK tab took the manual button's place.
+  All three plug-ins need this version (Voxology 0.68.0, Mixology 0.38.0, Masterology 0.42.0).
+
+ALSO NEW (BETA 29): THE COACH FOR THE MASTER
   - Pick Master in the Rack and open COACH: the Coach plans your whole master through Masterology's Auto-Master.
     Choose the GENRE, INTENSITY and TARGET (Streaming, Loud release or Club), press ANALYZE & BUILD and play the song.
   - Let the whole song play (best), or press BUILD NOW once it has heard 12 seconds. STOP stops listening.
@@ -141,7 +149,7 @@ WHAT THE INSTALLER PUTS WHERE
             this Read Me and the manuals in /Applications/Sonicology
             (a script missing from your folder: copy it from /Library/Application Support/Sonicology)
   All three are listed under "Sonicology" in your DAW's plug-in list. Each plug-in also has its full manual
-  inside (the ? button).
+  inside (the ? button; in Mixology: Settings, Manual).
 
 
 THE INSTALLER ISN'T SIGNED YET (BETA)

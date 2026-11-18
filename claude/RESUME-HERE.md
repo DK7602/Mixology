@@ -249,6 +249,21 @@ sends higher-resolution art, re-run it.
   RESUME-HERE), re-run in progress. The installers are unaffected (test code only).
   08:29: both green (Masterology run 44255774936 all jobs incl. ASan; Voxology run 44259562701 with the fix). All CI
   green on all three repos. Waiting for the user's Beta 29 test in Cubase.
+- 2026-11-18, user on Beta 29: "works, no cut-outs. What's next?" + (1) Coach ANALYZE on backup vocals gave the same
+  feedback 3 times even after APPLY; (2) remove the cube from the RACK buttons (the word fills them); (3) Mixology: the
+  manual into Settings, remove its button, RACK uses the space; then move on to the next step.
+- BETA 30 BUILT (Mixology 0.38.0, Voxology 0.67.0 -> 0.68.0, Masterology 0.42.0): (1) cause: Auto-Edit (and Auto-Master)
+  decide from the input as it comes in, so after APPLY the same take gives the same plan. Now the job also compares the
+  plan with the settings now (Voxology: VoxParams::forEachValue ids, Masterology: autoanalyze::chainValues ids; a switch
+  / choice that differs, a knob > 2 % of its range away) and Voxology renders the take through the current settings
+  (vox::coach::Now: issues and "before" measured through them). JSON: "same" per module, "changes", "upToDate",
+  "beforeNow". rack.js: NOTHING TO CHANGE (APPLY disabled), "Already set" on modules, badges. Tests: Voxology
+  test_coach (Now), Masterology test_master_coach + the plug-in test (APPLY, ANALYZE AGAIN -> upToDate, 0 changes).
+  Mixology's own Coach already re-plans from the settings now (tested in Beta 28). (2)/(3): RACK is a word in
+  Mixology (124 px tab where the cube and ? were), Mixology Link, Voxology (chip, 76 px), Masterology (pill, 62 px);
+  Settings has a Manual chip (opens the manual sheet). Preview checks: scratchpad heads.js / link30.js (pages served
+  from disk via Playwright's router; JUCE's bridge from /tmp/claude-0/juce) and b30coach.js.
+  Next (user said "move on to next step"): the Rack's project view of what to fix first (RACK-PLAN stage 3, "Next").
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the

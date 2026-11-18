@@ -45,11 +45,11 @@ export function openSettings(app, tab = "bridge") {
   dawRow(app, body);
   const tabs = el("div", "", body, { display: "flex", gap: "10px", marginBottom: "18px" });
   const content = el("div", "", body);
-  const names = [["bridge", `${hasBridge(app.daw) ? dawName(app.daw) : "DAW"} Bridge`], ["display", "Display"], ["about", "About"]];
+  const names = [["bridge", `${hasBridge(app.daw) ? dawName(app.daw) : "DAW"} Bridge`], ["display", "Display"], ["manual", "Manual"], ["about", "About"]];
   const chips = names.map(([id, label]) => {
     const c = el("div", "chip", tabs);
     c.textContent = label;
-    c.addEventListener("click", () => show(id));
+    c.addEventListener("click", () => (id === "manual" ? openHelp(app) : show(id)));   // the manual: its own sheet, to read
     c.dataset.id = id;
     return c;
   });
@@ -107,7 +107,7 @@ function displayPanel(app, root) {
 function aboutPanel(app, root) {
   const p = el("div", "", root, { fontSize: "19px", lineHeight: "1.6" });
   p.innerHTML = `<b>Mixology</b>: intelligent mixing engineer. Part of the suite: Voxology (vocals), Mixology (the mix), Masterology (mastering).<br>
-    ${app.version ? `Version ${esc(app.version)}. ` : ""}The manual (the ? button) explains everything it does.<br>
+    ${app.version ? `Version ${esc(app.version)}. ` : ""}The manual (Settings, Manual) explains everything it does.<br>
     <span class="dim">Fonts: Barlow Semi Condensed (SIL Open Font License).</span>`;
 }
 
