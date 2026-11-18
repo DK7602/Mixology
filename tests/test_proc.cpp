@@ -820,3 +820,74 @@ TEST_CASE ("Processing and meters: a sample that is not a number (NaN, infinity)
     CHECK (track.momentaryLufs() == Catch::Approx (trackClean.momentaryLufs()).margin (0.01));
     CHECK (track.shortTermLufs() == Catch::Approx (trackClean.shortTermLufs()).margin (0.2));
 }
+
+TEST_CASE ("Processing order (Beta 33): helpers, another order sounds different, a move while playing", "[proc][order]")
+{
+    // helpers
+    CHECK (validOrder (kDefaultOrder));
+    CHECK (orderText (kDefaultOrder) == "eq,comp,multi,trans,balance,loud,harm,analog,clip,width");
+    CHECK (orderFromText (orderText (kDefaultOrder)) == kDefaultOrder);
+    const auto compFirst = movedTo (kDefaultOrder, Module::comp, 0);
+    CHECK (orderText (compFirst) == "comp,eq,multi,trans,balance,loud,harm,analog,clip,width");
+    CHECK (orderFromText (orderText (compFirst)) == compFirst);
+    CHECK (unpackOrder (packOrder (compFirst)) == compFirst);
+    CHECK (unpackOrder (0) == kDefaultOrder);   // (not a valid order)
+    CHECK (movedTo (kDefaultOrder, Module::limit, 0) == kDefaultOrder);   // the Limiter stays last
+    CHECK (orderText (movedTo (kDefaultOrder, Module::eq, 42)) == "comp,multi,trans,balance,loud,harm,analog,clip,width,eq");
+    for (const char* damaged : { "", "eq,comp", "eq,comp,multi,trans,balance,loud,harm,analog,clip,width,eq", "eq,eq,multi,trans,balance,loud,harm,analog,clip,width", "gate,comp,multi,trans,balance,loud,harm,analog,clip,width" })
+    {
+        INFO (damaged);
+        CHECK (orderFromText (damaged) == kDefaultOrder);
+    }
+    CHECK_FALSE (isMovable (Module::gate));
+    CHECK_FALSE (isMovable (Module::space));
+    CHECK (isMovable (Module::stereo));
+
+    // EQ +12 dB at 500 Hz, then a 4:1 compressor from -20 dB: the EQ before squeezes the boost, after it adds it whole.
+    const auto v = with ({ { eqOn, 1.0f }, { eq1Type, 0.0f }, { eq1Freq, 500.0f }, { eq1Gain, 12.0f }, { eq1Q, 1.0f },
+                           { compOn, 1.0f }, { compThr, -20.0f }, { compRatio, 4.0f }, { compKnee, 0.0f }, { compAtt, 1.0f }, { compRel, 50.0f } });
+    const double amp = std::pow (10.0, -14.0 / 20.0);
+    auto level = [&] (const Order& o) {
+        Chain chain;
+        chain.prepare (48000.0, 2);
+        chain.setOrder (o);
+        chain.setValues (v);
+        auto s = sine (500.0, amp, 1.0, 48000.0);
+        run (chain, s);
+        CHECK (chain.playingOrder() == o);
+        return db (peak (s.l, s.size() / 2));
+    };
+    const double eqFirst = level (kDefaultOrder), compBefore = level (compFirst);
+    CHECK (eqFirst == Catch::Approx (-15.5).margin (1.0));
+    CHECK (compBefore == Catch::Approx (-6.5).margin (1.0));
+
+    // The same move while it plays: the moved modules fade out and back in (no jump), then the new order plays.
+    Chain chain;
+    chain.prepare (48000.0, 2);
+    chain.setValues (v);
+    auto s = sine (500.0, amp, 2.0, 48000.0);
+    const std::size_t at = 48000;
+    for (std::size_t start = 0; start < s.size(); start += 480)
+    {
+        if (start == at) chain.setOrder (compFirst);
+        double* ch[2] = { s.l.data() + start, s.r.data() + start };
+        chain.process (ch, 2, static_cast<int> (std::min<std::size_t> (480, s.size() - start)));
+    }
+    for (double x : s.l) REQUIRE (std::isfinite (x));
+    CHECK (chain.playingOrder() == compFirst);
+    double stepBefore = 0.0, stepAround = 0.0;
+    for (std::size_t i = at - 9600; i < at; ++i) stepBefore = std::max (stepBefore, std::abs (s.l[i] - s.l[i - 1]));
+    for (std::size_t i = at; i < at + 9600; ++i) stepAround = std::max (stepAround, std::abs (s.l[i] - s.l[i - 1]));
+    CHECK (stepAround <= std::max (stepBefore * 3.5, 0.05));   // (the level moves from one order's to the other's: no click)
+    CHECK (db (peak (s.l, s.size() - 9600)) == Catch::Approx (compBefore).margin (0.5));
+
+    // Nothing playing (every module off): the new order at once.
+    Chain idle;
+    idle.prepare (48000.0, 2);
+    idle.setValues (defaults());
+    auto quiet = sine (500.0, 0.1, 0.05, 48000.0);
+    run (idle, quiet);
+    idle.setOrder (compFirst);
+    run (idle, quiet);
+    CHECK (idle.playingOrder() == compFirst);
+}

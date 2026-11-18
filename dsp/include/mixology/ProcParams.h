@@ -130,6 +130,25 @@ namespace mixology::proc
         if it is one of them, else the first): what plans and presets write, so nothing switched on before stays. */
     std::array<std::pair<int, float>, kSpaceTypes + 2> spaceControls (std::uint32_t bits, SpaceType main);
 
+    /** Beta 33: the modules you can put in another order (from the Rack): EQ, Compressor, Multiband, Transients, Tone
+        Balance, Loudness, Harmonics, Analog, Clipper, Stereo. The Gate stays first; Final Touch, Space and the Limiter
+        last. Order: those ten in the order they play. */
+    constexpr int kMovable = 10;
+    using Order = std::array<Module, kMovable>;
+    constexpr Order kDefaultOrder { Module::eq, Module::comp, Module::multi, Module::trans, Module::tone, Module::loud,
+                                    Module::harm, Module::analog, Module::clip, Module::stereo };
+    bool isMovable (Module);
+    /** Each movable module exactly once. */
+    bool validOrder (const Order&);
+    /** `o` with `m` moved to place `to` (0 first, clamped); unchanged when `m` isn't movable (a damaged `o`: the own order). */
+    Order movedTo (Order o, Module m, int to);
+    /** "eq,comp,multi,..." (moduleKey()s), for a plug-in's state; and back (the own order when missing or damaged). */
+    std::string orderText (const Order&);
+    Order orderFromText (std::string_view);
+    /** One number for an atomic (4 bits a place); back: the own order when it isn't a valid one. */
+    std::uint64_t packOrder (const Order&);
+    Order unpackOrder (std::uint64_t);
+
     const std::array<ParamSpec, count>& specs();
     int indexOf (std::string_view id);    // -1 when there is no such control
     Values defaults();

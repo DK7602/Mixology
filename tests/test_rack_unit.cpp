@@ -310,3 +310,37 @@ TEST_CASE ("Rack unit: each processing module's on switch by its Rack key", "[ra
     for (const auto& m : rackunit::modules (st, false))
         if (m.switchable) CHECK (rackunit::switchOf (m.key) >= 0);
 }
+
+TEST_CASE ("Rack unit: Beta 33, the movable modules in the order they play, marked movable / moved", "[rack][order]")
+{
+    rackunit::State st;
+    {
+        const auto ms = rackunit::modules (st, true);
+        for (const auto& m : ms)
+        {
+            INFO (m.key);
+            pr::Module mod = pr::Module::eq;
+            const bool known = rackunit::moduleOf (m.key, mod);
+            CHECK (m.movable == (known && pr::isMovable (mod)));
+            CHECK_FALSE (m.moved);
+        }
+        CHECK_FALSE (find (ms, "mix.assist")->movable);
+        CHECK_FALSE (find (ms, "mix.gate")->movable);
+        CHECK_FALSE (find (ms, "mix.limit")->movable);
+    }
+    st.order = pr::movedTo (pr::kDefaultOrder, pr::Module::stereo, 0);   // Width first
+    const auto ms = rackunit::modules (st, true);
+    std::vector<std::string> keys;
+    for (const auto& m : ms) keys.push_back (m.key);
+    const std::vector<std::string> want { "mix.assist", "mix.gate", "mix.stereo", "mix.eq", "mix.comp", "mix.multi", "mix.trans", "mix.tone",
+                                          "mix.loud", "mix.harm", "mix.analog", "mix.clip", "mix.final", "mix.space", "mix.limit" };
+    CHECK (keys == want);
+    CHECK (find (ms, "mix.stereo")->moved);
+    CHECK (find (ms, "mix.eq")->moved);
+    CHECK_FALSE (find (ms, "mix.space")->moved);
+    pr::Module m = pr::Module::gate;
+    CHECK (rackunit::moduleOf ("mix.tone", m));
+    CHECK (m == pr::Module::tone);
+    CHECK_FALSE (rackunit::moduleOf ("mix.assist", m));
+    CHECK_FALSE (rackunit::moduleOf ("vox.comp", m));
+}

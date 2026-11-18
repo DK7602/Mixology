@@ -309,6 +309,18 @@ sends higher-resolution art, re-run it.
   installer (Artifacts: Sonicology-Windows, direct link .../runs/44339024476/artifacts/14442019921).
 - 18:41: re-run 3 (attempt 4) failed the same way (Mixology (macOS) never got a macOS runner; no Sonicology-macOS
   artifact). Stopped re-running. Offered the user: switch build-mac / macos to another GitHub Mac type (needs their OK).
+- 2026-11-18 evening: user asked "Are we ready to do the next step?" -> recommended testing Beta 32 first, then three
+  options (blind shoot-out, a chain you can reorder, AI separation). User: "im not at home so start with 2. we can do
+  1. when im home". The macOS installer of Beta 32 never got a GitHub macOS runner (3 tries); offered to switch the
+  Mac build to another runner type (no answer yet: don't change the workflow without an OK).
+- BETA 33 BUILT (Mixology 0.41.0, Voxology 0.71.0, Masterology 0.45.0): a chain you can reorder (RACK-PLAN "Built ... a
+  chain you can reorder"). Tests: test_rack_link (flags through the shared memory, Change::order to the owner),
+  Voxology test_chain [order] (helpers, another order sounds different, any block size, render, a move while playing:
+  no step bigger than the vocal's own, then the new order) + test_rack_unit, Mixology test_proc [order] (EQ +12 dB vs a
+  4:1 compressor: -15.5 vs -6.5 dB; a move while playing; idle switches at once) + test_rack_unit. Preview: rack_mock
+  MOVABLE / orders; scratchpad b33.js (drag, click still picks, UNDO / REDO, RESET ORDER, a fixed row doesn't move).
+  Known: LISTEN's take-out timing assumes Saturation after the listened module (a few samples off otherwise: monitoring
+  only); the plug-ins' own windows keep their fixed layout. Masterology manual's Claude Docs copy: rev 186.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the

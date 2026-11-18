@@ -179,6 +179,13 @@ namespace mixology::rackunit
         return -1;
     }
 
+    bool moduleOf (const std::string& moduleKey, Module& module)
+    {
+        for (int m = 0; m < kModules; ++m)
+            if (moduleKey == key (static_cast<Module> (m))) { module = static_cast<Module> (m); return true; }
+        return false;
+    }
+
     int indexOf (const std::string& key)
     {
         for (int i = 0; i < count; ++i)
@@ -249,13 +256,27 @@ namespace mixology::rackunit
             out.push_back (std::move (m));
         }
 
-        constexpr Module kOrder[] = { Module::gate, Module::eq, Module::comp, Module::multi, Module::trans, Module::tone, Module::loud,
-                                      Module::harm, Module::analog, Module::clip, Module::stereo, Module::final, Module::space, Module::limit };
-        for (const Module mod : kOrder)
+        // Beta 33: the Gate, the movable modules in the order they play (marked so the Rack can move them), then Final
+        // Touch, Space and the Limiter.
+        const auto order = proc::validOrder (st.order) ? st.order : proc::kDefaultOrder;
+        std::array<Module, kModules> sequence {};
+        {
+            std::size_t i = 0;
+            sequence[i++] = Module::gate;
+            for (const auto m : order) sequence[i++] = m;
+            for (const auto m : { Module::final, Module::space, Module::limit }) sequence[i++] = m;
+        }
+        for (const Module mod : sequence)
         {
             rack::Module m;
             m.key = key (mod);
             m.switchable = true;   // its own on switch (the Rack also turns the processing on when it is off: step 3)
+            if (proc::isMovable (mod))
+            {
+                m.movable = true;
+                const auto at = static_cast<std::size_t> (std::find (order.begin(), order.end(), mod) - order.begin());
+                m.moved = proc::kDefaultOrder[at] != mod;
+            }
             const bool on = chain && v (st, onParam (mod)) >= 0.5f;
             m.state = on ? rack::State::on : rack::State::off;
             switch (mod)

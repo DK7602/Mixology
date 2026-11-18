@@ -126,6 +126,7 @@ void MixologyLinkProcessor::prepareToPlay (double sampleRate, int)
     rackPub.start();
     const auto values = procRaw.read();
     chain.prepare (sampleRate, juce::jmax (1, getTotalNumOutputChannels()));
+    chain.setOrder (mixology::proc::unpackOrder (moduleOrder.load()));
     if (mixology::proc::isOn (values, mixology::proc::Module::space)) chain.ensureSpace();
     chain.setValues (values);
     setLatencySamples (chain.latencyFor (values));
@@ -221,6 +222,7 @@ void MixologyLinkProcessor::process (juce::AudioBuffer<Sample>& buffer)
             key = std::max (key, static_cast<double> (registry.keyLevel (duckSlots[static_cast<std::size_t> (i)].load (std::memory_order_relaxed), now)));
     }
     chain.setHost (bpm, key);
+    chain.setOrder (mixology::proc::unpackOrder (moduleOrder.load (std::memory_order_relaxed)));
     chain.setValues (procRaw.read());
     chain.process (buffer.getArrayOfWritePointers(), channels, n);
 
@@ -382,7 +384,7 @@ void MixologyLinkProcessor::publishRack()
     const auto now = suite::nowMs();
     // Stage 2: knobs turned and modules switched in a Rack view (in any Sonicology plug-in), on this track's Link.
     rackPub.serve (now, {}, [this] (const rack::Request& r) {
-        auto why = mixology::rackapply::apply (parameters, r, true);
+        auto why = mixology::rackapply::apply (parameters, r, true, &moduleOrder);
         if (why.empty() && (r.control == mixology::rackunit::kLowCutKey || r.control == mixology::rackunit::kMudKey
                             || r.control == mixology::rackunit::kPocketKey))
             assistFromMixology = false;   // yours now, not Clean Up's / Vocal Pocket's
@@ -395,6 +397,7 @@ void MixologyLinkProcessor::publishRack()
     const bool playing = linkNow - std::min (linkNow, lastAudioMs.load (std::memory_order_relaxed)) < 1000;
     mixology::rackunit::State st;
     st.values = procRaw.read();
+    st.order = mixology::proc::unpackOrder (moduleOrder.load());
     st.assist = assistSettings();
     if (st.assist.neutral()) assistFromMixology = false;
     st.assistByMixology = assistFromMixology;
@@ -475,6 +478,7 @@ void MixologyLinkProcessor::setStateInformation (const void* data, int sizeInByt
         if (xml->hasTagName (parameters.state.getType()))
         {
             parameters.replaceState (juce::ValueTree::fromXml (*xml));
+            mixology::rackapply::loadOrder (parameters, moduleOrder);
             mixology::link::DuckSources d;
             for (const auto& h : juce::StringArray::fromTokens (parameters.state.getProperty ("duck").toString(), ",", ""))
                 if (d.count < mixology::link::kMaxDuckSources && h.isNotEmpty())

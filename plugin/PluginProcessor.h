@@ -172,6 +172,8 @@ private:
     mixology::proc::Chain chain;
     std::atomic<int> latencyTold { 0 };   // what setLatencySamples last told the host (the bypass keeps to it)
     std::atomic<bool> resetWanted { false };
+    // Beta 33: the processing modules' order (proc::packOrder; set from the Rack, saved as the state's "order")
+    std::atomic<std::uint64_t> moduleOrder { mixology::proc::packOrder (mixology::proc::kDefaultOrder) };
     std::array<std::atomic<float>, mixology::proc::kMeterValues> procMeters {};
     std::atomic<std::uint32_t> procRunning { 0 };
     juce::CriticalSection stateLock;

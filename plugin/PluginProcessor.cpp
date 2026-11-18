@@ -175,7 +175,7 @@ void MixologyAudioProcessor::publishRack()
                                 : r.gesture == rack::Gesture::end ? "end" : "set";
             return bridgeHub->rackFaderMove (h, gesture, r.value);
         }
-        return mixology::rackapply::apply (parameters, r, false);
+        return mixology::rackapply::apply (parameters, r, false, &moduleOrder);
     });
     // While a Rack shows this track (or, for the faders, any track), serve its knobs 25 times a second (from rackTimer,
     // which calls this again).
@@ -195,6 +195,7 @@ void MixologyAudioProcessor::publishRack()
     mixology::rackunit::State st;
     st.link = false;
     st.values = procRaw.read();
+    st.order = mixology::proc::unpackOrder (moduleOrder.load());
     if (playing)
     {
         float mv[mixology::proc::kMeterValues];
@@ -359,6 +360,7 @@ void MixologyAudioProcessor::prepareToPlay (double sampleRate, int)
     loudness.prepare (sampleRate, juce::jmax (1, getTotalNumOutputChannels()));
     const auto values = procRaw.read();
     chain.prepare (sampleRate, juce::jmax (1, getTotalNumOutputChannels()));
+    chain.setOrder (mixology::proc::unpackOrder (moduleOrder.load()));
     if (mixology::proc::isOn (values, mixology::proc::Module::space)) chain.ensureSpace();
     chain.setValues (values);
     setLatencySamples (chain.latencyFor (values));
@@ -389,6 +391,7 @@ void MixologyAudioProcessor::process (juce::AudioBuffer<Sample>& buffer)
 
     chain.setHost (beat.bpm.load (std::memory_order_relaxed), -1.0);   // the tempo as of the last block
     const auto values = procRaw.read();
+    chain.setOrder (mixology::proc::unpackOrder (moduleOrder.load (std::memory_order_relaxed)));
     chain.setValues (values);
     chain.process (buffer.getArrayOfWritePointers(), channels, n);
     {
@@ -561,6 +564,7 @@ void MixologyAudioProcessor::setStateInformation (const void* data, int sizeInBy
             bridgeHub->loadProject (this, previous, id, ps);
             if (auto* params = xml->getChildByName (parameters.state.getType()))
                 parameters.replaceState (juce::ValueTree::fromXml (*params));
+                mixology::rackapply::loadOrder (parameters, moduleOrder);
         }
 }
 

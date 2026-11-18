@@ -26,6 +26,7 @@ namespace mixology::rackunit
         AssistSettings assist;             // Links
         bool assistByMixology = false;     // Mixology's Clean Up / Vocal Pocket set it
         std::string duckNames;             // the tracks its Space ducks under ("Lead Vox, Chorus Vox"), "" for none
+        proc::Order order = proc::kDefaultOrder;   // Beta 33: the movable modules in the order they play
     };
 
     /** The modules (brief: keys, states and summaries only; full: values, bands and meters too). */
@@ -43,6 +44,8 @@ namespace mixology::rackunit
     /** A processing module's on switch (its control's index) by the module's Rack key ("mix.comp"), -1 if none (the
         Assist EQ has none: it is on while it does something). */
     int switchOf (const std::string& moduleKey);
+    /** Beta 33: a processing module by its Rack key ("mix.comp"); false: no such module (the Assist EQ, a typo). */
+    bool moduleOf (const std::string& moduleKey, proc::Module& module);
     /** A processing control's index by its id, -1 if none. */
     int indexOf (const std::string& key);
     /** An Assist EQ knob's position (0..1) for a value. */

@@ -11,9 +11,6 @@ namespace mixology::proc
     {
         constexpr double kGlideSeconds = 0.03;   // knob moves
         constexpr double kFadeSeconds = 0.02;    // a module switching on / off
-        constexpr Module kOrder[] = { Module::gate, Module::eq, Module::comp, Module::multi, Module::trans, Module::tone,
-                                      Module::loud, Module::harm, Module::analog, Module::clip, Module::stereo, Module::final,
-                                      Module::space, Module::limit };
 
         std::size_t ix (int i) { return static_cast<std::size_t> (i); }
         std::size_t ix (Module m) { return static_cast<std::size_t> (m); }
@@ -98,7 +95,7 @@ namespace mixology::proc
         }
     };
 
-    Chain::Chain() = default;
+    Chain::Chain() { buildSequence(); }
     Chain::~Chain() = default;
 
     void Chain::ensureSpace()
@@ -183,6 +180,24 @@ namespace mixology::proc
         meters = {};
     }
 
+    void Chain::buildSequence()
+    {
+        std::size_t i = 0;
+        sequence[i++] = Module::gate;
+        for (const auto m : activeOrder) sequence[i++] = m;
+        for (const auto m : { Module::final, Module::space, Module::limit }) sequence[i++] = m;
+    }
+
+    void Chain::setOrder (const Order& o)
+    {
+        wantedOrder = validOrder (o) ? o : kDefaultOrder;
+        if (fresh && wantedOrder != activeOrder)
+        {
+            activeOrder = wantedOrder;
+            buildSequence();
+        }
+    }
+
     void Chain::setValues (const Values& v)
     {
         if (! fresh && v == lastInput) return;   // called every block; the values rarely change
@@ -234,6 +249,11 @@ namespace mixology::proc
 
     void Chain::idle (int nch, int n)
     {
+        if (wantedOrder != activeOrder)   // nothing plays: the new order at once
+        {
+            activeOrder = wantedOrder;
+            buildSequence();
+        }
         float l = -200.0f, r = -200.0f;   // nothing runs: what goes out is what came in (measured once)
         peakInto (l, r, nch, n);
         meters.inL = std::max (meters.inL, l);
@@ -269,9 +289,18 @@ namespace mixology::proc
         glide (n);
         peakInto (meters.inL, meters.inR, nch, n);
         const double step = static_cast<double> (n) / (kFadeSeconds * rate);
-        for (auto m : kOrder)
+        // Beta 33: a new order: the modules that change place fade out where they are (as if switched off); once all of
+        // them are silent the new order plays and they fade back in at their new places.
+        std::array<bool, kModules> hold {};
+        const bool reorder = wantedOrder != activeOrder;
+        if (reorder)
+            for (int i = 0; i < kMovable; ++i)
+                if (activeOrder[static_cast<std::size_t> (i)] != wantedOrder[static_cast<std::size_t> (i)])
+                    hold[ix (activeOrder[static_cast<std::size_t> (i)])] = true;
+        bool held = false;
+        for (auto m : sequence)
         {
-            const bool on = isOn (target, m);
+            const bool on = isOn (target, m) && ! hold[ix (m)];
             const double w0 = w[ix (m)];
             const double w1 = on ? std::min (1.0, w0 + step) : std::max (0.0, w0 - step);
             if (w0 <= 0.0 && w1 <= 0.0)
@@ -285,6 +314,7 @@ namespace mixology::proc
             }
             if (w0 <= 0.0) resetModule (m);
             w[ix (m)] = w1;
+            if (hold[ix (m)] && w1 > 0.0) held = true;
 
             if (m == Module::limit)
             {
@@ -311,6 +341,11 @@ namespace mixology::proc
                     }
         }
         peakInto (meters.outL, meters.outR, nch, n);
+        if (reorder && ! held)
+        {
+            activeOrder = wantedOrder;
+            buildSequence();
+        }
     }
 
     void Chain::runModule (Module m, int nch, int n)

@@ -350,8 +350,30 @@
       { id: "mud", from: "mix", kind: "info", title: "A little mud around 300 Hz", need: "Have a look: Keys and Chorus Vox both pile up there.", text: "", tracks: ["Keys", "Chorus Vox"], tool: "clean" },
       { id: "harsh", from: "mix", kind: "info", title: "Hats a touch harsh at 6 kHz", need: "", text: "", tracks: ["Hats"], tool: "polish", done: true }] };
 
+  // Beta 33: the modules a plug-in lets you move (as Voxology and Mixology Link mark them), and each unit's order.
+  const MOVABLE = new Set(["vox.eq", "vox.dyneq", "vox.deess", "vox.rider", "vox.comp", "vox.sat",
+    "mix.eq", "mix.comp", "mix.multi", "mix.trans", "mix.tone", "mix.loud", "mix.harm", "mix.analog", "mix.clip", "mix.stereo"]);
+  const orders = {};   // unit id -> its movable keys in the order you set (none: its own)
+  function applyOrder(u) {
+    const mods = u.modules || [];
+    const own = mods.filter((m) => MOVABLE.has(m.key)).map((m) => m.key);
+    const want = orders[u.id] ? orders[u.id].filter((k) => own.includes(k)) : own;
+    const slots = mods.map((m, i) => (MOVABLE.has(m.key) ? i : -1)).filter((i) => i >= 0);
+    const byKey = new Map(mods.map((m) => [m.key, m]));
+    const out = mods.slice();
+    slots.forEach((slot, j) => { out[slot] = byKey.get(want[j]); });
+    out.forEach((m, i) => { if (MOVABLE.has(m.key)) { m.movable = true; m.moved = own[slots.indexOf(i)] !== m.key; } });
+    u.modules = out;
+  }
+  function moveIn(unitId, key, to, own) {
+    const list = (orders[unitId] || own).filter((k) => k !== key);
+    list.splice(Math.max(0, Math.min(to, list.length)), 0, key);
+    orders[unitId] = list;
+  }
+
   function units() {
     const list = rawUnits();
+    for (const u of list) applyOrder(u);
     for (const u of list) {
       u.gen = 1;
       if (powered[u.id] === false) u.on = false;
@@ -469,6 +491,13 @@
         } else if (r.change === "power") {
           if (r.unit.startsWith("ht-")) { tickets[t] = { outcome: "refused", why: "Honey Tune has no bypass of its own." }; return; }
           powered[r.unit] = r.value >= 0.5;
+        } else if (r.change === "order") {
+          const u = rawUnits().find((x) => x.id === r.unit);
+          const own = ((u && u.modules) || []).filter((m) => MOVABLE.has(m.key)).map((m) => m.key);
+          if (!own.length) { tickets[t] = { outcome: "refused", why: "This plug-in keeps its modules in their order." }; return; }
+          if (r.control === "reset") delete orders[r.unit];
+          else if (!own.includes(r.control)) { tickets[t] = { outcome: "refused", why: "That module stays where it is." }; return; }
+          else moveIn(r.unit, r.control, Math.round(r.value), own);
         } else if (r.change === "state") switched[r.unit + "|" + r.module] = r.value >= 0.5 ? "on" : "off";
         else if (r.change === "reset" && r.module === "mix.faders") turned[r.unit + "|" + r.module + "|" + r.control] = 0.75;   // 0 dB
         else if (r.change === "reset") delete turned[r.unit + "|" + r.module + "|" + r.control];

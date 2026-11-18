@@ -229,6 +229,77 @@ namespace mixology::proc
         return -1;
     }
 
+    // ---- Beta 33: the movable modules' order ------------------------------------------------------------------------
+    bool isMovable (Module m)
+    {
+        return std::find (kDefaultOrder.begin(), kDefaultOrder.end(), m) != kDefaultOrder.end();
+    }
+
+    bool validOrder (const Order& o)
+    {
+        for (const auto m : kDefaultOrder)
+            if (std::count (o.begin(), o.end(), m) != 1) return false;
+        return true;
+    }
+
+    Order movedTo (Order o, Module m, int to)
+    {
+        if (! validOrder (o)) o = kDefaultOrder;
+        const auto at = std::find (o.begin(), o.end(), m);
+        if (at == o.end()) return o;
+        std::array<Module, kMovable - 1> rest {};
+        std::copy (o.begin(), at, rest.begin());
+        std::copy (at + 1, o.end(), rest.begin() + (at - o.begin()));
+        const int place = std::clamp (to, 0, kMovable - 1);
+        Order out {};
+        for (int i = 0, r = 0; i < kMovable; ++i)
+            out[static_cast<std::size_t> (i)] = i == place ? m : rest[static_cast<std::size_t> (r++)];
+        return out;
+    }
+
+    std::string orderText (const Order& o)
+    {
+        std::string s;
+        for (const auto m : o)
+        {
+            if (! s.empty()) s += ',';
+            s += moduleKey (m);
+        }
+        return s;
+    }
+
+    Order orderFromText (std::string_view text)
+    {
+        Order o = kDefaultOrder;
+        std::size_t start = 0;
+        for (int i = 0; i < kMovable; ++i)
+        {
+            const auto comma = text.find (',', start);
+            const auto part = text.substr (start, comma == std::string_view::npos ? std::string_view::npos : comma - start);
+            bool found = false;
+            for (const auto m : kDefaultOrder)
+                if (part == moduleKey (m)) { o[static_cast<std::size_t> (i)] = m; found = true; }
+            if (! found) return kDefaultOrder;
+            if (comma == std::string_view::npos) { if (i != kMovable - 1) return kDefaultOrder; break; }
+            start = comma + 1;
+        }
+        return validOrder (o) ? o : kDefaultOrder;
+    }
+
+    std::uint64_t packOrder (const Order& o)
+    {
+        std::uint64_t v = 0;
+        for (int i = 0; i < kMovable; ++i) v |= static_cast<std::uint64_t> (static_cast<int> (o[static_cast<std::size_t> (i)]) & 15) << (4 * i);
+        return v;
+    }
+
+    Order unpackOrder (std::uint64_t v)
+    {
+        Order o {};
+        for (int i = 0; i < kMovable; ++i) o[static_cast<std::size_t> (i)] = static_cast<Module> ((v >> (4 * i)) & 15u);
+        return validOrder (o) ? o : kDefaultOrder;
+    }
+
     Values defaults()
     {
         Values v {};

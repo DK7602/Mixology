@@ -336,8 +336,21 @@ Roughly 3 to 5 build sessions, step 1 first.
   turns the track's Link down (LinkRegistry layout 7). Nothing goes into UNDO / History until KEEP; a preview ends
   (yours back) when no Rack shows the track for 4 s. A save during a preview keeps yours (Voxology, Masterology).
 
-**Next (stage 3 is done):** whatever the user picks: the blind shoot-out's findings, a chain you can reorder, AI
-voice / room / noise separation.
+**Built 2026-11-18 (Beta 33: Mixology 0.41.0, Voxology 0.71.0, Masterology 0.45.0), a chain you can reorder:**
+- The user's pick ("start with 2"). Changes the plan's "no reordering" only inside one plug-in: the DAW still decides the
+  order of the plug-ins on a track. Change::order (control: the module's key or "reset"; value: its place among the
+  unit's movable modules); Module::movable / moved ride in the module slot's switchable word (bits 1 / 2), so the
+  layout stayed. rack.js: drag a movable row in SIGNAL CHAIN (6 px before it starts, so a click still picks it; only
+  among that plug-in's movable rows; a gold line shows where it lands), RESET ORDER under the rows, UNDO / REDO.
+- Voxology: vox::InsertOrder (Tone EQ, Dynamic EQ, De-Esser, Rider, Compressor, Saturation); VocalChain dips the
+  inserts' output over one 256-sample chunk, switches while silent, comes back over the next (the space's tails carry
+  on); render() and a fresh start play the order at once. Saved as the state's "insertOrder" (and in MY CHAINS).
+- Mixology: proc::Order (EQ, Compressor, Multiband, Transients, Tone Balance, Loudness, Harmonics, Analog, Clipper,
+  Width); proc::Chain fades the modules that change place out through their own weights, switches once all are
+  silent, fades them back in. Saved as the processing state's "order", in each Link and in Mixology's Full Mix.
+- Masterology keeps its order (Auto-Master's loudness search and the limiter at the end depend on it): it refuses.
+
+**Next:** the blind shoot-out (the user's next pick, when they're home), then AI voice / room / noise separation.
 
 **The plan as written before building:**
 

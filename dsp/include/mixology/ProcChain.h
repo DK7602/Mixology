@@ -48,6 +48,11 @@ namespace mixology::proc
         void reset();
         /** Where the controls should be (they glide there). */
         void setValues (const Values&);
+        /** Beta 33 (audio thread, before process()): the order the movable modules play in (proc::Order; a damaged one:
+            the own order). Each module that changes place fades out where it was, then back in at its new place (the
+            others play on); before the first values, and while nothing plays, it takes effect at once. */
+        void setOrder (const Order&);
+        const Order& playingOrder() const { return activeOrder; }
         const Values& values() const { return target; }
         /** Samples of latency these settings need (the Limiter's lookahead when it is on, else 0). */
         int latencyFor (const Values&) const;
@@ -157,6 +162,9 @@ namespace mixology::proc
         Values lastInput {};   // the values setValues last saw (unchanged: nothing to redo, the usual case per block)
         bool fresh = true;
         std::array<double, kModules> w {};
+        Order wantedOrder = kDefaultOrder, activeOrder = kDefaultOrder;
+        std::array<Module, kModules> sequence {};   // the Gate, activeOrder, Final Touch, Space, the Limiter
+        void buildSequence();
         Buffer work {}, dry {};
         Meters meters;
 

@@ -3,7 +3,7 @@
 Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list all three are under Sonicology.
 
-Manual for version 0.40.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
+Manual for version 0.41.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -65,6 +65,7 @@ fix):
 | The Coach after APPLY (Already set / NOTHING TO CHANGE); RACK as a word; the manual in Settings | New in 0.38: tested in the engine and the browser preview, not yet in a DAW |
 | Sonicology Rack: WHAT TO FIX FIRST on the SESSION page (the Mix Assistant's points, the setup check and the Rack's warnings, worst first) | New in 0.39: tested in the browser preview, not yet in a DAW |
 | The Coach's PREVIEW (hear the plan, flip PLAN / YOURS at the same loudness, KEEP PLAN or BACK TO YOURS) | New in 0.40: tested in the engine and the browser preview, not yet in a DAW |
+| Sonicology Rack: move a module (drag its row; RESET ORDER), in Mixology Link, Mixology's Full Mix and Voxology | New in 0.41: tested in the engine and the browser preview, not yet in a DAW |
 
 Nothing changes your sound until you ask: every processing module starts switched off (the audio passes
 through bit for bit). What can change it: the Cubase faders and pans Mixology moves, the Assist EQ / Trim in
@@ -912,6 +913,16 @@ and the window grows to about 85 % of your screen's height while it's open (the 
   - **The knob jumps back by itself?** That track's automation is on Read (in Cubase, the **R** button is lit): Cubase
     plays its automation and moves the knob back. The Rack tells you. Switch Read off, or switch on Write (**W**) to
     record your move.
+  - **Move a module** (new in Beta 33): drag its row in the Signal Chain up or down (the rows you can move have six
+    dots on the right). Voxology lets you move Tone EQ, Dynamic EQ, De-Esser, Rider, Compressor and Saturation;
+    Mixology Link (and Mixology on the Full Mix) EQ, Compressor, Multiband, Transients, Tone Balance, Loudness,
+    Harmonics, Analog, Clipper and Width. The rest stay where they must be (Voxology's tuning and cleanup first, the
+    space and the Output last; Mixology's Gate first, Final Touch, Space and the Limiter last), and Masterology keeps
+    its mastering order. The sound dips for a split second while the module changes place. **RESET ORDER** (under the
+    rows) puts back the plug-in's own order; **UNDO** takes a move back. The order is saved with your project (and in
+    Voxology's MY CHAINS). Common moves: the EQ after the compressor (it shapes the squeezed sound), the De-Esser after
+    the compressor (it catches the "s" sounds the compressor brought up), Saturation before the compressor (warmer, the
+    compressor evens it out). The plug-ins' own windows keep their usual layout.
 - **The top bar's tools** (on the RACK page, for the track you picked):
   - **UNDO / REDO** (the curved arrows): the Rack's own changes, one at a time (a drag, a click, a switch, a fix, a
     whole A / B flip or BYPASS). Your DAW's undo doesn't cover plug-in knobs; this does, for what you changed in the
