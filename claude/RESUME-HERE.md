@@ -243,6 +243,10 @@ sends higher-resolution art, re-run it.
 - Beta 29 installer: Sonicology suite run 44255805219 (label "Beta 29", version 0.29.0; Mixology 7490f19, Voxology
   59a42ba7f84dc59b4cc6b07e4e1341181f8d0011, Masterology fe67acfbd76ddd35c6e3e563caa164f16fae6456 by SHA). Stage 3
   (the Coach) is done: vocals, tracks, master. Next (when the user says): a project view of what to fix first.
+  ALL GREEN (8 jobs). CI on the Beta 29 commits: Mixology green; Masterology Windows (engine + plug-in tests,
+  pluginval) and UI smoke green, ASan job still running at 07:58; Voxology's ASan job had failed on Beta 28 (a
+  test-only bug in Beta 27's test_realtime.cpp: the no-throw new wasn't replaced; fixed in Voxology 751fa99, see its
+  RESUME-HERE), re-run in progress. The installers are unaffected (test code only).
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the
