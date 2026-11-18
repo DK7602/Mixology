@@ -324,6 +324,9 @@ sends higher-resolution art, re-run it.
 - Beta 33 pushed (Mixology fca4d93, Voxology 34be9da, Masterology 9982248); installer run 44383920227 (label "Beta 33",
   version 0.33.0). Local tests: Mixology 267/267 cases, Masterology ctest 316/316, Voxology 226/227 (the one: test_manual
   on a binary built before the version bump; passes rebuilt).
+- 20:30: Beta 33 installer run 44383920227 ALL GREEN: Windows (artifact Sonicology-Windows, id 14465956823) and, this
+  time, macOS too (Sonicology-macOS, id 14466818895: the macOS runners were free again). CI: Mixology fca4d93 green,
+  Voxology 34be9da green (incl. ASan); Masterology 9982248 still running (no failure so far).
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the
