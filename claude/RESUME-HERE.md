@@ -291,6 +291,8 @@ sends higher-resolution art, re-run it.
   Voxology da6679e, Masterology ad74cb8); installer run 44339024476 (label "Beta 32", version 0.32.0). Local tests:
   Mixology all 264 cases, Masterology ctest 315/315 (+ the plug-in test), Voxology 221/222 (the one was test_manual
   on a binary built before the version bump; passes rebuilt). Masterology manual's Claude Docs copy: rev 185.
+  Beta 31 CI: Voxology 5c0623c (run 44327466470) and Masterology c462189 (run 44327474517) green too: all of Beta 31
+  is green.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the
