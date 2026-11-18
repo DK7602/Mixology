@@ -166,6 +166,11 @@ public:
     /** The Coach's report for the Rack (Unit::report of the Mixology that owns the mix): the first of the tracks the open
         Racks show, its state and plan, as JSON ({"track":<hash>, ...}); "" when none of them is a track. */
     std::string coachReport (const std::vector<std::uint32_t>& shownTracks) const;
+    /** Beta 31: the Rack's WHAT TO FIX FIRST (its SESSION page): the setup check's issues, then the Mix Assistant's points
+        (worst first; those a smart tool already fixed since Mixology listened, flagged done), each with its tracks, as
+        JSON ({"kind":"fix", ...}) for the Unit::report of the Mixology that owns the mix while a Rack shows the Full Mix.
+        Always valid JSON within rack::kReportBytes (the last points dropped to fit). */
+    std::string fixReport() const;
 
     /** Protected channels, saved with the project (Mixology's plug-in state). Safe from any thread: the host
         may save or load state off the message thread, so both go through a small locked copy. */

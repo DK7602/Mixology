@@ -270,7 +270,7 @@ Roughly 3 to 5 build sessions, step 1 first.
 - **Insert order check:** from the levels, whether the Link really sits after Voxology; a warning when not.
 - **MODULES page:** TURN ON HERE where the track's plug-in has the module.
 
-## Stage 3: the Coach (vocals Beta 26, tracks Beta 28, the master Beta 29; concept `rack-coach.png`)
+## Stage 3: the Coach (vocals Beta 26, tracks Beta 28, the master Beta 29, the project view Beta 31; concept `rack-coach.png`)
 
 **Built 2026-11-18 (Beta 26: Mixology 0.34.0, Voxology 0.64.0, Masterology 0.38.0), vocals:**
 - The COACH page (rack.js `coachPage` / `coachBar`; header button next to SESSION) on a track with Voxology (not BEAT).
@@ -317,7 +317,18 @@ Roughly 3 to 5 build sessions, step 1 first.
 - rack.js: coachOf on the Master track (kind "master"): GENRE / INTENSITY / TARGET (REFERENCE when wide), BUILD NOW
   with the seconds heard, RESULTS rows each on their own scale with their unit; STOP for every Coach while it listens.
 
-**Next:** a project view of what to fix first across tracks (Mixology's Mix Assistant points).
+**Built 2026-11-18 (Beta 31: Mixology 0.39.0, Voxology 0.69.0, Masterology 0.43.0), the project view:**
+- WHAT TO FIX FIRST, the SESSION page's right panel: one numbered list for the project, worst first. Mixology's part:
+  BridgeHub::fixReport ({"kind":"fix", analyzed, busy, seconds, style, fromProject, items[{id, from "setup" | "mix",
+  kind, title, need, text, tracks[names], tool, done}], more}), the report of the Mixology that owns the mix while a
+  Rack shows the Full Mix (rack.js asks for "fullmix" on the SESSION page: wantTrack()). rack.js adds the Rack's own
+  warn lines (together(), units' lines), the insert-order check and another beta's plug-in; one topic is said once
+  (Mixology's setup check and the Rack both notice a vocal without a Link, or a shared track name). Each point: its
+  tracks (open on the RACK page), COACH (when the track has a Coach), the one-click fixes, the smart tool's name.
+  SESSION rows count what is worth fixing on each track.
+
+**Next (stage 3 is done):** whatever the user picks: the blind shoot-out's findings, a chain you can reorder, AI
+voice / room / noise separation.
 
 **The plan as written before building:**
 

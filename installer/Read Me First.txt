@@ -7,7 +7,15 @@ The complete vocal, mixing and mastering suite
 
 Thanks for trying the beta. Nothing here is finished: tell us what's confusing, what breaks and what you'd change.
 
-NEW IN THIS BETA: FIXES FROM YOUR BETA 29 TEST
+NEW IN THIS BETA: WHAT TO FIX FIRST (THE RACK'S SESSION PAGE)
+  - The Rack's SESSION page has a new list on the right: what to fix first in your whole project, worst first.
+  - It puts together Mixology's Mix Assistant (press ANALYZE MIX in Mixology first: a buried vocal, a kick and 808
+    that clash, mud...), Mixology's setup check (a vocal without Mixology Link...) and the Rack's own warnings (two
+    reverbs on one vocal...), each said once.
+  - Each point names its tracks: click one to open it, COACH to let the Coach build it, or a one-click fix.
+  All three plug-ins need this version (Voxology 0.69.0, Mixology 0.39.0, Masterology 0.43.0).
+
+ALSO NEW (BETA 30): FIXES FROM YOUR BETA 29 TEST
   - The Coach after APPLY: press ANALYZE AGAIN and it now compares its plan with your settings. Modules already set
     say "Already set", and when nothing is left to change it says so (the button reads NOTHING TO CHANGE) instead of
     giving the same advice again.

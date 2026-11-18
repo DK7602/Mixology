@@ -240,6 +240,10 @@ void MixologyAudioProcessor::publishRack()
         if (! faders.values.empty() && u.modules.size() < static_cast<std::size_t> (rack::kMaxModules)) u.modules.push_back (std::move (faders));
         u.report = bridgeHub->coachReport (shownTracks);   // Beta 28: the Coach on the track the Rack shows
     }
+    // Beta 31: a Rack showing the Full Mix (its SESSION page asks for it) gets WHAT TO FIX FIRST: the setup check and the
+    // Mix Assistant's points (only the Mixology that owns the mix has them).
+    if (u.report.empty() && faderOwner && due == rack::Publisher::Due::full && rackPub.shows (now, hash, role))
+        u.report = bridgeHub->fixReport();
     const auto& v = st.values;
     if (onMaster && mixology::proc::isOn (v, mixology::proc::Module::final) && v[mixology::proc::finOut] <= -0.5f)
         u.lines.push_back ({ rack::Level::ok, "Room made for Masterology: the Full Mix's Final Output is "

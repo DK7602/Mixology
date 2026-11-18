@@ -323,6 +323,16 @@
     return r;
   }
 
+  // Beta 31: Mixology's WHAT TO FIX FIRST (BridgeHub::fixReport): the setup check, then the Mix Assistant's points.
+  const fixMode = new URLSearchParams(location.search).get("fix");
+  const FIX_REPORT = () => fixMode === "none" ? { kind: "fix", analyzed: false, busy: false, seconds: 0, style: "Hip Hop - Trap", items: [], more: 0 }
+    : { kind: "fix", analyzed: true, busy: false, seconds: 48, style: "Hip Hop - Trap", fromProject: false, more: 0, items: [
+      { id: "setup-vocal-link", from: "setup", kind: "warn", title: "Ad-Libs has Voxology but no Mixology Link", need: "Add Mixology Link under Voxology, so Mixology hears the finished ad-libs.", text: "", tracks: ["Ad-Libs"] },
+      { id: "vocal-low", from: "mix", kind: "warn", title: "Lead vocal sits 2.4 dB under the beat", need: "Yes: the words get lost in the chorus. Balance lifts it to where Hip Hop - Trap puts it.", text: "", tracks: ["Lead Vox"], tool: "balance" },
+      { id: "kick-bass", from: "mix", kind: "warn", title: "Kick and 808 hit the same low notes", need: "Yes: they blur into one boom. Duck the 808 under the kick, or EQ them apart.", text: "", tracks: ["Kick", "808"] },
+      { id: "mud", from: "mix", kind: "info", title: "A little mud around 300 Hz", need: "Have a look: Keys and Chorus Vox both pile up there.", text: "", tracks: ["Keys", "Chorus Vox"], tool: "clean" },
+      { id: "harsh", from: "mix", kind: "info", title: "Hats a touch harsh at 6 kHz", need: "", text: "", tracks: ["Hats"], tool: "polish", done: true }] };
+
   function units() {
     const list = rawUnits();
     for (const u of list) {
@@ -376,6 +386,8 @@
       const shown = shownTrack.startsWith("t") ? +shownTrack.slice(1) : 0;
       const link = shown && list.find((u) => u.product === "link" && u.hash === shown);
       if (link) mix.report = JSON.stringify(mixCoachReport(shown, link.track));
+      // Beta 31: a Rack showing the Full Mix (the SESSION page) gets Mixology's WHAT TO FIX FIRST (?fix=none: not analyzed).
+      else if (shownTrack === "fullmix") mix.report = JSON.stringify(FIX_REPORT());
     }
     return list;
   }

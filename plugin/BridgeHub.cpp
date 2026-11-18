@@ -3986,6 +3986,65 @@ std::string BridgeHub::coachReport (const std::vector<std::uint32_t>& shownTrack
     return utf8;
 }
 
+std::string BridgeHub::fixReport() const
+{
+    using namespace mixology;
+    const auto clip = [] (const std::string& t, std::size_t n) {
+        if (t.size() <= n) return juce::String::fromUTF8 (t.c_str());
+        std::size_t cut = n;
+        while (cut > 0 && (static_cast<unsigned char> (t[cut]) & 0xC0) == 0x80) --cut;   // never inside a UTF-8 character
+        return juce::String::fromUTF8 (t.substr (0, cut).c_str()) + juce::String::fromUTF8 ("\xE2\x80\xA6");
+    };
+    struct Item { const mix::Suggestion* sg; const char* from; bool done; std::string tool; };
+    std::vector<Item> items;
+    for (const auto& sg : setupNow) items.push_back ({ &sg, "setup", false, {} });
+    if (report.valid)
+    {
+        // Worst first (warn, then info, then fine), each kind in the Mix Assistant's own order.
+        for (const char* kind : { "warn", "info", "calm" })
+            for (const auto& sg : report.suggestions)
+            {
+                if (sg.kind != kind) continue;
+                const auto it = donePoints.find (sg.id);
+                items.push_back ({ &sg, "mix", it != donePoints.end() && it->second.done, toolForPoint (sg.id) });
+            }
+    }
+    const bool busy = analyzeState == Analyze::reading || analyzeState == Analyze::listening;
+    for (std::size_t keep = items.size() + 1; keep-- > 0;)
+    {
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("kind", "fix");
+        o->setProperty ("analyzed", report.valid);
+        o->setProperty ("busy", busy);
+        o->setProperty ("seconds", report.valid ? std::round (report.secondsHeard) : 0.0);
+        o->setProperty ("style", juce::String::fromUTF8 ((report.valid ? report.style : autoStyleKnown ? autoStyle : mix::Style {}).name.c_str()));
+        o->setProperty ("fromProject", adviceFromProject);   // advice that came back with the project (not heard yet this session)
+        juce::Array<juce::var> list;
+        for (std::size_t i = 0; i < keep; ++i)
+        {
+            const auto& it = items[i];
+            auto* x = new juce::DynamicObject();
+            x->setProperty ("id", juce::String (it.sg->id));
+            x->setProperty ("from", juce::String (it.from));
+            x->setProperty ("kind", juce::String (it.sg->kind));
+            x->setProperty ("title", clip (it.sg->title, 90));
+            x->setProperty ("need", clip (it.sg->need, 160));
+            x->setProperty ("text", clip (it.sg->text, 240));
+            juce::Array<juce::var> names;
+            for (std::size_t k = 0; k < it.sg->tracks.size() && k < 4; ++k) names.add (clip (it.sg->tracks[k], 40));
+            x->setProperty ("tracks", names);
+            if (! it.tool.empty()) x->setProperty ("tool", juce::String (it.tool));
+            if (it.done) x->setProperty ("done", true);
+            list.add (juce::var (x));
+        }
+        o->setProperty ("items", list);
+        o->setProperty ("more", static_cast<int> (items.size() - keep));
+        auto utf8 = juce::JSON::toString (juce::var (o), true).toStdString();
+        if (utf8.size() < rack::kReportBytes) return utf8;
+    }
+    return "{\"kind\":\"fix\",\"items\":[]}";
+}
+
 mixology::BridgeSession::Result BridgeHub::autoUndo (std::uint64_t step, std::string& info)
 {
     const auto* s = history.find (step);

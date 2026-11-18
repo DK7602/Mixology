@@ -264,6 +264,13 @@ sends higher-resolution art, re-run it.
   Settings has a Manual chip (opens the manual sheet). Preview checks: scratchpad heads.js / link30.js (pages served
   from disk via Playwright's router; JUCE's bridge from /tmp/claude-0/juce) and b30coach.js.
   Next (user said "move on to next step"): the Rack's project view of what to fix first (RACK-PLAN stage 3, "Next").
+- Beta 30 installer dispatched (label "Beta 30", version 0.30.0; Mixology 45a0009, Voxology 40d0e72e3d18..., Masterology
+  9119bd249ee0...). Masterology manual's Claude Docs copy: rev 183.
+- BETA 31 BUILT (Mixology 0.39.0, Voxology 0.69.0, Masterology 0.43.0): WHAT TO FIX FIRST on the Rack's SESSION page
+  (stage 3's last item; details in RACK-PLAN "Built ... the project view"). New C++: BridgeHub::fixReport (Mixology
+  only), published as the master Mixology's report when a Rack shows the Full Mix (PluginProcessor::publishRack);
+  compiled against JUCE here (scratchpad c28.sh), no unit test (BridgeHub has none). Preview: rack_mock FIX_REPORT
+  (?fix=none: not analyzed), scratchpad b31.js. Stage 3 (the Coach) is done; next is the user's pick.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the
