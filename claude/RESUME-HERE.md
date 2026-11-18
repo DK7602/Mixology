@@ -287,6 +287,10 @@ sends higher-resolution art, re-run it.
   coachAsks() (a shown track can ask Mixology's Coach while it reports another), redraw() after every Coach answer.
   Known limit: on a Mixology track a save during PREVIEW saves what plays (the Link keeps its own state); the manual
   says to KEEP or go BACK first. Preview: rack_mock previewStep, scratchpad b32.js.
+- Beta 31 installer (run 44327493199) and Mixology's CI on 80e965c: green (15:26). Beta 32 pushed (Mixology 7ab511b,
+  Voxology da6679e, Masterology ad74cb8); installer run 44339024476 (label "Beta 32", version 0.32.0). Local tests:
+  Mixology all 264 cases, Masterology ctest 315/315 (+ the plug-in test), Voxology 221/222 (the one was test_manual
+  on a binary built before the version bump; passes rebuilt). Masterology manual's Claude Docs copy: rev 185.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the
