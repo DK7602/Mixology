@@ -183,6 +183,11 @@ sends higher-resolution art, re-run it.
   takes ~45 min of Mac time; five separate installers would have taken ~4 hours, and Beta 25's Read Me lists 21 - 25.
   sonicology.yml since 1e22db4: `build` = the three Windows builds, `build-mac` = the three Macs with max-parallel 1.
   Betas 22 - 25 were built in a worktree (/tmp/claude-0/mix22) and fast-forwarded onto claude/mixology.
+- 2026-11-18: Beta 25 installer run 44195754708 GREEN (Windows + macOS; the Macs one at a time, none cancelled). CI fixes:
+  Voxology's new test used M_PI (MSVC); Masterology's Windows CI hadn't built its headless plug-in tests since Beta 17
+  (shared RackHost.h named WebBrowserComponent with JUCE_WEB_BROWSER=0): viewResource is now `#if JUCE_WEB_BROWSER`
+  (19f0c93 here, the same file in all three). Mixology CI green at 19f0c93. The leftover branch claude/mixology-beta22
+  (= afd7c93) couldn't be deleted from the session (the push was refused): the user can delete it on GitHub.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the
