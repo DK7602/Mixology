@@ -297,6 +297,9 @@ sends higher-resolution art, re-run it.
   builds were cancelled before getting a runner (no steps ran: the macOS queue, not the code); failed jobs re-run.
   CI: Mixology 7ab511b green; Voxology da6679e Windows green, ASan running; Masterology ad74cb8 UI smoke green,
   Windows tests and ASan running.
+- 17:15: CI on all three Beta 32 commits GREEN (Voxology 44339010780, Masterology 44339164990 incl. ASan + plug-in
+  tests). Suite re-run 1: Masterology (macOS) green; Mixology (macOS) cancelled again after 15 min without a macOS
+  runner (no steps), so the macOS installer was skipped. Re-run 2 queued (17:15). The Windows installer is unaffected.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the
