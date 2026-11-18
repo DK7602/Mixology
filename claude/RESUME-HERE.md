@@ -293,6 +293,10 @@ sends higher-resolution art, re-run it.
   on a binary built before the version bump; passes rebuilt). Masterology manual's Claude Docs copy: rev 185.
   Beta 31 CI: Voxology 5c0623c (run 44327466470) and Masterology c462189 (run 44327474517) green too: all of Beta 31
   is green.
+- 16:28 Beta 32 installer run 44339024476: Windows installer GREEN (all Windows builds, shared files match). Both macOS
+  builds were cancelled before getting a runner (no steps ran: the macOS queue, not the code); failed jobs re-run.
+  CI: Mixology 7ab511b green; Voxology da6679e Windows green, ASan running; Masterology ad74cb8 UI smoke green,
+  Windows tests and ASan running.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the
