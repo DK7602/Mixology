@@ -247,6 +247,8 @@ sends higher-resolution art, re-run it.
   pluginval) and UI smoke green, ASan job still running at 07:58; Voxology's ASan job had failed on Beta 28 (a
   test-only bug in Beta 27's test_realtime.cpp: the no-throw new wasn't replaced; fixed in Voxology 751fa99, see its
   RESUME-HERE), re-run in progress. The installers are unaffected (test code only).
+  08:29: both green (Masterology run 44255774936 all jobs incl. ASan; Voxology run 44259562701 with the fix). All CI
+  green on all three repos. Waiting for the user's Beta 29 test in Cubase.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the
