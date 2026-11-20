@@ -327,6 +327,17 @@ sends higher-resolution art, re-run it.
 - 20:30: Beta 33 installer run 44383920227 ALL GREEN: Windows (artifact Sonicology-Windows, id 14465956823) and, this
   time, macOS too (Sonicology-macOS, id 14466818895: the macOS runners were free again). CI: Mixology fca4d93 green,
   Voxology 34be9da green (incl. ASan); Masterology 9982248 still running (no failure so far).
+- 2026-11-20, user on Beta 33 (video + screenshot): (1) moving a module showed "moved" but the row went back: the
+  shared link clamped every request value to 0..1 (a knob's), so a new place became 1 (the module landed 2nd). Fixed in
+  Link::request and take() (Change::order keeps 0 .. kMaxModules - 1); test_rack_link now sends 4.4 and 99; rack_mock
+  clamps like the real link (b33.js would have caught it). (2) BACK TO MIXOLOGY cut off in a 1154 px window (stage
+  1280): narrow header says "BACK" (title has the whole), less padding (scratchpad hdr33.js checks 1000 - 1700 px).
+  (3) "Turn the Link's Space off" confused them (it's Mixology's): every warning / fix now says "Mixology's Compressor /
+  Space". (4) Lead vox: ANALYZE, APPLY, ANALYZE AGAIN on the same section still suggested changes: the comparison counted
+  a knob more than 2 % of its range away as a change (half a dB on an EQ); now closeEnough (1.5 dB, dBTP 0.25, 15 % Hz,
+  25 % ms, 8 points of a %, else 5 % of the range) in Voxology's and Masterology's Coach. Not reproduced here (needs
+  the plug-in in a host): ask for a screenshot of what it lists if it still happens.
+- BETA 34 BUILT (Mixology 0.41.1, Voxology 0.71.1, Masterology 0.45.1): those four fixes. Masterology manual's Claude Docs copy: rev 188.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the

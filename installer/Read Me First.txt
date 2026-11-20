@@ -7,7 +7,15 @@ The complete vocal, mixing and mastering suite
 
 Thanks for trying the beta. Nothing here is finished: tell us what's confusing, what breaks and what you'd change.
 
-NEW IN THIS BETA: PUT A CHAIN IN YOUR OWN ORDER (THE RACK)
+NEW IN THIS BETA: FIXES FROM YOUR BETA 33 TEST
+  - Moving a module in the Rack's SIGNAL CHAIN: it now lands where you drop it (it went only one or two places).
+  - The Rack in a smaller window: the BACK button is no longer cut off at the right.
+  - The warnings say "Mixology's Space" and "Mixology's Compressor" (they were called "the Link's").
+  - The Coach after APPLY: ANALYZE AGAIN no longer counts tiny differences as changes (a knob within about 1.5 dB,
+    or a small step, of the plan counts as already set).
+  All three plug-ins need this version (Voxology 0.71.1, Mixology 0.41.1, Masterology 0.45.1).
+
+ALSO NEW (BETA 33): PUT A CHAIN IN YOUR OWN ORDER (THE RACK)
   - In the Rack's SIGNAL CHAIN, drag a module up or down to move it (rows you can move show six dots).
   - Voxology: Tone EQ, Dynamic EQ, De-Esser, Rider, Compressor and Saturation. Mixology Link and Mixology's Full Mix:
     EQ, Compressor, Multiband, Transients, Tone Balance, Loudness, Harmonics, Analog, Clipper and Width. Tuning and

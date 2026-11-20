@@ -3,7 +3,7 @@
 Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list all three are under Sonicology.
 
-Manual for version 0.41.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
+Manual for version 0.41.1 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -65,7 +65,7 @@ fix):
 | The Coach after APPLY (Already set / NOTHING TO CHANGE); RACK as a word; the manual in Settings | New in 0.38: tested in the engine and the browser preview, not yet in a DAW |
 | Sonicology Rack: WHAT TO FIX FIRST on the SESSION page (the Mix Assistant's points, the setup check and the Rack's warnings, worst first) | New in 0.39: tested in the browser preview, not yet in a DAW |
 | The Coach's PREVIEW (hear the plan, flip PLAN / YOURS at the same loudness, KEEP PLAN or BACK TO YOURS) | New in 0.40: tested in the engine and the browser preview, not yet in a DAW |
-| Sonicology Rack: move a module (drag its row; RESET ORDER), in Mixology Link, Mixology's Full Mix and Voxology | New in 0.41: tested in the engine and the browser preview, not yet in a DAW |
+| Sonicology Rack: move a module (drag its row; RESET ORDER), in Mixology Link, Mixology's Full Mix and Voxology | New in 0.41 (fixed in 0.41.1: a module now lands where you drop it): tested in the engine and the browser preview; 0.41.0 tried in Cubase |
 
 Nothing changes your sound until you ask: every processing module starts switched off (the audio passes
 through bit for bit). What can change it: the Cubase faders and pans Mixology moves, the Assist EQ / Trim in
@@ -937,7 +937,7 @@ and the window grows to about 85 % of your screen's height while it's open (the 
 - **Rack Coach** (right): **How they work together** (green: fine, blue: good to know, red: fix it, for example two
   compressors on one vocal, Pitch and Honey Tune both tuning, two Masterologys, or Mixology's Limiter before
   Masterology), the chain overview, and what the picked module is for. Many red lines come with **one-click fixes**
-  (for example "Turn the Link's Compressor off" or "Turn Voxology's Compressor off"): click one and the plug-in that
+  (for example "Turn Mixology's Compressor off" or "Turn Voxology's Compressor off"): click one and the plug-in that
   owns that module switches it off; **UNDO** in the message switches it back on.
 - **Gain staging** (in the Rack Coach, for the track you picked): each plug-in's level going in and coming out (peaks,
   live) and how much it adds. It warns when one makes the track much louder (louder sounds better by itself, so

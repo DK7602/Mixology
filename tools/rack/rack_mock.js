@@ -435,6 +435,8 @@
     host: "mixology",
     async request(r) {
       const t = nextTicket++;
+      // as the plug-ins' shared link carries it: a knob's value 0..1; a module's new place (order) a whole number
+      r = Object.assign({}, r, { value: r.change === "order" ? Math.max(0, Math.min(15, +r.value || 0)) : Math.max(0, Math.min(1, +r.value || 0)) });
       if (lockMaster && r.unit === "masterology") return { ticket: 0, why: "Auto-Master is running." };
       const cs = coach[r.unit] && coach[r.unit].state;
       if (r.change !== "coach" && (cs === "listening" || cs === "working")) return { ticket: 0, why: cs === "listening" ? "Auto-Edit is listening to the vocal." : "Auto-Edit is working out the settings." };
@@ -518,10 +520,10 @@
         host: this.host, hostHash: this.host === "voxology" ? H.lead : 0,
         units: units(),
         together: [
-          { hash: H.lead, level: "ok", text: "Voxology compresses this vocal, so Mixology's Link adds no second compressor." },
+          { hash: H.lead, level: "ok", text: "Voxology compresses this vocal, so Mixology adds no second compressor." },
           { hash: H.lead, level: "ok", text: "Voxology adds the reverb and delay here; Mixology adds none on top." },
-          { hash: H.chorus, level: "warn", text: "Two reverbs on this vocal: Voxology's Reverb (plate) and the Link's Space (hall). Stacked spaces can wash it out: turn one down or off.",
-            fixes: [{ unit: "link-chorus", gen: 1, module: "mix.space", on: false, label: "Turn the Link's Space off (hall)" },
+          { hash: H.chorus, level: "warn", text: "Two reverbs on this vocal: Voxology's Reverb (plate) and Mixology's Space (hall). Stacked spaces can wash it out: turn one down or off.",
+            fixes: [{ unit: "link-chorus", gen: 1, module: "mix.space", on: false, label: "Turn Mixology's Space off (hall)" },
                     { unit: "vox-chorus", gen: 1, module: "vox.reverb", on: false, label: "Turn Voxology's Reverb off" }] },
           { hash: H.adlibs, level: "warn", text: "Mixology can't hear this track: there is no Mixology Link on it." },
           { hash: H.keys, level: "ok", text: "The Space on Keys ducks under Lead Vox and Chorus Vox, so it blooms between the lines." },
