@@ -347,7 +347,8 @@ sends higher-resolution art, re-run it.
   (the Overview's "analyze" uses it too), rackCoach mixanalyze / mixfinish / mixcancel, fixReport hearing / enough /
   playing. Preview: rack_mock mixListen (Analyze Mix from the Rack, "20 s" in 4 s); scratchpad b35.js walks it all
   (start, setup, ANALYZE MIX, FINISH, the Coach on Lead Vox with PREVIEW / KEEP, close and GO ON, skips, master, done).
-  Installer: run 44765676092 ("Beta 35", version 0.35.0; Mixology d4ca518, Voxology 91825a1, Masterology cdf9d51).
+  Installer: run 44765676092 ("Beta 35", version 0.35.0; Mixology d4ca518, Voxology 91825a1, Masterology cdf9d51). GREEN
+  (16:12 UTC, Windows and Mac). Told the user; they asked how the blind shoot-out works (explained; waits for home).
   Beta 34 (run 44759903301) finished all green (Windows and Mac). Its Build & Test: Mixology green; Voxology and
   Masterology cancelled at 15:40 by the Beta 35 push (the newer run replaces it), so Beta 35's CI covers them.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
