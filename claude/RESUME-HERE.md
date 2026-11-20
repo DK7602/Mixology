@@ -339,6 +339,14 @@ sends higher-resolution art, re-run it.
   the plug-in in a host): ask for a screenshot of what it lists if it still happens.
 - BETA 34 BUILT (Mixology 0.41.1, Voxology 0.71.1, Masterology 0.45.1): those four fixes. Masterology manual's Claude Docs copy: rev 188.
   Pushed Mixology e5d59b5, Voxology ee2d37c, Masterology 569f8d5; installer run 44759903301 (label "Beta 34", 0.34.0).
+- 2026-11-20: user: "whats next?" -> recommended: test Beta 34, the blind shoot-out when home, GUIDED MIX now, AI separation
+  later. User: "yes start the guided first mix"; then asked for a Settings switch to turn it off for pros, then took it
+  back ("nevermind ... a GUIDED MIX button on the SESSION page"): no setting; it only runs when pressed.
+- BETA 35 BUILT (Mixology 0.42.0, Voxology 0.72.0, Masterology 0.46.0): GUIDED MIX (RACK-PLAN "Built ... GUIDED MIX").
+  rack.js: guideSteps / guidePanel / guideNow / guideObserve / guideSig, clicks guide-*; BridgeHub::startAnalyzeMix
+  (the Overview's "analyze" uses it too), rackCoach mixanalyze / mixfinish / mixcancel, fixReport hearing / enough /
+  playing. Preview: rack_mock mixListen (Analyze Mix from the Rack, "20 s" in 4 s); scratchpad b35.js walks it all
+  (start, setup, ANALYZE MIX, FINISH, the Coach on Lead Vox with PREVIEW / KEEP, close and GO ON, skips, master, done).
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the

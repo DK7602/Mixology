@@ -342,7 +342,16 @@
 
   // Beta 31: Mixology's WHAT TO FIX FIRST (BridgeHub::fixReport): the setup check, then the Mix Assistant's points.
   const fixMode = new URLSearchParams(location.search).get("fix");
-  const FIX_REPORT = () => fixMode === "none" ? { kind: "fix", analyzed: false, busy: false, seconds: 0, style: "Hip Hop - Trap", items: [], more: 0 }
+  // Beta 35 (GUIDED MIX): Analyze Mix started from the Rack listens fast here ("20 s" in 4 s), finishes at "60 s".
+  const mixListen = { state: fixMode === "none" ? "idle" : "done", t0: 0, heard: 48 };
+  const listenNow = () => {
+    if (mixListen.state !== "listening") return 0;
+    const h = Math.floor((Date.now() - mixListen.t0) / 1000 * 5);
+    if (h >= 60) { mixListen.state = "done"; mixListen.heard = 60; }
+    return Math.min(h, 60);
+  };
+  const FIX_REPORT = () => (listenNow(), mixListen.state !== "done") ? { kind: "fix", analyzed: false, busy: mixListen.state === "listening", seconds: 0, hearing: listenNow(), enough: 20, playing: true,
+      style: "Hip Hop - Trap", items: [{ id: "setup-vocal-link", from: "setup", kind: "warn", title: "Ad-Libs has Voxology but no Mixology Link", need: "Add Mixology Link under Voxology, so Mixology hears the finished ad-libs.", text: "", tracks: ["Ad-Libs"] }], more: 0 }
     : { kind: "fix", analyzed: true, busy: false, seconds: 48, style: "Hip Hop - Trap", fromProject: false, more: 0, items: [
       { id: "setup-vocal-link", from: "setup", kind: "warn", title: "Ad-Libs has Voxology but no Mixology Link", need: "Add Mixology Link under Voxology, so Mixology hears the finished ad-libs.", text: "", tracks: ["Ad-Libs"] },
       { id: "vocal-low", from: "mix", kind: "warn", title: "Lead vocal sits 2.4 dB under the beat", need: "Yes: the words get lost in the chorus. Balance lifts it to where Hip Hop - Trap puts it.", text: "", tracks: ["Lead Vox"], tool: "balance" },
@@ -447,6 +456,12 @@
         if (r.change === "coach" && r.unit === "mixology") {
           const [stepName, h] = r.control.split(".");
           const hash = +h;
+          if (stepName === "mixanalyze") { mixListen.state = "listening"; mixListen.t0 = Date.now(); tickets[t] = { outcome: "applied", why: "" }; return; }
+          if (stepName === "mixfinish") {
+            if (listenNow() < 20) { tickets[t] = { outcome: "refused", why: "Let Analyze Mix hear a little more of the song first." }; return; }
+            mixListen.state = "done"; mixListen.heard = listenNow(); tickets[t] = { outcome: "applied", why: "" }; return;
+          }
+          if (stepName === "mixcancel") { if (mixListen.state === "listening") mixListen.state = "idle"; tickets[t] = { outcome: "applied", why: "" }; return; }
           const c = (mixCoach[hash] = mixCoach[hash] || { state: "idle" });
           const refuseMix = (why) => { tickets[t] = { outcome: "refused", why }; return null; };
           const pv = previewStep(c, stepName, -1.4, refuseMix);

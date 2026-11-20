@@ -7,7 +7,15 @@ The complete vocal, mixing and mastering suite
 
 Thanks for trying the beta. Nothing here is finished: tell us what's confusing, what breaks and what you'd change.
 
-NEW IN THIS BETA: FIXES FROM YOUR BETA 33 TEST
+NEW IN THIS BETA: GUIDED MIX (THE RACK'S SESSION PAGE)
+  - Press GUIDED MIX at the top of the Rack's SESSION page: your first mix, one step at a time.
+  - Check the setup, let Mixology hear the mix (ANALYZE MIX right there), see what to fix first, then the Coach on
+    each track (vocals first: ANALYZE & BUILD, PREVIEW, KEEP PLAN or BACK TO YOURS), then the master.
+  - NEXT / SKIP move on; close it with the X and GO ON WITH GUIDED MIX picks up where you were.
+  - Pro? Just don't press it: nothing changes unless you start it.
+  All three plug-ins need this version (Voxology 0.72.0, Mixology 0.42.0, Masterology 0.46.0).
+
+ALSO IN THIS BETA: FIXES FROM YOUR BETA 33 TEST
   - Moving a module in the Rack's SIGNAL CHAIN: it now lands where you drop it (it went only one or two places).
   - The Rack in a smaller window: the BACK button is no longer cut off at the right.
   - The warnings say "Mixology's Space" and "Mixology's Compressor" (they were called "the Link's").

@@ -350,6 +350,15 @@ Roughly 3 to 5 build sessions, step 1 first.
   silent, fades them back in. Saved as the processing state's "order", in each Link and in Mixology's Full Mix.
 - Masterology keeps its order (Auto-Master's loudness search and the limiter at the end depend on it): it refuses.
 
+**Built 2026-11-20 (Beta 35: Mixology 0.42.0, Voxology 0.72.0, Masterology 0.46.0), GUIDED MIX:**
+- The audit's "first ten minutes": a GUIDED MIX button on the SESSION page (nothing happens unless pressed; the user:
+  pros just don't press it). Its steps take the left column (SESSION: beside WHAT TO FIX FIRST; COACH: in place of
+  SIGNAL CHAIN): setup (the warn points not from Analyze Mix), listen (Mixology's Analyze Mix started from the Rack:
+  Coach step "mixanalyze.0", then "mixfinish.0" once it heard kEnoughSeconds, "mixcancel.0"; fixReport's hearing /
+  enough / playing), what to fix first, the Coach on each track (guideTracks: lead vocal, vocals, bass, kick, snare,
+  hats / drums, beat, the rest; only tracks with a Coach), the master, finished. Step text follows the Coach's state;
+  guideObserve marks kept / already set; SKIP; any step clickable; progress in localStorage per project (track keys).
+
 **Next:** the blind shoot-out (the user's next pick, when they're home), then AI voice / room / noise separation.
 
 **The plan as written before building:**

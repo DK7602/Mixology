@@ -2262,32 +2262,7 @@ juce::var BridgeHub::command (const juce::String& name, const juce::var& arg)
         ++applyVersion;
     }
     else if (name == "analyze")
-    {
-        const auto style = styleFromVar (value);
-        if (bridge.applying())
-            r = { false, "Mixology is still applying " + bridge.planProgress().what + ": try again in a second." };
-        else if (mixology::link::processRegistry().links (mixology::link::nowMs()).empty())
-            r = { false, "No Mixology Link found. Insert Mixology Link on your tracks (after their other plug-ins), then press Analyze Mix." };
-        else
-        {
-            if (report.valid && analyzeState == Analyze::done) adviceAnalysis = analysis;   // Cancel goes back to it
-            if (trackListen.active)
-            {
-                const bool forCoach = trackListen.forCoach;
-                trackListen = {};
-                if (forCoach) { coach.state = "idle"; coach.heard = 0.0; }
-                else autoResult ("stopped", "Analyze Mix started: AUTO stopped listening (Analyze Mix hears every track). Press AUTO again when it has finished.");
-            }
-            analysis.begin (style);
-            analysis.setVocalOffset (vocalOffset, vocalFromYou);
-            autoListen.reset();
-            if (bridge.link() == mixology::BridgeSession::Link::connected && bridge.scanAllChannels (t).ok)
-                analyzeState = Analyze::reading;   // first every channel's fader, then listen
-            else
-                analyzeState = Analyze::listening;
-            ++analysisVersion;
-        }
-    }
+        r = startAnalyzeMix (styleFromVar (value), t);
     else if (name == "autoStyle")
     {
         // The interface's style, at start and on every change. Auto Analyze listens for it (and a new style is new
@@ -3813,6 +3788,31 @@ void BridgeHub::autoRun (mixology::mix::Page page, std::uint32_t hash)
 // Beta 28: the Sonicology Rack's Coach on one of Mixology's tracks: AUTO's rules on every page at once (mix::makeCoachPlan),
 // shown first (the Rack's COACH page), applied on APPLY as one History step; UNDO takes that step back.
 
+mixology::BridgeSession::Result BridgeHub::startAnalyzeMix (const mixology::mix::Style& style, double t)
+{
+    if (bridge.applying())
+        return { false, "Mixology is still applying " + bridge.planProgress().what + ": try again in a second." };
+    if (mixology::link::processRegistry().links (mixology::link::nowMs()).empty())
+        return { false, "No Mixology Link found. Insert Mixology Link on your tracks (after their other plug-ins), then press Analyze Mix." };
+    if (report.valid && analyzeState == Analyze::done) adviceAnalysis = analysis;   // Cancel goes back to it
+    if (trackListen.active)
+    {
+        const bool forCoach = trackListen.forCoach;
+        trackListen = {};
+        if (forCoach) { coach.state = "idle"; coach.heard = 0.0; }
+        else autoResult ("stopped", "Analyze Mix started: AUTO stopped listening (Analyze Mix hears every track). Press AUTO again when it has finished.");
+    }
+    analysis.begin (style);
+    analysis.setVocalOffset (vocalOffset, vocalFromYou);
+    autoListen.reset();
+    if (bridge.link() == mixology::BridgeSession::Link::connected && bridge.scanAllChannels (t).ok)
+        analyzeState = Analyze::reading;   // first every channel's fader, then listen
+    else
+        analyzeState = Analyze::listening;
+    ++analysisVersion;
+    return { true, {} };
+}
+
 void BridgeHub::coachFailed (const std::string& why)
 {
     ++coach.rev;
@@ -3845,6 +3845,26 @@ void BridgeHub::coachBuild (std::uint32_t hash)
 std::string BridgeHub::rackCoach (const std::string& step, std::uint32_t hash)
 {
     using namespace mixology;
+    // Beta 35, the Rack's GUIDED MIX: Analyze Mix from the Rack ("mixanalyze.0"), finished early once it has heard enough
+    // ("mixfinish.0"), stopped ("mixcancel.0").
+    if (step == "mixanalyze")
+    {
+        if (analyzeState == Analyze::reading || analyzeState == Analyze::listening) return {};   // (already listening)
+        const auto r = startAnalyzeMix (report.valid ? report.style : autoStyleKnown ? autoStyle : mix::Style {}, now());
+        return r.ok ? std::string() : r.message;
+    }
+    if (step == "mixfinish")
+    {
+        if (analyzeState != Analyze::listening) return "Analyze Mix isn't listening right now.";
+        if (analysis.secondsHeard() < mix::Analysis::kEnoughSeconds) return "Let Analyze Mix hear a little more of the song first.";
+        finishAnalysis();
+        return {};
+    }
+    if (step == "mixcancel")
+    {
+        if (analyzeState == Analyze::reading || analyzeState == Analyze::listening) command ("analyzeCancel", {});
+        return {};
+    }
     if (hash == 0) return "The Coach works on one track at a time: pick a track (Auto Mix on Mixology's Overview does the whole mix).";
     const auto links = link::processRegistry().links (link::nowMs());
     std::string name;
@@ -4201,6 +4221,10 @@ std::string BridgeHub::fixReport() const
         o->setProperty ("analyzed", report.valid);
         o->setProperty ("busy", busy);
         o->setProperty ("seconds", report.valid ? std::round (report.secondsHeard) : 0.0);
+        // Beta 35 (GUIDED MIX): while Analyze Mix listens, how far it is (it can finish once it heard "enough")
+        o->setProperty ("hearing", busy ? std::floor (analysis.secondsHeard()) : 0.0);
+        o->setProperty ("enough", mix::Analysis::kEnoughSeconds);
+        o->setProperty ("playing", transportPlaying);
         o->setProperty ("style", juce::String::fromUTF8 ((report.valid ? report.style : autoStyleKnown ? autoStyle : mix::Style {}).name.c_str()));
         o->setProperty ("fromProject", adviceFromProject);   // advice that came back with the project (not heard yet this session)
         juce::Array<juce::var> list;

@@ -287,6 +287,8 @@ private:
     float previewGainDb() const;        // on the track's Link now (0 or below)
     bool coachStepDone() const;         // the APPLY step is still done in Mixology's History
     void coachBuild (std::uint32_t hash);
+    /** Analyze Mix starts listening (the Overview's ANALYZE MIX, the Rack's GUIDED MIX). */
+    mixology::BridgeSession::Result startAnalyzeMix (const mixology::mix::Style&, double t);
     void coachFailed (const std::string& why);
     mixology::BridgeSession::Result undoStep (std::uint64_t step, const std::string& label, std::string& info);
     /** Tracks AUTO heard on its own: merged into every report made from moments that didn't hear them (kept with the

@@ -3,7 +3,7 @@
 Mixology is part of **Sonicology**: Voxology (vocals), Mixology (the mix) and Masterology (mastering), made to work
 together. In your DAW's plug-in list all three are under Sonicology.
 
-Manual for version 0.41.1 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
+Manual for version 0.42.0 (the interface, live meters, the faders in Cubase, FL Studio, Ableton Live, Logic Pro and Cakewalk, Mixology Link, Analyze Mix, the smart
 tools: Auto Mix, Polish, Balance, Clean Up, Vocal Pocket, Stereo Architect, Reference Match, the processing: EQ,
 Dynamics, Tone and Stereo on any track or on the full mix, Space: reverb, delay and effects on a track or an FX
 channel, ducking under the vocal, the Master page's finishing knobs, the suite link: Mixology sees Voxology
@@ -66,6 +66,7 @@ fix):
 | Sonicology Rack: WHAT TO FIX FIRST on the SESSION page (the Mix Assistant's points, the setup check and the Rack's warnings, worst first) | New in 0.39: tested in the browser preview, not yet in a DAW |
 | The Coach's PREVIEW (hear the plan, flip PLAN / YOURS at the same loudness, KEEP PLAN or BACK TO YOURS) | New in 0.40: tested in the engine and the browser preview, not yet in a DAW |
 | Sonicology Rack: move a module (drag its row; RESET ORDER), in Mixology Link, Mixology's Full Mix and Voxology | New in 0.41 (fixed in 0.41.1: a module now lands where you drop it): tested in the engine and the browser preview; 0.41.0 tried in Cubase |
+| Sonicology Rack: GUIDED MIX (the SESSION page: setup, Analyze Mix, what to fix first, the Coach on each track, the master) | New in 0.42: tested in the browser preview (Mixology's part compiled against JUCE), not yet in a DAW |
 
 Nothing changes your sound until you ask: every processing module starts switched off (the audio passes
 through bit for bit). What can change it: the Cubase faders and pans Mixology moves, the Assist EQ / Trim in
@@ -974,6 +975,15 @@ on your master channel), and a Link in the wrong insert slot. Each point names i
 the RACK page, **COACH** to let the Coach build that track, or a one-click fix where there is one. "In Mixology:
 Balance" (or Clean Up, Polish, Vocal Pocket) names the smart tool that fixes it. Points a tool already fixed since
 Mixology listened come last, ticked. Until Analyze Mix has listened the list says so, with the Rack's own points.
+
+**GUIDED MIX** (new in Beta 35; the button at the top of the SESSION page): your first mix, one step at a time. The
+steps take the left column while it runs (on the COACH page, in place of the signal chain): **check the setup** (fix
+the red points in WHAT TO FIX FIRST), **let Mixology hear the mix** (ANALYZE MIX from the guide: play the busiest part
+of the song; FINISH once it has heard enough), **what to fix first** (read the list), then **the Coach on each track**
+(vocals first, then bass, drums, the beat and the rest: ANALYZE & BUILD, PREVIEW, then KEEP PLAN or BACK TO YOURS),
+**the master**, and **finished** (what you kept and skipped). NEXT and the arrow go forward and back, SKIP leaves a
+track as it is, and you can click any step. Close it with the X and **GO ON WITH GUIDED MIX** picks up where you were
+(while the Rack stays in the same plug-in). Pro? Just don't press it: nothing changes unless you start it.
 
 **The COACH page:** the Coach builds a track's whole chain for you, shows you why, and shows the result before you take
 it. It works through the plug-in that owns the track: a **vocal with Voxology** (0.64 or newer, not in BEAT mode)
