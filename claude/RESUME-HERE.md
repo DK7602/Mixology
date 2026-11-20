@@ -1413,3 +1413,6 @@ MANUAL.md, M1_TEST.md, INSTALL.txt).
   heard). Mixology: BridgeHub::handoffChanging sets suite::MixInfo::changing (bit 3; layout stays 4) while a plan
   applies and for kChangeSettleMs = 4 s after autoMixKey() changes; Masterology's Auto Analyze pauses ("mixology"),
   drops its edits and listens afresh. Test: "Suite: Mixology tells Masterology while it changes the mix".
+- 2026-11-20: user: shoot-out "a while" off (they think Voxology beats their old chain); asked to start AI separation.
+  STEP 1 done (feasibility): Voxology docs/ai-cleanup/STEP1.md. Off-the-shelf AI hurts singing; waiting for the
+  user's pick for step 2 (train it on singing via a Kaggle GPU, or improve the classic Room).

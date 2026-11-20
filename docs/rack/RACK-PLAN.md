@@ -359,7 +359,12 @@ Roughly 3 to 5 build sessions, step 1 first.
   hats / drums, beat, the rest; only tracks with a Coach), the master, finished. Step text follows the Coach's state;
   guideObserve marks kept / already set; SKIP; any step clickable; progress in localStorage per project (track keys).
 
-**Next:** the blind shoot-out (the user's next pick, when they're home), then AI voice / room / noise separation.
+**AI voice / room / noise cleanup, step 1 done 2026-11-20** (the user: shoot-out later, "start step 1"): Voxology's
+docs/ai-cleanup/STEP1.md. DeepFilterNet3 (MIT / Apache) cuts held sung notes (speech-trained); nothing open and
+sellable removes a bedroom's echo; cost is fine. Step 2 waits for the user: fine-tune it on singing, or improve the
+classic Room.
+
+**Next:** the user's pick for AI cleanup step 2; the blind shoot-out when they have time.
 
 **The plan as written before building:**
 
