@@ -347,6 +347,8 @@ sends higher-resolution art, re-run it.
   (the Overview's "analyze" uses it too), rackCoach mixanalyze / mixfinish / mixcancel, fixReport hearing / enough /
   playing. Preview: rack_mock mixListen (Analyze Mix from the Rack, "20 s" in 4 s); scratchpad b35.js walks it all
   (start, setup, ANALYZE MIX, FINISH, the Coach on Lead Vox with PREVIEW / KEEP, close and GO ON, skips, master, done).
+  Installer: run 44765676092 ("Beta 35", version 0.35.0; Mixology d4ca518, Voxology 91825a1, Masterology cdf9d51).
+  Beta 34 (run 44759903301) finished all green.
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the
