@@ -1416,3 +1416,6 @@ MANUAL.md, M1_TEST.md, INSTALL.txt).
 - 2026-11-20: user: shoot-out "a while" off (they think Voxology beats their old chain); asked to start AI separation.
   STEP 1 done (feasibility): Voxology docs/ai-cleanup/STEP1.md. Off-the-shelf AI hurts singing; waiting for the
   user's pick for step 2 (train it on singing via a Kaggle GPU, or improve the classic Room).
+  STEP 2 done (retrained on singing + the user's packs, Kaggle GPU): Voxology docs/ai-cleanup/STEP2.md. Male singer /
+  female rap pass; female singer / male chant not yet. Waiting for the user's pick for step 3 (Voxology's RESUME-HERE
+  has the details).

@@ -361,10 +361,13 @@ Roughly 3 to 5 build sessions, step 1 first.
 
 **AI voice / room / noise cleanup, step 1 done 2026-11-20** (the user: shoot-out later, "start step 1"): Voxology's
 docs/ai-cleanup/STEP1.md. DeepFilterNet3 (MIT / Apache) cuts held sung notes (speech-trained); nothing open and
-sellable removes a bedroom's echo; cost is fine. Step 2 waits for the user: fine-tune it on singing, or improve the
-classic Room.
+sellable removes a bedroom's echo; cost is fine. **Step 2 done the same day** (the user: "teach the AI to handle
+singing"; their Cymatics / Looperman packs allowed for training): Voxology's docs/ai-cleanup/STEP2.md. Retrained on a
+Kaggle GPU (5.5 h): male singer and female rapper now pass (far better than Voxology's classic Denoiser), the female
+singer and the deep male chant still lose some notes. No plug-in code yet.
 
-**Next:** the user's pick for AI cleanup step 2; the blind shoot-out when they have time.
+**Next:** the user's pick for AI step 3 (another training round, or build it into Voxology's Cleanup, or stop); the
+blind shoot-out when they have time.
 
 **The plan as written before building:**
 
