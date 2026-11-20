@@ -338,6 +338,7 @@ sends higher-resolution art, re-run it.
   25 % ms, 8 points of a %, else 5 % of the range) in Voxology's and Masterology's Coach. Not reproduced here (needs
   the plug-in in a host): ask for a screenshot of what it lists if it still happens.
 - BETA 34 BUILT (Mixology 0.41.1, Voxology 0.71.1, Masterology 0.45.1): those four fixes. Masterology manual's Claude Docs copy: rev 188.
+  Pushed Mixology e5d59b5, Voxology ee2d37c, Masterology 569f8d5; installer run 44759903301 (label "Beta 34", 0.34.0).
 - CHANGED in step 3 (told the user): the padlock does NOT lock the Rack's hand (it only stops Mixology's automatic
   moves, as on Mixology's own pages); it will guard the Coach in stage 3. (Was: "Decided in step 1: the padlock
   locks the Rack's hand too".) The lock is per unit, a text the owner publishes ("Auto-Edit is listening to the
