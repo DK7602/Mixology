@@ -1425,3 +1425,8 @@ MANUAL.md, M1_TEST.md, INSTALL.txt).
   ROUND 3 (2026-11-21, user said go): with the plug-in safety net it loses no notes on any clean take or the user's
   takes, 5 % at worst (female singer after real noise drops away). The candidate for building into Voxology's Cleanup,
   only if the user says so. Waiting for the user.
+  STEP 3 BUILT (user: "Yes, build it into Voxology"; Auto-Edit uses it): Voxology 0.73.0, Cleanup's Mode Classic / AI
+  (Voxology docs/ai-cleanup/STEP3.md). Fresh-eyes review fixed; also an older classic-reducer bug (no noise learned for
+  ~5 s after the DAW stopped). All 239 Voxology engine tests pass locally. BETA 36 installer: run 44925218071 ("Beta 36",
+  0.36.0; Mixology 88a2a89, Voxology c52e350, Masterology claude/eloquent-einstein-sscadx = cdf9d51). Mixology and
+  Masterology unchanged since Beta 35.
