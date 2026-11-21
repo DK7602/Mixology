@@ -1429,4 +1429,5 @@ MANUAL.md, M1_TEST.md, INSTALL.txt).
   (Voxology docs/ai-cleanup/STEP3.md). Fresh-eyes review fixed; also an older classic-reducer bug (no noise learned for
   ~5 s after the DAW stopped). All 239 Voxology engine tests pass locally. BETA 36 installer: run 44925218071 ("Beta 36",
   0.36.0; Mixology 88a2a89, Voxology c52e350, Masterology claude/eloquent-einstein-sscadx = cdf9d51). Mixology and
-  Masterology unchanged since Beta 35.
+  Masterology unchanged since Beta 35. GREEN (16:59 UTC, Windows and Mac); Voxology CI for c52e350: Windows green (tests,
+  pluginval 10, VST3 validator), ASan job was still running at 17:10. Told the user.
