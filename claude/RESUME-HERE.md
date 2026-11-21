@@ -1419,3 +1419,4 @@ MANUAL.md, M1_TEST.md, INSTALL.txt).
   STEP 2 done (retrained on singing + the user's packs, Kaggle GPU): Voxology docs/ai-cleanup/STEP2.md. Male singer /
   female rap pass; female singer / male chant not yet. Waiting for the user's pick for step 3 (Voxology's RESUME-HERE
   has the details).
+  ROUND 2 (2026-11-21): chant + noisy female singer fixed; clean female held notes still cut. Waiting for the user.

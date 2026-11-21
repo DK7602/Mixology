@@ -364,7 +364,8 @@ docs/ai-cleanup/STEP1.md. DeepFilterNet3 (MIT / Apache) cuts held sung notes (sp
 sellable removes a bedroom's echo; cost is fine. **Step 2 done the same day** (the user: "teach the AI to handle
 singing"; their Cymatics / Looperman packs allowed for training): Voxology's docs/ai-cleanup/STEP2.md. Retrained on a
 Kaggle GPU (5.5 h): male singer and female rapper now pass (far better than Voxology's classic Denoiser), the female
-singer and the deep male chant still lose some notes. No plug-in code yet.
+singer and the deep male chant still lose some notes. No plug-in code yet. **Round 2** (2026-11-21, the user picked another
+round): the chant and the female singer in noise fixed; her quieter held notes on a clean take still get turned down.
 
 **Next:** the user's pick for AI step 3 (another training round, or build it into Voxology's Cleanup, or stop); the
 blind shoot-out when they have time.
