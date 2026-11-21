@@ -1422,3 +1422,6 @@ MANUAL.md, M1_TEST.md, INSTALL.txt).
   ROUND 2 (2026-11-21): chant + noisy female singer fixed; clean female held notes still cut. Waiting for the user.
   Root cause found (dead top end on dark clean notes; sudden noise changes) + a proven plug-in safety net; round 3
   proposed (Voxology STEP2.md). Waiting for the user.
+  ROUND 3 (2026-11-21, user said go): with the plug-in safety net it loses no notes on any clean take or the user's
+  takes, 5 % at worst (female singer after real noise drops away). The candidate for building into Voxology's Cleanup,
+  only if the user says so. Waiting for the user.

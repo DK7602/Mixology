@@ -366,8 +366,11 @@ singing"; their Cymatics / Looperman packs allowed for training): Voxology's doc
 Kaggle GPU (5.5 h): male singer and female rapper now pass (far better than Voxology's classic Denoiser), the female
 singer and the deep male chant still lose some notes. No plug-in code yet. **Round 2** (2026-11-21, the user picked another
 round): the chant and the female singer in noise fixed; her quieter held notes on a clean take still get turned down.
+**Round 3** (2026-11-21, after finding the root cause): with a plug-in safety net (the AI looks at the take plus a faint
+hiss it never adds to the sound) no notes lost on any clean take or the user's takes, 5 % at worst on the hardest
+real-noise case.
 
-**Next:** the user's pick for AI step 3 (another training round, or build it into Voxology's Cleanup, or stop); the
+**Next:** the user's pick for AI step 3 (build round 3 + the safety net into Voxology's Cleanup, or stop); the
 blind shoot-out when they have time.
 
 **The plan as written before building:**
