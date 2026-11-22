@@ -1446,3 +1446,6 @@ MANUAL.md, M1_TEST.md, INSTALL.txt).
   with it, loudness kept, stereo through one shifter, legato not split - and several notes at once; PLAN.md "Beta 39"):
   installer run 44997984577 (#50, "Beta 39", 0.39.0; Mixology and Masterology unchanged): GREEN (07:49 UTC).
   Voxology Build & Test for 8f25b60: Windows (tests + pluginval) green; ASan + UBSan green (08:08). Told the user.
+  BETA 40 (Voxology 0.76.0 = 9ea433f: split / join notes (Alt + double-click, J), hear a note while stopped (check in
+  Cubase: no ARA host here), consonants move whole with their note, high / breathy voices in the right octave; PLAN.md
+  "Beta 40"): installer run 45034761075 (#51, "Beta 40", 0.40.0; Mixology and Masterology unchanged): building.
