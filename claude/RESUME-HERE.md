@@ -1454,4 +1454,4 @@ MANUAL.md, M1_TEST.md, INSTALL.txt).
   moves on the beat (Alt free), your own key notes and the tuning (Auto = the beat's, from Voxology), the ? opens Honey
   Tune's quick start and keys table, moved notes at their new pitch from the start (first 40 ms 49 / 43 / 25 -> 19 / 22
   / 11 c); PLAN.md "Beta 41"): installer run 45063604245 (#52, "Beta 41", 0.41.0; Mixology and Masterology
-  unchanged): building.
+  unchanged): GREEN (20:21 UTC). Voxology Build & Test for 025d7c7: running.
