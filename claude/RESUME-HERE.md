@@ -1439,5 +1439,7 @@ MANUAL.md, M1_TEST.md, INSTALL.txt).
   2026-11-22, user on Beta 37: "i re analyzed and no cut out" (Mixology's Analyze Mix, AI on). Waiting for the user.
   HONEY TUNE AUDIT 3 + NEW LOOK (2026-11-22, Voxology 0.74.0 = 174eef5; details: Voxology docs/honey-audit/PLAN.md
   and its RESUME-HERE): waveform notes, black pitch line, cream marble, playback / edit bugs fixed, smarter Snap,
-  right-click menu, play / loop from the editor. BETA 38 installer: run 44993480766 ("Beta 38", 0.38.0; Mixology and
-  Masterology unchanged since Beta 37). Next proposed: Beta 39 multi-select, split / merge, hear a note while stopped.
+  right-click menu, play / loop from the editor. BETA 38 installer: run 44993753339 (#49, "Beta 38", 0.38.0; Voxology
+  2dbd9c1 = 0.74.0 + the NaN hang fix; the first run 44993480766 was cancelled for it; Mixology and Masterology
+  unchanged since Beta 37): GREEN (06:51 UTC). Told the user. Beta 39 under way: the engine audit's sound fixes
+  (attack / release move with the note, loudness kept, stereo through one shifter, legato not split), then multi-select.
