@@ -1449,4 +1449,4 @@ MANUAL.md, M1_TEST.md, INSTALL.txt).
   BETA 40 (Voxology 0.76.0 = 9ea433f: split / join notes (Alt + double-click, J), hear a note while stopped (check in
   Cubase: no ARA host here), consonants move whole with their note, high / breathy voices in the right octave; PLAN.md
   "Beta 40"): installer run 45034761075 (#51, "Beta 40", 0.40.0; Mixology and Masterology unchanged): GREEN (15:12 UTC).
-  Voxology Build & Test for 9ea433f: Windows (tests + pluginval) green; ASan + UBSan running. Told the user.
+  Voxology Build & Test for 9ea433f: Windows (tests + pluginval) green; ASan + UBSan green (15:32). Told the user.
