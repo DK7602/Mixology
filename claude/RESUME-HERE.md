@@ -1445,4 +1445,4 @@ MANUAL.md, M1_TEST.md, INSTALL.txt).
   BETA 39 (Voxology 0.75.0 = 8f25b60: the engine review's sound fixes, measured - a moved note's attack / release move
   with it, loudness kept, stereo through one shifter, legato not split - and several notes at once; PLAN.md "Beta 39"):
   installer run 44997984577 (#50, "Beta 39", 0.39.0; Mixology and Masterology unchanged): GREEN (07:49 UTC).
-  Voxology Build & Test for 8f25b60: Windows (tests + pluginval) green; ASan + UBSan still running at 07:55. Told the user.
+  Voxology Build & Test for 8f25b60: Windows (tests + pluginval) green; ASan + UBSan green (08:08). Told the user.
