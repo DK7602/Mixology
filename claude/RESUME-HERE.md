@@ -1436,3 +1436,4 @@ MANUAL.md, M1_TEST.md, INSTALL.txt).
   AI background passes rest half the time). Cause of the cut-outs not proven. Installer run 44938605290 ("Beta 37",
   0.37.0; Mixology eb0ac06, Masterology cdf9d51): GREEN (19:25 UTC); Voxology CI for 7d100da green (19:28). Told the
   user; waiting for their Beta 37 test (Cubase F12 meter, Mode Classic comparison, buffer 512/1024).
+  2026-11-22, user on Beta 37: "i re analyzed and no cut out" (Mixology's Analyze Mix, AI on). Waiting for the user.
