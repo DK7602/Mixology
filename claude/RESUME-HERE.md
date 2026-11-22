@@ -1441,5 +1441,7 @@ MANUAL.md, M1_TEST.md, INSTALL.txt).
   and its RESUME-HERE): waveform notes, black pitch line, cream marble, playback / edit bugs fixed, smarter Snap,
   right-click menu, play / loop from the editor. BETA 38 installer: run 44993753339 (#49, "Beta 38", 0.38.0; Voxology
   2dbd9c1 = 0.74.0 + the NaN hang fix; the first run 44993480766 was cancelled for it; Mixology and Masterology
-  unchanged since Beta 37): GREEN (06:51 UTC). Told the user. Beta 39 under way: the engine audit's sound fixes
-  (attack / release move with the note, loudness kept, stereo through one shifter, legato not split), then multi-select.
+  unchanged since Beta 37): GREEN (06:51 UTC). Told the user.
+  BETA 39 (Voxology 0.75.0 = 8f25b60: the engine review's sound fixes, measured - a moved note's attack / release move
+  with it, loudness kept, stereo through one shifter, legato not split - and several notes at once; PLAN.md "Beta 39"):
+  installer run 44997984577 (#50, "Beta 39", 0.39.0; Mixology and Masterology unchanged), building.
