@@ -1450,3 +1450,8 @@ MANUAL.md, M1_TEST.md, INSTALL.txt).
   Cubase: no ARA host here), consonants move whole with their note, high / breathy voices in the right octave; PLAN.md
   "Beta 40"): installer run 45034761075 (#51, "Beta 40", 0.40.0; Mixology and Masterology unchanged): GREEN (15:12 UTC).
   Voxology Build & Test for 9ea433f: Windows (tests + pluginval) green; ASan + UBSan green (15:32). Told the user.
+  BETA 41 (Voxology 0.77.0 = 025d7c7: note level and mute (Ctrl + drag, M), notes to check (amber dot, N / D), time
+  moves on the beat (Alt free), your own key notes and the tuning (Auto = the beat's, from Voxology), the ? opens Honey
+  Tune's quick start and keys table, moved notes at their new pitch from the start (first 40 ms 49 / 43 / 25 -> 19 / 22
+  / 11 c); PLAN.md "Beta 41"): installer run 45063604245 (#52, "Beta 41", 0.41.0; Mixology and Masterology
+  unchanged): building.
